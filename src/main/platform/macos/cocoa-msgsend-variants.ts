@@ -78,6 +78,13 @@ const I64_VARIANT = {
   },
 } as const;
 
+const RETURNS_U8_VARIANT = {
+  objc_msgSend: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.u8,
+  },
+} as const;
+
 const getInitWithContentRectLib = macOSLibraryAccessor('msgSendInitWithContentRect', () =>
   dlopen(LIBOBJC_PATH, INIT_WITH_CONTENT_RECT_VARIANT),
 );
@@ -89,6 +96,10 @@ const getU8Lib = macOSLibraryAccessor('msgSendU8', () => dlopen(LIBOBJC_PATH, U8
 const getF64Lib = macOSLibraryAccessor('msgSendF64', () => dlopen(LIBOBJC_PATH, F64_VARIANT));
 
 const getI64Lib = macOSLibraryAccessor('msgSendI64', () => dlopen(LIBOBJC_PATH, I64_VARIANT));
+
+const getReturnsU8Lib = macOSLibraryAccessor('msgSendReturnsU8', () =>
+  dlopen(LIBOBJC_PATH, RETURNS_U8_VARIANT),
+);
 
 const ptrIn = (n: bigint): Pointer => Number(n) as Pointer;
 const bigIntOut = (p: Pointer | null): bigint => (p === null ? 0n : BigInt(p));
@@ -179,4 +190,15 @@ export const msgSendI64 = (receiver: bigint, selector: bigint, arg: bigint): big
   const lib = getI64Lib();
   const result = lib.symbols.objc_msgSend(ptrIn(receiver), ptrIn(selector), arg);
   return bigIntOut(result);
+};
+
+/**
+ * Send a zero-extra-arg message that returns a `BOOL`, e.g. `[obj isProxy]`,
+ * `[window isVisible]`, `[NSApp isActive]`. Returns 0 (NO) or 1 (YES).
+ *
+ * Only callable on macOS — throws {@link SambarError} otherwise.
+ */
+export const msgSendReturnsU8 = (receiver: bigint, selector: bigint): number => {
+  const lib = getReturnsU8Lib();
+  return lib.symbols.objc_msgSend(ptrIn(receiver), ptrIn(selector));
 };

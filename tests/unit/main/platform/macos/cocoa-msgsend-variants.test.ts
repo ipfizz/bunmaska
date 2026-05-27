@@ -6,6 +6,7 @@ import {
   msgSendI64,
   msgSendInitWithContentRect,
   msgSendPtr,
+  msgSendReturnsU8,
   msgSendU8,
 } from '../../../../../src/main/platform/macos/cocoa-msgsend-variants';
 
@@ -39,6 +40,12 @@ describe('msgSendI64 export', () => {
   });
 });
 
+describe('msgSendReturnsU8 export', () => {
+  test('is a function', () => {
+    expect(typeof msgSendReturnsU8).toBe('function');
+  });
+});
+
 if (currentPlatform() !== 'macos') {
   describe('msgSendInitWithContentRect on non-macOS hosts', () => {
     test('throws SambarError', () => {
@@ -69,6 +76,12 @@ if (currentPlatform() !== 'macos') {
   describe('msgSendI64 on non-macOS hosts', () => {
     test('throws SambarError', () => {
       expect(() => msgSendI64(0n, 0n, 0n)).toThrow(SambarError);
+    });
+  });
+
+  describe('msgSendReturnsU8 on non-macOS hosts', () => {
+    test('throws SambarError', () => {
+      expect(() => msgSendReturnsU8(0n, 0n)).toThrow(SambarError);
     });
   });
 }
