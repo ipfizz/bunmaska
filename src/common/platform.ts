@@ -5,6 +5,8 @@
  * All other code calls {@link currentPlatform} or {@link isSupported}.
  */
 
+import { SambarError } from './errors';
+
 export type Platform = 'macos' | 'linux' | 'windows';
 
 const RAW_TO_PLATFORM = new Map<string, Platform>([
@@ -22,7 +24,7 @@ const SUPPORTED: ReadonlySet<Platform> = new Set<Platform>(['macos', 'linux']);
 export const mapPlatform = (raw: string): Platform => {
   const mapped = RAW_TO_PLATFORM.get(raw);
   if (mapped === undefined) {
-    throw new Error(`Unsupported platform: ${raw}`);
+    throw new SambarError(`Unsupported platform: ${raw}`);
   }
   return mapped;
 };

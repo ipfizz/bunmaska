@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { SambarError } from '../../../src/common/errors';
 import {
   currentPlatform,
   isSupported,
@@ -19,7 +20,8 @@ describe('mapPlatform', () => {
     expect(mapPlatform('win32')).toBe('windows');
   });
 
-  test('throws on unknown platform tag', () => {
+  test('throws SambarError on unknown platform tag', () => {
+    expect(() => mapPlatform('freebsd')).toThrow(SambarError);
     expect(() => mapPlatform('freebsd')).toThrow(/Unsupported platform: freebsd/);
   });
 });
