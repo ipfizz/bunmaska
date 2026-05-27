@@ -71,6 +71,13 @@ const F64_VARIANT = {
   },
 } as const;
 
+const I64_VARIANT = {
+  objc_msgSend: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.i64],
+    returns: FFIType.pointer,
+  },
+} as const;
+
 const getInitWithContentRectLib = macOSLibraryAccessor('msgSendInitWithContentRect', () =>
   dlopen(LIBOBJC_PATH, INIT_WITH_CONTENT_RECT_VARIANT),
 );
@@ -80,6 +87,8 @@ const getPtrLib = macOSLibraryAccessor('msgSendPtr', () => dlopen(LIBOBJC_PATH, 
 const getU8Lib = macOSLibraryAccessor('msgSendU8', () => dlopen(LIBOBJC_PATH, U8_VARIANT));
 
 const getF64Lib = macOSLibraryAccessor('msgSendF64', () => dlopen(LIBOBJC_PATH, F64_VARIANT));
+
+const getI64Lib = macOSLibraryAccessor('msgSendI64', () => dlopen(LIBOBJC_PATH, I64_VARIANT));
 
 const ptrIn = (n: bigint): Pointer => Number(n) as Pointer;
 const bigIntOut = (p: Pointer | null): bigint => (p === null ? 0n : BigInt(p));
@@ -154,6 +163,20 @@ export const msgSendU8 = (receiver: bigint, selector: bigint, arg: number): bigi
  */
 export const msgSendF64 = (receiver: bigint, selector: bigint, arg: number): bigint => {
   const lib = getF64Lib();
+  const result = lib.symbols.objc_msgSend(ptrIn(receiver), ptrIn(selector), arg);
+  return bigIntOut(result);
+};
+
+/**
+ * Send a message with one extra `int64_t` (signed) arg — used for `NSInteger`
+ * params on 64-bit macOS, e.g.
+ * `[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular]`,
+ * `[NSNumber numberWithInteger:n]`.
+ *
+ * Only callable on macOS — throws {@link SambarError} otherwise.
+ */
+export const msgSendI64 = (receiver: bigint, selector: bigint, arg: bigint): bigint => {
+  const lib = getI64Lib();
   const result = lib.symbols.objc_msgSend(ptrIn(receiver), ptrIn(selector), arg);
   return bigIntOut(result);
 };
