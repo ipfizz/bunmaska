@@ -21,6 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Linux native deps (GTK 4)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-1
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
