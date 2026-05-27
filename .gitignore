@@ -1,0 +1,40 @@
+# Internal — never commit
+.admin/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Native build artifacts
+*.dylib
+*.so
+*.dll
+*.node
+*.o
+
+# Runtime / Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log
