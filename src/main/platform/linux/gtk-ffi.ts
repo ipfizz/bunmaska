@@ -30,5 +30,17 @@ export const loadGtkFFI = () => {
       args: [],
       returns: FFIType.pointer,
     },
+    gtk_window_set_title: {
+      args: [FFIType.pointer, FFIType.cstring],
+      returns: FFIType.void,
+    },
+    gtk_window_set_default_size: {
+      args: [FFIType.pointer, FFIType.i32, FFIType.i32],
+      returns: FFIType.void,
+    },
+    gtk_window_present: {
+      args: [FFIType.pointer],
+      returns: FFIType.void,
+    },
   });
 };

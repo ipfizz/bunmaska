@@ -18,5 +18,20 @@ if (currentPlatform() === 'linux') {
       // didn't crash and FFI dispatch works.
       expect(typeof result).toBe('number');
     });
+
+    test('the library exports gtk_window_set_title', () => {
+      const lib = loadGtkFFI();
+      expect(typeof lib.symbols.gtk_window_set_title).toBe('function');
+    });
+
+    test('the library exports gtk_window_set_default_size', () => {
+      const lib = loadGtkFFI();
+      expect(typeof lib.symbols.gtk_window_set_default_size).toBe('function');
+    });
+
+    test('the library exports gtk_window_present', () => {
+      const lib = loadGtkFFI();
+      expect(typeof lib.symbols.gtk_window_present).toBe('function');
+    });
   });
 }
