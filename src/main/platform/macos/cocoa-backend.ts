@@ -1,4 +1,5 @@
 import { createLogger } from '../../../common/logger';
+import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { CooperativePump } from '../../run-loop';
 import type {
   NativeApplication,
@@ -13,6 +14,7 @@ import {
   msgSendInitWithContentRect,
   msgSendInitWithFrameConfig,
   msgSendPtr,
+  msgSendPtrI64U8,
   msgSendPtrPtr,
   msgSendReturnsU8,
   msgSendSize,
@@ -20,6 +22,7 @@ import {
 } from './cocoa-msgsend-variants';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
+import { createScriptMessageHandler } from './cocoa-script-message-handler';
 import { computeWindowStyleMask, STANDARD_WINDOW_STYLE } from './cocoa-style-mask';
 import { loadWebKit } from './cocoa-webkit';
 import type { Handle } from './objc';
@@ -35,17 +38,23 @@ const log = createLogger('macos-backend');
 
 const NS_BACKING_STORE_BUFFERED = 2n;
 const NS_ACTIVATION_POLICY_REGULAR = 0n;
+const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
+const SCRIPT_MESSAGE_HANDLER_NAME = 'sambar';
+
+const dispatchScript = (envelopeJson: string): string =>
+  `window.__sambar && window.__sambar._dispatch(${JSON.stringify(envelopeJson)});`;
 
 class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
+  #envelopeCallback: ((envelopeJson: string) => void) | undefined;
 
   constructor(webview: Handle) {
     this.#webview = webview;
   }
 
-  /** The underlying `WKWebView` handle. Used by the IPC layer. */
-  get handle(): Handle {
-    return this.#webview;
+  /** @internal Called by the script message handler with renderer envelopes. */
+  deliverRendererEnvelope(envelopeJson: string): void {
+    this.#envelopeCallback?.(envelopeJson);
   }
 
   loadURL(url: string): void {
@@ -95,6 +104,14 @@ class MacOSWebContents implements NativeWebContents {
       0n,
     );
   }
+
+  sendEnvelopeToRenderer(envelopeJson: string): void {
+    this.executeJavaScript(dispatchScript(envelopeJson));
+  }
+
+  onRendererEnvelope(callback: (envelopeJson: string) => void): void {
+    this.#envelopeCallback = callback;
+  }
 }
 
 class MacOSWindow implements NativeWindow {
@@ -104,9 +121,9 @@ class MacOSWindow implements NativeWindow {
   #closed = false;
   #onClosed: (() => void) | undefined;
 
-  constructor(window: Handle, webview: Handle, bounds: Rect) {
+  constructor(window: Handle, contents: MacOSWebContents, bounds: Rect) {
     this.#window = window;
-    this.#contents = new MacOSWebContents(webview);
+    this.#contents = contents;
     this.#bounds = bounds;
   }
 
@@ -211,16 +228,45 @@ class MacOSApplication implements NativeApplication {
       rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
       rt.selectors.get('init'),
     );
+
+    // The web view (and thus its contents) does not exist until after the
+    // configuration is built, so the handler forwards to a late-bound contents
+    // reference rather than capturing it directly.
+    let contents: MacOSWebContents | undefined;
+    const userContentController = rt.msgSend(
+      configuration,
+      rt.selectors.get('userContentController'),
+    );
+    const handler = createScriptMessageHandler((envelopeJson) =>
+      contents?.deliverRendererEnvelope(envelopeJson),
+    );
+    msgSendPtrPtr(
+      userContentController,
+      rt.selectors.get('addScriptMessageHandler:name:'),
+      handler.handle,
+      nsString(SCRIPT_MESSAGE_HANDLER_NAME),
+    );
+
+    const userScript = msgSendPtrI64U8(
+      rt.msgSend(rt.classes.get('WKUserScript'), rt.selectors.get('alloc')),
+      rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:'),
+      nsString(generatePreloadBootstrap()),
+      WK_INJECTION_TIME_AT_DOCUMENT_START,
+      0,
+    );
+    msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
+
     const webview = msgSendInitWithFrameConfig(
       rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),
       rt.selectors.get('initWithFrame:configuration:'),
       frame,
       configuration,
     );
+    contents = new MacOSWebContents(webview);
     msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
     msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));
 
-    const nativeWindow = new MacOSWindow(window, webview, {
+    const nativeWindow = new MacOSWindow(window, contents, {
       x: 0,
       y: 0,
       width: options.width,
