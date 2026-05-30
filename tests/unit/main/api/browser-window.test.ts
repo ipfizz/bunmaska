@@ -20,6 +20,8 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
   let title = options.title;
   let visible = options.show;
   let bounds: Rect = { x: 0, y: 0, width: options.width, height: options.height };
+  let maximized = false;
+  let minimized = false;
   let onClosed: (() => void) | undefined;
   const webContents: NativeWebContents = {
     loadURL: () => undefined,
@@ -52,6 +54,20 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
       visible = false;
     },
     isVisible: () => visible,
+    focus: () => {
+      visible = true;
+    },
+    minimize: () => {
+      minimized = true;
+    },
+    maximize: () => {
+      maximized = true;
+    },
+    unmaximize: () => {
+      maximized = false;
+    },
+    isMaximized: () => maximized,
+    isMinimized: () => minimized,
     close: () => onClosed?.(),
     onClosed: (cb) => {
       onClosed = cb;
