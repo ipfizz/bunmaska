@@ -1,0 +1,72 @@
+/**
+ * Backend-neutral contracts for the native platform layer.
+ *
+ * Everything above `platform/` (the public `api/` classes) depends only on
+ * these interfaces, never on a concrete backend (`platform/macos`,
+ * `platform/linux`). Platform-specific handles (`id`, `SEL`, `GtkWidget*`)
+ * never appear here — the seam speaks only plain TS: numbers, strings, and
+ * callbacks (D024).
+ */
+
+/** A rectangle in screen/content coordinates. */
+export type Rect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+/** Options for creating a native window + its embedded web view. */
+export type NativeWindowOptions = {
+  readonly width: number;
+  readonly height: number;
+  readonly title: string;
+  readonly show: boolean;
+};
+
+/**
+ * The web view embedded in a window. Sambar's `WebContents` delegates to this.
+ *
+ * The IPC surface (renderer messaging + navigation callbacks) is added to this
+ * interface in the IPC phase, alongside its implementation — kept out until
+ * then so the contract never advertises a method the backend does not provide.
+ */
+export interface NativeWebContents {
+  /** Navigate to a URL (http/https/file/about). */
+  loadURL(url: string): void;
+  /** Load an inline HTML string with an optional base URL for relative refs. */
+  loadHTML(html: string, baseUrl?: string): void;
+  /** The web view's current URL, or `''` before the first navigation. */
+  getURL(): string;
+  /** Evaluate JS in the page. Fire-and-forget — no result is returned (D022). */
+  executeJavaScript(code: string): void;
+}
+
+/** A native top-level window. */
+export interface NativeWindow {
+  /** The window's web contents. */
+  readonly webContents: NativeWebContents;
+  setTitle(title: string): void;
+  getTitle(): string;
+  setSize(width: number, height: number): void;
+  getBounds(): Rect;
+  show(): void;
+  hide(): void;
+  isVisible(): boolean;
+  /** Close and destroy the window. Idempotent. */
+  close(): void;
+  /** Register a callback fired once when the window is closed. */
+  onClosed(callback: () => void): void;
+}
+
+/** The native application host: lifecycle + window factory. */
+export interface NativeApplication {
+  /** Bootstrap the native app and begin pumping its run loop. Idempotent. */
+  start(): void;
+  /** Register a callback fired once the app is ready to create windows. */
+  onReady(callback: () => void): void;
+  /** Create a native window. */
+  createWindow(options: NativeWindowOptions): NativeWindow;
+  /** Stop the run loop and release the application. */
+  quit(): void;
+}

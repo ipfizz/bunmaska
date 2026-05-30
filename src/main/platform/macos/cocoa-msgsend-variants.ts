@@ -98,6 +98,13 @@ const FRAME_CONFIG_VARIANT = {
   },
 } as const;
 
+const SIZE_VARIANT = {
+  objc_msgSend: {
+    args: [FFIType.u64, FFIType.u64, FFIType.f64, FFIType.f64],
+    returns: FFIType.u64,
+  },
+} as const;
+
 const getInitWithContentRectLib = macOSLibraryAccessor('msgSendInitWithContentRect', () =>
   dlopen(LIBOBJC_PATH, INIT_WITH_CONTENT_RECT_VARIANT),
 );
@@ -123,6 +130,8 @@ const getPtrPtrLib = macOSLibraryAccessor('msgSendPtrPtr', () =>
 const getFrameConfigLib = macOSLibraryAccessor('msgSendInitWithFrameConfig', () =>
   dlopen(LIBOBJC_PATH, FRAME_CONFIG_VARIANT),
 );
+
+const getSizeLib = macOSLibraryAccessor('msgSendSize', () => dlopen(LIBOBJC_PATH, SIZE_VARIANT));
 
 export type CGRectArgs = readonly [x: number, y: number, width: number, height: number];
 
@@ -249,3 +258,16 @@ export const msgSendInitWithFrameConfig = (
     frame[3],
     configuration,
   );
+
+/**
+ * Send a message with an `NSSize`/`CGSize` arg (two `double`s by value), e.g.
+ * `[window setContentSize:(NSSize){w, h}]`.
+ *
+ * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
+ */
+export const msgSendSize = (
+  receiver: Handle,
+  selector: Handle,
+  width: number,
+  height: number,
+): Handle => getSizeLib().symbols.objc_msgSend(receiver, selector, width, height);
