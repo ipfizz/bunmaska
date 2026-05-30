@@ -83,6 +83,20 @@ const PTR_PTR_VARIANT = {
   },
 } as const;
 
+const PTR3_VARIANT = {
+  objc_msgSend: {
+    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
+    returns: FFIType.u64,
+  },
+} as const;
+
+const RETURNS_I64_VARIANT = {
+  objc_msgSend: {
+    args: [FFIType.u64, FFIType.u64],
+    returns: FFIType.i64,
+  },
+} as const;
+
 const FRAME_CONFIG_VARIANT = {
   objc_msgSend: {
     args: [
@@ -129,6 +143,12 @@ const getPtrPtrLib = macOSLibraryAccessor('msgSendPtrPtr', () =>
 
 const getFrameConfigLib = macOSLibraryAccessor('msgSendInitWithFrameConfig', () =>
   dlopen(LIBOBJC_PATH, FRAME_CONFIG_VARIANT),
+);
+
+const getPtr3Lib = macOSLibraryAccessor('msgSendPtr3', () => dlopen(LIBOBJC_PATH, PTR3_VARIANT));
+
+const getReturnsI64Lib = macOSLibraryAccessor('msgSendReturnsI64', () =>
+  dlopen(LIBOBJC_PATH, RETURNS_I64_VARIANT),
 );
 
 const getSizeLib = macOSLibraryAccessor('msgSendSize', () => dlopen(LIBOBJC_PATH, SIZE_VARIANT));
