@@ -21,11 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux native deps (GTK 4 + Xvfb)
+      - name: Install Linux native deps (GTK 4 + WebKitGTK 6.0 + Xvfb)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-1 xvfb
+          sudo apt-get install -y libgtk-4-1 libwebkitgtk-6.0-4 xvfb
 
       - uses: oven-sh/setup-bun@v2
         with:
