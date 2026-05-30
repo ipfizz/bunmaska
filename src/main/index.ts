@@ -5,6 +5,13 @@ export { BrowserWindow, type BrowserWindowOptions } from './api/browser-window';
 export { WebContents } from './api/web-contents';
 export { clipboard, type Clipboard } from './api/clipboard';
 export {
+  dialog,
+  type Dialog,
+  type MessageBoxOptions,
+  type OpenDialogOptions,
+  type SaveDialogOptions,
+} from './api/dialog';
+export {
   Menu,
   MenuItem,
   type MenuItemOptions,
