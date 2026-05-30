@@ -291,6 +291,38 @@ export const msgSendInitWithFrameConfig = (
   );
 
 /**
+ * Send a message with three extra pointer-sized args, e.g.
+ * `[NSMenuItem initWithTitle:action:keyEquivalent:]`.
+ *
+ * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
+ */
+export const msgSendPtr3 = (
+  receiver: Handle,
+  selector: Handle,
+  arg0: Handle,
+  arg1: Handle,
+  arg2: Handle,
+): Handle => getPtr3Lib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2);
+
+/**
+ * Send a zero-extra-arg message that returns an `NSInteger`, e.g.
+ * `[menu numberOfItems]`, `[alert runModal]`.
+ *
+ * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
+ */
+export const msgSendReturnsI64 = (receiver: Handle, selector: Handle): bigint =>
+  getReturnsI64Lib().symbols.objc_msgSend(receiver, selector);
+
+/**
+ * Send a message with one extra pointer-sized arg that returns a `BOOL`, e.g.
+ * `[[NSWorkspace sharedWorkspace] openURL:nsurl]`. Returns 0 (NO) or 1 (YES).
+ *
+ * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
+ */
+export const msgSendPtrReturnsU8 = (receiver: Handle, selector: Handle, arg: Handle): number =>
+  getPtrReturnsU8Lib().symbols.objc_msgSend(receiver, selector, arg);
+
+/**
  * Send a message with an `NSSize`/`CGSize` arg (two `double`s by value), e.g.
  * `[window setContentSize:(NSSize){w, h}]`.
  *
