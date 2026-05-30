@@ -38,6 +38,9 @@ export class WebContents extends EventEmitter {
     this.#native.onRendererEnvelope((json) => {
       void this.#handleRendererEnvelope(json);
     });
+    this.#native.onDidFinishLoad(() => {
+      this.emit('did-finish-load');
+    });
   }
 
   /** Navigate to a URL. */

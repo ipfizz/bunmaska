@@ -44,6 +44,8 @@ export interface NativeWebContents {
   sendEnvelopeToRenderer(envelopeJson: string): void;
   /** Register a callback for raw IPC envelopes (JSON) posted by the renderer. */
   onRendererEnvelope(callback: (envelopeJson: string) => void): void;
+  /** Register a callback fired when a navigation finishes loading. */
+  onDidFinishLoad(callback: () => void): void;
 }
 
 /** A native top-level window. */

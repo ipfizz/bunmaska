@@ -28,6 +28,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     executeJavaScript: () => undefined,
     sendEnvelopeToRenderer: () => undefined,
     onRendererEnvelope: () => undefined,
+    onDidFinishLoad: () => undefined,
   };
   return {
     webContents,

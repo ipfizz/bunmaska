@@ -8,9 +8,11 @@ const makeFakeNative = (): {
   native: NativeWebContents;
   sent: string[];
   fireRenderer: (json: string) => void;
+  fireDidFinishLoad: () => void;
 } => {
   const sent: string[] = [];
   let onEnvelope: ((json: string) => void) | undefined;
+  let onLoad: (() => void) | undefined;
   const native: NativeWebContents = {
     loadURL: () => undefined,
     loadHTML: () => undefined,
@@ -20,8 +22,16 @@ const makeFakeNative = (): {
     onRendererEnvelope: (cb) => {
       onEnvelope = cb;
     },
+    onDidFinishLoad: (cb) => {
+      onLoad = cb;
+    },
   };
-  return { native, sent, fireRenderer: (json) => onEnvelope?.(json) };
+  return {
+    native,
+    sent,
+    fireRenderer: (json) => onEnvelope?.(json),
+    fireDidFinishLoad: () => onLoad?.(),
+  };
 };
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -99,5 +109,19 @@ describe('WebContents <-> ipcMain auto-wiring', () => {
     expect(() => fireRenderer('not json{')).not.toThrow();
     await flush();
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe('WebContents did-finish-load', () => {
+  test('re-emits the native load completion as a did-finish-load event', () => {
+    const { native, fireDidFinishLoad } = makeFakeNative();
+    const wc = new WebContents(native);
+    let loads = 0;
+    wc.on('did-finish-load', () => {
+      loads += 1;
+    });
+    fireDidFinishLoad();
+    fireDidFinishLoad();
+    expect(loads).toBe(2);
   });
 });

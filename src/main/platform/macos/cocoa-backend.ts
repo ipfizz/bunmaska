@@ -22,6 +22,7 @@ import {
 } from './cocoa-msgsend-variants';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
+import { createNavigationDelegate } from './cocoa-navigation-delegate';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
 import { computeWindowStyleMask, STANDARD_WINDOW_STYLE } from './cocoa-style-mask';
 import { loadWebKit } from './cocoa-webkit';
@@ -47,6 +48,7 @@ const dispatchScript = (envelopeJson: string): string =>
 class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
+  #didFinishLoadCallback: (() => void) | undefined;
 
   constructor(webview: Handle) {
     this.#webview = webview;
@@ -55,6 +57,11 @@ class MacOSWebContents implements NativeWebContents {
   /** @internal Called by the script message handler with renderer envelopes. */
   deliverRendererEnvelope(envelopeJson: string): void {
     this.#envelopeCallback?.(envelopeJson);
+  }
+
+  /** @internal Called by the navigation delegate when a load finishes. */
+  deliverDidFinishLoad(): void {
+    this.#didFinishLoadCallback?.();
   }
 
   loadURL(url: string): void {
@@ -111,6 +118,10 @@ class MacOSWebContents implements NativeWebContents {
 
   onRendererEnvelope(callback: (envelopeJson: string) => void): void {
     this.#envelopeCallback = callback;
+  }
+
+  onDidFinishLoad(callback: () => void): void {
+    this.#didFinishLoadCallback = callback;
   }
 }
 
@@ -263,6 +274,10 @@ class MacOSApplication implements NativeApplication {
       configuration,
     );
     contents = new MacOSWebContents(webview);
+
+    const navigationDelegate = createNavigationDelegate(() => contents?.deliverDidFinishLoad());
+    msgSendPtr(webview, rt.selectors.get('setNavigationDelegate:'), navigationDelegate.handle);
+
     msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
     msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));
 
