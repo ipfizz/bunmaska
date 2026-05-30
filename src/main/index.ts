@@ -3,6 +3,7 @@ import './bootstrap';
 export { App, app } from './api/app';
 export { BrowserWindow, type BrowserWindowOptions } from './api/browser-window';
 export { WebContents } from './api/web-contents';
+export { clipboard, type Clipboard } from './api/clipboard';
 export {
   FFIError,
   InvalidArgumentError,

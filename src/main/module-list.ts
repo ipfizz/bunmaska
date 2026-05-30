@@ -55,7 +55,13 @@ export const KNOWN_ELECTRON_MODULES = [
 export type ElectronModuleName = (typeof KNOWN_ELECTRON_MODULES)[number];
 
 /** The modules Sambar actually ships. Grows phase by phase. */
-export const IMPLEMENTED_MODULES = ['app', 'BrowserWindow', 'WebContents', 'ipcMain'] as const;
+export const IMPLEMENTED_MODULES = [
+  'app',
+  'BrowserWindow',
+  'WebContents',
+  'ipcMain',
+  'clipboard',
+] as const;
 
 const implemented: ReadonlySet<string> = new Set(IMPLEMENTED_MODULES);
 
