@@ -1,5 +1,16 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, test } from 'bun:test';
 import { App, app } from '../../../../src/main/api/app';
+
+describe('App singleton', () => {
+  test('is an instance of App', () => {
+    expect(app).toBeInstanceOf(App);
+  });
+
+  test('is a Node EventEmitter for Electron compatibility', () => {
+    expect(app).toBeInstanceOf(EventEmitter);
+  });
+});
 
 describe('App.isReady', () => {
   test('is false on a fresh instance', () => {
@@ -16,28 +27,34 @@ describe('App.isReady', () => {
 describe('App.markReady', () => {
   test('emits ready exactly once when called multiple times', () => {
     const a = new App();
-    const calls: number[] = [];
-    a.on('ready', () => calls.push(1));
+    let calls = 0;
+    a.on('ready', () => {
+      calls += 1;
+    });
     a.markReady();
     a.markReady();
     a.markReady();
-    expect(calls).toHaveLength(1);
+    expect(calls).toBe(1);
   });
 
   test('fires handlers registered before markReady', () => {
     const a = new App();
-    const calls: number[] = [];
-    a.on('ready', () => calls.push(1));
+    let fired = false;
+    a.on('ready', () => {
+      fired = true;
+    });
     a.markReady();
-    expect(calls).toHaveLength(1);
+    expect(fired).toBe(true);
   });
 
   test('does not fire handlers registered after markReady', () => {
     const a = new App();
     a.markReady();
-    const calls: number[] = [];
-    a.on('ready', () => calls.push(1));
-    expect(calls).toHaveLength(0);
+    let fired = false;
+    a.on('ready', () => {
+      fired = true;
+    });
+    expect(fired).toBe(false);
   });
 });
 
@@ -54,6 +71,23 @@ describe('App.whenReady', () => {
     a.markReady();
     await promise;
   });
+
+  test('invokes the start hook on first call when not ready', () => {
+    const a = new App();
+    let started = 0;
+    a.setStartHook(() => {
+      started += 1;
+    });
+    void a.whenReady();
+    expect(started).toBe(1);
+  });
+
+  test('a start hook that marks ready resolves whenReady', async () => {
+    const a = new App();
+    a.setStartHook(() => a.markReady());
+    await a.whenReady();
+    expect(a.isReady).toBe(true);
+  });
 });
 
 describe('App event surface', () => {
@@ -63,21 +97,30 @@ describe('App event surface', () => {
     expect(a.listenerCount('before-quit')).toBe(1);
   });
 
-  test('will-quit handlers can be registered', () => {
-    const a = new App();
-    a.on('will-quit', () => undefined);
-    expect(a.listenerCount('will-quit')).toBe(1);
-  });
-
   test('window-all-closed handlers can be registered', () => {
     const a = new App();
     a.on('window-all-closed', () => undefined);
     expect(a.listenerCount('window-all-closed')).toBe(1);
   });
+
+  test('supports the Electron addListener/removeListener alias surface', () => {
+    const a = new App();
+    const handler = (): void => undefined;
+    a.addListener('will-quit', handler);
+    expect(a.listenerCount('will-quit')).toBe(1);
+    a.removeListener('will-quit', handler);
+    expect(a.listenerCount('will-quit')).toBe(0);
+  });
 });
 
-describe('app singleton', () => {
-  test('is an instance of App', () => {
-    expect(app).toBeInstanceOf(App);
+describe('App.quit', () => {
+  test('emits before-quit, will-quit, then quit in order', () => {
+    const a = new App();
+    const order: string[] = [];
+    a.on('before-quit', () => order.push('before-quit'));
+    a.on('will-quit', () => order.push('will-quit'));
+    a.on('quit', () => order.push('quit'));
+    a.quit();
+    expect(order).toEqual(['before-quit', 'will-quit', 'quit']);
   });
 });
