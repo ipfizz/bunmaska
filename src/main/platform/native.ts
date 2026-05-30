@@ -40,6 +40,10 @@ export interface NativeWebContents {
   getURL(): string;
   /** Evaluate JS in the page. Fire-and-forget — no result is returned (D022). */
   executeJavaScript(code: string): void;
+  /** Deliver a raw IPC envelope (JSON) to the renderer's preload bridge. */
+  sendEnvelopeToRenderer(envelopeJson: string): void;
+  /** Register a callback for raw IPC envelopes (JSON) posted by the renderer. */
+  onRendererEnvelope(callback: (envelopeJson: string) => void): void;
 }
 
 /** A native top-level window. */
