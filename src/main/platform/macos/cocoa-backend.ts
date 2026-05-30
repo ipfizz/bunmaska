@@ -171,6 +171,34 @@ class MacOSWindow implements NativeWindow {
     return msgSendReturnsU8(this.#window, cocoa().selectors.get('isVisible')) === 1;
   }
 
+  focus(): void {
+    msgSendPtr(this.#window, cocoa().selectors.get('makeKeyAndOrderFront:'), 0n);
+  }
+
+  minimize(): void {
+    msgSendPtr(this.#window, cocoa().selectors.get('miniaturize:'), 0n);
+  }
+
+  maximize(): void {
+    if (!this.isMaximized()) {
+      msgSendPtr(this.#window, cocoa().selectors.get('zoom:'), 0n);
+    }
+  }
+
+  unmaximize(): void {
+    if (this.isMaximized()) {
+      msgSendPtr(this.#window, cocoa().selectors.get('zoom:'), 0n);
+    }
+  }
+
+  isMaximized(): boolean {
+    return msgSendReturnsU8(this.#window, cocoa().selectors.get('isZoomed')) === 1;
+  }
+
+  isMinimized(): boolean {
+    return msgSendReturnsU8(this.#window, cocoa().selectors.get('isMiniaturized')) === 1;
+  }
+
   close(): void {
     if (this.#closed) {
       return;

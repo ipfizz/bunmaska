@@ -59,6 +59,16 @@ export interface NativeWindow {
   show(): void;
   hide(): void;
   isVisible(): boolean;
+  /** Bring the window to the front and give it keyboard focus. */
+  focus(): void;
+  /** Minimize the window to the dock/taskbar. */
+  minimize(): void;
+  /** Maximize (zoom) the window to fill the available screen area. */
+  maximize(): void;
+  /** Restore a maximized window to its previous size. */
+  unmaximize(): void;
+  isMaximized(): boolean;
+  isMinimized(): boolean;
   /** Close and destroy the window. Idempotent. */
   close(): void;
   /** Register a callback fired once when the window is closed. */

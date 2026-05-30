@@ -101,6 +101,30 @@ export class BrowserWindow extends EventEmitter {
     return this.#native.isVisible();
   }
 
+  focus(): void {
+    this.#native.focus();
+  }
+
+  minimize(): void {
+    this.#native.minimize();
+  }
+
+  maximize(): void {
+    this.#native.maximize();
+  }
+
+  unmaximize(): void {
+    this.#native.unmaximize();
+  }
+
+  isMaximized(): boolean {
+    return this.#native.isMaximized();
+  }
+
+  isMinimized(): boolean {
+    return this.#native.isMinimized();
+  }
+
   isDestroyed(): boolean {
     return this.#destroyed;
   }
