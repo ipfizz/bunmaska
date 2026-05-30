@@ -101,6 +101,26 @@ class MacOSWebContents implements NativeWebContents {
     return nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString')));
   }
 
+  reload(): void {
+    cocoa().msgSend(this.#webview, cocoa().selectors.get('reload'));
+  }
+
+  goBack(): void {
+    cocoa().msgSend(this.#webview, cocoa().selectors.get('goBack'));
+  }
+
+  goForward(): void {
+    cocoa().msgSend(this.#webview, cocoa().selectors.get('goForward'));
+  }
+
+  canGoBack(): boolean {
+    return msgSendReturnsU8(this.#webview, cocoa().selectors.get('canGoBack')) === 1;
+  }
+
+  canGoForward(): boolean {
+    return msgSendReturnsU8(this.#webview, cocoa().selectors.get('canGoForward')) === 1;
+  }
+
   executeJavaScript(code: string): void {
     const rt = cocoa();
     // nil completion handler — fire-and-forget (D022).

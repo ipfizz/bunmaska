@@ -59,6 +59,31 @@ export class WebContents extends EventEmitter {
     return this.#native.getURL();
   }
 
+  /** Reload the current page. */
+  reload(): void {
+    this.#native.reload();
+  }
+
+  /** Navigate back one entry in the session history, if possible. */
+  goBack(): void {
+    this.#native.goBack();
+  }
+
+  /** Navigate forward one entry in the session history, if possible. */
+  goForward(): void {
+    this.#native.goForward();
+  }
+
+  /** Whether there is a previous history entry to go back to. */
+  canGoBack(): boolean {
+    return this.#native.canGoBack();
+  }
+
+  /** Whether there is a next history entry to go forward to. */
+  canGoForward(): boolean {
+    return this.#native.canGoForward();
+  }
+
   /** Evaluate JavaScript in the page (fire-and-forget, D022). */
   executeJavaScript(code: string): void {
     this.#native.executeJavaScript(code);

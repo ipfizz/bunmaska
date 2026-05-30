@@ -38,6 +38,16 @@ export interface NativeWebContents {
   loadHTML(html: string, baseUrl?: string): void;
   /** The web view's current URL, or `''` before the first navigation. */
   getURL(): string;
+  /** Reload the current page. */
+  reload(): void;
+  /** Navigate back one entry in the session history, if possible. */
+  goBack(): void;
+  /** Navigate forward one entry in the session history, if possible. */
+  goForward(): void;
+  /** Whether there is a previous history entry to go back to. */
+  canGoBack(): boolean;
+  /** Whether there is a next history entry to go forward to. */
+  canGoForward(): boolean;
   /** Evaluate JS in the page. Fire-and-forget — no result is returned (D022). */
   executeJavaScript(code: string): void;
   /** Deliver a raw IPC envelope (JSON) to the renderer's preload bridge. */

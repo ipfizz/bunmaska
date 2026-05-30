@@ -17,6 +17,11 @@ const makeFakeNative = (): {
     loadURL: () => undefined,
     loadHTML: () => undefined,
     getURL: () => '',
+    reload: () => undefined,
+    goBack: () => undefined,
+    goForward: () => undefined,
+    canGoBack: () => false,
+    canGoForward: () => false,
     executeJavaScript: () => undefined,
     sendEnvelopeToRenderer: (json) => sent.push(json),
     onRendererEnvelope: (cb) => {
@@ -123,5 +128,32 @@ describe('WebContents did-finish-load', () => {
     fireDidFinishLoad();
     fireDidFinishLoad();
     expect(loads).toBe(2);
+  });
+});
+
+describe('WebContents navigation', () => {
+  test('delegates reload, goBack and goForward to the native view', () => {
+    const calls: string[] = [];
+    const native: NativeWebContents = {
+      loadURL: () => undefined,
+      loadHTML: () => undefined,
+      getURL: () => '',
+      reload: () => calls.push('reload'),
+      goBack: () => calls.push('goBack'),
+      goForward: () => calls.push('goForward'),
+      canGoBack: () => true,
+      canGoForward: () => false,
+      executeJavaScript: () => undefined,
+      sendEnvelopeToRenderer: () => undefined,
+      onRendererEnvelope: () => undefined,
+      onDidFinishLoad: () => undefined,
+    };
+    const wc = new WebContents(native);
+    wc.reload();
+    wc.goBack();
+    wc.goForward();
+    expect(calls).toEqual(['reload', 'goBack', 'goForward']);
+    expect(wc.canGoBack()).toBe(true);
+    expect(wc.canGoForward()).toBe(false);
   });
 });
