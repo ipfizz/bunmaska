@@ -61,6 +61,7 @@ export const IMPLEMENTED_MODULES = [
   'WebContents',
   'ipcMain',
   'clipboard',
+  'nativeTheme',
 ] as const;
 
 const implemented: ReadonlySet<string> = new Set(IMPLEMENTED_MODULES);
