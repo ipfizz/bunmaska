@@ -20,6 +20,7 @@ export {
 } from './api/menu';
 export { nativeTheme, type NativeTheme } from './api/native-theme';
 export { Notification, type NotificationOptions } from './api/notification';
+export { type Display, type Point, screen, type Size } from './api/screen';
 export { shell, type Shell } from './api/shell';
 export {
   FFIError,

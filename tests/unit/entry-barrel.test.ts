@@ -25,6 +25,12 @@ describe('sambar/main entry barrel', () => {
     expect(sambarMain.Notification).toBeDefined();
     expect(typeof sambarMain.Notification.isSupported).toBe('function');
   });
+
+  test('exports the screen module', () => {
+    expect(sambarMain.screen).toBeDefined();
+    expect(typeof sambarMain.screen.getAllDisplays).toBe('function');
+    expect(typeof sambarMain.screen.getPrimaryDisplay).toBe('function');
+  });
 });
 
 describe('sambar (root) entry barrel', () => {

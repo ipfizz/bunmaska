@@ -40,6 +40,16 @@ export const GIO_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (GListModel*) -> guint number of items
+  g_list_model_get_n_items: {
+    args: [FFIType.pointer],
+    returns: FFIType.u32,
+  },
+  // (GListModel*, guint position) -> transfer-full gpointer (caller g_object_unref's)
+  g_list_model_get_item: {
+    args: [FFIType.pointer, FFIType.u32],
+    returns: FFIType.pointer,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GIO_FFI_SYMBOLS>> | undefined } = {

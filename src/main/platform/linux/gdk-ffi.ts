@@ -67,6 +67,21 @@ export const GDK_FFI_SYMBOLS = {
     args: [FFIType.cstring, FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (display) -> GListModel* of GdkMonitor (owned by GDK, do NOT unref the model)
+  gdk_display_get_monitors: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (monitor, GdkRectangle* out) -> void; fills a 4 x i32 [x, y, width, height]
+  gdk_monitor_get_geometry: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (monitor) -> int device-pixel scale factor (>= 1)
+  gdk_monitor_get_scale_factor: {
+    args: [FFIType.pointer],
+    returns: FFIType.i32,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GDK_FFI_SYMBOLS>> | undefined } = {
