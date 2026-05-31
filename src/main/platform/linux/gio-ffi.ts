@@ -1,0 +1,52 @@
+import { dlopen, FFIType } from 'bun:ffi';
+import { UnsupportedPlatformError } from '../../../common/errors';
+import { currentPlatform } from '../../../common/platform';
+
+/**
+ * Loads GIO's default-handler URI launcher — the Linux primitive behind
+ * Sambar's `shell.openExternal`/`openPath`/`showItemInFolder`.
+ *
+ * `g_app_info_launch_default_for_uri(uri, context, error)` hands a URI to the
+ * desktop's default handler (browser for `http(s):`, file manager for
+ * `file:`) and returns a `gboolean`. Sambar passes `context = NULL` and
+ * `error = NULL` and relies on the boolean return rather than `GError`
+ * unwrapping. `libgio-2.0` is a hard dependency of GTK 4, so it is always
+ * present wherever `libgtk-4` is.
+ *
+ * Convention (matches the existing Linux loaders): `gboolean` is modelled as
+ * {@link FFIType.i32} (compare `=== 1`), NOT `bool`; the `GAppLaunchContext*`
+ * and `GError**` args are real pointers passed as `null`; `cstring` args are
+ * NUL-terminated UTF-8 strings.
+ *
+ * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
+ * the module stays safely importable on macOS for unit testing.
+ */
+
+const LIBGIO_PATH = 'libgio-2.0.so.0';
+
+/** The GIO FFI symbol descriptor table. */
+export const GIO_FFI_SYMBOLS = {
+  g_app_info_launch_default_for_uri: {
+    args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
+} as const;
+
+const cache: { ffi: ReturnType<typeof dlopen<typeof GIO_FFI_SYMBOLS>> | undefined } = {
+  ffi: undefined,
+};
+
+export const loadGioFFI = () => {
+  const platform = currentPlatform();
+  if (platform !== 'linux') {
+    throw new UnsupportedPlatformError(
+      `loadGioFFI() is only supported on Linux; current platform is ${platform}`,
+    );
+  }
+  if (cache.ffi) {
+    return cache.ffi;
+  }
+  const ffi = dlopen(LIBGIO_PATH, GIO_FFI_SYMBOLS);
+  cache.ffi = ffi;
+  return ffi;
+};

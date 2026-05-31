@@ -1,5 +1,6 @@
 import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
+import * as gtkShell from '../platform/linux/gtk-shell';
 import * as cocoaShell from '../platform/macos/cocoa-shell';
 
 /**
@@ -24,6 +25,13 @@ const macosBackend: ShellBackend = {
   beep: () => cocoaShell.beep(),
 };
 
+const linuxBackend: ShellBackend = {
+  openExternal: (url) => gtkShell.openExternal(url),
+  openPath: (path) => gtkShell.openPath(path),
+  showItemInFolder: (path) => gtkShell.showItemInFolder(path),
+  beep: () => gtkShell.beep(),
+};
+
 let backend: ShellBackend | undefined;
 
 const getBackend = (): ShellBackend => {
@@ -32,6 +40,9 @@ const getBackend = (): ShellBackend => {
   }
   if (currentPlatform() === 'macos') {
     return macosBackend;
+  }
+  if (currentPlatform() === 'linux') {
+    return linuxBackend;
   }
   throw new UnsupportedPlatformError(`shell is not supported on ${currentPlatform()} yet`);
 };
