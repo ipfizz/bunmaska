@@ -12,6 +12,7 @@ export {
   type OpenDialogOptions,
   type SaveDialogOptions,
 } from './api/dialog';
+export { type GlobalShortcut, globalShortcut } from './api/global-shortcut';
 export {
   Menu,
   MenuItem,

@@ -1,4 +1,5 @@
 import { loadGlibFFI } from './glib-ffi';
+import { pollX11ShortcutsOnce } from './x11-global-shortcut';
 
 /**
  * Linux native run-loop drain.
@@ -8,6 +9,11 @@ import { loadGlibFFI } from './glib-ffi';
  * We iterate the default main context while it reports pending sources, never
  * blocking (`may_block = FALSE`), bounded by a per-tick budget so a busy loop
  * cannot starve Bun's own event loop.
+ *
+ * The drain ALSO polls the dedicated X11 global-shortcut connection
+ * ({@link pollX11ShortcutsOnce}) each tick: `XGrabKey` events arrive on their own
+ * display connection, not GLib's main context, so they need their own poll. The
+ * poll is a no-op until a global shortcut is registered.
  */
 
 const NULL_CONTEXT = null;
@@ -29,5 +35,6 @@ export const createLinuxDrain = (): (() => void) => {
       }
       glib.symbols.g_main_context_iteration(NULL_CONTEXT, MAY_BLOCK_FALSE);
     }
+    pollX11ShortcutsOnce();
   };
 };

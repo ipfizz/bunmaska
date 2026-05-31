@@ -62,6 +62,7 @@ export const IMPLEMENTED_MODULES = [
   'ipcMain',
   'clipboard',
   'dialog',
+  'globalShortcut',
   'Menu',
   'MenuItem',
   'nativeTheme',

@@ -38,6 +38,7 @@ describe('IMPLEMENTED_MODULES', () => {
     expect(implemented).toContain('shell');
     expect(implemented).toContain('Notification');
     expect(implemented).toContain('screen');
+    expect(implemented).toContain('globalShortcut');
   });
 
   test('does not yet claim still-unshipped modules like Tray', () => {
