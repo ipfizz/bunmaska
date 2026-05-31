@@ -2,6 +2,7 @@ import type { Pointer } from 'bun:ffi';
 import {
   generateChannelId,
   generateIsolatedChannelSetup,
+  generateIsolatedHostSource,
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
@@ -50,6 +51,7 @@ class LinuxWebContents implements NativeWebContents {
     const wired = createWebViewWithIpc({
       preloadSource: generatePreloadBootstrap(),
       isolatedSetupSource: generateIsolatedChannelSetup(channelId),
+      isolatedHostSource: generateIsolatedHostSource(channelId),
       pageWorldSource: generatePageWorldStub(channelId),
       ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {

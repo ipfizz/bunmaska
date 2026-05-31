@@ -62,28 +62,34 @@ const resolveTransport = (
  * Create the `contextBridge`. Pass a {@link ContextBridgeTransport} to drive it
  * over a mock document in tests; in a real renderer it auto-resolves the channel
  * id, `document`, and `CustomEvent` from the isolated world's globals.
+ *
+ * The host is created lazily on first `exposeInMainWorld` by running the
+ * canonical {@link installCrossWorldHost} (the same baked protocol source that is
+ * injected into the isolated world), so this typed surface and the injected
+ * runtime path share one implementation.
  */
 export const createContextBridge = (override?: ContextBridgeTransport): ContextBridge => {
-  const exposed = new Set<string>();
+  let expose: ((key: string, api: Record<string, unknown>) => void) | undefined;
   return {
     exposeInMainWorld(key, api) {
-      if (exposed.has(key)) {
-        throw new SambarError(`contextBridge: "${key}" is already defined in the main world`);
-      }
-      const transport = resolveTransport(override);
-      if (transport === undefined) {
-        throw new SambarError(
-          'contextBridge: no cross-world channel is available; exposeInMainWorld must run in the Sambar isolated preload world',
+      if (expose === undefined) {
+        const transport = resolveTransport(override);
+        if (transport === undefined) {
+          throw new SambarError(
+            'contextBridge: no cross-world channel is available; exposeInMainWorld must run in the Sambar isolated preload world',
+          );
+        }
+        expose = installCrossWorldHost(
+          transport.channelId,
+          transport.scope,
+          transport.CustomEventImpl,
         );
       }
-      installCrossWorldHost(
-        transport.channelId,
-        key,
-        api,
-        transport.scope,
-        transport.CustomEventImpl,
-      );
-      exposed.add(key);
+      try {
+        expose(key, api);
+      } catch (error) {
+        throw new SambarError(error instanceof Error ? error.message : String(error));
+      }
     },
   };
 };

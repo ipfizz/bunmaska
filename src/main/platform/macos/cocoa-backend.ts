@@ -2,6 +2,7 @@ import { createLogger } from '../../../common/logger';
 import {
   generateChannelId,
   generateIsolatedChannelSetup,
+  generateIsolatedHostSource,
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
@@ -354,10 +355,13 @@ class MacOSApplication implements NativeApplication {
     // stub and the isolated host both bake it in at inject time.
     const channelId = generateChannelId();
 
-    // Isolated world: record the channel id, then the bridge, then the user
-    // preload — so `window.__sambar` and the channel id exist when it runs.
+    // Isolated world: record the channel id, then the bridge, then the
+    // contextBridge host (installs `__sambar.exposeInMainWorld`), then the user
+    // preload — so `window.__sambar` + the channel + exposeInMainWorld all exist
+    // when the user preload runs and calls exposeInMainWorld.
     addUserScript(generateIsolatedChannelSetup(channelId), isolatedWorld);
     addUserScript(generatePreloadBootstrap(), isolatedWorld);
+    addUserScript(generateIsolatedHostSource(channelId), isolatedWorld);
     if (options.preloadScript !== undefined) {
       addUserScript(options.preloadScript, isolatedWorld);
     }

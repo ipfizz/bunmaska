@@ -44,7 +44,8 @@ export type WebViewIpcOptions = {
   readonly preloadSource: string;
   /**
    * Optional user preload source injected at document-start in the isolated
-   * world AFTER the bridge, so `window.__sambar` exists when it runs.
+   * world AFTER the bridge + contextBridge host, so `window.__sambar` and
+   * `exposeInMainWorld` exist when it runs.
    */
   readonly userPreloadSource?: string;
   /**
@@ -52,6 +53,12 @@ export type WebViewIpcOptions = {
    * contextBridge channel-id setup). Optional.
    */
   readonly isolatedSetupSource?: string;
+  /**
+   * The contextBridge host source injected into the ISOLATED world AFTER the
+   * bridge and BEFORE the user preload — it installs
+   * `window.__sambar.exposeInMainWorld`. Optional.
+   */
+  readonly isolatedHostSource?: string;
   /**
    * Source injected into the PAGE/main world (world_name = NULL) — the
    * cross-world contextBridge stub (Phase B). Optional.
@@ -137,11 +144,15 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   );
 
   // Isolated world: channel-id setup (if any) BEFORE the bridge, then the
-  // bridge, then the user preload.
+  // bridge, then the contextBridge host (installs exposeInMainWorld), then the
+  // user preload (so it can call exposeInMainWorld).
   if (options.isolatedSetupSource !== undefined) {
     addUserScript(ucm, options.isolatedSetupSource);
   }
   addUserScript(ucm, options.preloadSource);
+  if (options.isolatedHostSource !== undefined) {
+    addUserScript(ucm, options.isolatedHostSource);
+  }
   if (options.userPreloadSource !== undefined) {
     addUserScript(ucm, options.userPreloadSource);
   }
