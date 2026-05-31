@@ -27,6 +27,7 @@ import {
   makeNotifyCallback,
   SignalRegistry,
 } from './gtk-signals';
+import { registerAllSchemes } from './webkit-uri-scheme';
 import { createWebViewWithIpc, sendToRenderer } from './webkit-ipc';
 import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
 
@@ -80,6 +81,11 @@ class LinuxWebContents implements NativeWebContents {
     this.#view = wired.view;
     this.#registry = wired.registry;
     this.#exec = new ExecResultChannel(this.#view);
+    // Wire every custom scheme registered via `protocol.handle` onto THIS view's
+    // WebKitWebContext before any load, so `app://…` loads are served. Each
+    // scheme registers once per process (the dedup guard inside); the request
+    // callback's JSCallback is retained there for the process lifetime.
+    registerAllSchemes(this.#view);
     // Enable developer extras so the inspector is available (right-click →
     // Inspect Element, and openDevTools()). Stable WebKitGTK 6.0 API.
     const webkit = loadWebKitGtkFFI();

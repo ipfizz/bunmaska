@@ -149,6 +149,38 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     ],
     returns: FFIType.pointer,
   },
+  // () -> WebKitWebContext* (the process-wide default context; transfer-none).
+  webkit_web_context_get_default: {
+    args: [],
+    returns: FFIType.pointer,
+  },
+  // (WebKitWebView*) -> WebKitWebContext* (the view's context; transfer-none).
+  webkit_web_view_get_context: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (context, scheme, callback, user_data, destroy_notify) -> void. The callback
+  // is a `WebKitURISchemeRequestCallback`; user_data/destroy are NULL here.
+  webkit_web_context_register_uri_scheme: {
+    args: [FFIType.pointer, FFIType.cstring, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (WebKitURISchemeRequest*) -> const char* (transfer-none; owned by WebKit).
+  webkit_uri_scheme_request_get_uri: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (request, GInputStream*, stream_length:gint64, content_type:char* /*nullable*/) -> void.
+  // `finish` takes its own ref on the stream; -1 length = unknown.
+  webkit_uri_scheme_request_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.i64, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (request, GError*) -> void. Completes the request with an error response.
+  webkit_uri_scheme_request_finish_error: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof WEBKITGTK_FFI_SYMBOLS>> | undefined } = {

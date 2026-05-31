@@ -26,4 +26,10 @@ describe('GIO_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(sym.args).toEqual([FFIType.pointer]);
     expect(sym.returns).toBe(FFIType.pointer);
   });
+
+  it('declares g_memory_input_stream_new_from_bytes as [ptr (GBytes*)] -> ptr (GInputStream*)', () => {
+    const sym = GIO_FFI_SYMBOLS.g_memory_input_stream_new_from_bytes;
+    expect(sym.args).toEqual([FFIType.pointer]);
+    expect(sym.returns).toBe(FFIType.pointer);
+  });
 });

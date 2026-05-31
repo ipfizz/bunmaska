@@ -107,6 +107,47 @@ describe('WEBKITGTK_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_inspector_show.args).toEqual([FFIType.pointer]);
     expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_inspector_show.returns).toBe(FFIType.void);
   });
+
+  it('declares web_context_get_default as () -> ptr (the default WebKitWebContext)', () => {
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_context_get_default.args).toEqual([]);
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_context_get_default.returns).toBe(FFIType.pointer);
+  });
+
+  it('declares web_view_get_context as (ptr) -> ptr', () => {
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_context.args).toEqual([FFIType.pointer]);
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_context.returns).toBe(FFIType.pointer);
+  });
+
+  it('declares register_uri_scheme as (ctx, cstring, cb, ptr, ptr) -> void', () => {
+    const sym = WEBKITGTK_FFI_SYMBOLS.webkit_web_context_register_uri_scheme;
+    expect(sym.args).toEqual([
+      FFIType.pointer,
+      FFIType.cstring,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ]);
+    expect(sym.returns).toBe(FFIType.void);
+  });
+
+  it('declares uri_scheme_request_get_uri as (ptr) -> ptr (transfer-none const char*)', () => {
+    const sym = WEBKITGTK_FFI_SYMBOLS.webkit_uri_scheme_request_get_uri;
+    expect(sym.args).toEqual([FFIType.pointer]);
+    expect(sym.returns).toBe(FFIType.pointer);
+  });
+
+  it('declares uri_scheme_request_finish as (request, stream, i64 len, ptr type) -> void', () => {
+    const sym = WEBKITGTK_FFI_SYMBOLS.webkit_uri_scheme_request_finish;
+    expect(sym.args).toEqual([FFIType.pointer, FFIType.pointer, FFIType.i64, FFIType.pointer]);
+    expect(sym.args[2]).toBe(FFIType.i64);
+    expect(sym.returns).toBe(FFIType.void);
+  });
+
+  it('declares uri_scheme_request_finish_error as (request, GError*) -> void', () => {
+    const sym = WEBKITGTK_FFI_SYMBOLS.webkit_uri_scheme_request_finish_error;
+    expect(sym.args).toEqual([FFIType.pointer, FFIType.pointer]);
+    expect(sym.returns).toBe(FFIType.void);
+  });
 });
 
 describe('WebKit enum constants', () => {

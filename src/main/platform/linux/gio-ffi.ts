@@ -50,6 +50,13 @@ export const GIO_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.u32],
     returns: FFIType.pointer,
   },
+  // (GBytes*) -> GInputStream* (transfer-full). Takes its own ref on the GBytes,
+  // so the caller unrefs its local GBytes after this returns. Backs the custom
+  // URL-scheme response body on Linux (the GInputStream WebKit reads from).
+  g_memory_input_stream_new_from_bytes: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GIO_FFI_SYMBOLS>> | undefined } = {

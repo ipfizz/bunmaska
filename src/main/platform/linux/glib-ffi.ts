@@ -54,6 +54,21 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // (string) -> GQuark (a guint32 id). Used to build an error domain for the
+  // GError handed to webkit_uri_scheme_request_finish_error.
+  g_quark_from_string: {
+    args: [FFIType.cstring],
+    returns: FFIType.u32,
+  },
+  // (domain:GQuark, code:gint, message) -> GError* (transfer-full; g_error_free).
+  g_error_new_literal: {
+    args: [FFIType.u32, FFIType.i32, FFIType.cstring],
+    returns: FFIType.pointer,
+  },
+  g_error_free: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GLIB_FFI_SYMBOLS>> | undefined } = {
