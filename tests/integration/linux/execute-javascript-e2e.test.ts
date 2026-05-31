@@ -56,7 +56,10 @@ describe.skipIf(!isLinux)('executeJavaScript over a real WebKitGTK webview', () 
     contents.loadHTML('<!doctype html><html><body>exec</body></html>', 'about:blank');
 
     // Pump until the page (and its page-world `sambarExec` handler) is live.
-    await pumpUntil(() => didFinish, 5000);
+    // Generous budget: a cold WebKitGTK process under software-GL Xvfb can take
+    // several seconds to fire did-finish-load on a loaded CI runner (a 5s budget
+    // flaked). pumpUntil early-exits the instant the page is ready.
+    await pumpUntil(() => didFinish, 20000);
     expect(didFinish).toBe(true);
 
     // Settle each exec by pumping the cooperative loop while awaiting it.
@@ -66,7 +69,7 @@ describe.skipIf(!isLinux)('executeJavaScript over a real WebKitGTK webview', () 
       void promise.finally(() => {
         done = true;
       });
-      await pumpUntil(() => done, 5000);
+      await pumpUntil(() => done, 10000);
       return promise;
     };
 
@@ -79,7 +82,7 @@ describe.skipIf(!isLinux)('executeJavaScript over a real WebKitGTK webview', () 
     void throwing.catch(() => {
       threw = true;
     });
-    await pumpUntil(() => threw, 5000);
+    await pumpUntil(() => threw, 10000);
     await expect(throwing).rejects.toThrow(/boom/);
 
     window.close();
