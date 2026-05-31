@@ -77,9 +77,10 @@ export const evaluateJavaScriptOnView = (view: Pointer, code: string): Promise<u
       reject(new Error(`executeJavaScript timed out after ${EVAL_TIMEOUT_MS}ms`));
     }, EVAL_TIMEOUT_MS);
 
-    // A pinned, NULL-initialized `GError*` slot for evaluate_javascript_finish.
+    // NULL-initialized `GError*` out-slot. The callback closes over `errorSlot`
+    // itself (not just its pointer number) so Bun's GC cannot free the buffer
+    // before the async finish() writes into it; ptr() is taken at call time.
     const errorSlot = new BigUint64Array(1);
-    const errorSlotPtr = ptr(errorSlot);
 
     callback = new JSCallback((source: Pointer, result: Pointer, _userData: Pointer): void => {
       if (settled) {
@@ -87,6 +88,7 @@ export const evaluateJavaScriptOnView = (view: Pointer, code: string): Promise<u
       }
       settled = true;
       clearTimeout(timer);
+      const errorSlotPtr = ptr(errorSlot);
       const value = webkit.symbols.webkit_web_view_evaluate_javascript_finish(
         source,
         result,
