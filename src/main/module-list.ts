@@ -65,6 +65,7 @@ export const IMPLEMENTED_MODULES = [
   'Menu',
   'MenuItem',
   'nativeTheme',
+  'Notification',
   'shell',
 ] as const;
 

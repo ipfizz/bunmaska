@@ -20,6 +20,11 @@ describe('sambar/main entry barrel', () => {
   test('exports currentPlatform', () => {
     expect(typeof sambarMain.currentPlatform).toBe('function');
   });
+
+  test('exports the Notification class', () => {
+    expect(sambarMain.Notification).toBeDefined();
+    expect(typeof sambarMain.Notification.isSupported).toBe('function');
+  });
 });
 
 describe('sambar (root) entry barrel', () => {
