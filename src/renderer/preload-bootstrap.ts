@@ -54,8 +54,32 @@ const BOOTSTRAP_SOURCE = `(function () {
     },
     on: function (ch, listener) {
       var list = listeners.get(ch) || [];
-      list.push(listener);
+      list.push({ fn: listener, once: false });
       listeners.set(ch, list);
+    },
+    once: function (ch, listener) {
+      var list = listeners.get(ch) || [];
+      list.push({ fn: listener, once: true });
+      listeners.set(ch, list);
+    },
+    removeListener: function (ch, listener) {
+      var list = listeners.get(ch);
+      if (!list) {
+        return;
+      }
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].fn === listener) {
+          list.splice(i, 1);
+          return;
+        }
+      }
+    },
+    removeAllListeners: function (ch) {
+      if (ch === undefined) {
+        listeners.clear();
+      } else {
+        listeners.delete(ch);
+      }
     },
     _dispatch: function (raw) {
       var env = JSON.parse(raw);
@@ -72,9 +96,24 @@ const BOOTSTRAP_SOURCE = `(function () {
         return;
       }
       if (env.kind === 'send' && typeof env.channel === 'string') {
-        var list = listeners.get(env.channel) || [];
-        for (var i = 0; i < list.length; i += 1) {
-          list[i].apply(null, env.args || []);
+        var live = listeners.get(env.channel) || [];
+        // Snapshot so listeners added during dispatch are not invoked this round.
+        var snapshot = live.slice();
+        var args = env.args || [];
+        for (var i = 0; i < snapshot.length; i += 1) {
+          var record = snapshot[i];
+          var current = listeners.get(env.channel) || [];
+          // Skip records removed (by removeListener/removeAllListeners) earlier
+          // in this same dispatch.
+          if (current.indexOf(record) === -1) {
+            continue;
+          }
+          // once-listeners are removed BEFORE firing so a re-entrant dispatch
+          // cannot invoke them a second time.
+          if (record.once) {
+            current.splice(current.indexOf(record), 1);
+          }
+          record.fn.apply(null, args);
         }
       }
     },

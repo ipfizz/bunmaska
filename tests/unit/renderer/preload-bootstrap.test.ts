@@ -1,12 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 import { generatePreloadBootstrap } from '../../../src/renderer/preload-bootstrap';
 
+type Listener = (...args: unknown[]) => void;
+
 type Bridge = {
   send: (channel: string, ...args: unknown[]) => void;
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
-  on: (channel: string, listener: (...args: unknown[]) => void) => void;
+  on: (channel: string, listener: Listener) => void;
+  once: (channel: string, listener: Listener) => void;
+  removeListener: (channel: string, listener: Listener) => void;
+  removeAllListeners: (channel?: string) => void;
   _dispatch: (raw: string) => void;
 };
+
+const sendEnvelope = (channel: string, args: unknown[] = []): string =>
+  JSON.stringify({ kind: 'send', channel, args });
 
 const evalBootstrap = (): { bridge: Bridge; posted: string[] } => {
   const posted: string[] = [];
@@ -97,5 +105,122 @@ describe('__sambar.on', () => {
     expect(() =>
       bridge._dispatch(JSON.stringify({ kind: 'send', channel: 'nobody', args: [] })),
     ).not.toThrow();
+  });
+
+  test('invokes every registered listener for a channel in order', () => {
+    const { bridge } = evalBootstrap();
+    const order: number[] = [];
+    bridge.on('multi', () => order.push(1));
+    bridge.on('multi', () => order.push(2));
+    bridge._dispatch(sendEnvelope('multi'));
+    expect(order).toEqual([1, 2]);
+  });
+});
+
+describe('__sambar.once', () => {
+  test('fires exactly once then auto-removes', () => {
+    const { bridge } = evalBootstrap();
+    let calls = 0;
+    bridge.once('tick', () => {
+      calls += 1;
+    });
+    bridge._dispatch(sendEnvelope('tick'));
+    bridge._dispatch(sendEnvelope('tick'));
+    expect(calls).toBe(1);
+  });
+
+  test('passes the envelope args to the listener', () => {
+    const { bridge } = evalBootstrap();
+    const received: unknown[][] = [];
+    bridge.once('tick', (...args) => received.push(args));
+    bridge._dispatch(sendEnvelope('tick', ['a', 2]));
+    expect(received).toEqual([['a', 2]]);
+  });
+
+  test('a once listener removed before dispatch never fires', () => {
+    const { bridge } = evalBootstrap();
+    let calls = 0;
+    const fn = (): void => {
+      calls += 1;
+    };
+    bridge.once('tick', fn);
+    bridge.removeListener('tick', fn);
+    bridge._dispatch(sendEnvelope('tick'));
+    expect(calls).toBe(0);
+  });
+});
+
+describe('__sambar.removeListener', () => {
+  test('removes the specific listener and leaves the others', () => {
+    const { bridge } = evalBootstrap();
+    const hits: string[] = [];
+    const a = (): void => void hits.push('a');
+    const b = (): void => void hits.push('b');
+    bridge.on('news', a);
+    bridge.on('news', b);
+    bridge.removeListener('news', a);
+    bridge._dispatch(sendEnvelope('news'));
+    expect(hits).toEqual(['b']);
+  });
+
+  test('a removed listener does not fire on a later dispatch', () => {
+    const { bridge } = evalBootstrap();
+    let calls = 0;
+    const fn = (): void => {
+      calls += 1;
+    };
+    bridge.on('news', fn);
+    bridge._dispatch(sendEnvelope('news'));
+    bridge.removeListener('news', fn);
+    bridge._dispatch(sendEnvelope('news'));
+    expect(calls).toBe(1);
+  });
+
+  test('removing an unknown listener is a no-op', () => {
+    const { bridge } = evalBootstrap();
+    expect(() => bridge.removeListener('news', () => undefined)).not.toThrow();
+    expect(() => bridge.removeListener('missing', () => undefined)).not.toThrow();
+  });
+
+  test('removes only the first matching instance of a duplicated listener', () => {
+    const { bridge } = evalBootstrap();
+    let calls = 0;
+    const fn = (): void => {
+      calls += 1;
+    };
+    bridge.on('dup', fn);
+    bridge.on('dup', fn);
+    bridge.removeListener('dup', fn);
+    bridge._dispatch(sendEnvelope('dup'));
+    expect(calls).toBe(1);
+  });
+});
+
+describe('__sambar.removeAllListeners', () => {
+  test('clears a single channel when given one', () => {
+    const { bridge } = evalBootstrap();
+    const hits: string[] = [];
+    bridge.on('news', () => void hits.push('news'));
+    bridge.on('other', () => void hits.push('other'));
+    bridge.removeAllListeners('news');
+    bridge._dispatch(sendEnvelope('news'));
+    bridge._dispatch(sendEnvelope('other'));
+    expect(hits).toEqual(['other']);
+  });
+
+  test('clears every channel when given no argument', () => {
+    const { bridge } = evalBootstrap();
+    const hits: string[] = [];
+    bridge.on('a', () => void hits.push('a'));
+    bridge.on('b', () => void hits.push('b'));
+    bridge.removeAllListeners();
+    bridge._dispatch(sendEnvelope('a'));
+    bridge._dispatch(sendEnvelope('b'));
+    expect(hits).toEqual([]);
+  });
+
+  test('clearing an unknown channel is a no-op', () => {
+    const { bridge } = evalBootstrap();
+    expect(() => bridge.removeAllListeners('missing')).not.toThrow();
   });
 });
