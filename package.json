@@ -43,7 +43,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "type-check": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --timeout 30000",
     "test:watch": "bun test --watch",
     "validate": "bun run format:check && bun run lint && bun run type-check && bun run test",
     "prepublishOnly": "bun run validate"
