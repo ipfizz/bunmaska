@@ -57,6 +57,8 @@ export interface NativeWebContents {
   canGoForward(): boolean;
   /** Evaluate JS in the page. Fire-and-forget — no result is returned (D022). */
   executeJavaScript(code: string): void;
+  /** Open the native web inspector (devtools) for this view. Best-effort. */
+  openDevTools(): void;
   /** Deliver a raw IPC envelope (JSON) to the renderer's preload bridge. */
   sendEnvelopeToRenderer(envelopeJson: string): void;
   /** Register a callback for raw IPC envelopes (JSON) posted by the renderer. */

@@ -122,4 +122,26 @@ describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
 
     app.quit();
   });
+
+  test('openDevTools exists and does not throw', async () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const app = createLinuxApplication();
+    app.start();
+    const window: NativeWindow = app.createWindow({
+      width: 320,
+      height: 240,
+      title: 'DevTools',
+      show: true,
+    });
+    const contents = window.webContents;
+    contents.loadHTML('<!doctype html><html><body>devtools</body></html>');
+    await pump(200);
+    expect(typeof contents.openDevTools).toBe('function');
+    expect(() => contents.openDevTools()).not.toThrow();
+    await pump(100);
+    window.close();
+    app.quit();
+  });
 });

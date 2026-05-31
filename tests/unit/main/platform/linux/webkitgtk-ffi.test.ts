@@ -86,6 +86,27 @@ describe('WEBKITGTK_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_can_go_back.returns).toBe(FFIType.i32);
     expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_can_go_forward.returns).toBe(FFIType.i32);
   });
+
+  it('declares get_settings as (ptr) -> ptr (the WebKitSettings accessor)', () => {
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_settings.args).toEqual([FFIType.pointer]);
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_settings.returns).toBe(FFIType.pointer);
+  });
+
+  it('declares set_enable_developer_extras as (ptr, i32) -> void', () => {
+    const sym = WEBKITGTK_FFI_SYMBOLS.webkit_settings_set_enable_developer_extras;
+    expect(sym.args).toEqual([FFIType.pointer, FFIType.i32]);
+    expect(sym.returns).toBe(FFIType.void);
+  });
+
+  it('declares get_inspector as (ptr) -> ptr (the WebKitWebInspector accessor)', () => {
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_inspector.args).toEqual([FFIType.pointer]);
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_inspector.returns).toBe(FFIType.pointer);
+  });
+
+  it('declares inspector show as (ptr) -> void', () => {
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_inspector_show.args).toEqual([FFIType.pointer]);
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_inspector_show.returns).toBe(FFIType.void);
+  });
 });
 
 describe('WebKit enum constants', () => {

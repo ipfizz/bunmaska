@@ -23,6 +23,7 @@ const makeFakeNative = (): {
     canGoBack: () => false,
     canGoForward: () => false,
     executeJavaScript: () => undefined,
+    openDevTools: () => undefined,
     sendEnvelopeToRenderer: (json) => sent.push(json),
     onRendererEnvelope: (cb) => {
       onEnvelope = cb;
@@ -131,6 +132,21 @@ describe('WebContents did-finish-load', () => {
   });
 });
 
+describe('WebContents.openDevTools', () => {
+  test('delegates to the native view', () => {
+    let opened = 0;
+    const { native } = makeFakeNative();
+    const wc = new WebContents({
+      ...native,
+      openDevTools: () => {
+        opened += 1;
+      },
+    });
+    wc.openDevTools();
+    expect(opened).toBe(1);
+  });
+});
+
 describe('WebContents navigation', () => {
   test('delegates reload, goBack and goForward to the native view', () => {
     const calls: string[] = [];
@@ -144,6 +160,7 @@ describe('WebContents navigation', () => {
       canGoBack: () => true,
       canGoForward: () => false,
       executeJavaScript: () => undefined,
+      openDevTools: () => undefined,
       sendEnvelopeToRenderer: () => undefined,
       onRendererEnvelope: () => undefined,
       onDidFinishLoad: () => undefined,

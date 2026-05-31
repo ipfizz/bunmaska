@@ -56,6 +56,29 @@ export const PRELOAD_WORLD_NAME = 'SambarPreload';
 const dispatchScript = (envelopeJson: string): string =>
   `window.__sambar && window.__sambar._dispatch(${JSON.stringify(envelopeJson)});`;
 
+/**
+ * Turn on `developerExtrasEnabled` on a `WKPreferences` via KVC so the inspector
+ * is available. Best-effort: the key is undocumented SPI, so a failure to set it
+ * must not abort window creation.
+ */
+const enableDeveloperExtras = (preferences: Handle): void => {
+  if (preferences === 0n) {
+    return;
+  }
+  try {
+    const rt = cocoa();
+    const yes = msgSendU8(rt.classes.get('NSNumber'), rt.selectors.get('numberWithBool:'), 1);
+    msgSendPtrPtr(
+      preferences,
+      rt.selectors.get('setValue:forKey:'),
+      yes,
+      nsString('developerExtrasEnabled'),
+    );
+  } catch (error) {
+    log.warn('could not enable developer extras', error);
+  }
+};
+
 class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
   readonly #isolatedWorld: Handle;
@@ -137,6 +160,26 @@ class MacOSWebContents implements NativeWebContents {
   executeJavaScript(code: string): void {
     // Public API runs in the PAGE world (Electron semantics: the main world).
     this.#evaluateInWorld(code, pageWorld());
+  }
+
+  /**
+   * Open the web inspector. Developer extras are enabled at view creation, so
+   * the inspector is always available via right-click → Inspect Element; this
+   * also drives it open programmatically through the private `-[WKWebView
+   * _inspector]` + `-[_WKInspector show]` selectors. Those are private SPI: the
+   * whole call is best-effort and never throws if the selectors are absent.
+   */
+  openDevTools(): void {
+    try {
+      const rt = cocoa();
+      const inspector = rt.msgSend(this.#webview, rt.selectors.get('_inspector'));
+      if (inspector === 0n) {
+        return;
+      }
+      rt.msgSend(inspector, rt.selectors.get('show'));
+    } catch (error) {
+      log.warn('openDevTools failed (private inspector SPI unavailable)', error);
+    }
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
@@ -318,6 +361,11 @@ class MacOSApplication implements NativeApplication {
       rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
       rt.selectors.get('init'),
     );
+
+    // Enable developer extras so the web inspector is available (right-click →
+    // Inspect Element, and webContents.openDevTools()). `developerExtrasEnabled`
+    // is a KVC key on WKPreferences; set via setValue:forKey: with an NSNumber.
+    enableDeveloperExtras(rt.msgSend(configuration, rt.selectors.get('preferences')));
 
     // The web view (and thus its contents) does not exist until after the
     // configuration is built, so the handler forwards to a late-bound contents

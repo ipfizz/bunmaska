@@ -84,6 +84,21 @@ if (currentPlatform() === 'macos') {
       }
     });
 
+    test('openDevTools exists and does not throw', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({ width: 400, height: 300, title: 't', show: true });
+        win.webContents.loadHTML('<html><body>hi</body></html>', 'about:blank');
+        await delay(150);
+        expect(typeof win.webContents.openDevTools).toBe('function');
+        expect(() => win.webContents.openDevTools()).not.toThrow();
+        await delay(50);
+      } finally {
+        app.quit();
+      }
+    });
+
     test('hide makes the window not visible', () => {
       const app = createMacOSApplication();
       app.start();

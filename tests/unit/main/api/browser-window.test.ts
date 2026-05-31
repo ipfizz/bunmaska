@@ -37,6 +37,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     canGoBack: () => false,
     canGoForward: () => false,
     executeJavaScript: () => undefined,
+    openDevTools: () => undefined,
     sendEnvelopeToRenderer: () => undefined,
     onRendererEnvelope: () => undefined,
     onDidFinishLoad: () => undefined,

@@ -62,6 +62,13 @@ class LinuxWebContents implements NativeWebContents {
     });
     this.#view = wired.view;
     this.#registry = wired.registry;
+    // Enable developer extras so the inspector is available (right-click →
+    // Inspect Element, and openDevTools()). Stable WebKitGTK 6.0 API.
+    const webkit = loadWebKitGtkFFI();
+    webkit.symbols.webkit_settings_set_enable_developer_extras(
+      webkit.symbols.webkit_web_view_get_settings(this.#view),
+      GTK_TRUE,
+    );
     this.#registry.connect(
       this.#view,
       'load-changed',
@@ -144,6 +151,15 @@ class LinuxWebContents implements NativeWebContents {
       null,
       null,
     );
+  }
+
+  openDevTools(): void {
+    const webkit = loadWebKitGtkFFI();
+    const inspector = webkit.symbols.webkit_web_view_get_inspector(this.#view);
+    if (inspector === null) {
+      return;
+    }
+    webkit.symbols.webkit_web_inspector_show(inspector);
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {

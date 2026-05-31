@@ -89,6 +89,11 @@ export class WebContents extends EventEmitter {
     this.#native.executeJavaScript(code);
   }
 
+  /** Open the developer tools (web inspector) for this view. Best-effort. */
+  openDevTools(): void {
+    this.#native.openDevTools();
+  }
+
   /** Send an event on a channel to the renderer (`ipcRenderer.on` receives it). */
   send(channel: string, ...args: readonly unknown[]): void {
     this.#native.sendEnvelopeToRenderer(encodeEnvelope({ kind: 'send', channel, args }));

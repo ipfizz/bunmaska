@@ -106,6 +106,22 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
+  webkit_web_view_get_settings: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  webkit_settings_set_enable_developer_extras: {
+    args: [FFIType.pointer, FFIType.i32],
+    returns: FFIType.void,
+  },
+  webkit_web_view_get_inspector: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  webkit_web_inspector_show: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
   webkit_user_content_manager_new: {
     args: [],
     returns: FFIType.pointer,
