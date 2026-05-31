@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildDispatchScript,
   HANDLER_NAME,
+  PRELOAD_WORLD_NAME,
   SIGNAL,
 } from '../../../../../src/main/platform/linux/webkit-ipc';
 
@@ -12,6 +13,10 @@ describe('webkit-ipc constants', () => {
 
   it('connects the detailed script-message-received::sambar signal', () => {
     expect(SIGNAL).toBe('script-message-received::sambar');
+  });
+
+  it('uses the SambarPreload isolated world name (matches the macOS backend)', () => {
+    expect(PRELOAD_WORLD_NAME).toBe('SambarPreload');
   });
 });
 

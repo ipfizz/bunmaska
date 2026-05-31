@@ -9,6 +9,13 @@ import {
 } from './webkitgtk-ffi';
 
 /**
+ * Name of the isolated JS world the bridge + user preload run in (Electron
+ * `contextIsolation: true`). The page/main world is `NULL`. Must match the
+ * macOS `PRELOAD_WORLD_NAME`.
+ */
+export const PRELOAD_WORLD_NAME = 'SambarPreload';
+
+/**
  * WebKitGTK 6.0 IPC bridge — the Linux mirror of `cocoa-script-message-handler`.
  *
  * Builds a fully-wired `WebKitUserContentManager` BEFORE the view is
@@ -53,16 +60,17 @@ const requirePointer = (ptr: Pointer | null, what: string): Pointer => {
 };
 
 /**
- * Build a `WebKitUserScript` from `source` and add it to the manager at
- * document-start in all frames. The manager takes its own ref on the script, so
- * it need not be retained here.
+ * Build a `WebKitUserScript` from `source` for the named isolated world and add
+ * it to the manager at document-start in all frames. The manager takes its own
+ * ref on the script, so it need not be retained here.
  */
 const addUserScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
-  const script = webkit.symbols.webkit_user_script_new(
+  const script = webkit.symbols.webkit_user_script_new_for_world(
     cstr(source),
     WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
     WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+    cstr(PRELOAD_WORLD_NAME),
     null,
     null,
   );
@@ -73,8 +81,8 @@ const addUserScript = (ucm: Pointer, source: string): void => {
  * Create a `WebKitWebView` with a pre-wired user-content-manager:
  * 1. `webkit_user_content_manager_new()`
  * 2. connect `script-message-received::sambar` BEFORE register (documented race)
- * 3. `register_script_message_handler(ucm, 'sambar', NULL)` (default world)
- * 4. add the preload user-script at document-start in all frames
+ * 3. `register_script_message_handler(ucm, 'sambar', 'SambarPreload')` (isolated world)
+ * 4. add the preload user-script at document-start in all frames (isolated world)
  * 5. construct the view via `g_object_new(webkit_web_view_get_type(),
  *    'user-content-manager', ucm, NULL)` — the manager is construct-only.
  *
@@ -93,11 +101,12 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   const callback = makeScriptMessageCallback(options.onMessage);
   registry.connect(ucm, SIGNAL, callback);
 
-  // world_name = NULL (default world). cstring cannot encode NULL -> pointer 0.
+  // Register the handler IN the isolated world so its `webkit.messageHandlers`
+  // binding is reachable only from there (matches the user-script world below).
   webkit.symbols.webkit_user_content_manager_register_script_message_handler(
     ucm,
     cstr(HANDLER_NAME),
-    null,
+    cstr(PRELOAD_WORLD_NAME),
   );
 
   addUserScript(ucm, options.preloadSource);
@@ -127,8 +136,9 @@ export const buildDispatchScript = (envelopeJson: string): string =>
 
 /**
  * Push a JSON envelope to the renderer's preload bridge via fire-and-forget
- * `evaluate_javascript` (length = -1 for NUL-terminated; all trailing
- * world/source/cancellable/callback/user_data are NULL).
+ * `evaluate_javascript` (length = -1 for NUL-terminated; cancellable/callback/
+ * user_data are NULL). `world_name` targets the ISOLATED `SambarPreload` world,
+ * where `__sambar._dispatch` lives — NOT the page world.
  */
 export const sendToRenderer = (view: Pointer, envelopeJson: string): void => {
   const webkit = loadWebKitGtkFFI();
@@ -136,7 +146,7 @@ export const sendToRenderer = (view: Pointer, envelopeJson: string): void => {
     view,
     cstr(buildDispatchScript(envelopeJson)),
     -1n,
-    null,
+    cstr(PRELOAD_WORLD_NAME),
     null,
     null,
     null,
