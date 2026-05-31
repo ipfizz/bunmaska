@@ -8,7 +8,16 @@
  * parts (plist text, slug, bundle layout) are factored out for unit testing.
  */
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SAMBAR_VERSION } from '../common/version';
 
@@ -176,6 +185,134 @@ export const buildStapleArgs = (appPath: string): string[] => [
   appPath,
 ];
 
+/** One entry of a macOS `.iconset`: the file name and the square pixel size. */
+export type IconsetEntry = {
+  readonly name: string;
+  readonly size: number;
+};
+
+/**
+ * The ten standard `.iconset` members macOS expects, in ascending order. Each
+ * `@2x` retina variant is exactly double its non-retina sibling. Pure. Used to
+ * drive the `sips` resizes that feed `iconutil`.
+ */
+export const iconsetSpec = (): readonly IconsetEntry[] => [
+  { name: 'icon_16x16.png', size: 16 },
+  { name: 'icon_16x16@2x.png', size: 32 },
+  { name: 'icon_32x32.png', size: 32 },
+  { name: 'icon_32x32@2x.png', size: 64 },
+  { name: 'icon_128x128.png', size: 128 },
+  { name: 'icon_128x128@2x.png', size: 256 },
+  { name: 'icon_256x256.png', size: 256 },
+  { name: 'icon_256x256@2x.png', size: 512 },
+  { name: 'icon_512x512.png', size: 512 },
+  { name: 'icon_512x512@2x.png', size: 1024 },
+];
+
+/** Build the `sips` argv that resizes `src` to a `size`×`size` square at `dest`. Pure. */
+export const buildSipsArgs = (size: number, src: string, dest: string): string[] => [
+  '-z',
+  String(size),
+  String(size),
+  src,
+  '--out',
+  dest,
+];
+
+/** Build the `iconutil` argv that converts an `.iconset` directory into `outIcns`. Pure. */
+export const buildIconutilArgs = (iconsetDir: string, outIcns: string): string[] => [
+  '-c',
+  'icns',
+  iconsetDir,
+  '-o',
+  outIcns,
+];
+
+export type HdiutilOptions = {
+  readonly volName: string;
+  readonly srcFolder: string;
+  readonly outDmg: string;
+};
+
+/**
+ * Build the `hdiutil create` argv for a compressed (`UDZO`) disk image. Pure.
+ * `-ov` overwrites an existing image so repeat builds are idempotent.
+ */
+export const buildHdiutilArgs = (opts: HdiutilOptions): string[] => [
+  'create',
+  '-volname',
+  opts.volName,
+  '-srcfolder',
+  opts.srcFolder,
+  '-ov',
+  '-format',
+  'UDZO',
+  opts.outDmg,
+];
+
+/** Spawn a tool, await it, and throw with its stderr on a non-zero exit. */
+const runTool = async (label: string, argv: string[]): Promise<void> => {
+  const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`${label} failed (exit ${exitCode}):\n${stderr}`);
+  }
+};
+
+/**
+ * Convert a PNG at `pngPath` to an `.icns` at `outIcns` via `sips` + `iconutil`.
+ * Builds a temporary `.iconset` with the ten {@link iconsetSpec} sizes, then
+ * folds it into a single `.icns`. Cleans the temp iconset on success or failure.
+ */
+export const convertPngToIcns = async (pngPath: string, outIcns: string): Promise<void> => {
+  const work = mkdtempSync(join(tmpdir(), 'sambar-iconset-'));
+  // iconutil only accepts a directory whose name ends in `.iconset`.
+  const iconsetDir = join(work, 'icon.iconset');
+  mkdirSync(iconsetDir, { recursive: true });
+  try {
+    for (const { name, size } of iconsetSpec()) {
+      await runTool('sips', ['sips', ...buildSipsArgs(size, pngPath, join(iconsetDir, name))]);
+    }
+    await runTool('iconutil', ['iconutil', ...buildIconutilArgs(iconsetDir, outIcns)]);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+};
+
+/** Converts a PNG icon to `.icns`. Injectable so unit tests need not shell out. */
+export type ConvertIcon = (pngPath: string, outIcns: string) => Promise<void>;
+
+export type BuildDmgOptions = {
+  readonly appDir: string;
+  readonly name: string;
+  readonly outDmg: string;
+};
+
+/**
+ * Produce a compressed `.dmg` at `outDmg` containing the `.app` at `appDir`.
+ * Stages the bundle plus a `/Applications` symlink (for drag-install) in a temp
+ * folder, runs `hdiutil create`, and cleans the staging dir afterward. Throws
+ * with the tool's stderr on a non-zero exit.
+ */
+export const buildDmg = async (opts: BuildDmgOptions): Promise<void> => {
+  const staging = mkdtempSync(join(tmpdir(), 'sambar-dmg-'));
+  try {
+    const stagedApp = join(staging, `${opts.name}.app`);
+    await runTool('cp', ['cp', '-R', opts.appDir, stagedApp]);
+    await runTool('ln', ['ln', '-s', '/Applications', join(staging, 'Applications')]);
+    await runTool('hdiutil', [
+      'hdiutil',
+      ...buildHdiutilArgs({ volName: opts.name, srcFolder: staging, outDmg: opts.outDmg }),
+    ]);
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
+};
+
+/** Builds a `.dmg` from a finished `.app`. Injectable so unit tests need not shell out. */
+export type BuildDmg = (opts: BuildDmgOptions) => Promise<void>;
+
 /**
  * Code-sign an `.app` at `appPath` with `identity` (a real `Developer ID
  * Application: …` identity, or `-` for ad-hoc) and verify the result. Throws
@@ -211,11 +348,18 @@ export type BuildMacAppOptions = {
   readonly name: string;
   readonly id?: string;
   readonly out?: string;
+  /** App icon: a `.icns` (copied as-is) or a `.png` (converted to `.icns`). */
   readonly icon?: string;
   /** When set, code-sign the finished bundle with this identity (`-` = ad-hoc). */
   readonly sign?: string;
+  /** When true, also produce an `<out>/<Name>.dmg` containing the signed bundle. */
+  readonly dmg?: boolean;
   /** Seam for the signer; defaults to {@link codesignApp}. Stub it in tests. */
   readonly signApp?: SignApp;
+  /** Seam for PNG→.icns conversion; defaults to {@link convertPngToIcns}. Stub it in tests. */
+  readonly convertIcon?: ConvertIcon;
+  /** Seam for `.dmg` creation; defaults to {@link buildDmg}. Stub it in tests. */
+  readonly buildDmg?: BuildDmg;
 };
 
 /** Compile `entry` to a standalone binary at `outfile`. Throws on a non-zero exit. */
@@ -253,8 +397,16 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
     if (!existsSync(opts.icon)) {
       throw new Error(`sambar build: icon not found: ${opts.icon}`);
     }
-    copyFileSync(opts.icon, layout.iconPath);
-    iconFile = layout.iconFileName;
+    if (opts.icon.toLowerCase().endsWith('.png')) {
+      // Convert the PNG to a multi-resolution .icns inside the bundle.
+      const convertIcon = opts.convertIcon ?? convertPngToIcns;
+      await convertIcon(opts.icon, layout.iconPath);
+    } else {
+      // Already an .icns (or another container iconutil produced): copy as-is.
+      copyFileSync(opts.icon, layout.iconPath);
+    }
+    // CFBundleIconFile is the base name WITHOUT extension, per macOS convention.
+    iconFile = opts.name;
   }
 
   const plist = buildInfoPlist(
@@ -269,6 +421,13 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   if (opts.sign !== undefined) {
     const signApp = opts.signApp ?? codesignApp;
     await signApp(opts.sign, layout.appDir);
+  }
+
+  // The .dmg packages the finished (and signed, if requested) bundle, so it is
+  // produced after signing.
+  if (opts.dmg === true) {
+    const dmg = opts.buildDmg ?? buildDmg;
+    await dmg({ appDir: layout.appDir, name: opts.name, outDmg: join(out, `${opts.name}.dmg`) });
   }
 
   return layout.appDir;

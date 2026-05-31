@@ -8,7 +8,13 @@
  */
 
 import { buildLinuxApp } from './build-linux';
-import { type BuildMacAppOptions, buildMacApp, type SignApp } from './build-macos';
+import {
+  type BuildDmg,
+  type BuildMacAppOptions,
+  buildMacApp,
+  type ConvertIcon,
+  type SignApp,
+} from './build-macos';
 import { type Command, parseArgs, resolveTarget } from './parse-args';
 import { runApp } from './run';
 import { currentPlatform } from '../common/platform';
@@ -35,10 +41,13 @@ build options:
   --name <Name>      Display/bundle name (default: derived from <entry>)
   --id <bundle.id>   Bundle identifier (default: com.sambar.<name-slug>)
   --out <dir>        Output directory (default: current directory)
-  --icon <path>      App icon (.icns for macOS, .png for linux)
+  --icon <path>      App icon. macOS accepts a .icns (copied as-is) or a .png
+                     (converted to .icns via sips/iconutil); linux takes a .png.
   --sign <identity>  Code-sign the macOS .app. Use '-' for an ad-hoc signature
                      (no certificate), or a 'Developer ID Application: Name
                      (TEAMID)' identity that is present in your keychain.
+  --dmg              Also build a <Name>.dmg disk image of the macOS .app
+                     (macOS-only; uses hdiutil), with an /Applications symlink.
   --notarize         Notarization hook (macOS, with --sign). Requires the env
                      vars APPLE_ID, TEAM_ID and an app-specific password; this
                      build does not submit to Apple — see the docs to release.
@@ -62,6 +71,8 @@ export type DispatchDeps = {
   readonly buildMac?: (opts: BuildMacAppOptions) => Promise<string>;
   readonly signApp?: SignApp;
   readonly notarize?: NotarizeHook;
+  readonly convertIcon?: ConvertIcon;
+  readonly buildDmg?: BuildDmg;
 };
 
 const runBuild = async (
@@ -84,6 +95,11 @@ const runBuild = async (
     err(
       'sambar build: --notarize is macOS-only (notarytool), with a macOS target on a macOS host.',
     );
+    return 1;
+  }
+  // hdiutil is a macOS tool and the .dmg only wraps the macOS .app.
+  if (command.options.dmg === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
+    err('sambar build: --dmg is macOS-only (hdiutil), with a macOS target on a macOS host.');
     return 1;
   }
 
@@ -110,7 +126,10 @@ const runBuild = async (
     ...(command.options.out !== undefined ? { out: command.options.out } : {}),
     ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
     ...(command.options.sign !== undefined ? { sign: command.options.sign } : {}),
+    ...(command.options.dmg === true ? { dmg: true } : {}),
     ...(deps.signApp !== undefined ? { signApp: deps.signApp } : {}),
+    ...(deps.convertIcon !== undefined ? { convertIcon: deps.convertIcon } : {}),
+    ...(deps.buildDmg !== undefined ? { buildDmg: deps.buildDmg } : {}),
   });
   out(appPath);
 

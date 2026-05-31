@@ -23,6 +23,8 @@ export type BuildOptions = {
   readonly sign?: string;
   /** Request notarization (a documented hook; requires Apple credentials to actually run). */
   readonly notarize?: boolean;
+  /** Also produce a `.dmg` containing the built `.app` (macOS-only; uses hdiutil). */
+  readonly dmg?: boolean;
 };
 
 export type Command =
@@ -42,7 +44,7 @@ const BUILD_STRING_FLAGS = new Map<string, 'name' | 'id' | 'out' | 'icon' | 'sig
 ]);
 
 /** `sambar build` boolean flags that take no value, by argv token. */
-const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>(['--notarize']);
+const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>(['--notarize', '--dmg']);
 
 const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux']);
 
@@ -70,6 +72,8 @@ const parseBuild = (rest: readonly string[]): Command => {
       if (BUILD_BOOLEAN_FLAGS.has(token)) {
         if (token === '--notarize') {
           options.notarize = true;
+        } else if (token === '--dmg') {
+          options.dmg = true;
         }
         continue;
       }

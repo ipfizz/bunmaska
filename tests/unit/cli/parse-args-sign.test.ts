@@ -73,3 +73,47 @@ describe('parseArgs --notarize', () => {
     });
   });
 });
+
+describe('parseArgs --dmg', () => {
+  test('build without --dmg leaves dmg falsey', () => {
+    const cmd = parseArgs(['build', 'app.ts']);
+    expect(cmd.kind).toBe('build');
+    if (cmd.kind === 'build') {
+      expect(cmd.options.dmg).toBeUndefined();
+    }
+  });
+
+  test('build accepts a boolean --dmg flag (no value)', () => {
+    const cmd = parseArgs(['build', 'app.ts', '--dmg']);
+    expect(cmd.kind).toBe('build');
+    if (cmd.kind === 'build') {
+      expect(cmd.options.dmg).toBe(true);
+    }
+  });
+
+  test('build parses --dmg alongside --sign', () => {
+    expect(parseArgs(['build', 'app.ts', '--sign', '-', '--dmg'])).toEqual({
+      kind: 'build',
+      entry: 'app.ts',
+      options: { sign: '-', dmg: true },
+    });
+  });
+});
+
+describe('parseArgs --icon png vs icns', () => {
+  test('captures a .png icon path verbatim', () => {
+    const cmd = parseArgs(['build', 'app.ts', '--icon', '/tmp/logo.png']);
+    expect(cmd.kind).toBe('build');
+    if (cmd.kind === 'build') {
+      expect(cmd.options.icon).toBe('/tmp/logo.png');
+    }
+  });
+
+  test('captures a .icns icon path verbatim', () => {
+    const cmd = parseArgs(['build', 'app.ts', '--icon', '/tmp/logo.icns']);
+    expect(cmd.kind).toBe('build');
+    if (cmd.kind === 'build') {
+      expect(cmd.options.icon).toBe('/tmp/logo.icns');
+    }
+  });
+});
