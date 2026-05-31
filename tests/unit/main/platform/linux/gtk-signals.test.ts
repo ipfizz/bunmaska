@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import {
   CLOSE_REQUEST_CB_DEF,
+  closeRequestDecision,
   DESTROY_CB_DEF,
   LOAD_CHANGED_CB_DEF,
   makeCloseRequestCallback,
   makeDestroyCallback,
   makeLoadChangedCallback,
+  makeNotifyCallback,
+  NOTIFY_CB_DEF,
   SCRIPT_MESSAGE_CB_DEF,
   SignalRegistry,
 } from '../../../../../src/main/platform/linux/gtk-signals';
@@ -33,11 +36,26 @@ describe('gtk-signals callback ABI definitions (shape-only)', () => {
     expect(SCRIPT_MESSAGE_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
     expect(SCRIPT_MESSAGE_CB_DEF.returns).toBe('void');
   });
+
+  it('notify is (gobject, pspec, user_data) -> void: three pointers', () => {
+    expect(NOTIFY_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
+    expect(NOTIFY_CB_DEF.returns).toBe('void');
+  });
+});
+
+describe('closeRequestDecision (preventable close, GTK semantics)', () => {
+  it('returns 1 (veto, stay open) when the close request is vetoed', () => {
+    expect(closeRequestDecision(() => true)).toBe(1);
+  });
+
+  it('returns 0 (allow GTK to destroy) when not vetoed', () => {
+    expect(closeRequestDecision(() => false)).toBe(0);
+  });
 });
 
 describe('gtk-signals JSCallback factories (constructible + closable)', () => {
   it('builds a close-request callback exposing a native ptr', () => {
-    const cb = makeCloseRequestCallback(noop);
+    const cb = makeCloseRequestCallback(() => false);
     expect(typeof cb.ptr).toBe('number');
     cb.close();
   });
@@ -49,6 +67,12 @@ describe('gtk-signals JSCallback factories (constructible + closable)', () => {
     expect(typeof loadChanged.ptr).toBe('number');
     destroy.close();
     loadChanged.close();
+  });
+
+  it('builds a notify callback exposing a native ptr', () => {
+    const cb = makeNotifyCallback(noop);
+    expect(typeof cb.ptr).toBe('number');
+    cb.close();
   });
 });
 

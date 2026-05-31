@@ -72,6 +72,10 @@ export const GTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
+  gtk_window_is_active: {
+    args: [FFIType.pointer],
+    returns: FFIType.i32,
+  },
   gtk_widget_get_width: {
     args: [FFIType.pointer],
     returns: FFIType.i32,

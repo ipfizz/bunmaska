@@ -31,19 +31,44 @@ export const DESTROY_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const
 export const LOAD_CHANGED_CB_DEF = { args: ['ptr', 'i32', 'ptr'], returns: 'void' } as const;
 /** ABI shape for `script-message-received` (WK6.0): `(manager, value, user_data) -> void`. */
 export const SCRIPT_MESSAGE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
+/** ABI shape for a `GObject::notify` signal: `(gobject, pspec, user_data) -> void`. */
+export const NOTIFY_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
 /**
- * `GtkWindow::close-request` handler.
+ * Decide a `GtkWindow::close-request` return value from a JS close handler.
  *
- * INVERTED semantics — return 0 (FALSE) to ALLOW the close so GTK's default
- * handler destroys the window; returning 1 vetoes. Fires `onClosed` bookkeeping
- * then returns 0.
+ * INVERTED GTK semantics: return 1 (TRUE) to VETO (stop the default handler, so
+ * the window stays open); return 0 (FALSE) to ALLOW GTK's default handler to
+ * destroy the window. `onCloseRequest` returns `true` to veto. Pure (no FFI) so
+ * the veto logic is unit-tested without a display.
  */
-export const makeCloseRequestCallback = (onClosed: () => void): JSCallback =>
-  new JSCallback((_self: Pointer, _userData: Pointer): number => {
-    onClosed();
-    return 0;
-  }, CLOSE_REQUEST_CB_DEF);
+export const closeRequestDecision = (onCloseRequest: () => boolean): number =>
+  onCloseRequest() ? 1 : 0;
+
+/**
+ * `GtkWindow::close-request` handler (preventable).
+ *
+ * `onCloseRequest` is consulted on every close attempt (title-bar button or the
+ * programmatic `gtk_window_close`). It returns `true` to VETO — the window stays
+ * open and {@link closeRequestDecision} returns 1; otherwise it runs the close
+ * bookkeeping/teardown itself and returns `false`, so this returns 0 and GTK
+ * destroys the window.
+ */
+export const makeCloseRequestCallback = (onCloseRequest: () => boolean): JSCallback =>
+  new JSCallback(
+    (_self: Pointer, _userData: Pointer): number => closeRequestDecision(onCloseRequest),
+    CLOSE_REQUEST_CB_DEF,
+  );
+
+/**
+ * A generic `GObject::notify::<prop>` handler. Runs `onNotify` on each property
+ * change; the caller reads the new value (e.g. via `g_object_get`) or toggles a
+ * tracked flag. The `GParamSpec*` second arg is ignored.
+ */
+export const makeNotifyCallback = (onNotify: () => void): JSCallback =>
+  new JSCallback((_gobject: Pointer, _pspec: Pointer, _userData: Pointer): void => {
+    onNotify();
+  }, NOTIFY_CB_DEF);
 
 /**
  * `GtkWidget::destroy` handler. Fires `onClosed` bookkeeping + drops retained

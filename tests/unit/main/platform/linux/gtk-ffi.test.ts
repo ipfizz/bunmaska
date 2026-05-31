@@ -46,6 +46,11 @@ describe('GTK_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(GTK_FFI_SYMBOLS.gtk_window_is_maximized.returns).toBe(FFIType.i32);
   });
 
+  it('returns i32 (gboolean) from is_active for focus/blur detection', () => {
+    expect(GTK_FFI_SYMBOLS.gtk_window_is_active.args).toEqual([FFIType.pointer]);
+    expect(GTK_FFI_SYMBOLS.gtk_window_is_active.returns).toBe(FFIType.i32);
+  });
+
   it('reads allocated size via get_width/get_height([ptr] -> i32)', () => {
     expect(GTK_FFI_SYMBOLS.gtk_widget_get_width.args).toEqual([FFIType.pointer]);
     expect(GTK_FFI_SYMBOLS.gtk_widget_get_width.returns).toBe(FFIType.i32);

@@ -11,6 +11,7 @@ import type {
   NativeWindow,
   NativeWindowOptions,
   Rect,
+  WindowEventType,
 } from '../../../../src/main/platform/native';
 import {
   BrowserWindow,
@@ -18,7 +19,19 @@ import {
 } from '../../../../src/main/api/browser-window';
 import { resetWebContentsIdsForTesting } from '../../../../src/main/api/web-contents';
 
-type FakeWindow = NativeWindow & { fireClosed: () => void };
+type FakeWindow = NativeWindow & {
+  fireClosed: () => void;
+  /** Fire a non-preventable window event up through the seam. */
+  fireEvent: (type: WindowEventType) => void;
+  /**
+   * Simulate a native close attempt: run the registered close callback. Returns
+   * whether the close was vetoed (callback returned true). When not vetoed, the
+   * fake fires `onClosed` like a real backend would.
+   */
+  fireCloseRequest: () => boolean;
+  /** Number of times the (idempotent) teardown ran. */
+  teardownCount: () => number;
+};
 
 const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
   let title = options.title;
@@ -27,6 +40,17 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
   let maximized = false;
   let minimized = false;
   let onClosed: (() => void) | undefined;
+  let onClose: (() => boolean) | undefined;
+  let teardowns = 0;
+  let tornDown = false;
+  const eventCallbacks = new Map<WindowEventType, () => void>();
+  const teardown = (): void => {
+    if (tornDown) {
+      return;
+    }
+    tornDown = true;
+    teardowns += 1;
+  };
   const webContents: NativeWebContents = {
     loadURL: () => undefined,
     loadHTML: () => undefined,
@@ -73,29 +97,61 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     },
     isMaximized: () => maximized,
     isMinimized: () => minimized,
-    close: () => onClosed?.(),
+    close: () => {
+      // A real backend routes programmatic close through the same delegate path:
+      // consult the veto, and only on a non-veto run teardown + fire closed.
+      if (onClose?.() === true) {
+        return;
+      }
+      teardown();
+      onClosed?.();
+    },
     onClosed: (cb) => {
       onClosed = cb;
     },
+    onClose: (cb) => {
+      onClose = cb;
+    },
+    onWindowEvent: (type, cb) => {
+      eventCallbacks.set(type, cb);
+    },
     fireClosed: () => onClosed?.(),
+    fireEvent: (type) => eventCallbacks.get(type)?.(),
+    fireCloseRequest: () => {
+      if (onClose?.() === true) {
+        return true;
+      }
+      teardown();
+      onClosed?.();
+      return false;
+    },
+    teardownCount: () => teardowns,
   };
 };
 
-const makeFakeApp = (): { native: NativeApplication; created: NativeWindowOptions[] } => {
+const makeFakeApp = (): {
+  native: NativeApplication;
+  created: NativeWindowOptions[];
+  windows: FakeWindow[];
+} => {
   const created: NativeWindowOptions[] = [];
+  const windows: FakeWindow[] = [];
   const native: NativeApplication = {
     start: () => undefined,
     onReady: (cb) => cb(),
     quit: () => undefined,
     createWindow: (options) => {
       created.push(options);
-      return makeFakeWindow(options);
+      const window = makeFakeWindow(options);
+      windows.push(window);
+      return window;
     },
   };
-  return { native, created };
+  return { native, created, windows };
 };
 
 let created: NativeWindowOptions[];
+let windows: FakeWindow[];
 
 beforeEach(() => {
   resetWindowRegistryForTesting();
@@ -103,6 +159,7 @@ beforeEach(() => {
   resetBootstrapForTesting();
   const fake = makeFakeApp();
   created = fake.created;
+  windows = fake.windows;
   setNativeAppForTesting(fake.native);
 });
 
@@ -228,5 +285,107 @@ describe('BrowserWindow lifecycle', () => {
     expect(closedEvents).toBe(1);
     expect(win.isDestroyed()).toBe(true);
     expect(BrowserWindow.fromId(win.id)).toBeUndefined();
+  });
+});
+
+describe('BrowserWindow lifecycle events', () => {
+  const simpleEvents: WindowEventType[] = [
+    'focus',
+    'blur',
+    'show',
+    'hide',
+    'resize',
+    'maximize',
+    'unmaximize',
+    'minimize',
+    'restore',
+    'ready-to-show',
+  ];
+
+  for (const type of simpleEvents) {
+    test(`re-emits the native '${type}' event`, () => {
+      const win = new BrowserWindow();
+      let fired = 0;
+      win.on(type, () => {
+        fired += 1;
+      });
+      windows[0]?.fireEvent(type);
+      expect(fired).toBe(1);
+    });
+  }
+
+  test('a native close request with no listeners proceeds to closed', () => {
+    const win = new BrowserWindow();
+    let closed = 0;
+    win.on('closed', () => {
+      closed += 1;
+    });
+    const vetoed = windows[0]?.fireCloseRequest();
+    expect(vetoed).toBe(false);
+    expect(closed).toBe(1);
+    expect(win.isDestroyed()).toBe(true);
+  });
+
+  test("emits a preventable 'close' before 'closed' with an Electron-style event", () => {
+    const win = new BrowserWindow();
+    const order: string[] = [];
+    let eventArg: { preventDefault: () => void; defaultPrevented: boolean } | undefined;
+    win.on('close', (event) => {
+      order.push('close');
+      eventArg = event;
+    });
+    win.on('closed', () => order.push('closed'));
+    windows[0]?.fireCloseRequest();
+    expect(order).toEqual(['close', 'closed']);
+    expect(typeof eventArg?.preventDefault).toBe('function');
+    expect(eventArg?.defaultPrevented).toBe(false);
+  });
+
+  test("a 'close' listener calling preventDefault vetoes the close", () => {
+    const win = new BrowserWindow();
+    let closed = 0;
+    win.on('close', (event) => {
+      event.preventDefault();
+    });
+    win.on('closed', () => {
+      closed += 1;
+    });
+    const vetoed = windows[0]?.fireCloseRequest();
+    expect(vetoed).toBe(true);
+    expect(closed).toBe(0);
+    expect(win.isDestroyed()).toBe(false);
+    expect(BrowserWindow.fromId(win.id)).toBe(win);
+  });
+
+  test('a non-prevented close after a prevented one still closes', () => {
+    const win = new BrowserWindow();
+    let prevent = true;
+    win.on('close', (event) => {
+      if (prevent) {
+        event.preventDefault();
+      }
+    });
+    expect(windows[0]?.fireCloseRequest()).toBe(true);
+    expect(win.isDestroyed()).toBe(false);
+    prevent = false;
+    expect(windows[0]?.fireCloseRequest()).toBe(false);
+    expect(win.isDestroyed()).toBe(true);
+  });
+
+  test('programmatic close() consults close listeners (preventable)', () => {
+    const win = new BrowserWindow();
+    win.on('close', (event) => {
+      event.preventDefault();
+    });
+    win.close();
+    expect(win.isDestroyed()).toBe(false);
+  });
+
+  test('teardown runs exactly once across repeated close attempts (idempotent)', () => {
+    const win = new BrowserWindow();
+    windows[0]?.fireCloseRequest();
+    win.close();
+    windows[0]?.fireCloseRequest();
+    expect(windows[0]?.teardownCount()).toBe(1);
   });
 });

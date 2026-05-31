@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { InvalidArgumentError } from '../../common/errors';
-import type { NativeWindow } from '../platform/native';
+import type { NativeWindow, WindowEventType } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
 import { nativeApp } from '../native-app';
 import type { Rect } from '../platform/native';
@@ -64,6 +64,43 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const DEFAULT_TITLE = 'Sambar';
 
+/** The non-preventable lifecycle events re-emitted verbatim from the seam. */
+const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
+  'focus',
+  'blur',
+  'show',
+  'hide',
+  'resize',
+  'maximize',
+  'unmaximize',
+  'minimize',
+  'restore',
+  'ready-to-show',
+];
+
+/**
+ * The event object passed to `close` listeners, mirroring Electron: a listener
+ * calls {@link preventDefault} to veto the close.
+ */
+export type WindowCloseEvent = {
+  /** Veto the pending close so the window stays open. */
+  preventDefault(): void;
+  /** Whether {@link preventDefault} was called. */
+  readonly defaultPrevented: boolean;
+};
+
+const makeCloseEvent = (): WindowCloseEvent => {
+  let prevented = false;
+  return {
+    preventDefault(): void {
+      prevented = true;
+    },
+    get defaultPrevented(): boolean {
+      return prevented;
+    },
+  };
+};
+
 const registry = new Map<number, BrowserWindow>();
 let nextId = 1;
 
@@ -102,6 +139,18 @@ export class BrowserWindow extends EventEmitter {
       registry.delete(this.id);
       this.emit('closed');
     });
+    // Preventable close: re-emit Electron's `close` with an event a listener may
+    // veto via preventDefault(). Returning true tells the backend to stay open.
+    this.#native.onClose(() => {
+      const event = makeCloseEvent();
+      this.emit('close', event);
+      return event.defaultPrevented;
+    });
+    for (const type of WINDOW_EVENT_TYPES) {
+      this.#native.onWindowEvent(type, () => {
+        this.emit(type);
+      });
+    }
     registry.set(this.id, this);
   }
 

@@ -71,6 +71,26 @@ export interface NativeWebContents {
   onDidFinishLoad(callback: () => void): void;
 }
 
+/**
+ * Non-preventable window lifecycle events surfaced from the backend.
+ *
+ * Each maps to an Electron `BrowserWindow` event of the same name. The
+ * preventable `close` is NOT in this set — it flows through {@link
+ * NativeWindow.onClose} so a listener can veto it; the final `closed` flows
+ * through {@link NativeWindow.onClosed}.
+ */
+export type WindowEventType =
+  | 'focus'
+  | 'blur'
+  | 'show'
+  | 'hide'
+  | 'resize'
+  | 'maximize'
+  | 'unmaximize'
+  | 'minimize'
+  | 'restore'
+  | 'ready-to-show';
+
 /** A native top-level window. */
 export interface NativeWindow {
   /** The window's web contents. */
@@ -96,6 +116,19 @@ export interface NativeWindow {
   close(): void;
   /** Register a callback fired once when the window is closed. */
   onClosed(callback: () => void): void;
+  /**
+   * Register a callback for a non-preventable window lifecycle event. The same
+   * type may be registered once; the backend invokes it each time the native
+   * event fires.
+   */
+  onWindowEvent(type: WindowEventType, callback: () => void): void;
+  /**
+   * Register the preventable-close callback, consulted BEFORE the window closes
+   * on EVERY close path (title-bar button, programmatic `close()`, app quit).
+   * Return `true` to VETO the close (the window stays open); return `false` to
+   * allow it, after which the backend runs teardown and fires `onClosed`.
+   */
+  onClose(callback: () => boolean): void;
 }
 
 /** The native application host: lifecycle + window factory. */

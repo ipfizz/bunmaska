@@ -13,6 +13,7 @@ import type {
   NativeWindow,
   NativeWindowOptions,
   Rect,
+  WindowEventType,
 } from '../native';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
@@ -34,6 +35,7 @@ import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
 import { createNavigationDelegate } from './cocoa-navigation-delegate';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
+import { createWindowDelegate } from './cocoa-window-delegate';
 import { computeWindowStyleMask, STANDARD_WINDOW_STYLE } from './cocoa-style-mask';
 import { loadWebKit } from './cocoa-webkit';
 import type { Handle } from './objc';
@@ -295,8 +297,10 @@ class MacOSWindow implements NativeWindow {
   readonly #contents: MacOSWebContents;
   readonly #teardown: () => void;
   #bounds: Rect;
-  #closed = false;
+  #tornDown = false;
   #onClosed: (() => void) | undefined;
+  #onClose: (() => boolean) | undefined;
+  readonly #eventHandlers = new Map<WindowEventType, () => void>();
 
   constructor(window: Handle, contents: MacOSWebContents, bounds: Rect, teardown: () => void) {
     this.#window = window;
@@ -307,6 +311,35 @@ class MacOSWindow implements NativeWindow {
 
   get webContents(): NativeWebContents {
     return this.#contents;
+  }
+
+  /**
+   * @internal `windowShouldClose:` hook. Consults the registered JS close
+   * listener (preventable). Returns true to VETO. Called by the window delegate.
+   */
+  shouldClose(): boolean {
+    return this.#onClose?.() === true;
+  }
+
+  /**
+   * @internal `windowWillClose:` hook. AppKit has committed to closing on EVERY
+   * path here — title-bar button, programmatic `-close`, or `app.quit()`. Run
+   * the idempotent teardown (settle pending execs, detach script handlers) so a
+   * later `executeJavaScript` can never touch a freed `WKWebView`, then fire the
+   * `closed` bookkeeping. THIS is the close-path use-after-free fix.
+   */
+  willClose(): void {
+    if (this.#tornDown) {
+      return;
+    }
+    this.#tornDown = true;
+    this.#teardown();
+    this.#onClosed?.();
+  }
+
+  /** @internal Surface a non-preventable lifecycle event. Called by the delegate. */
+  emitEvent(type: WindowEventType): void {
+    this.#eventHandlers.get(type)?.();
   }
 
   setTitle(title: string): void {
@@ -328,10 +361,14 @@ class MacOSWindow implements NativeWindow {
 
   show(): void {
     msgSendPtr(this.#window, cocoa().selectors.get('makeKeyAndOrderFront:'), 0n);
+    // AppKit has no `windowDidShow:` notification, so `show` is emitted here. A
+    // becomeKey notification also fires `focus` via the delegate.
+    this.emitEvent('show');
   }
 
   hide(): void {
     msgSendPtr(this.#window, cocoa().selectors.get('orderOut:'), 0n);
+    this.emitEvent('hide');
   }
 
   isVisible(): boolean {
@@ -367,20 +404,27 @@ class MacOSWindow implements NativeWindow {
   }
 
   close(): void {
-    if (this.#closed) {
+    if (this.#tornDown) {
       return;
     }
-    this.#closed = true;
-    // Detach + release the per-window script message handler BEFORE closing so a
-    // late message can never reach a freed callback (mirrors the Linux
-    // SignalRegistry teardown discipline).
-    this.#teardown();
-    cocoa().msgSend(this.#window, cocoa().selectors.get('close'));
-    this.#onClosed?.();
+    // Route through the SAME delegate path the title-bar red button uses:
+    // `-performClose:` (NOT `-close`, which bypasses the delegate) triggers
+    // `windowShouldClose:` (the veto) then, if allowed, `windowWillClose:`
+    // (teardown + `closed`). No teardown here — `willClose()` owns it,
+    // idempotently — so a vetoed programmatic close leaves the window fully alive.
+    msgSendPtr(this.#window, cocoa().selectors.get('performClose:'), 0n);
   }
 
   onClosed(callback: () => void): void {
     this.#onClosed = callback;
+  }
+
+  onClose(callback: () => boolean): void {
+    this.#onClose = callback;
+  }
+
+  onWindowEvent(type: WindowEventType, callback: () => void): void {
+    this.#eventHandlers.set(type, callback);
   }
 }
 
@@ -520,7 +564,21 @@ class MacOSApplication implements NativeApplication {
     );
     contents = new MacOSWebContents(webview, isolatedWorld);
 
-    const navigationDelegate = createNavigationDelegate(() => contents?.deliverDidFinishLoad());
+    // Forward-declared so the navigation + window delegate closures can reference
+    // it; assigned once the teardown closure (below) exists. The closures only
+    // run on later native callbacks, after the assignment.
+    let nativeWindow: MacOSWindow;
+
+    // `ready-to-show` is emitted once, on the FIRST finished load, reusing the
+    // navigation delegate's did-finish-load signal.
+    let readyToShowEmitted = false;
+    const navigationDelegate = createNavigationDelegate(() => {
+      contents?.deliverDidFinishLoad();
+      if (!readyToShowEmitted) {
+        readyToShowEmitted = true;
+        nativeWindow.emitEvent('ready-to-show');
+      }
+    });
     msgSendPtr(webview, rt.selectors.get('setNavigationDelegate:'), navigationDelegate.handle);
 
     msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
@@ -547,7 +605,7 @@ class MacOSApplication implements NativeApplication {
       contents?.rejectPendingExecs();
     };
 
-    const nativeWindow = new MacOSWindow(
+    nativeWindow = new MacOSWindow(
       window,
       contents,
       {
@@ -558,6 +616,19 @@ class MacOSApplication implements NativeApplication {
       },
       teardown,
     );
+
+    // Set the NSWindowDelegate: it routes `windowShouldClose:` (the preventable
+    // veto) and `windowWillClose:` (teardown + `closed`) plus the key/resize/
+    // miniaturize lifecycle notifications into the window. The delegate's IMP
+    // JSCallbacks are retained for the process lifetime by `defineObjcClass`, so
+    // they are never freed inside their own invocation (JSCallback discipline).
+    const windowDelegate = createWindowDelegate({
+      shouldClose: () => nativeWindow.shouldClose(),
+      willClose: () => nativeWindow.willClose(),
+      event: (type) => nativeWindow.emitEvent(type),
+    });
+    msgSendPtr(window, rt.selectors.get('setDelegate:'), windowDelegate.handle);
+
     if (options.show) {
       nativeWindow.show();
     }

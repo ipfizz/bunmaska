@@ -14,13 +14,19 @@ import type {
   NativeWindow,
   NativeWindowOptions,
   Rect,
+  WindowEventType,
 } from '../native';
 import { ExecResultChannel } from './eval-js';
 import { loadGtkFFI } from './gtk-ffi';
 import { getCurrentAppMenu } from './gtk-menu';
 import { loadGtkMenuFFI } from './gtk-menu-ffi';
 import { createLinuxDrain } from './gtk-run-loop';
-import { makeCloseRequestCallback, makeLoadChangedCallback, SignalRegistry } from './gtk-signals';
+import {
+  makeCloseRequestCallback,
+  makeLoadChangedCallback,
+  makeNotifyCallback,
+  SignalRegistry,
+} from './gtk-signals';
 import { createWebViewWithIpc, sendToRenderer } from './webkit-ipc';
 import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
 
@@ -200,6 +206,15 @@ class LinuxWebContents implements NativeWebContents {
  * Linux {@link NativeWindow}: a `GtkWindow` hosting a `WebKitWebView` as its
  * single child. Title / visibility / minimized state are tracked in JS because
  * GTK 4 exposes no reliable getters for them.
+ *
+ * Lifecycle events: `focus`/`blur` (notify::is-active), `resize`
+ * (notify::default-width/height), `maximize`/`unmaximize` (notify::maximized),
+ * `show`/`hide` (emitted from show()/hide()), `ready-to-show` (first finished
+ * load), and a preventable `close` (close-request veto). DEFERRED on Linux:
+ * `minimize`/`restore` — GTK 4 has no public, notifiable minimized property nor
+ * a `gtk_window_is_minimized` getter, so the window-manager-driven iconify state
+ * cannot be observed reliably. `minimize()` still iconifies and `isMinimized()`
+ * reports the JS-tracked flag; only the EVENT is unavailable.
  */
 class LinuxWindow implements NativeWindow {
   readonly #window: Pointer;
@@ -208,10 +223,19 @@ class LinuxWindow implements NativeWindow {
   #title: string;
   #visible = false;
   #minimized = false;
+  #active = false;
+  #maximized = false;
   readonly #defaultWidth: number;
   readonly #defaultHeight: number;
   #closed = false;
   readonly #closedCallbacks: Array<() => void> = [];
+  #onClose: (() => boolean) | undefined;
+  readonly #eventHandlers = new Map<WindowEventType, () => void>();
+
+  /** Surface a non-preventable lifecycle event to its registered handler. */
+  #emitEvent(type: WindowEventType): void {
+    this.#eventHandlers.get(type)?.();
+  }
 
   constructor(options: NativeWindowOptions) {
     const gtk = loadGtkFFI();
@@ -244,13 +268,67 @@ class LinuxWindow implements NativeWindow {
       gtk.symbols.gtk_window_set_child(this.#window, box);
     }
 
+    // Preventable close-request: consult the JS `close` listener first. If it
+    // vetoes, return true (1) so GTK's default handler does NOT destroy the
+    // window. Otherwise run teardown + fire `closed`, then return false (0) so
+    // GTK destroys it. Returning the veto is the Linux half of preventable close.
     this.#registry.connect(
       this.#window,
       'close-request',
-      makeCloseRequestCallback(() => {
-        this.#handleClosed();
+      makeCloseRequestCallback(() => this.#requestClose()),
+    );
+
+    // Focus/blur: `notify::is-active` fires when the active state flips; read the
+    // dedicated getter (no g_object_get varargs) and emit the matching edge.
+    this.#registry.connect(
+      this.#window,
+      'notify::is-active',
+      makeNotifyCallback(() => {
+        const active = gtk.symbols.gtk_window_is_active(this.#window) !== 0;
+        if (active === this.#active) {
+          return;
+        }
+        this.#active = active;
+        this.#emitEvent(active ? 'focus' : 'blur');
       }),
     );
+
+    // Maximize/unmaximize: `notify::maximized` on the GtkWindow:maximized prop.
+    this.#registry.connect(
+      this.#window,
+      'notify::maximized',
+      makeNotifyCallback(() => {
+        const maximized = gtk.symbols.gtk_window_is_maximized(this.#window) !== 0;
+        if (maximized === this.#maximized) {
+          return;
+        }
+        this.#maximized = maximized;
+        this.#emitEvent(maximized ? 'maximize' : 'unmaximize');
+      }),
+    );
+
+    // Resize: the default-size props change when the window is resized. Two
+    // distinct callbacks so the registry closes each exactly once on teardown.
+    this.#registry.connect(
+      this.#window,
+      'notify::default-width',
+      makeNotifyCallback(() => this.#emitEvent('resize')),
+    );
+    this.#registry.connect(
+      this.#window,
+      'notify::default-height',
+      makeNotifyCallback(() => this.#emitEvent('resize')),
+    );
+
+    // ready-to-show: emit once on the first finished load (reuses the web
+    // contents' load-changed FINISHED signal).
+    let readyToShowEmitted = false;
+    this.#webContents.onDidFinishLoad(() => {
+      if (!readyToShowEmitted) {
+        readyToShowEmitted = true;
+        this.#emitEvent('ready-to-show');
+      }
+    });
 
     if (options.show) {
       this.show();
@@ -259,6 +337,24 @@ class LinuxWindow implements NativeWindow {
 
   get webContents(): NativeWebContents {
     return this.#webContents;
+  }
+
+  /**
+   * Consult the JS `close` listener for a native `close-request`. Returns true
+   * to VETO (the window stays open); on a non-veto runs the close bookkeeping +
+   * teardown and returns false so GTK destroys the window.
+   */
+  #requestClose(): boolean {
+    if (this.#closed) {
+      // Already torn down (e.g. programmatic close races the native request):
+      // allow GTK to finish destroying.
+      return false;
+    }
+    if (this.#onClose?.() === true) {
+      return true;
+    }
+    this.#handleClosed();
+    return false;
   }
 
   #handleClosed(): void {
@@ -311,12 +407,14 @@ class LinuxWindow implements NativeWindow {
     gtk.symbols.gtk_window_present(this.#window);
     this.#visible = true;
     this.#minimized = false;
+    this.#emitEvent('show');
   }
 
   hide(): void {
     const gtk = loadGtkFFI();
     gtk.symbols.gtk_widget_set_visible(this.#window, GTK_FALSE);
     this.#visible = false;
+    this.#emitEvent('hide');
   }
 
   isVisible(): boolean {
@@ -357,15 +455,29 @@ class LinuxWindow implements NativeWindow {
     if (this.#closed) {
       return;
     }
+    // Preventable: consult the JS `close` listener (same veto the native
+    // `close-request` path uses). If vetoed, leave the window fully alive.
+    if (this.#onClose?.() === true) {
+      return;
+    }
     const gtk = loadGtkFFI();
     // Disconnect handlers and tear down web contents while the GObjects are
-    // still alive, then destroy the window.
+    // still alive, then destroy the window. Teardown runs OUTSIDE any signal
+    // callback here, so closing the retained thunks is safe.
     this.#handleClosed();
     gtk.symbols.gtk_window_destroy(this.#window);
   }
 
   onClosed(callback: () => void): void {
     this.#closedCallbacks.push(callback);
+  }
+
+  onClose(callback: () => boolean): void {
+    this.#onClose = callback;
+  }
+
+  onWindowEvent(type: WindowEventType, callback: () => void): void {
+    this.#eventHandlers.set(type, callback);
   }
 }
 
