@@ -1,0 +1,90 @@
+/**
+ * Pure argument parser for the `sambar` CLI.
+ *
+ * Maps a raw argv tail (no node/bun/script prefix) to a {@link Command}
+ * discriminated union. No I/O, no `process` access — kept pure so every branch
+ * is unit-testable.
+ */
+
+/** Options accepted by `sambar build`. All optional; the bundler fills defaults. */
+export type BuildOptions = {
+  readonly name?: string;
+  readonly id?: string;
+  readonly out?: string;
+  readonly icon?: string;
+};
+
+export type Command =
+  | { readonly kind: 'help' }
+  | { readonly kind: 'version' }
+  | { readonly kind: 'run'; readonly entry: string; readonly args: readonly string[] }
+  | { readonly kind: 'build'; readonly entry: string; readonly options: BuildOptions }
+  | { readonly kind: 'error'; readonly message: string };
+
+const BUILD_FLAGS = new Map<string, keyof BuildOptions>([
+  ['--name', 'name'],
+  ['--id', 'id'],
+  ['--out', 'out'],
+  ['--icon', 'icon'],
+]);
+
+const parseRun = (rest: readonly string[]): Command => {
+  const [entry, ...args] = rest;
+  if (entry === undefined) {
+    return { kind: 'error', message: 'sambar run: missing <entry.ts>' };
+  }
+  return { kind: 'run', entry, args };
+};
+
+const parseBuild = (rest: readonly string[]): Command => {
+  let entry: string | undefined;
+  const options: { -readonly [K in keyof BuildOptions]: BuildOptions[K] } = {};
+
+  for (let i = 0; i < rest.length; i += 1) {
+    const token = rest[i];
+    if (token === undefined) {
+      continue;
+    }
+    if (token.startsWith('--')) {
+      const key = BUILD_FLAGS.get(token);
+      if (key === undefined) {
+        return { kind: 'error', message: `sambar build: unknown flag ${token}` };
+      }
+      const value = rest[i + 1];
+      if (value === undefined) {
+        return { kind: 'error', message: `sambar build: flag ${token} requires a value` };
+      }
+      options[key] = value;
+      i += 1;
+      continue;
+    }
+    if (entry === undefined) {
+      entry = token;
+      continue;
+    }
+    return { kind: 'error', message: `sambar build: unexpected argument ${token}` };
+  }
+
+  if (entry === undefined) {
+    return { kind: 'error', message: 'sambar build: missing <entry.ts>' };
+  }
+  return { kind: 'build', entry, options };
+};
+
+/** Parse the argv tail into a {@link Command}. Never throws. */
+export const parseArgs = (argv: readonly string[]): Command => {
+  const [head, ...rest] = argv;
+  if (head === undefined || head === '--help' || head === '-h' || head === 'help') {
+    return { kind: 'help' };
+  }
+  if (head === '--version' || head === '-v') {
+    return { kind: 'version' };
+  }
+  if (head === 'run') {
+    return parseRun(rest);
+  }
+  if (head === 'build') {
+    return parseBuild(rest);
+  }
+  return { kind: 'error', message: `sambar: unknown command '${head}'` };
+};
