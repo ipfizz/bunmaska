@@ -1,131 +1,103 @@
-import { CString, JSCallback, type Pointer, ptr, read } from 'bun:ffi';
-import { cstr } from '../cstr';
-import { loadGlibFFI } from './glib-ffi';
-import { ASYNC_READY_CB_DEF } from './gtk-signals';
-import { loadJscFFI } from './jsc-ffi';
-import { loadWebKitGtkFFI } from './webkitgtk-ffi';
+import type { Pointer } from 'bun:ffi';
+import { createLogger } from '../../../common/logger';
+import { buildExecWrapper } from '../../ipc/exec-wrapper';
+import { EXEC_HANDLER_NAME, evalInPageWorld } from './webkit-ipc';
 
 /**
  * `WebContents.executeJavaScript` on Linux (WebKitGTK 6.0).
  *
- * `webkit_web_view_evaluate_javascript` runs the script in the PAGE world
- * (world_name = NULL) and reports completion through a real
- * `GAsyncReadyCallback` — a plain C function pointer, safe with `bun:ffi`'s
- * {@link JSCallback} (NOT an Objective-C block, so no D022 hazard). On firing,
- * `evaluate_javascript_finish` yields the result `JSCValue*` (or NULL + GError).
+ * The result returns out-of-band through a PAGE-world `sambarExec`
+ * script-message handler — EXACTLY mirroring the macOS implementation. A
+ * per-call `GAsyncReadyCallback` (a `bun:ffi` {@link JSCallback}) cannot be used:
+ * closing it during its own invocation frees the native trampoline WebKit is
+ * still returning into → SIGSEGV. Instead a wrapper runs the user code and posts
+ * `{ execId, ok, result?, error? }` to the `sambarExec` handler (registered once
+ * in `createWebViewWithIpc` and closed only on window teardown), which settles
+ * the matching pending Promise here.
  *
- * The result is serialized uniformly with `jsc_value_to_json` and JSON-parsed on
- * the JS side — so string/number/boolean/null/object/array all round-trip with
- * `JSON.stringify` semantics. The transfer-full JSON `char*` is freed with
- * `g_free`; a failure's GError is read for its message then freed.
- *
- * Each call creates one JSCallback, retained in a module registry against GC
- * until it fires, then closed. A 30s timeout rejects + frees the slot so a
- * navigated-away page cannot leak the Promise.
+ * The wrapper is injected via the EXISTING fire-and-forget page-world eval path
+ * ({@link evalInPageWorld}) — NO native callback, so there is nothing to free.
  */
 
+const log = createLogger('linux-eval-js');
+
 /** Reject + clear a pending `executeJavaScript` after this long (ms). */
-export const EVAL_TIMEOUT_MS = 30_000;
+export const EXEC_TIMEOUT_MS = 30_000;
 
-/** Byte offset of `message` in `GError { GQuark domain; gint code; gchar* message; }`. */
-const GERROR_MESSAGE_OFFSET = 8;
-
-/** Retains in-flight async callbacks so Bun cannot GC the native thunk pre-fire. */
-const inFlight = new Set<JSCallback>();
-
-/** Read a `GError**` slot's message string then free the GError. */
-const takeGErrorMessage = (errorSlotPtr: Pointer): string => {
-  const errAddr = read.ptr(errorSlotPtr, 0);
-  if (errAddr === 0) {
-    return 'executeJavaScript failed';
-  }
-  const errPtr = errAddr as Pointer;
-  const messageAddr = read.ptr(errPtr, GERROR_MESSAGE_OFFSET);
-  const message =
-    messageAddr === 0 ? 'executeJavaScript failed' : new CString(messageAddr as Pointer).toString();
-  loadGlibFFI().symbols.g_error_free(errPtr);
-  return message;
+/** A pending `executeJavaScript` awaiting its page-world result message. */
+type PendingExec = {
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (reason: Error) => void;
+  readonly timer: ReturnType<typeof setTimeout>;
 };
 
 /**
- * Evaluate `code` in `view`'s page world and resolve to its JSON-round-tripped
- * completion value (Electron semantics).
+ * Per-`LinuxWebContents` registry of in-flight `executeJavaScript` calls. Issues
+ * a monotonic `execId`, injects the wrapper, and settles each Promise when the
+ * matching `sambarExec` message arrives (or on timeout / teardown). There is NO
+ * native callback to close — the page-world handler is shared and torn down with
+ * the window — so this is SAFE.
  */
-export const evaluateJavaScriptOnView = (view: Pointer, code: string): Promise<unknown> => {
-  const webkit = loadWebKitGtkFFI();
-  const jsc = loadJscFFI();
-  const glib = loadGlibFFI();
+export class ExecResultChannel {
+  readonly #view: Pointer;
+  readonly #pending = new Map<number, PendingExec>();
+  #nextExecId = 1;
 
-  return new Promise<unknown>((resolve, reject) => {
-    let settled = false;
-    let callback: JSCallback | undefined;
+  constructor(view: Pointer) {
+    this.#view = view;
+  }
 
-    const release = (): void => {
-      if (callback !== undefined) {
-        inFlight.delete(callback);
-        callback.close();
-        callback = undefined;
-      }
-    };
+  /**
+   * Evaluate `code` in the PAGE world and resolve to its completion value
+   * (Electron semantics). The outcome arrives via {@link deliverExecResult}.
+   */
+  executeJavaScript(code: string): Promise<unknown> {
+    const execId = this.#nextExecId;
+    this.#nextExecId += 1;
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#pending.delete(execId);
+        reject(new Error(`executeJavaScript timed out after ${EXEC_TIMEOUT_MS}ms`));
+      }, EXEC_TIMEOUT_MS);
+      this.#pending.set(execId, { resolve, reject, timer });
+      evalInPageWorld(this.#view, buildExecWrapper(execId, EXEC_HANDLER_NAME, code));
+    });
+  }
 
-    const timer = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      release();
-      reject(new Error(`executeJavaScript timed out after ${EVAL_TIMEOUT_MS}ms`));
-    }, EVAL_TIMEOUT_MS);
+  /**
+   * Settle the pending exec for the `{ execId, ok, result?, error? }` JSON the
+   * page-world `sambarExec` handler posted. Malformed / unknown ids are dropped.
+   */
+  deliverExecResult(json: string): void {
+    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
+    try {
+      outcome = JSON.parse(json);
+    } catch (error) {
+      log.warn('dropping malformed exec result', error);
+      return;
+    }
+    if (typeof outcome.execId !== 'number') {
+      return;
+    }
+    const pending = this.#pending.get(outcome.execId);
+    if (pending === undefined) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.#pending.delete(outcome.execId);
+    if (outcome.ok) {
+      pending.resolve(outcome.result);
+    } else {
+      pending.reject(new Error(outcome.error ?? 'executeJavaScript failed'));
+    }
+  }
 
-    // NULL-initialized `GError*` out-slot. The callback closes over `errorSlot`
-    // itself (not just its pointer number) so Bun's GC cannot free the buffer
-    // before the async finish() writes into it; ptr() is taken at call time.
-    const errorSlot = new BigUint64Array(1);
-
-    callback = new JSCallback((source: Pointer, result: Pointer, _userData: Pointer): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      const errorSlotPtr = ptr(errorSlot);
-      const value = webkit.symbols.webkit_web_view_evaluate_javascript_finish(
-        source,
-        result,
-        errorSlotPtr,
-      );
-      if (value === null) {
-        const message = takeGErrorMessage(errorSlotPtr);
-        release();
-        reject(new Error(message));
-        return;
-      }
-      const jsonPtr = jsc.symbols.jsc_value_to_json(value, 0);
-      release();
-      if (jsonPtr === null) {
-        resolve(undefined);
-        return;
-      }
-      const json = new CString(jsonPtr).toString();
-      glib.symbols.g_free(jsonPtr);
-      try {
-        resolve(json === '' ? undefined : JSON.parse(json));
-      } catch {
-        // A non-JSON serialization resolves to undefined (JSON.stringify semantics).
-        resolve(undefined);
-      }
-    }, ASYNC_READY_CB_DEF);
-    inFlight.add(callback);
-
-    webkit.symbols.webkit_web_view_evaluate_javascript(
-      view,
-      cstr(code),
-      -1n,
-      null,
-      null,
-      null,
-      callback.ptr,
-      null,
-    );
-  });
-};
+  /** Reject every still-pending exec; called on window close. */
+  rejectPending(): void {
+    for (const [, pending] of this.#pending) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('executeJavaScript aborted: web contents destroyed'));
+    }
+    this.#pending.clear();
+  }
+}

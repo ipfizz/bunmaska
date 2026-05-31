@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildDispatchScript,
+  EXEC_HANDLER_NAME,
+  EXEC_SIGNAL,
   HANDLER_NAME,
   PRELOAD_WORLD_NAME,
   SIGNAL,
@@ -17,6 +19,14 @@ describe('webkit-ipc constants', () => {
 
   it('uses the SambarPreload isolated world name (matches the macOS backend)', () => {
     expect(PRELOAD_WORLD_NAME).toBe('SambarPreload');
+  });
+
+  it('uses the page-world "sambarExec" exec return-channel handler (matches macOS)', () => {
+    expect(EXEC_HANDLER_NAME).toBe('sambarExec');
+  });
+
+  it('connects the detailed script-message-received::sambarExec signal', () => {
+    expect(EXEC_SIGNAL).toBe('script-message-received::sambarExec');
   });
 });
 

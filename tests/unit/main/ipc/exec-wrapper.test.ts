@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildExecWrapper } from '../../../../../src/main/platform/macos/cocoa-exec-wrapper';
+import { buildExecWrapper } from '../../../../src/main/ipc/exec-wrapper';
 
 /**
  * The wrapper-source generator is pure string-building, so it is unit-testable

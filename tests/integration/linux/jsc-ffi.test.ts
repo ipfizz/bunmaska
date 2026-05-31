@@ -9,12 +9,5 @@ if (currentPlatform() === 'linux') {
       const lib = loadJscFFI();
       expect(typeof lib.symbols.jsc_value_to_string).toBe('function');
     });
-
-    // CI-RISK: jsc_value_to_json is the uniform serializer used to return an
-    // executeJavaScript result back across the FFI boundary.
-    test('resolves jsc_value_to_json from the separate .so', () => {
-      const lib = loadJscFFI();
-      expect(typeof lib.symbols.jsc_value_to_json).toBe('function');
-    });
   });
 }

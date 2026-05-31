@@ -24,7 +24,6 @@ if (currentPlatform() === 'linux') {
         'webkit_web_view_can_go_back',
         'webkit_web_view_can_go_forward',
         'webkit_web_view_evaluate_javascript',
-        'webkit_web_view_evaluate_javascript_finish',
         'webkit_web_view_get_user_content_manager',
         'webkit_user_content_manager_new',
         'webkit_user_content_manager_register_script_message_handler',

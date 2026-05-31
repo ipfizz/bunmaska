@@ -40,11 +40,6 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // Frees a `GError` allocated by a failed async-finish call (NULL-safe no-op).
-  g_error_free: {
-    args: [FFIType.pointer],
-    returns: FFIType.void,
-  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GLIB_FFI_SYMBOLS>> | undefined } = {

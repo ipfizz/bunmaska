@@ -31,8 +31,6 @@ export const DESTROY_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const
 export const LOAD_CHANGED_CB_DEF = { args: ['ptr', 'i32', 'ptr'], returns: 'void' } as const;
 /** ABI shape for `script-message-received` (WK6.0): `(manager, value, user_data) -> void`. */
 export const SCRIPT_MESSAGE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
-/** ABI shape for `GAsyncReadyCallback`: `(source, result, user_data) -> void`. */
-export const ASYNC_READY_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
 /**
  * `GtkWindow::close-request` handler.

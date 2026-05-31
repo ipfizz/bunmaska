@@ -15,7 +15,7 @@ import type {
   NativeWindowOptions,
   Rect,
 } from '../native';
-import { evaluateJavaScriptOnView } from './eval-js';
+import { ExecResultChannel } from './eval-js';
 import { loadGtkFFI } from './gtk-ffi';
 import { createLinuxDrain } from './gtk-run-loop';
 import { makeCloseRequestCallback, makeLoadChangedCallback, SignalRegistry } from './gtk-signals';
@@ -42,6 +42,7 @@ const GTK_FALSE = 0;
 class LinuxWebContents implements NativeWebContents {
   readonly #view: Pointer;
   readonly #registry: SignalRegistry;
+  readonly #exec: ExecResultChannel;
   #didFinishLoad = false;
   readonly #pendingEnvelopes: string[] = [];
   readonly #didFinishLoadCallbacks: Array<() => void> = [];
@@ -60,9 +61,15 @@ class LinuxWebContents implements NativeWebContents {
           callback(json);
         }
       },
+      // The page-world `sambarExec` return channel for `executeJavaScript`. The
+      // exec channel is constructed below (it needs the view), so forward late.
+      onExecMessage: (json: string) => {
+        this.#exec.deliverExecResult(json);
+      },
     });
     this.#view = wired.view;
     this.#registry = wired.registry;
+    this.#exec = new ExecResultChannel(this.#view);
     // Enable developer extras so the inspector is available (right-click →
     // Inspect Element, and openDevTools()). Stable WebKitGTK 6.0 API.
     const webkit = loadWebKitGtkFFI();
@@ -142,11 +149,17 @@ class LinuxWebContents implements NativeWebContents {
 
   /**
    * Evaluate `code` in the PAGE world (world_name = NULL) and resolve to its
-   * completion value. The async result returns via a real `GAsyncReadyCallback`
-   * (a plain C callback, safe with bun:ffi — NOT a block, so no D022 hazard).
+   * completion value. The result returns out-of-band through the page-world
+   * `sambarExec` handler (mirrors macOS, D022) — NO per-call native callback, so
+   * nothing is freed mid-invocation.
    */
   executeJavaScript(code: string): Promise<unknown> {
-    return evaluateJavaScriptOnView(this.#view, code);
+    return this.#exec.executeJavaScript(code);
+  }
+
+  /** @internal Reject every still-pending exec; called on window close. */
+  rejectPendingExecs(): void {
+    this.#exec.rejectPending();
   }
 
   openDevTools(): void {
@@ -238,6 +251,10 @@ class LinuxWindow implements NativeWindow {
     for (const callback of this.#closedCallbacks) {
       callback();
     }
+    // Reject any executeJavaScript Promise still awaiting a `sambarExec` result
+    // it can no longer receive, THEN disconnect signals + close the retained
+    // JSCallbacks (including the shared exec handler) — never per-call.
+    this.#webContents.rejectPendingExecs();
     this.#webContents.registry().disconnectAll();
     this.#registry.disconnectAll();
   }

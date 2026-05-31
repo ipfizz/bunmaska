@@ -102,14 +102,6 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     ],
     returns: FFIType.void,
   },
-  // `evaluate_javascript_finish(view, result, &error)` -> transfer-full
-  // `JSCValue*` (or NULL + GError on failure). Called from the GAsyncReadyCallback
-  // to retrieve the result of `evaluate_javascript`. `error` is a `GError**`
-  // (pointer to a pinned NULL-initialized slot).
-  webkit_web_view_evaluate_javascript_finish: {
-    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   webkit_web_view_get_user_content_manager: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,

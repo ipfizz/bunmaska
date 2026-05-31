@@ -25,13 +25,6 @@ export const JSC_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // `jsc_value_to_json(value, indent)` -> transfer-full JSON `char*`. Used to
-  // uniformly serialize any executeJavaScript result (string/number/bool/null/
-  // object/array) so the JS side can JSON.parse it. Free the result with g_free.
-  jsc_value_to_json: {
-    args: [FFIType.pointer, FFIType.u32],
-    returns: FFIType.pointer,
-  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof JSC_FFI_SYMBOLS>> | undefined } = {

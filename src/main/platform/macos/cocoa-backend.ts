@@ -14,8 +14,8 @@ import type {
   NativeWindowOptions,
   Rect,
 } from '../native';
+import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
-import { buildExecWrapper } from './cocoa-exec-wrapper';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import {
   msgSendI64,

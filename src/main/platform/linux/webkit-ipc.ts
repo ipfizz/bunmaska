@@ -31,6 +31,15 @@ export const HANDLER_NAME = 'sambar';
 /** The detailed signal connected before registering the handler (documented race). */
 export const SIGNAL = `script-message-received::${HANDLER_NAME}`;
 
+/**
+ * Page-world handler name `executeJavaScript` posts its result to. Mirrors the
+ * macOS `EXEC_RESULT_HANDLER_NAME` — the return channel for the public
+ * `executeJavaScript`, registered in the PAGE world (world_name = NULL).
+ */
+export const EXEC_HANDLER_NAME = 'sambarExec';
+/** The detailed signal connected before registering the exec handler. */
+export const EXEC_SIGNAL = `script-message-received::${EXEC_HANDLER_NAME}`;
+
 /** A web view wired for IPC, plus the manager and the signal registry to retain. */
 export type WiredWebView = {
   readonly view: Pointer;
@@ -66,6 +75,11 @@ export type WebViewIpcOptions = {
   readonly pageWorldSource?: string;
   /** Called with each JSON envelope the renderer posts. */
   readonly onMessage: (json: string) => void;
+  /**
+   * Called with each JSON `{ execId, ok, result?, error? }` the page-world
+   * `executeJavaScript` wrapper posts to the `sambarExec` handler. Optional.
+   */
+  readonly onExecMessage?: (json: string) => void;
 };
 
 /** Assert a native call returned a real (non-NULL) pointer. */
@@ -143,6 +157,21 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     cstr(PRELOAD_WORLD_NAME),
   );
 
+  // Second handler in the PAGE world (world_name = NULL): the return channel for
+  // the public `executeJavaScript`, whose wrapper posts its result here. Its
+  // JSCallback is retained in the SAME registry so it is closed on window
+  // teardown — NEVER per-call (closing a JSCallback mid-invocation frees its
+  // native trampoline). Connect the detailed signal BEFORE registering (race).
+  if (options.onExecMessage !== undefined) {
+    const execCallback = makeScriptMessageCallback(options.onExecMessage);
+    registry.connect(ucm, EXEC_SIGNAL, execCallback);
+    webkit.symbols.webkit_user_content_manager_register_script_message_handler(
+      ucm,
+      cstr(EXEC_HANDLER_NAME),
+      null,
+    );
+  }
+
   // Isolated world: channel-id setup (if any) BEFORE the bridge, then the
   // bridge, then the contextBridge host (installs exposeInMainWorld), then the
   // user preload (so it can call exposeInMainWorld).
@@ -194,6 +223,26 @@ export const sendToRenderer = (view: Pointer, envelopeJson: string): void => {
     cstr(buildDispatchScript(envelopeJson)),
     -1n,
     cstr(PRELOAD_WORLD_NAME),
+    null,
+    null,
+    null,
+    null,
+  );
+};
+
+/**
+ * Evaluate `source` in the PAGE/main world (world_name = NULL) fire-and-forget —
+ * NO `GAsyncReadyCallback` (length = -1 for NUL-terminated; cancellable/callback/
+ * user_data are NULL). Used to inject the `executeJavaScript` wrapper, whose
+ * result returns out-of-band via the `sambarExec` page-world handler.
+ */
+export const evalInPageWorld = (view: Pointer, source: string): void => {
+  const webkit = loadWebKitGtkFFI();
+  webkit.symbols.webkit_web_view_evaluate_javascript(
+    view,
+    cstr(source),
+    -1n,
+    null,
     null,
     null,
     null,

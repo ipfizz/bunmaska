@@ -1,12 +1,13 @@
 /**
- * Builds the page-world wrapper script for `WebContents.executeJavaScript` on
- * macOS.
+ * Builds the page-world wrapper script for `WebContents.executeJavaScript`.
  *
- * A completion-handler block cannot be passed to
- * `evaluateJavaScript:inFrame:inContentWorld:completionHandler:` (a real
- * Objective-C block crashes Bun, D022), so the result is returned out-of-band:
- * the wrapper runs the user code and posts the outcome to a page-world
- * `WKScriptMessageHandler` named `handlerName`.
+ * On both backends the completion handler cannot be passed to the native
+ * `evaluateJavaScript` call (a real Objective-C block crashes Bun on macOS,
+ * D022; a per-call `GAsyncReadyCallback` JSCallback is closed mid-invocation on
+ * Linux, freeing its trampoline), so the result is returned out-of-band: the
+ * wrapper runs the user code and posts the outcome to a page-world
+ * `WKScriptMessageHandler` / `WebKitUserContentManager` handler named
+ * `handlerName`.
  *
  * User code is evaluated via indirect `(0, eval)(code)` so a bare expression
  * resolves to its completion value — matching Electron, where the evaluated
