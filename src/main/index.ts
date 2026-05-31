@@ -3,6 +3,7 @@ import './bootstrap';
 export { App, app } from './api/app';
 export { BrowserWindow, type BrowserWindowOptions } from './api/browser-window';
 export { WebContents } from './api/web-contents';
+export { ipcMain } from './api/ipc-main';
 export { clipboard, type Clipboard } from './api/clipboard';
 export {
   dialog,
