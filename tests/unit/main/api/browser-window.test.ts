@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { InvalidArgumentError } from '../../../../src/common/errors';
 import { resetBootstrapForTesting } from '../../../../src/main/bootstrap';
 import { setNativeAppForTesting } from '../../../../src/main/native-app';
 import type {
@@ -130,6 +134,56 @@ describe('BrowserWindow construction', () => {
 
   test('is a Node EventEmitter', () => {
     expect(typeof new BrowserWindow().on).toBe('function');
+  });
+
+  test('leaves preloadScript undefined when webPreferences is omitted', () => {
+    new BrowserWindow();
+    expect(created[0]?.preloadScript).toBeUndefined();
+  });
+});
+
+describe('BrowserWindow webPreferences.preload', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'sambar-preload-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('reads the preload file and passes its contents as preloadScript', () => {
+    const source = 'window.__sambarPreloadRan = true;\n';
+    const preloadPath = join(dir, 'preload.js');
+    writeFileSync(preloadPath, source);
+
+    new BrowserWindow({ webPreferences: { preload: preloadPath } });
+
+    expect(created[0]?.preloadScript).toBe(source);
+  });
+
+  test('resolves a relative preload path against the current working directory', () => {
+    const source = 'void 0;\n';
+    const preloadPath = join(dir, 'relative-preload.js');
+    writeFileSync(preloadPath, source);
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      new BrowserWindow({ webPreferences: { preload: 'relative-preload.js' } });
+    } finally {
+      process.chdir(cwd);
+    }
+
+    expect(created[0]?.preloadScript).toBe(source);
+  });
+
+  test('throws InvalidArgumentError naming the path when the preload is missing', () => {
+    const missing = join(dir, 'does-not-exist.js');
+    expect(() => new BrowserWindow({ webPreferences: { preload: missing } })).toThrow(
+      InvalidArgumentError,
+    );
+    expect(() => new BrowserWindow({ webPreferences: { preload: missing } })).toThrow(missing);
   });
 });
 

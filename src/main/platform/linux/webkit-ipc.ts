@@ -35,6 +35,11 @@ export type WiredWebView = {
 export type WebViewIpcOptions = {
   /** The preload bridge source injected at document-start in all frames. */
   readonly preloadSource: string;
+  /**
+   * Optional user preload source injected at document-start in all frames AFTER
+   * the bridge, so `window.__sambar` exists when it runs.
+   */
+  readonly userPreloadSource?: string;
   /** Called with each JSON envelope the renderer posts. */
   readonly onMessage: (json: string) => void;
 };
@@ -48,10 +53,11 @@ const requirePointer = (ptr: Pointer | null, what: string): Pointer => {
 };
 
 /**
- * Build a `WebKitUserScript` for the preload bridge and add it to the manager.
- * The manager takes its own ref on the script, so it need not be retained here.
+ * Build a `WebKitUserScript` from `source` and add it to the manager at
+ * document-start in all frames. The manager takes its own ref on the script, so
+ * it need not be retained here.
  */
-const addPreloadUserScript = (ucm: Pointer, source: string): void => {
+const addUserScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
   const script = webkit.symbols.webkit_user_script_new(
     cstr(source),
@@ -94,7 +100,10 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     null,
   );
 
-  addPreloadUserScript(ucm, options.preloadSource);
+  addUserScript(ucm, options.preloadSource);
+  if (options.userPreloadSource !== undefined) {
+    addUserScript(ucm, options.userPreloadSource);
+  }
 
   const view = requirePointer(
     gobject.symbols.g_object_new(

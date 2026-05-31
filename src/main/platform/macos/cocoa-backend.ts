@@ -306,14 +306,23 @@ class MacOSApplication implements NativeApplication {
       nsString(SCRIPT_MESSAGE_HANDLER_NAME),
     );
 
-    const userScript = msgSendPtrI64U8(
-      rt.msgSend(rt.classes.get('WKUserScript'), rt.selectors.get('alloc')),
-      rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:'),
-      nsString(generatePreloadBootstrap()),
-      WK_INJECTION_TIME_AT_DOCUMENT_START,
-      0,
-    );
-    msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
+    const addUserScript = (source: string): void => {
+      const userScript = msgSendPtrI64U8(
+        rt.msgSend(rt.classes.get('WKUserScript'), rt.selectors.get('alloc')),
+        rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:'),
+        nsString(source),
+        WK_INJECTION_TIME_AT_DOCUMENT_START,
+        0,
+      );
+      msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
+    };
+
+    // Bridge first, then the user preload, so `window.__sambar` exists when the
+    // preload runs.
+    addUserScript(generatePreloadBootstrap());
+    if (options.preloadScript !== undefined) {
+      addUserScript(options.preloadScript);
+    }
 
     const webview = msgSendInitWithFrameConfig(
       rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),

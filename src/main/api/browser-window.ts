@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { InvalidArgumentError } from '../../common/errors';
 import type { NativeWindow } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
 import { nativeApp } from '../native-app';
@@ -12,12 +15,44 @@ import { WebContents } from './web-contents';
  * `getAllWindows` / `fromId` statics.
  */
 
+/** Per-window renderer preferences, mirroring Electron's `webPreferences`. */
+export type WebPreferences = {
+  /**
+   * Path to a JavaScript file run before the page's own scripts, after the
+   * built-in `window.__sambar` bridge. Resolved to an absolute path and read
+   * synchronously at window construction. Shares the page world (context
+   * isolation is a separate increment).
+   */
+  readonly preload?: string;
+};
+
 export type BrowserWindowOptions = {
   readonly width?: number;
   readonly height?: number;
   readonly title?: string;
   /** Whether to show the window immediately. Defaults to `true`. */
   readonly show?: boolean;
+  /** Per-window renderer preferences. */
+  readonly webPreferences?: WebPreferences;
+};
+
+/**
+ * Resolve a `webPreferences.preload` path to an absolute path and read its
+ * source synchronously. Returns `undefined` when no preload is configured;
+ * throws {@link InvalidArgumentError} naming the path when it cannot be read.
+ */
+const readPreloadScript = (preload: string | undefined): string | undefined => {
+  if (preload === undefined) {
+    return undefined;
+  }
+  const absolutePath = resolve(preload);
+  try {
+    return readFileSync(absolutePath, 'utf8');
+  } catch (cause) {
+    throw new InvalidArgumentError(`failed to read webPreferences.preload at ${absolutePath}`, {
+      cause,
+    });
+  }
 };
 
 const DEFAULT_WIDTH = 800;
@@ -47,11 +82,13 @@ export class BrowserWindow extends EventEmitter {
     this.id = nextId;
     nextId += 1;
 
+    const preloadScript = readPreloadScript(options.webPreferences?.preload);
     this.#native = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,
       title: options.title ?? DEFAULT_TITLE,
       show: options.show ?? true,
+      ...(preloadScript !== undefined ? { preloadScript } : {}),
     });
     this.webContents = new WebContents(this.#native.webContents);
 

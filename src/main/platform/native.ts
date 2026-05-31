@@ -22,6 +22,13 @@ export type NativeWindowOptions = {
   readonly height: number;
   readonly title: string;
   readonly show: boolean;
+  /**
+   * Resolved source of the user preload script, injected at document-start in
+   * all frames AFTER the built-in bridge bootstrap. Undefined when no preload
+   * was configured. The api layer resolves the path and reads the file; the
+   * seam carries only the source string, never a path or handle (D024).
+   */
+  readonly preloadScript?: string;
 };
 
 /**

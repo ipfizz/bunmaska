@@ -40,9 +40,10 @@ class LinuxWebContents implements NativeWebContents {
   readonly #didFinishLoadCallbacks: Array<() => void> = [];
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
 
-  constructor() {
+  constructor(userPreloadSource?: string) {
     const wired = createWebViewWithIpc({
       preloadSource: generatePreloadBootstrap(),
+      ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {
         for (const callback of this.#rendererEnvelopeCallbacks) {
           callback(json);
@@ -186,7 +187,7 @@ class LinuxWindow implements NativeWindow {
     gtk.symbols.gtk_window_set_title(this.#window, cstr(options.title));
     gtk.symbols.gtk_window_set_default_size(this.#window, options.width, options.height);
 
-    this.#webContents = new LinuxWebContents();
+    this.#webContents = new LinuxWebContents(options.preloadScript);
     gtk.symbols.gtk_window_set_child(this.#window, this.#webContents.view());
 
     this.#registry.connect(
