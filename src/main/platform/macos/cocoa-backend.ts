@@ -173,13 +173,15 @@ class MacOSWebContents implements NativeWebContents {
 class MacOSWindow implements NativeWindow {
   readonly #window: Handle;
   readonly #contents: MacOSWebContents;
+  readonly #teardown: () => void;
   #bounds: Rect;
   #closed = false;
   #onClosed: (() => void) | undefined;
 
-  constructor(window: Handle, contents: MacOSWebContents, bounds: Rect) {
+  constructor(window: Handle, contents: MacOSWebContents, bounds: Rect, teardown: () => void) {
     this.#window = window;
     this.#contents = contents;
+    this.#teardown = teardown;
     this.#bounds = bounds;
   }
 
@@ -249,6 +251,10 @@ class MacOSWindow implements NativeWindow {
       return;
     }
     this.#closed = true;
+    // Detach + release the per-window script message handler BEFORE closing so a
+    // late message can never reach a freed callback (mirrors the Linux
+    // SignalRegistry teardown discipline).
+    this.#teardown();
     cocoa().msgSend(this.#window, cocoa().selectors.get('close'));
     this.#onClosed?.();
   }
@@ -382,12 +388,29 @@ class MacOSApplication implements NativeApplication {
     msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
     msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));
 
-    const nativeWindow = new MacOSWindow(window, contents, {
-      x: 0,
-      y: 0,
-      width: options.width,
-      height: options.height,
-    });
+    // Teardown run on window close: detach the handler from the isolated world
+    // then drop its registry entry + release the native instance.
+    const teardown = (): void => {
+      msgSendPtrPtr(
+        userContentController,
+        rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
+        nsString(SCRIPT_MESSAGE_HANDLER_NAME),
+        isolatedWorld,
+      );
+      handler.dispose();
+    };
+
+    const nativeWindow = new MacOSWindow(
+      window,
+      contents,
+      {
+        x: 0,
+        y: 0,
+        width: options.width,
+        height: options.height,
+      },
+      teardown,
+    );
     if (options.show) {
       nativeWindow.show();
     }

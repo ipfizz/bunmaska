@@ -44,6 +44,13 @@ const ensureHandlerClass = (): Handle => {
 export type ScriptMessageHandler = {
   /** The Objective-C handler instance to pass to `addScriptMessageHandler:name:`. */
   readonly handle: Handle;
+  /**
+   * Drop the per-window routing entry and release the native instance. Call from
+   * the owning window's `close()` AFTER detaching it from the
+   * `userContentController` so a late message can no longer reach a freed
+   * callback. Idempotent.
+   */
+  dispose(): void;
 };
 
 /**
@@ -57,5 +64,16 @@ export const createScriptMessageHandler = (
   const cls = ensureHandlerClass();
   const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
   registry.set(handle, onEnvelope);
-  return { handle };
+  let disposed = false;
+  return {
+    handle,
+    dispose(): void {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      registry.delete(handle);
+      cocoa().msgSend(handle, cocoa().selectors.get('release'));
+    },
+  };
 };
