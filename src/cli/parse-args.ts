@@ -2,9 +2,15 @@
  * Pure argument parser for the `sambar` CLI.
  *
  * Maps a raw argv tail (no node/bun/script prefix) to a {@link Command}
- * discriminated union. No I/O, no `process` access — kept pure so every branch
- * is unit-testable.
+ * discriminated union. {@link parseArgs} does no I/O and never reads `process`,
+ * so every branch is unit-testable. The lone exception is {@link resolveTarget},
+ * which folds in the host platform default and is kept here beside its type.
  */
+
+import { currentPlatform } from '../common/platform';
+
+/** Build targets `sambar build` can produce. */
+export type BuildTarget = 'macos' | 'linux';
 
 /** Options accepted by `sambar build`. All optional; the bundler fills defaults. */
 export type BuildOptions = {
@@ -12,6 +18,7 @@ export type BuildOptions = {
   readonly id?: string;
   readonly out?: string;
   readonly icon?: string;
+  readonly target?: BuildTarget;
 };
 
 export type Command =
@@ -26,7 +33,13 @@ const BUILD_FLAGS = new Map<string, keyof BuildOptions>([
   ['--id', 'id'],
   ['--out', 'out'],
   ['--icon', 'icon'],
+  ['--target', 'target'],
 ]);
+
+const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux']);
+
+const isBuildTarget = (value: string): value is BuildTarget =>
+  BUILD_TARGETS.has(value as BuildTarget);
 
 const parseRun = (rest: readonly string[]): Command => {
   const [entry, ...args] = rest;
@@ -53,6 +66,17 @@ const parseBuild = (rest: readonly string[]): Command => {
       const value = rest[i + 1];
       if (value === undefined) {
         return { kind: 'error', message: `sambar build: flag ${token} requires a value` };
+      }
+      if (key === 'target') {
+        if (!isBuildTarget(value)) {
+          return {
+            kind: 'error',
+            message: `sambar build: --target must be macos or linux (got ${value})`,
+          };
+        }
+        options.target = value;
+        i += 1;
+        continue;
       }
       options[key] = value;
       i += 1;
@@ -87,4 +111,17 @@ export const parseArgs = (argv: readonly string[]): Command => {
     return parseBuild(rest);
   }
   return { kind: 'error', message: `sambar: unknown command '${head}'` };
+};
+
+/**
+ * Resolve the effective build target: an explicit `--target` when given,
+ * otherwise the host platform (macOS hosts build macOS, Linux hosts build Linux;
+ * a macOS host can still cross-build Linux via `--target linux`).
+ */
+export const resolveTarget = (target: BuildTarget | undefined): BuildTarget => {
+  if (target !== undefined) {
+    return target;
+  }
+  const host = currentPlatform();
+  return host === 'macos' ? 'macos' : 'linux';
 };
