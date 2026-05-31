@@ -65,6 +65,7 @@ export const IMPLEMENTED_MODULES = [
   'globalShortcut',
   'Menu',
   'MenuItem',
+  'nativeImage',
   'nativeTheme',
   'Notification',
   'protocol',

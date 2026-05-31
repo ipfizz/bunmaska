@@ -41,10 +41,15 @@ describe('IMPLEMENTED_MODULES', () => {
     expect(implemented).toContain('globalShortcut');
     expect(implemented).toContain('Tray');
     expect(implemented).toContain('protocol');
+    expect(implemented).toContain('nativeImage');
   });
 
   test('claims the protocol module', () => {
     expect(isImplemented('protocol')).toBe(true);
+  });
+
+  test('claims the nativeImage module', () => {
+    expect(isImplemented('nativeImage')).toBe(true);
   });
 
   test('does not yet claim still-unshipped modules like autoUpdater', () => {

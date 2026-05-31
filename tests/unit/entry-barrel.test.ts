@@ -43,6 +43,14 @@ describe('sambar/main entry barrel', () => {
     expect(typeof sambarMain.protocol.isProtocolHandled).toBe('function');
     expect(typeof sambarMain.protocol.getRegisteredSchemes).toBe('function');
   });
+
+  test('exports the nativeImage module and class', () => {
+    expect(sambarMain.nativeImage).toBeDefined();
+    expect(typeof sambarMain.nativeImage.createFromPath).toBe('function');
+    expect(typeof sambarMain.nativeImage.createFromBuffer).toBe('function');
+    expect(typeof sambarMain.nativeImage.createEmpty).toBe('function');
+    expect(typeof sambarMain.NativeImage).toBe('function');
+  });
 });
 
 describe('sambar (root) entry barrel', () => {

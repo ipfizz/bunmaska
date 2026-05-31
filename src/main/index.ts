@@ -19,6 +19,13 @@ export {
   type MenuItemOptions,
   type MenuItemType,
 } from './api/menu';
+export {
+  type DecodedImage,
+  NativeImage,
+  type NativeImageBackend,
+  type NativeImageHandle,
+  nativeImage,
+} from './api/native-image';
 export { nativeTheme, type NativeTheme } from './api/native-theme';
 export { Notification, type NotificationOptions } from './api/notification';
 export {
