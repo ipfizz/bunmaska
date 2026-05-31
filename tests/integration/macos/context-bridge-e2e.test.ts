@@ -6,14 +6,11 @@ import type { NativeApplication, NativeWebContents } from '../../../src/main/pla
 
 /**
  * Phase B proof on a real WKWebView: a contextBridge surface exposed in the
- * ISOLATED world is callable from the PAGE world via the cross-world DOM
- * channel, returns a Promise, AND the page still cannot reach `__sambar`.
- *
- * The backend injects the real page-world stub and sets the channel id on the
- * isolated global (`__sambarBridgeChannel`). The isolated-world preload below
- * wires the host using that real channel id + the same DOM protocol the
- * production `cross-world-bridge.ts` implements, so this exercises the actual
- * injected stub and channel handshake end-to-end.
+ * ISOLATED world via the REAL `window.__sambar.exposeInMainWorld` is callable
+ * from the PAGE world via the cross-world DOM channel, returns a Promise, AND
+ * the page still cannot reach `__sambar`. If the isolated host injection
+ * regressed, `exposeInMainWorld` would be undefined and this test would time
+ * out — so this exercises the actual injected host end-to-end.
  */
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -24,26 +21,14 @@ if (currentPlatform() === 'macos') {
     let contents: NativeWebContents;
     const received: string[] = [];
 
-    // Isolated-world preload: install a host for `myApi.add` over the real
-    // channel id the backend set, then relay the page world's call result and
-    // its `typeof __sambar` probe back over IPC.
+    // Isolated-world preload: use the REAL exposeInMainWorld the backend
+    // injects, then relay the page world's call result and its `typeof
+    // __sambar` probe back over IPC.
     const isolatedPreload = [
-      'var channel = globalThis.__sambarBridgeChannel;',
-      'document.addEventListener(channel, function (e) {',
-      '  var d = e.detail || {};',
-      "  if (d.key !== 'myApi' || d.method !== 'add') { return; }",
-      '  var result = d.args[0] + d.args[1];',
-      '  document.dispatchEvent(new CustomEvent(channel + ":reply", {',
-      '    detail: { callId: d.callId, ok: true, result: result },',
-      '  }));',
+      "window.__sambar.exposeInMainWorld('myApi', {",
+      '  add: function (a, b) { return a + b; },',
+      '  version: 7,',
       '});',
-      'function announce() {',
-      '  document.dispatchEvent(new CustomEvent(channel + ":announce", {',
-      "    detail: { key: 'myApi', methods: ['add'], values: { version: 7 } },",
-      '  }));',
-      '}',
-      'document.addEventListener(channel + ":ready", announce);',
-      'announce();',
       // Relay the page world's findings back over IPC.
       "document.addEventListener('cb-result', function (e) {",
       "  window.__sambar.send('cb-result', e.detail);",

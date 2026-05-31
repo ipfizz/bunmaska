@@ -5,12 +5,11 @@ import type { NativeWindow } from '../../../src/main/platform/native';
 
 /**
  * Phase B proof on real GTK4 + WebKitGTK 6.0: a contextBridge surface exposed in
- * the ISOLATED `SambarPreload` world is callable from the PAGE world via the
- * cross-world DOM channel (Promise), AND the page cannot reach `__sambar`.
- *
- * The backend injects the real page-world stub (world_name = NULL) and sets the
- * channel id on the isolated global. The isolated preload wires the host over
- * that real channel id + the production DOM protocol.
+ * the ISOLATED `SambarPreload` world via the REAL
+ * `window.__sambar.exposeInMainWorld` is callable from the PAGE world via the
+ * cross-world DOM channel (Promise), AND the page cannot reach `__sambar`. If the
+ * isolated host injection regressed, `exposeInMainWorld` would be undefined and
+ * this test would time out — so it exercises the actual injected host.
  *
  * Runs only in CI ubuntu under `xvfb-run -a`. Inert on macOS via
  * `describe.skipIf`.
@@ -36,21 +35,10 @@ describe.skipIf(!isLinux)('Linux contextBridge cross-world proxy', () => {
     }
 
     const isolatedPreload = [
-      'var channel = globalThis.__sambarBridgeChannel;',
-      'document.addEventListener(channel, function (e) {',
-      '  var d = e.detail || {};',
-      "  if (d.key !== 'myApi' || d.method !== 'add') { return; }",
-      '  document.dispatchEvent(new CustomEvent(channel + ":reply", {',
-      '    detail: { callId: d.callId, ok: true, result: d.args[0] + d.args[1] },',
-      '  }));',
+      "window.__sambar.exposeInMainWorld('myApi', {",
+      '  add: function (a, b) { return a + b; },',
+      '  version: 7,',
       '});',
-      'function announce() {',
-      '  document.dispatchEvent(new CustomEvent(channel + ":announce", {',
-      "    detail: { key: 'myApi', methods: ['add'], values: { version: 7 } },",
-      '  }));',
-      '}',
-      'document.addEventListener(channel + ":ready", announce);',
-      'announce();',
       "document.addEventListener('cb-result', function (e) {",
       "  window.__sambar.send('cb-result', e.detail);",
       '});',
