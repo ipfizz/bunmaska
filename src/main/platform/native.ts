@@ -45,6 +45,7 @@ export type NativeWindowOptions = {
 export type NativeNavigationEvent =
   | { readonly type: 'did-start-loading' }
   | { readonly type: 'did-stop-loading' }
+  | { readonly type: 'dom-ready' }
   | { readonly type: 'did-navigate' }
   | { readonly type: 'did-finish-load' }
   | {

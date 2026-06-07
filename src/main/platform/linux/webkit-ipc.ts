@@ -1,5 +1,6 @@
 import type { Pointer } from 'bun:ffi';
 import { cstr } from '../cstr';
+import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
 import {
@@ -80,6 +81,8 @@ export type WebViewIpcOptions = {
    * `executeJavaScript` wrapper posts to the `sambarExec` handler. Optional.
    */
   readonly onExecMessage?: (json: string) => void;
+  /** Called when the page-world dom-ready script fires (DOMContentLoaded). Optional. */
+  readonly onDomReady?: () => void;
 };
 
 /** Assert a native call returned a real (non-NULL) pointer. */
@@ -172,6 +175,19 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     );
   }
 
+  // Page-world dom-ready handler: the injected script posts here on
+  // DOMContentLoaded. Same retain/connect-before-register discipline as exec.
+  if (options.onDomReady !== undefined) {
+    const onDomReady = options.onDomReady;
+    const domReadyCallback = makeScriptMessageCallback(() => onDomReady());
+    registry.connect(ucm, `script-message-received::${DOM_READY_HANDLER_NAME}`, domReadyCallback);
+    webkit.symbols.webkit_user_content_manager_register_script_message_handler(
+      ucm,
+      cstr(DOM_READY_HANDLER_NAME),
+      null,
+    );
+  }
+
   // Isolated world: channel-id setup (if any) BEFORE the bridge, then the
   // bridge, then the contextBridge host (installs exposeInMainWorld), then the
   // user preload (so it can call exposeInMainWorld).
@@ -188,6 +204,10 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   // Page/main world: the cross-world contextBridge stub (Phase B).
   if (options.pageWorldSource !== undefined) {
     addPageWorldScript(ucm, options.pageWorldSource);
+  }
+  // Page/main world: the dom-ready notifier (posts on DOMContentLoaded).
+  if (options.onDomReady !== undefined) {
+    addPageWorldScript(ucm, generateDomReadyScript());
   }
 
   const view = requirePointer(

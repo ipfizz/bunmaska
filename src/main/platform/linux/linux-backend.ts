@@ -81,6 +81,9 @@ class LinuxWebContents implements NativeWebContents {
       onExecMessage: (json: string) => {
         this.#exec.deliverExecResult(json);
       },
+      onDomReady: () => {
+        this.#dispatchNavigation({ type: 'dom-ready' });
+      },
     });
     this.#view = wired.view;
     this.#registry = wired.registry;

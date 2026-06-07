@@ -205,6 +205,17 @@ describe('WebContents navigation events', () => {
     expect(url).toBe('https://app.test/route');
   });
 
+  test('re-emits dom-ready', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents(native);
+    let fired = 0;
+    wc.on('dom-ready', () => {
+      fired += 1;
+    });
+    fireNavigation({ type: 'dom-ready' });
+    expect(fired).toBe(1);
+  });
+
   test('did-fail-load carries the error code and description', () => {
     const { native, fireNavigation } = makeFakeNative();
     const wc = new WebContents(native);

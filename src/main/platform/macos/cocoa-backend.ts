@@ -18,6 +18,7 @@ import type {
   WindowEventType,
 } from '../native';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
+import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import {
@@ -679,6 +680,19 @@ class MacOSApplication implements NativeApplication {
       nsString(EXEC_RESULT_HANDLER_NAME),
     );
 
+    // Page-world dom-ready channel: an injected script posts here on
+    // DOMContentLoaded, surfacing Electron's `dom-ready`.
+    const domReadyHandler = createScriptMessageHandler(() =>
+      contents?.deliverNavigation({ type: 'dom-ready' }),
+    );
+    msgSendPtr3(
+      userContentController,
+      rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
+      domReadyHandler.handle,
+      pageWorld(),
+      nsString(DOM_READY_HANDLER_NAME),
+    );
+
     const addUserScript = (source: string, world: Handle): void => {
       const userScript = msgSendPtrI64U8Ptr(
         rt.msgSend(rt.classes.get('WKUserScript'), rt.selectors.get('alloc')),
@@ -705,8 +719,10 @@ class MacOSApplication implements NativeApplication {
     if (options.preloadScript !== undefined) {
       addUserScript(options.preloadScript, isolatedWorld);
     }
-    // Page world: the cross-world stub that materialises contextBridge surfaces.
+    // Page world: the cross-world stub that materialises contextBridge surfaces,
+    // and the dom-ready notifier.
     addUserScript(generatePageWorldStub(channelId), pageWorld());
+    addUserScript(generateDomReadyScript(), pageWorld());
 
     const webview = msgSendInitWithFrameConfig(
       rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),
@@ -760,6 +776,13 @@ class MacOSApplication implements NativeApplication {
         pageWorld(),
       );
       execHandler.dispose();
+      msgSendPtrPtr(
+        userContentController,
+        rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
+        nsString(DOM_READY_HANDLER_NAME),
+        pageWorld(),
+      );
+      domReadyHandler.dispose();
       contents?.rejectPendingExecs();
     };
 
