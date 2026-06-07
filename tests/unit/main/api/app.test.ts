@@ -11,6 +11,7 @@ import {
   type LockBackend,
   SingleInstanceManager,
 } from '../../../../src/main/api/single-instance';
+import { Menu, resetApplicationMenuForTesting } from '../../../../src/main/api/menu';
 
 const fakeEnv = (overrides: Partial<EnvironmentDeps> = {}): AppEnvironment =>
   buildAppEnvironment({
@@ -401,6 +402,26 @@ describe('App single-instance lock', () => {
     a.releaseSingleInstanceLock();
     expect(fixture.stops()).toBe(1);
     expect(a.hasSingleInstanceLock()).toBe(false);
+  });
+});
+
+describe('App.applicationMenu', () => {
+  test('is null by default', () => {
+    resetApplicationMenuForTesting();
+    expect(new App().applicationMenu).toBeNull();
+  });
+
+  test('the getter delegates to Menu.getApplicationMenu', () => {
+    resetApplicationMenuForTesting();
+    expect(new App().applicationMenu).toBe(Menu.getApplicationMenu());
+  });
+
+  test('assigning null clears the application menu', () => {
+    resetApplicationMenuForTesting();
+    const a = new App();
+    a.applicationMenu = null;
+    expect(a.applicationMenu).toBeNull();
+    expect(Menu.getApplicationMenu()).toBeNull();
   });
 });
 

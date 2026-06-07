@@ -5,6 +5,7 @@ import { type AppEnvironment, defaultAppEnvironment } from './app-environment';
 import { localeCountryCode } from './app-locale';
 import { resolveAppName, resolveAppVersion } from './app-metadata';
 import { type AppPathName, resolveAppPath } from './app-paths';
+import { Menu } from './menu';
 import { createLockBackend } from './single-instance-backend';
 import { SingleInstanceManager } from './single-instance';
 
@@ -190,6 +191,15 @@ export class App extends EventEmitter {
   /** Whether the app is running from a packaged build (vs. the dev runner). */
   get isPackaged(): boolean {
     return this.#environment().isPackaged;
+  }
+
+  /** The application menu bar (Electron's `app.applicationMenu`), or `null`. */
+  get applicationMenu(): Menu | null {
+    return Menu.getApplicationMenu();
+  }
+
+  set applicationMenu(menu: Menu | null) {
+    Menu.setApplicationMenu(menu);
   }
 
   /** Exit immediately with `exitCode` (default 0), skipping the quit events. */
