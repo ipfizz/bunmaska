@@ -53,6 +53,12 @@ describe('GOBJECT_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(sym.returns).toBe(FFIType.pointer);
   });
 
+  it('declares g_object_get as [ptr, cstring, ptr (out), ptr (null)] -> void', () => {
+    const sym = GOBJECT_FFI_SYMBOLS.g_object_get;
+    expect(sym.args).toEqual([FFIType.pointer, FFIType.cstring, FFIType.pointer, FFIType.pointer]);
+    expect(sym.returns).toBe(FFIType.void);
+  });
+
   it('exposes G_CONNECT_DEFAULT === 0', () => {
     expect(G_CONNECT_DEFAULT).toBe(0);
   });

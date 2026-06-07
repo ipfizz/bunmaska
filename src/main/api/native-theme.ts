@@ -4,6 +4,7 @@ import {
   setAppearance as macosSetAppearance,
   shouldUseDarkColors as macosShouldUseDarkColors,
 } from '../platform/macos/cocoa-native-theme';
+import { shouldUseDarkColors as linuxShouldUseDarkColors } from '../platform/linux/gtk-native-theme';
 
 /**
  * System appearance — a drop-in equivalent of Electron's `nativeTheme`.
@@ -11,15 +12,24 @@ import {
  * Extends {@link EventEmitter} for the `updated` event (D023). `shouldUseDarkColors`
  * honors the `themeSource` override ('light'/'dark'), falling back to the OS
  * appearance for 'system'. Setting `themeSource` applies an app-wide appearance
- * (so web views re-theme) and emits `updated`. The OS-change observer that fires
- * `updated` on a system appearance change, and the real Linux OS read, land in a
- * follow-up; today Linux reads `false` for 'system'.
+ * (so web views re-theme) and emits `updated`. `shouldUseDarkColors` reads the
+ * real OS appearance on both platforms (macOS `AppleInterfaceStyle`, Linux
+ * `GtkSettings`). The observer that fires `updated` on an OS-driven appearance
+ * change lands in a follow-up; today `updated` fires on `themeSource` changes.
  */
 
 export type ThemeSource = 'system' | 'light' | 'dark';
 
-const osShouldUseDark = (): boolean =>
-  currentPlatform() === 'macos' ? macosShouldUseDarkColors() : false;
+const osShouldUseDark = (): boolean => {
+  const platform = currentPlatform();
+  if (platform === 'macos') {
+    return macosShouldUseDarkColors();
+  }
+  if (platform === 'linux') {
+    return linuxShouldUseDarkColors();
+  }
+  return false;
+};
 
 const applyThemeSource = (source: ThemeSource): void => {
   if (currentPlatform() === 'macos') {

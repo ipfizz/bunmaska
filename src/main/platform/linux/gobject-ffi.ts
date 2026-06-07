@@ -62,6 +62,13 @@ export const GOBJECT_FFI_SYMBOLS = {
     args: [FFIType.u64, FFIType.cstring, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // C varargs; the fixed `[ptr, cstring, ptr (out), ptr (null)]` arity is valid
+  // ONLY for reading a SINGLE property into a caller-allocated out buffer, e.g.
+  // `g_object_get(settings, "gtk-application-prefer-dark-theme", &gboolean, NULL)`.
+  g_object_get: {
+    args: [FFIType.pointer, FFIType.cstring, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GOBJECT_FFI_SYMBOLS>> | undefined } = {
