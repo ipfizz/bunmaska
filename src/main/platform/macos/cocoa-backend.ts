@@ -31,6 +31,7 @@ import {
   msgSendSize,
   msgSendU8,
 } from './cocoa-msgsend-variants';
+import { createAppDelegate } from './cocoa-app-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
 import { createNavigationDelegate } from './cocoa-navigation-delegate';
@@ -462,8 +463,10 @@ class MacOSWindow implements NativeWindow {
 class MacOSApplication implements NativeApplication {
   #started = false;
   #app: Handle = 0n;
+  #appDelegate: Handle = 0n;
   #pump: CooperativePump | undefined;
   #readyCallbacks: Array<() => void> = [];
+  #onActivate: ((hasVisibleWindows: boolean) => void) | undefined;
 
   start(): void {
     if (this.#started) {
@@ -472,6 +475,13 @@ class MacOSApplication implements NativeApplication {
     const rt = cocoa();
     loadWebKit();
     this.#app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
+    // Install the application delegate (Dock-reopen → activate). NSApp holds its
+    // delegate weakly, so the +1 from alloc/init (never released) keeps it alive.
+    const delegate = createAppDelegate({
+      activate: (hasVisibleWindows) => this.#onActivate?.(hasVisibleWindows),
+    });
+    this.#appDelegate = delegate.handle;
+    msgSendPtr(this.#app, rt.selectors.get('setDelegate:'), this.#appDelegate);
     msgSendI64(this.#app, rt.selectors.get('setActivationPolicy:'), NS_ACTIVATION_POLICY_REGULAR);
     rt.msgSend(this.#app, rt.selectors.get('finishLaunching'));
     msgSendU8(this.#app, rt.selectors.get('activateIgnoringOtherApps:'), 1);
@@ -494,6 +504,10 @@ class MacOSApplication implements NativeApplication {
     } else {
       this.#readyCallbacks.push(callback);
     }
+  }
+
+  onActivate(callback: (hasVisibleWindows: boolean) => void): void {
+    this.#onActivate = callback;
   }
 
   createWindow(options: NativeWindowOptions): NativeWindow {

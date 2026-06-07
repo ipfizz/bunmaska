@@ -141,4 +141,11 @@ export interface NativeApplication {
   createWindow(options: NativeWindowOptions): NativeWindow;
   /** Stop the run loop and release the application. */
   quit(): void;
+  /**
+   * Register a callback fired when the app is re-activated (Electron's `activate`
+   * — e.g. a macOS Dock-icon click), receiving whether any windows are visible.
+   * Optional: platforms without an activation concept (Linux) omit it. Must be
+   * registered before {@link start}.
+   */
+  onActivate?(callback: (hasVisibleWindows: boolean) => void): void;
 }

@@ -59,6 +59,7 @@ export class App extends EventEmitter {
     this.#singleInstance = undefined;
     this.#pathOverrides.clear();
     for (const event of [
+      'activate',
       'window-all-closed',
       'browser-window-created',
       'browser-window-focus',

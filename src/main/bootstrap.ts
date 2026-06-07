@@ -1,3 +1,4 @@
+import { makeCancelableEvent } from '../common/cancelable-event';
 import { app } from './api/app';
 import { nativeApp } from './native-app';
 
@@ -20,6 +21,10 @@ export const ensureNativeStarted = (): void => {
   started = true;
   const native = nativeApp();
   native.onReady(() => app.markReady());
+  // macOS Dock-reopen → Electron's `activate` (Linux backends omit onActivate).
+  native.onActivate?.((hasVisibleWindows) => {
+    app.emit('activate', makeCancelableEvent(), hasVisibleWindows);
+  });
   native.start();
 };
 
