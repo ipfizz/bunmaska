@@ -8,6 +8,7 @@ import {
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { CooperativePump } from '../../run-loop';
 import type {
+  NativeAppKit,
   NativeApplication,
   NativeWebContents,
   NativeWindow,
@@ -31,6 +32,7 @@ import {
   msgSendSize,
   msgSendU8,
 } from './cocoa-msgsend-variants';
+import * as cocoaApp from './cocoa-app';
 import { createAppDelegate } from './cocoa-app-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
@@ -520,6 +522,22 @@ class MacOSApplication implements NativeApplication {
 
   onOpenFile(callback: (path: string) => void): void {
     this.#onOpenFile = callback;
+  }
+
+  /** macOS AppKit application operations (activation, hide/show, dock tile). */
+  readonly appKit: NativeAppKit = {
+    setActivationPolicy: cocoaApp.setActivationPolicy,
+    hide: cocoaApp.hide,
+    show: cocoaApp.show,
+    isHidden: cocoaApp.isHidden,
+    isActive: cocoaApp.isActive,
+    setDockBadge: cocoaApp.setDockBadge,
+    getDockBadge: cocoaApp.getDockBadge,
+    bounceDock: cocoaApp.bounceDock,
+  };
+
+  showAboutPanel(): void {
+    cocoaApp.showAboutPanel();
   }
 
   createWindow(options: NativeWindowOptions): NativeWindow {

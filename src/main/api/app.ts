@@ -5,9 +5,12 @@ import { type AppEnvironment, defaultAppEnvironment } from './app-environment';
 import { localeCountryCode } from './app-locale';
 import { resolveAppName, resolveAppVersion } from './app-metadata';
 import { type AppPathName, resolveAppPath } from './app-paths';
+import * as desktop from './app-desktop';
 import { Menu } from './menu';
 import { createLockBackend } from './single-instance-backend';
 import { SingleInstanceManager } from './single-instance';
+
+export type { Dock } from './app-desktop';
 
 /**
  * Application lifecycle controller — the drop-in equivalent of Electron's `app`.
@@ -22,10 +25,17 @@ import { SingleInstanceManager } from './single-instance';
  * ({@link setStartHook}) by the runtime barrel, and the host facts behind the
  * metadata/path/locale methods come from an injectable {@link AppEnvironment}
  * (the live one is built lazily from `os`/`process`/`fs`/`Intl`).
+ *
+ * This file intentionally exceeds the 300-line guideline: it is the public `app`
+ * facade mirroring Electron's large `app` module. All non-trivial logic lives in
+ * sibling modules (`app-paths`, `app-metadata`, `app-locale`, `app-environment`,
+ * `app-desktop`, `single-instance`); the methods here are thin delegators kept
+ * together for one coherent public surface.
  */
 export class App extends EventEmitter {
   #ready = false;
   #quitting = false;
+  #badgeCount = 0;
   #startHook: (() => void) | undefined;
   #env: AppEnvironment | undefined;
   #nameOverride: string | undefined;
@@ -203,6 +213,64 @@ export class App extends EventEmitter {
 
   set applicationMenu(menu: Menu | null) {
     Menu.setApplicationMenu(menu);
+  }
+
+  /** Set the macOS activation policy (no-op off macOS). */
+  setActivationPolicy(policy: 'regular' | 'accessory' | 'prohibited'): void {
+    desktop.setActivationPolicy(policy);
+  }
+
+  /** Hide all application windows — macOS (no-op off macOS). */
+  hide(): void {
+    desktop.hideApp();
+  }
+
+  /** Show application windows after {@link hide} — macOS (no-op off macOS). */
+  show(): void {
+    desktop.showApp();
+  }
+
+  /** Whether the application is hidden (macOS); `false` off macOS. */
+  isHidden(): boolean {
+    return desktop.isAppHidden();
+  }
+
+  /** Whether the application is the active app (macOS); `false` off macOS. */
+  isActive(): boolean {
+    return desktop.isAppActive();
+  }
+
+  /** Show the platform's standard about panel (no-op where unsupported). */
+  showAboutPanel(): void {
+    desktop.showAboutPanel();
+  }
+
+  /** The macOS dock object, or `undefined` on other platforms. */
+  get dock(): desktop.Dock | undefined {
+    return desktop.getDock();
+  }
+
+  /**
+   * Set the app's badge count. On macOS shows it on the dock tile; the value is
+   * always cached for {@link getBadgeCount}. Returns whether it was displayed.
+   */
+  setBadgeCount(count = 0): boolean {
+    this.#badgeCount = count;
+    return desktop.displayBadgeCount(count);
+  }
+
+  /** The last badge count set via {@link setBadgeCount}. */
+  getBadgeCount(): number {
+    return this.#badgeCount;
+  }
+
+  /** Property form of {@link getBadgeCount} / {@link setBadgeCount}. */
+  get badgeCount(): number {
+    return this.#badgeCount;
+  }
+
+  set badgeCount(count: number) {
+    this.setBadgeCount(count);
   }
 
   /** Exit immediately with `exitCode` (default 0), skipping the quit events. */

@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { App, app } from '../../../../src/main/api/app';
+import { setNativeAppForTesting } from '../../../../src/main/native-app';
+import type { NativeAppKit, NativeApplication } from '../../../../src/main/platform/native';
 import {
   type AppEnvironment,
   buildAppEnvironment,
@@ -402,6 +404,120 @@ describe('App single-instance lock', () => {
     a.releaseSingleInstanceLock();
     expect(fixture.stops()).toBe(1);
     expect(a.hasSingleInstanceLock()).toBe(false);
+  });
+});
+
+describe('App macOS desktop integration', () => {
+  type DesktopCalls = {
+    policy: string[];
+    hidden: number;
+    shown: number;
+    badges: string[];
+    bounces: boolean[];
+    about: number;
+  };
+
+  /** Install a fake native app (optionally with macOS appKit) and record calls. */
+  const install = (withAppKit: boolean): DesktopCalls => {
+    const calls: DesktopCalls = {
+      policy: [],
+      hidden: 0,
+      shown: 0,
+      badges: [],
+      bounces: [],
+      about: 0,
+    };
+    let dockBadge = '';
+    const appKit: NativeAppKit = {
+      setActivationPolicy: (p) => calls.policy.push(p),
+      hide: () => {
+        calls.hidden += 1;
+      },
+      show: () => {
+        calls.shown += 1;
+      },
+      isHidden: () => true,
+      isActive: () => true,
+      setDockBadge: (label) => {
+        dockBadge = label;
+        calls.badges.push(label);
+      },
+      getDockBadge: () => dockBadge,
+      bounceDock: (critical) => calls.bounces.push(critical),
+    };
+    const native: NativeApplication = {
+      start: () => undefined,
+      onReady: (cb) => cb(),
+      createWindow: () => {
+        throw new Error('createWindow unused in desktop tests');
+      },
+      quit: () => undefined,
+      showAboutPanel: () => {
+        calls.about += 1;
+      },
+      ...(withAppKit ? { appKit } : {}),
+    };
+    setNativeAppForTesting(native);
+    return calls;
+  };
+
+  afterEach(() => setNativeAppForTesting(undefined));
+
+  test('setActivationPolicy delegates to appKit', () => {
+    const calls = install(true);
+    new App().setActivationPolicy('accessory');
+    expect(calls.policy).toEqual(['accessory']);
+  });
+
+  test('hide/show delegate to appKit', () => {
+    const calls = install(true);
+    const a = new App();
+    a.hide();
+    a.show();
+    expect([calls.hidden, calls.shown]).toEqual([1, 1]);
+  });
+
+  test('isHidden/isActive reflect appKit', () => {
+    install(true);
+    const a = new App();
+    expect(a.isHidden()).toBe(true);
+    expect(a.isActive()).toBe(true);
+  });
+
+  test('showAboutPanel delegates', () => {
+    const calls = install(true);
+    new App().showAboutPanel();
+    expect(calls.about).toBe(1);
+  });
+
+  test('dock proxies setBadge/getBadge/bounce', () => {
+    const calls = install(true);
+    const dock = new App().dock;
+    dock?.setBadge('3');
+    expect(dock?.getBadge()).toBe('3');
+    dock?.bounce('critical');
+    expect(calls.bounces).toEqual([true]);
+  });
+
+  test('setBadgeCount shows on the dock and caches the value', () => {
+    const calls = install(true);
+    const a = new App();
+    expect(a.setBadgeCount(5)).toBe(true);
+    expect(calls.badges.at(-1)).toBe('5');
+    expect(a.getBadgeCount()).toBe(5);
+    expect(a.badgeCount).toBe(5);
+    a.setBadgeCount(0);
+    expect(calls.badges.at(-1)).toBe('');
+  });
+
+  test('without appKit (non-macOS) the macOS ops are inert but badge caches', () => {
+    install(false);
+    const a = new App();
+    expect(a.dock).toBeUndefined();
+    expect(a.isHidden()).toBe(false);
+    expect(a.isActive()).toBe(false);
+    expect(a.setBadgeCount(9)).toBe(false);
+    expect(a.getBadgeCount()).toBe(9);
   });
 });
 

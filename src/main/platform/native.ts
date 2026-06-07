@@ -131,6 +131,25 @@ export interface NativeWindow {
   onClose(callback: () => boolean): void;
 }
 
+/**
+ * macOS-only application operations (AppKit's `NSApplication`): activation
+ * policy, hide/show, and the dock tile. Present only on the macOS backend
+ * ({@link NativeApplication.appKit}); other platforms omit it.
+ */
+export interface NativeAppKit {
+  setActivationPolicy(policy: 'regular' | 'accessory' | 'prohibited'): void;
+  hide(): void;
+  show(): void;
+  isHidden(): boolean;
+  isActive(): boolean;
+  /** Set the dock-tile badge label (empty string clears it). */
+  setDockBadge(label: string): void;
+  /** The current dock-tile badge label, or `''`. */
+  getDockBadge(): string;
+  /** Bounce the dock icon (`critical` bounces until focused). */
+  bounceDock(critical: boolean): void;
+}
+
 /** The native application host: lifecycle + window factory. */
 export interface NativeApplication {
   /** Bootstrap the native app and begin pumping its run loop. Idempotent. */
@@ -160,4 +179,8 @@ export interface NativeApplication {
    * {@link start}.
    */
   onOpenFile?(callback: (path: string) => void): void;
+  /** macOS-only AppKit application operations (activation, hide/show, dock). */
+  readonly appKit?: NativeAppKit;
+  /** Show the platform's standard about panel (Electron's `showAboutPanel`). */
+  showAboutPanel?(): void;
 }
