@@ -240,12 +240,37 @@ export class BrowserWindow extends EventEmitter {
     return this.#native.isMinimized();
   }
 
+  restore(): void {
+    this.#native.restore();
+  }
+
+  isFocused(): boolean {
+    return this.#native.isFocused();
+  }
+
+  setFullScreen(flag: boolean): void {
+    this.#native.setFullScreen(flag);
+  }
+
+  isFullScreen(): boolean {
+    return this.#native.isFullScreen();
+  }
+
+  setAlwaysOnTop(flag: boolean): void {
+    this.#native.setAlwaysOnTop(flag);
+  }
+
   isDestroyed(): boolean {
     return this.#destroyed;
   }
 
   close(): void {
     this.#native.close();
+  }
+
+  /** Force-close the window without consulting `close` listeners. */
+  destroy(): void {
+    this.#native.destroy();
   }
 
   /** All open windows, in creation order. */

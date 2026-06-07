@@ -130,8 +130,19 @@ export interface NativeWindow {
   unmaximize(): void;
   isMaximized(): boolean;
   isMinimized(): boolean;
+  /** Restore a minimized window. */
+  restore(): void;
+  /** Whether the window currently has keyboard focus. */
+  isFocused(): boolean;
+  /** Enter or leave fullscreen. */
+  setFullScreen(flag: boolean): void;
+  isFullScreen(): boolean;
+  /** Keep the window above others (macOS; best-effort/no-op elsewhere). */
+  setAlwaysOnTop(flag: boolean): void;
   /** Close and destroy the window. Idempotent. */
   close(): void;
+  /** Force-close the window, bypassing the preventable `close` listener. */
+  destroy(): void;
   /** Register a callback fired once when the window is closed. */
   onClosed(callback: () => void): void;
   /**

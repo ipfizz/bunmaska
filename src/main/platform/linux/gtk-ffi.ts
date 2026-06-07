@@ -92,6 +92,18 @@ export const GTK_FFI_SYMBOLS = {
     args: [],
     returns: FFIType.pointer,
   },
+  gtk_window_fullscreen: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
+  gtk_window_unfullscreen: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
+  gtk_window_is_fullscreen: {
+    args: [FFIType.pointer],
+    returns: FFIType.i32,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GTK_FFI_SYMBOLS>> | undefined } = {

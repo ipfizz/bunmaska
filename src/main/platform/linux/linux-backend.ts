@@ -471,6 +471,35 @@ class LinuxWindow implements NativeWindow {
     return this.#minimized;
   }
 
+  restore(): void {
+    const gtk = loadGtkFFI();
+    gtk.symbols.gtk_window_unminimize(this.#window);
+    this.#minimized = false;
+  }
+
+  isFocused(): boolean {
+    const gtk = loadGtkFFI();
+    return gtk.symbols.gtk_window_is_active(this.#window) !== 0;
+  }
+
+  setFullScreen(flag: boolean): void {
+    const gtk = loadGtkFFI();
+    if (flag) {
+      gtk.symbols.gtk_window_fullscreen(this.#window);
+    } else {
+      gtk.symbols.gtk_window_unfullscreen(this.#window);
+    }
+  }
+
+  isFullScreen(): boolean {
+    const gtk = loadGtkFFI();
+    return gtk.symbols.gtk_window_is_fullscreen(this.#window) !== 0;
+  }
+
+  setAlwaysOnTop(_flag: boolean): void {
+    // GTK4 dropped keep-above; no portable client API. No-op (best-effort).
+  }
+
   close(): void {
     if (this.#closed) {
       return;
@@ -486,6 +515,15 @@ class LinuxWindow implements NativeWindow {
     // callback here, so closing the retained thunks is safe.
     this.#handleClosed();
     gtk.symbols.gtk_window_destroy(this.#window);
+  }
+
+  destroy(): void {
+    if (this.#closed) {
+      return;
+    }
+    // Force-close: run teardown then destroy WITHOUT consulting the veto.
+    this.#handleClosed();
+    loadGtkFFI().symbols.gtk_window_destroy(this.#window);
   }
 
   onClosed(callback: () => void): void {

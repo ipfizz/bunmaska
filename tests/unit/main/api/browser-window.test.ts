@@ -41,6 +41,8 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
   let bounds: Rect = { x: 0, y: 0, width: options.width, height: options.height };
   let maximized = false;
   let minimized = false;
+  let fullscreen = false;
+  let focused = false;
   let onClosed: (() => void) | undefined;
   let onClose: (() => boolean) | undefined;
   let teardowns = 0;
@@ -88,6 +90,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     isVisible: () => visible,
     focus: () => {
       visible = true;
+      focused = true;
     },
     minimize: () => {
       minimized = true;
@@ -100,12 +103,25 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     },
     isMaximized: () => maximized,
     isMinimized: () => minimized,
+    restore: () => {
+      minimized = false;
+    },
+    isFocused: () => focused,
+    setFullScreen: (flag) => {
+      fullscreen = flag;
+    },
+    isFullScreen: () => fullscreen,
+    setAlwaysOnTop: () => undefined,
     close: () => {
       // A real backend routes programmatic close through the same delegate path:
       // consult the veto, and only on a non-veto run teardown + fire closed.
       if (onClose?.() === true) {
         return;
       }
+      teardown();
+      onClosed?.();
+    },
+    destroy: () => {
       teardown();
       onClosed?.();
     },
@@ -468,5 +484,44 @@ describe('App-level window events', () => {
     app.on('window-all-closed', () => undefined);
     win.close();
     expect(appExitCodes()).toEqual([]);
+  });
+});
+
+describe('BrowserWindow window controls', () => {
+  test('restore clears the minimized state', () => {
+    const win = new BrowserWindow();
+    win.minimize();
+    expect(win.isMinimized()).toBe(true);
+    win.restore();
+    expect(win.isMinimized()).toBe(false);
+  });
+
+  test('isFocused reflects the native state', () => {
+    const win = new BrowserWindow();
+    expect(win.isFocused()).toBe(false);
+    win.focus();
+    expect(win.isFocused()).toBe(true);
+  });
+
+  test('setFullScreen toggles isFullScreen', () => {
+    const win = new BrowserWindow();
+    expect(win.isFullScreen()).toBe(false);
+    win.setFullScreen(true);
+    expect(win.isFullScreen()).toBe(true);
+    win.setFullScreen(false);
+    expect(win.isFullScreen()).toBe(false);
+  });
+
+  test('setAlwaysOnTop does not throw', () => {
+    const win = new BrowserWindow();
+    expect(() => win.setAlwaysOnTop(true)).not.toThrow();
+  });
+
+  test('destroy force-closes even when a close listener vetoes', () => {
+    const win = new BrowserWindow();
+    win.on('close', (event) => event.preventDefault());
+    win.destroy();
+    expect(win.isDestroyed()).toBe(true);
+    expect(BrowserWindow.fromId(win.id)).toBeUndefined();
   });
 });

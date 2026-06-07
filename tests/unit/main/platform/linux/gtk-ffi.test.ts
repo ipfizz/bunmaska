@@ -63,6 +63,13 @@ describe('GTK_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(GTK_FFI_SYMBOLS.gtk_about_dialog_new.returns).toBe(FFIType.pointer);
   });
 
+  it('declares fullscreen/unfullscreen as [ptr] -> void and is_fullscreen as [ptr] -> i32', () => {
+    expect(GTK_FFI_SYMBOLS.gtk_window_fullscreen.args).toEqual([FFIType.pointer]);
+    expect(GTK_FFI_SYMBOLS.gtk_window_fullscreen.returns).toBe(FFIType.void);
+    expect(GTK_FFI_SYMBOLS.gtk_window_unfullscreen.returns).toBe(FFIType.void);
+    expect(GTK_FFI_SYMBOLS.gtk_window_is_fullscreen.returns).toBe(FFIType.i32);
+  });
+
   it('reads the title as a nullable pointer (not cstring) so 0 can be guarded', () => {
     expect(GTK_FFI_SYMBOLS.gtk_window_get_title.args).toEqual([FFIType.pointer]);
     expect(GTK_FFI_SYMBOLS.gtk_window_get_title.returns).toBe(FFIType.pointer);

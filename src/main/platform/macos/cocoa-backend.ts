@@ -30,6 +30,7 @@ import {
   msgSendPtr4,
   msgSendPtrI64U8Ptr,
   msgSendPtrPtr,
+  msgSendReturnsI64,
   msgSendReturnsU8,
   msgSendSize,
   msgSendU8,
@@ -58,6 +59,10 @@ const log = createLogger('macos-backend');
 
 const NS_BACKING_STORE_BUFFERED = 2n;
 const NS_ACTIVATION_POLICY_REGULAR = 0n;
+/** `NSWindowStyleMaskFullScreen` (1 << 14). */
+const NS_FULLSCREEN_STYLE_MASK = 16384n;
+/** `NSFloatingWindowLevel` — above normal windows. */
+const NS_FLOATING_WINDOW_LEVEL = 3n;
 const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
 const SCRIPT_MESSAGE_HANDLER_NAME = 'sambar';
 /** Page-world handler name `executeJavaScript` posts its result to (D022). */
@@ -443,6 +448,33 @@ class MacOSWindow implements NativeWindow {
     return msgSendReturnsU8(this.#window, cocoa().selectors.get('isMiniaturized')) === 1;
   }
 
+  restore(): void {
+    msgSendPtr(this.#window, cocoa().selectors.get('deminiaturize:'), 0n);
+  }
+
+  isFocused(): boolean {
+    return msgSendReturnsU8(this.#window, cocoa().selectors.get('isKeyWindow')) === 1;
+  }
+
+  isFullScreen(): boolean {
+    const styleMask = msgSendReturnsI64(this.#window, cocoa().selectors.get('styleMask'));
+    return (styleMask & NS_FULLSCREEN_STYLE_MASK) !== 0n;
+  }
+
+  setFullScreen(flag: boolean): void {
+    if (flag !== this.isFullScreen()) {
+      msgSendPtr(this.#window, cocoa().selectors.get('toggleFullScreen:'), 0n);
+    }
+  }
+
+  setAlwaysOnTop(flag: boolean): void {
+    msgSendI64(
+      this.#window,
+      cocoa().selectors.get('setLevel:'),
+      flag ? NS_FLOATING_WINDOW_LEVEL : 0n,
+    );
+  }
+
   close(): void {
     if (this.#tornDown) {
       return;
@@ -453,6 +485,15 @@ class MacOSWindow implements NativeWindow {
     // (teardown + `closed`). No teardown here — `willClose()` owns it,
     // idempotently — so a vetoed programmatic close leaves the window fully alive.
     msgSendPtr(this.#window, cocoa().selectors.get('performClose:'), 0n);
+  }
+
+  destroy(): void {
+    if (this.#tornDown) {
+      return;
+    }
+    // `-close` (not `-performClose:`) fires windowWillClose: (teardown + closed)
+    // WITHOUT windowShouldClose:, so it bypasses the preventable veto.
+    cocoa().msgSend(this.#window, cocoa().selectors.get('close'));
   }
 
   onClosed(callback: () => void): void {
