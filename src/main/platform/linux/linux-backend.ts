@@ -24,6 +24,7 @@ import { loadGtkMenuFFI } from './gtk-menu-ffi';
 import { createLinuxDrain } from './gtk-run-loop';
 import {
   makeCloseRequestCallback,
+  makeCreateCallback,
   makeLoadChangedCallback,
   makeLoadFailedCallback,
   makeNotifyCallback,
@@ -60,6 +61,7 @@ class LinuxWebContents implements NativeWebContents {
   readonly #pendingEnvelopes: string[] = [];
   readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
+  #windowOpenCallback: ((url: string) => void) | undefined;
 
   constructor(userPreloadSource?: string) {
     const channelId = generateChannelId();
@@ -114,6 +116,11 @@ class LinuxWebContents implements NativeWebContents {
       this.#view,
       'load-failed',
       makeLoadFailedCallback((event) => this.#dispatchNavigation(event)),
+    );
+    this.#registry.connect(
+      this.#view,
+      'create',
+      makeCreateCallback((url) => this.#windowOpenCallback?.(url)),
     );
   }
 
@@ -219,6 +226,10 @@ class LinuxWebContents implements NativeWebContents {
 
   onNavigation(callback: (event: NativeNavigationEvent) => void): void {
     this.#navigationCallbacks.push(callback);
+  }
+
+  setWindowOpenHandler(callback: (url: string) => void): void {
+    this.#windowOpenCallback = callback;
   }
 }
 

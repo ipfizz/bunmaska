@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   CLOSE_REQUEST_CB_DEF,
   closeRequestDecision,
+  CREATE_CB_DEF,
   DESTROY_CB_DEF,
   LOAD_CHANGED_CB_DEF,
   LOAD_FAILED_CB_DEF,
@@ -37,6 +38,11 @@ describe('gtk-signals callback ABI definitions (shape-only)', () => {
   it('load-failed is (self, load_event, uri, error, user_data) -> i32', () => {
     expect(LOAD_FAILED_CB_DEF.args).toEqual(['ptr', 'i32', 'ptr', 'ptr', 'ptr']);
     expect(LOAD_FAILED_CB_DEF.returns).toBe('i32');
+  });
+
+  it('create is (self, navigation_action, user_data) -> ptr (the new view or NULL)', () => {
+    expect(CREATE_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
+    expect(CREATE_CB_DEF.returns).toBe('ptr');
   });
 
   it('script-message takes three pointers (WK6.0 JSCValue* direct)', () => {

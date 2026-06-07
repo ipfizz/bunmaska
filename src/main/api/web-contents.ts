@@ -149,6 +149,20 @@ export class WebContents extends EventEmitter {
     return this.#zoomFactor;
   }
 
+  /**
+   * Set the handler consulted when the page requests a new window (`window.open`
+   * / `target=_blank`). The handler receives `{ url }` and returns `{ action }`.
+   * The native popup is always blocked (v1 — child-window creation isn't
+   * supported), so apps typically `shell.openExternal(url)` and return `deny`.
+   */
+  setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void {
+    this.#native.setWindowOpenHandler((url) => {
+      if (handler({ url }).action === 'allow') {
+        log.warn('setWindowOpenHandler { action: "allow" } is not yet supported; window blocked');
+      }
+    });
+  }
+
   /** Open the developer tools (web inspector) for this view. Best-effort. */
   openDevTools(): void {
     this.#native.openDevTools();

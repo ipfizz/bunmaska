@@ -70,6 +70,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     sendEnvelopeToRenderer: () => undefined,
     onRendererEnvelope: () => undefined,
     onNavigation: () => undefined,
+    setWindowOpenHandler: () => undefined,
   };
   return {
     webContents,

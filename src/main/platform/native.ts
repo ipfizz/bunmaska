@@ -93,6 +93,12 @@ export interface NativeWebContents {
   onRendererEnvelope(callback: (envelopeJson: string) => void): void;
   /** Register a callback for navigation lifecycle events. */
   onNavigation(callback: (event: NativeNavigationEvent) => void): void;
+  /**
+   * Register a callback invoked when the page requests a new window
+   * (`window.open` / `target=_blank`), receiving the target URL. The native
+   * popup is always blocked (v1); the handler decides what to do with the URL.
+   */
+  setWindowOpenHandler(callback: (url: string) => void): void;
 }
 
 /**

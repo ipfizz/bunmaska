@@ -4,7 +4,12 @@ import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
 import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadJscFFI } from './jsc-ffi';
-import { WEBKIT_LOAD_COMMITTED, WEBKIT_LOAD_FINISHED, WEBKIT_LOAD_STARTED } from './webkitgtk-ffi';
+import {
+  loadWebKitGtkFFI,
+  WEBKIT_LOAD_COMMITTED,
+  WEBKIT_LOAD_FINISHED,
+  WEBKIT_LOAD_STARTED,
+} from './webkitgtk-ffi';
 
 /**
  * GObject signal wiring for the Linux backend.
@@ -35,6 +40,8 @@ export const LOAD_FAILED_CB_DEF = {
   args: ['ptr', 'i32', 'ptr', 'ptr', 'ptr'],
   returns: 'i32',
 } as const;
+/** ABI shape for `WebKitWebView::create`: `(self, navigation_action, user_data) -> GtkWidget*`. */
+export const CREATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'ptr' } as const;
 /** ABI shape for `script-message-received` (WK6.0): `(manager, value, user_data) -> void`. */
 export const SCRIPT_MESSAGE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 /** ABI shape for a `GObject::notify` signal: `(gobject, pspec, user_data) -> void`. */
@@ -126,6 +133,28 @@ export const makeLoadFailedCallback = (
     },
     LOAD_FAILED_CB_DEF,
   );
+
+/**
+ * `WebKitWebView::create` handler (`window.open` / `target=_blank`). Reads the
+ * target URI from the navigation action, hands it to `onWindowOpen`, and returns
+ * NULL so no child web view is created (v1 deny path).
+ */
+export const makeCreateCallback = (onWindowOpen: (url: string) => void): JSCallback => {
+  const webkit = loadWebKitGtkFFI();
+  return new JSCallback(
+    (_webView: Pointer, navigationAction: Pointer, _userData: Pointer): Pointer | null => {
+      const request = webkit.symbols.webkit_navigation_action_get_request(navigationAction);
+      if (request !== null) {
+        const uri = webkit.symbols.webkit_uri_request_get_uri(request);
+        if (uri !== null) {
+          onWindowOpen(new CString(uri).toString());
+        }
+      }
+      return null;
+    },
+    CREATE_CB_DEF,
+  );
+};
 
 /**
  * `WebKitUserContentManager::script-message-received` handler (WK6.0).

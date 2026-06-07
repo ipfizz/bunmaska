@@ -14,12 +14,14 @@ const makeFakeNative = (): {
   zooms: number[];
   fireRenderer: (json: string) => void;
   fireNavigation: (event: NativeNavigationEvent) => void;
+  fireWindowOpen: (url: string) => void;
 } => {
   const sent: string[] = [];
   const execs: string[] = [];
   const zooms: number[] = [];
   let onEnvelope: ((json: string) => void) | undefined;
   let onNav: ((event: NativeNavigationEvent) => void) | undefined;
+  let onWindowOpen: ((url: string) => void) | undefined;
   const native: NativeWebContents = {
     loadURL: () => undefined,
     loadHTML: () => undefined,
@@ -42,6 +44,9 @@ const makeFakeNative = (): {
     onNavigation: (cb) => {
       onNav = cb;
     },
+    setWindowOpenHandler: (cb) => {
+      onWindowOpen = cb;
+    },
   };
   return {
     native,
@@ -50,6 +55,7 @@ const makeFakeNative = (): {
     zooms,
     fireRenderer: (json) => onEnvelope?.(json),
     fireNavigation: (event) => onNav?.(event),
+    fireWindowOpen: (url) => onWindowOpen?.(url),
   };
 };
 
@@ -211,6 +217,20 @@ describe('WebContents navigation events', () => {
   });
 });
 
+describe('WebContents.setWindowOpenHandler', () => {
+  test('invokes the handler with the requested url', () => {
+    const { native, fireWindowOpen } = makeFakeNative();
+    const wc = new WebContents(native);
+    let seen: string | undefined;
+    wc.setWindowOpenHandler(({ url }) => {
+      seen = url;
+      return { action: 'deny' };
+    });
+    fireWindowOpen('https://popup.test/path');
+    expect(seen).toBe('https://popup.test/path');
+  });
+});
+
 describe('WebContents.openDevTools', () => {
   test('delegates to the native view', () => {
     let opened = 0;
@@ -266,6 +286,7 @@ describe('WebContents navigation', () => {
       sendEnvelopeToRenderer: () => undefined,
       onRendererEnvelope: () => undefined,
       onNavigation: () => undefined,
+      setWindowOpenHandler: () => undefined,
     };
     const wc = new WebContents(native);
     wc.reload();

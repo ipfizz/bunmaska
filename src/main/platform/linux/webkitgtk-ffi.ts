@@ -94,6 +94,16 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.f64],
     returns: FFIType.void,
   },
+  // (WebKitNavigationAction*) -> WebKitURIRequest* (transfer-none).
+  webkit_navigation_action_get_request: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (WebKitURIRequest*) -> const char* uri (transfer-none).
+  webkit_uri_request_get_uri: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
   webkit_web_view_evaluate_javascript: {
     args: [
       FFIType.pointer,

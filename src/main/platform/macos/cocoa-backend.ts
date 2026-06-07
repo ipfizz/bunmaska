@@ -40,6 +40,7 @@ import { createAppDelegate } from './cocoa-app-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
 import { createNavigationDelegate } from './cocoa-navigation-delegate';
+import { createUIDelegate } from './cocoa-ui-delegate';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
 import { createUrlSchemeHandler } from './cocoa-url-scheme-handler';
 import { protocol } from '../../api/protocol';
@@ -150,6 +151,7 @@ class MacOSWebContents implements NativeWebContents {
   readonly #isolatedWorld: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
   #navigationCallback: ((event: NativeNavigationEvent) => void) | undefined;
+  #windowOpenCallback: ((url: string) => void) | undefined;
   readonly #pendingExecs = new Map<number, PendingExec>();
   #nextExecId = 1;
   #destroyed = false;
@@ -212,6 +214,11 @@ class MacOSWebContents implements NativeWebContents {
   /** @internal Called by the navigation delegate for each navigation event. */
   deliverNavigation(event: NativeNavigationEvent): void {
     this.#navigationCallback?.(event);
+  }
+
+  /** @internal Called by the UI delegate when the page requests a new window. */
+  deliverWindowOpen(url: string): void {
+    this.#windowOpenCallback?.(url);
   }
 
   loadURL(url: string): void {
@@ -345,6 +352,10 @@ class MacOSWebContents implements NativeWebContents {
 
   onNavigation(callback: (event: NativeNavigationEvent) => void): void {
     this.#navigationCallback = callback;
+  }
+
+  setWindowOpenHandler(callback: (url: string) => void): void {
+    this.#windowOpenCallback = callback;
   }
 }
 
@@ -721,6 +732,12 @@ class MacOSApplication implements NativeApplication {
       }
     });
     msgSendPtr(webview, rt.selectors.get('setNavigationDelegate:'), navigationDelegate.handle);
+
+    // WKUIDelegate: route window.open / target=_blank to the JS handler (returns
+    // nil so no child web view is created). Retained by its registry, like the
+    // nav delegate.
+    const uiDelegate = createUIDelegate((url) => contents?.deliverWindowOpen(url));
+    msgSendPtr(webview, rt.selectors.get('setUIDelegate:'), uiDelegate.handle);
 
     msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
     msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));

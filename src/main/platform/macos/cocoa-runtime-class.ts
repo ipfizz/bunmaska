@@ -30,11 +30,12 @@ export type ObjcMethodSpec = {
   /** The declared (post-`self`/`_cmd`) argument kinds; currently all objects. */
   readonly args: ReadonlyArray<'object'>;
   /** Return kind; defaults to `'void'`. */
-  readonly returns?: 'void' | 'bool';
+  readonly returns?: 'void' | 'bool' | 'object';
   /**
    * The JS implementation. Receives `(self, _cmd, ...args)` as bigint handles.
-   * A `returns: 'bool'` method's impl must produce `0`/`1`; the build wrapper
-   * reads that runtime value (a `() => number` is assignable here too).
+   * A `returns: 'bool'` method's impl must produce `0`/`1`; a `returns: 'object'`
+   * method's impl must produce a `Handle` (`0n` = nil). The build wrapper reads
+   * that runtime value (a `() => number`/`() => Handle` is assignable here too).
    */
   readonly impl: (self: Handle, cmd: Handle, ...args: Handle[]) => void;
 };
@@ -73,6 +74,17 @@ const buildCallback = (method: ObjcMethodSpec): JSCallback => {
         return result === 1 ? 1 : 0;
       },
       { args: argTypes, returns: FFIType.u8 },
+    );
+  }
+  if (method.returns === 'object') {
+    return new JSCallback(
+      (...raw: number[]): bigint => {
+        const handles = raw.map((value) => BigInt(value)) as [Handle, Handle, ...Handle[]];
+        // An object-returning IMP yields a Handle (0n = nil); coerce defensively.
+        const result = (method.impl as (...a: Handle[]) => unknown)(...handles);
+        return typeof result === 'bigint' ? result : 0n;
+      },
+      { args: argTypes, returns: FFIType.u64 },
     );
   }
   return new JSCallback(
