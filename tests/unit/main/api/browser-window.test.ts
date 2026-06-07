@@ -199,6 +199,18 @@ describe('BrowserWindow construction', () => {
     expect(created[0]).toEqual({ width: 1024, height: 768, title: 'My App', show: false });
   });
 
+  test('forwards resizable, frame, and fullscreen when provided', () => {
+    new BrowserWindow({ resizable: false, frame: false, fullscreen: true });
+    expect(created[0]).toMatchObject({ resizable: false, frame: false, fullscreen: true });
+  });
+
+  test('omits resizable/frame/fullscreen when not provided', () => {
+    new BrowserWindow();
+    expect(created[0]).not.toHaveProperty('resizable');
+    expect(created[0]).not.toHaveProperty('frame');
+    expect(created[0]).not.toHaveProperty('fullscreen');
+  });
+
   test('assigns incrementing ids', () => {
     const a = new BrowserWindow();
     const b = new BrowserWindow();

@@ -39,6 +39,12 @@ export type BrowserWindowOptions = {
   readonly title?: string;
   /** Whether to show the window immediately. Defaults to `true`. */
   readonly show?: boolean;
+  /** Whether the window is user-resizable. Defaults to `true`. */
+  readonly resizable?: boolean;
+  /** Whether to draw the OS frame/title bar. `false` opens a frameless window. */
+  readonly frame?: boolean;
+  /** Whether to open in fullscreen. Defaults to `false`. */
+  readonly fullscreen?: boolean;
   /** Per-window renderer preferences. */
   readonly webPreferences?: WebPreferences;
 };
@@ -133,6 +139,9 @@ export class BrowserWindow extends EventEmitter {
       title: options.title ?? DEFAULT_TITLE,
       show: options.show ?? true,
       ...(preloadScript !== undefined ? { preloadScript } : {}),
+      ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
+      ...(options.frame !== undefined ? { frame: options.frame } : {}),
+      ...(options.fullscreen !== undefined ? { fullscreen: options.fullscreen } : {}),
     });
     this.webContents = new WebContents(this.#native.webContents);
     app.emit('web-contents-created', makeCancelableEvent(), this.webContents);

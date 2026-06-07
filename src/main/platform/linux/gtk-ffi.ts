@@ -92,6 +92,14 @@ export const GTK_FFI_SYMBOLS = {
     args: [],
     returns: FFIType.pointer,
   },
+  gtk_window_set_decorated: {
+    args: [FFIType.pointer, FFIType.i32],
+    returns: FFIType.void,
+  },
+  gtk_window_set_resizable: {
+    args: [FFIType.pointer, FFIType.i32],
+    returns: FFIType.void,
+  },
   gtk_window_fullscreen: {
     args: [FFIType.pointer],
     returns: FFIType.void,

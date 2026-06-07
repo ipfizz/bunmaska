@@ -269,6 +269,15 @@ class LinuxWindow implements NativeWindow {
     this.#window = window;
     gtk.symbols.gtk_window_set_title(this.#window, cstr(options.title));
     gtk.symbols.gtk_window_set_default_size(this.#window, options.width, options.height);
+    if (options.frame === false) {
+      gtk.symbols.gtk_window_set_decorated(this.#window, GTK_FALSE);
+    }
+    if (options.resizable === false) {
+      gtk.symbols.gtk_window_set_resizable(this.#window, GTK_FALSE);
+    }
+    if (options.fullscreen === true) {
+      gtk.symbols.gtk_window_fullscreen(this.#window);
+    }
 
     this.#webContents = new LinuxWebContents(options.preloadScript);
     const appMenu = getCurrentAppMenu();

@@ -70,6 +70,12 @@ describe('GTK_FFI_SYMBOLS (shape-only ABI assertions)', () => {
     expect(GTK_FFI_SYMBOLS.gtk_window_is_fullscreen.returns).toBe(FFIType.i32);
   });
 
+  it('declares set_decorated and set_resizable as [ptr, i32] -> void', () => {
+    expect(GTK_FFI_SYMBOLS.gtk_window_set_decorated.args).toEqual([FFIType.pointer, FFIType.i32]);
+    expect(GTK_FFI_SYMBOLS.gtk_window_set_decorated.returns).toBe(FFIType.void);
+    expect(GTK_FFI_SYMBOLS.gtk_window_set_resizable.args).toEqual([FFIType.pointer, FFIType.i32]);
+  });
+
   it('reads the title as a nullable pointer (not cstring) so 0 can be guarded', () => {
     expect(GTK_FFI_SYMBOLS.gtk_window_get_title.args).toEqual([FFIType.pointer]);
     expect(GTK_FFI_SYMBOLS.gtk_window_get_title.returns).toBe(FFIType.pointer);

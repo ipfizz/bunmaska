@@ -22,6 +22,12 @@ export type NativeWindowOptions = {
   readonly height: number;
   readonly title: string;
   readonly show: boolean;
+  /** Whether the window is user-resizable (default `true`). */
+  readonly resizable?: boolean;
+  /** Whether to draw the OS title bar / frame (default `true`; `false` = frameless). */
+  readonly frame?: boolean;
+  /** Whether to open in fullscreen (default `false`). */
+  readonly fullscreen?: boolean;
   /**
    * Resolved source of the user preload script, injected at document-start in
    * all frames AFTER the built-in bridge bootstrap. Undefined when no preload

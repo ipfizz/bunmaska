@@ -44,7 +44,12 @@ import { createScriptMessageHandler } from './cocoa-script-message-handler';
 import { createUrlSchemeHandler } from './cocoa-url-scheme-handler';
 import { protocol } from '../../api/protocol';
 import { createWindowDelegate } from './cocoa-window-delegate';
-import { computeWindowStyleMask, STANDARD_WINDOW_STYLE } from './cocoa-style-mask';
+import {
+  BORDERLESS_WINDOW_STYLE,
+  type CocoaWindowStyle,
+  computeWindowStyleMask,
+  STANDARD_WINDOW_STYLE,
+} from './cocoa-style-mask';
 import { loadWebKit } from './cocoa-webkit';
 import type { Handle } from './objc';
 
@@ -133,6 +138,12 @@ const registerCustomSchemes = (configuration: Handle): void => {
     }
   }
 };
+
+/** The window style mask for the given options: frameless, or standard with optional resizing. */
+const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle =>
+  options.frame === false
+    ? BORDERLESS_WINDOW_STYLE
+    : { ...STANDARD_WINDOW_STYLE, resizable: options.resizable !== false };
 
 class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
@@ -595,7 +606,7 @@ class MacOSApplication implements NativeApplication {
       rt.msgSend(rt.classes.get('NSWindow'), rt.selectors.get('alloc')),
       rt.selectors.get('initWithContentRect:styleMask:backing:defer:'),
       frame,
-      BigInt(computeWindowStyleMask(STANDARD_WINDOW_STYLE)),
+      BigInt(computeWindowStyleMask(styleFromOptions(options))),
       NS_BACKING_STORE_BUFFERED,
       false,
     );
@@ -759,6 +770,9 @@ class MacOSApplication implements NativeApplication {
     });
     msgSendPtr(window, rt.selectors.get('setDelegate:'), windowDelegate.handle);
 
+    if (options.fullscreen === true) {
+      nativeWindow.setFullScreen(true);
+    }
     if (options.show) {
       nativeWindow.show();
     }
