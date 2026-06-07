@@ -25,6 +25,13 @@ export const ensureNativeStarted = (): void => {
   native.onActivate?.((hasVisibleWindows) => {
     app.emit('activate', makeCancelableEvent(), hasVisibleWindows);
   });
+  // macOS file/URL associations → Electron's `open-url` / `open-file`.
+  native.onOpenUrl?.((url) => {
+    app.emit('open-url', makeCancelableEvent(), url);
+  });
+  native.onOpenFile?.((path) => {
+    app.emit('open-file', makeCancelableEvent(), path);
+  });
   native.start();
 };
 

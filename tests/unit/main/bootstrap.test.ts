@@ -5,9 +5,18 @@ import { setNativeAppForTesting } from '../../../src/main/native-app';
 import type { NativeApplication } from '../../../src/main/platform/native';
 import { installSafeAppExit } from '../../helpers/safe-app-exit';
 
-/** A fake native app exposing a trigger for its registered activate callback. */
-const makeNative = (): { native: NativeApplication; activate: (v: boolean) => void } => {
-  let cb: ((v: boolean) => void) | undefined;
+type NativeTriggers = {
+  native: NativeApplication;
+  activate: (v: boolean) => void;
+  openUrl: (url: string) => void;
+  openFile: (path: string) => void;
+};
+
+/** A fake native app exposing triggers for its registered lifecycle callbacks. */
+const makeNative = (): NativeTriggers => {
+  let activateCb: ((v: boolean) => void) | undefined;
+  let openUrlCb: ((url: string) => void) | undefined;
+  let openFileCb: ((path: string) => void) | undefined;
   const native: NativeApplication = {
     start: () => undefined,
     onReady: (ready) => ready(),
@@ -16,10 +25,21 @@ const makeNative = (): { native: NativeApplication; activate: (v: boolean) => vo
     },
     quit: () => undefined,
     onActivate: (c) => {
-      cb = c;
+      activateCb = c;
+    },
+    onOpenUrl: (c) => {
+      openUrlCb = c;
+    },
+    onOpenFile: (c) => {
+      openFileCb = c;
     },
   };
-  return { native, activate: (v) => cb?.(v) };
+  return {
+    native,
+    activate: (v) => activateCb?.(v),
+    openUrl: (url) => openUrlCb?.(url),
+    openFile: (path) => openFileCb?.(path),
+  };
 };
 
 describe('bootstrap native wiring', () => {
@@ -50,5 +70,33 @@ describe('bootstrap native wiring', () => {
     setNativeAppForTesting(native);
     ensureNativeStarted();
     expect(app.isReady).toBe(true);
+  });
+
+  test('forwards native open-url to the app open-url event', () => {
+    installSafeAppExit();
+    const { native, openUrl } = makeNative();
+    resetBootstrapForTesting();
+    setNativeAppForTesting(native);
+    ensureNativeStarted();
+    let seen: string | undefined;
+    app.on('open-url', (_event: unknown, url: string) => {
+      seen = url;
+    });
+    openUrl('myapp://deep/link');
+    expect(seen).toBe('myapp://deep/link');
+  });
+
+  test('forwards native open-file to the app open-file event', () => {
+    installSafeAppExit();
+    const { native, openFile } = makeNative();
+    resetBootstrapForTesting();
+    setNativeAppForTesting(native);
+    ensureNativeStarted();
+    let seen: string | undefined;
+    app.on('open-file', (_event: unknown, path: string) => {
+      seen = path;
+    });
+    openFile('/Users/ada/doc.txt');
+    expect(seen).toBe('/Users/ada/doc.txt');
   });
 });

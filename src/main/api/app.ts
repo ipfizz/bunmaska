@@ -60,6 +60,8 @@ export class App extends EventEmitter {
     this.#pathOverrides.clear();
     for (const event of [
       'activate',
+      'open-url',
+      'open-file',
       'window-all-closed',
       'browser-window-created',
       'browser-window-focus',

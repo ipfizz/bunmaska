@@ -1,3 +1,5 @@
+import { nsStringToString } from './cocoa-foundation';
+import { msgSendI64, msgSendReturnsI64 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
@@ -20,6 +22,10 @@ import type { Handle } from './objc';
 export type AppDelegateHandlers = {
   /** The app was re-activated; `hasVisibleWindows` is AppKit's flag. */
   readonly activate: (hasVisibleWindows: boolean) => void;
+  /** The OS asked the app to open a URL (custom scheme / deep link). */
+  readonly openUrl: (url: string) => void;
+  /** The OS asked the app to open a file path (file association). */
+  readonly openFile: (path: string) => void;
 };
 
 let delegateClass: Handle | undefined;
@@ -39,6 +45,31 @@ const ensureDelegateClass = (): Handle => {
       impl: (_self, _cmd, _sender, hasVisibleWindows) => {
         current?.activate(hasVisibleWindows === 1n);
         // Return YES so AppKit performs its default reopen behavior.
+        return 1;
+      },
+    },
+    {
+      // void application:(NSApplication*)app openURLs:(NSArray<NSURL*>*)urls
+      selector: 'application:openURLs:',
+      typeEncoding: 'v@:@@',
+      args: ['object', 'object'],
+      impl: (_self, _cmd, _app, urls) => {
+        const rt = cocoa();
+        const count = msgSendReturnsI64(urls, rt.selectors.get('count'));
+        for (let i = 0n; i < count; i += 1n) {
+          const url = msgSendI64(urls, rt.selectors.get('objectAtIndex:'), i);
+          current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+        }
+      },
+    },
+    {
+      // BOOL application:(NSApplication*)app openFile:(NSString*)filename
+      selector: 'application:openFile:',
+      typeEncoding: 'c@:@@',
+      args: ['object', 'object'],
+      returns: 'bool',
+      impl: (_self, _cmd, _app, filename) => {
+        current?.openFile(nsStringToString(filename));
         return 1;
       },
     },

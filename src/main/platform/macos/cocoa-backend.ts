@@ -467,6 +467,8 @@ class MacOSApplication implements NativeApplication {
   #pump: CooperativePump | undefined;
   #readyCallbacks: Array<() => void> = [];
   #onActivate: ((hasVisibleWindows: boolean) => void) | undefined;
+  #onOpenUrl: ((url: string) => void) | undefined;
+  #onOpenFile: ((path: string) => void) | undefined;
 
   start(): void {
     if (this.#started) {
@@ -479,6 +481,8 @@ class MacOSApplication implements NativeApplication {
     // delegate weakly, so the +1 from alloc/init (never released) keeps it alive.
     const delegate = createAppDelegate({
       activate: (hasVisibleWindows) => this.#onActivate?.(hasVisibleWindows),
+      openUrl: (url) => this.#onOpenUrl?.(url),
+      openFile: (path) => this.#onOpenFile?.(path),
     });
     this.#appDelegate = delegate.handle;
     msgSendPtr(this.#app, rt.selectors.get('setDelegate:'), this.#appDelegate);
@@ -508,6 +512,14 @@ class MacOSApplication implements NativeApplication {
 
   onActivate(callback: (hasVisibleWindows: boolean) => void): void {
     this.#onActivate = callback;
+  }
+
+  onOpenUrl(callback: (url: string) => void): void {
+    this.#onOpenUrl = callback;
+  }
+
+  onOpenFile(callback: (path: string) => void): void {
+    this.#onOpenFile = callback;
   }
 
   createWindow(options: NativeWindowOptions): NativeWindow {

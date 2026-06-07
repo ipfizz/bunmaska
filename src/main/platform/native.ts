@@ -148,4 +148,16 @@ export interface NativeApplication {
    * registered before {@link start}.
    */
   onActivate?(callback: (hasVisibleWindows: boolean) => void): void;
+  /**
+   * Register a callback for an OS request to open a URL (custom-scheme deep link;
+   * Electron's `open-url`). macOS-only; other backends omit it. Register before
+   * {@link start}.
+   */
+  onOpenUrl?(callback: (url: string) => void): void;
+  /**
+   * Register a callback for an OS request to open a file path (file association;
+   * Electron's `open-file`). macOS-only; other backends omit it. Register before
+   * {@link start}.
+   */
+  onOpenFile?(callback: (path: string) => void): void;
 }
