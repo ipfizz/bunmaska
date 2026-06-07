@@ -10,6 +10,7 @@ import { CooperativePump } from '../../run-loop';
 import type {
   NativeAppKit,
   NativeApplication,
+  NativeNavigationEvent,
   NativeWebContents,
   NativeWindow,
   NativeWindowOptions,
@@ -132,7 +133,7 @@ class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
   readonly #isolatedWorld: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
-  #didFinishLoadCallback: (() => void) | undefined;
+  #navigationCallback: ((event: NativeNavigationEvent) => void) | undefined;
   readonly #pendingExecs = new Map<number, PendingExec>();
   #nextExecId = 1;
   #destroyed = false;
@@ -192,9 +193,9 @@ class MacOSWebContents implements NativeWebContents {
     this.#pendingExecs.clear();
   }
 
-  /** @internal Called by the navigation delegate when a load finishes. */
-  deliverDidFinishLoad(): void {
-    this.#didFinishLoadCallback?.();
+  /** @internal Called by the navigation delegate for each navigation event. */
+  deliverNavigation(event: NativeNavigationEvent): void {
+    this.#navigationCallback?.(event);
   }
 
   loadURL(url: string): void {
@@ -326,8 +327,8 @@ class MacOSWebContents implements NativeWebContents {
     this.#envelopeCallback = callback;
   }
 
-  onDidFinishLoad(callback: () => void): void {
-    this.#didFinishLoadCallback = callback;
+  onNavigation(callback: (event: NativeNavigationEvent) => void): void {
+    this.#navigationCallback = callback;
   }
 }
 
@@ -660,9 +661,9 @@ class MacOSApplication implements NativeApplication {
     // `ready-to-show` is emitted once, on the FIRST finished load, reusing the
     // navigation delegate's did-finish-load signal.
     let readyToShowEmitted = false;
-    const navigationDelegate = createNavigationDelegate(() => {
-      contents?.deliverDidFinishLoad();
-      if (!readyToShowEmitted) {
+    const navigationDelegate = createNavigationDelegate((event) => {
+      contents?.deliverNavigation(event);
+      if (event.type === 'did-finish-load' && !readyToShowEmitted) {
         readyToShowEmitted = true;
         nativeWindow.emitEvent('ready-to-show');
       }

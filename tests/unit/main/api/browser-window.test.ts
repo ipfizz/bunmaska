@@ -67,7 +67,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     setZoomFactor: () => undefined,
     sendEnvelopeToRenderer: () => undefined,
     onRendererEnvelope: () => undefined,
-    onDidFinishLoad: () => undefined,
+    onNavigation: () => undefined,
   };
   return {
     webContents,

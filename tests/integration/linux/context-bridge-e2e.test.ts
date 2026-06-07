@@ -63,7 +63,10 @@ describe.skipIf(!isLinux)('Linux contextBridge cross-world proxy', () => {
     contents.onRendererEnvelope((json) => received.push(json));
 
     let didFinish = false;
-    contents.onDidFinishLoad(() => {
+    contents.onNavigation((navEvent) => {
+      if (navEvent.type !== 'did-finish-load') {
+        return;
+      }
       didFinish = true;
     });
 

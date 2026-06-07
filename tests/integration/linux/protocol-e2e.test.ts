@@ -56,7 +56,10 @@ describe.skipIf(!isLinux)('custom app:// scheme over real WebKitGTK', () => {
     const contents: NativeWebContents = window.webContents;
 
     let didFinish = false;
-    contents.onDidFinishLoad(() => {
+    contents.onNavigation((navEvent) => {
+      if (navEvent.type !== 'did-finish-load') {
+        return;
+      }
       didFinish = true;
     });
     contents.loadURL('app://host/index.html');

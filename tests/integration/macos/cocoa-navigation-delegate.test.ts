@@ -34,7 +34,10 @@ if (currentPlatform() === 'macos') {
     test('onDidFinishLoad runs after loadHTML completes', async () => {
       const win = app.createWindow({ width: 400, height: 300, title: 'nav', show: true });
       let loads = 0;
-      win.webContents.onDidFinishLoad(() => {
+      win.webContents.onNavigation((navEvent) => {
+        if (navEvent.type !== 'did-finish-load') {
+          return;
+        }
         loads += 1;
       });
       win.webContents.loadHTML('<html><body>nav</body></html>', 'about:blank');

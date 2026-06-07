@@ -59,8 +59,14 @@ export class WebContents extends EventEmitter {
     this.#native.onRendererEnvelope((json) => {
       void this.#handleRendererEnvelope(json);
     });
-    this.#native.onDidFinishLoad(() => {
-      this.emit('did-finish-load');
+    this.#native.onNavigation((event) => {
+      if (event.type === 'did-navigate') {
+        this.emit('did-navigate', {}, this.getURL());
+      } else if (event.type === 'did-fail-load') {
+        this.emit('did-fail-load', {}, event.errorCode, event.errorDescription, this.getURL());
+      } else {
+        this.emit(event.type);
+      }
     });
   }
 

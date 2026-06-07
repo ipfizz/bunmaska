@@ -50,7 +50,10 @@ describe.skipIf(!isLinux)('executeJavaScript over a real WebKitGTK webview', () 
     const contents: NativeWebContents = window.webContents;
 
     let didFinish = false;
-    contents.onDidFinishLoad(() => {
+    contents.onNavigation((navEvent) => {
+      if (navEvent.type !== 'did-finish-load') {
+        return;
+      }
       didFinish = true;
     });
     contents.loadHTML('<!doctype html><html><body>exec</body></html>', 'about:blank');

@@ -70,7 +70,10 @@ describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
     expect(bounds.height).toBeGreaterThan(0);
 
     let didFinish = false;
-    contents.onDidFinishLoad(() => {
+    contents.onNavigation((navEvent) => {
+      if (navEvent.type !== 'did-finish-load') {
+        return;
+      }
       didFinish = true;
     });
 

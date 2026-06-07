@@ -1,9 +1,10 @@
 import { CString, JSCallback, type Pointer } from 'bun:ffi';
+import type { NativeNavigationEvent } from '../native';
 import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
 import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadJscFFI } from './jsc-ffi';
-import { WEBKIT_LOAD_FINISHED } from './webkitgtk-ffi';
+import { WEBKIT_LOAD_COMMITTED, WEBKIT_LOAD_FINISHED, WEBKIT_LOAD_STARTED } from './webkitgtk-ffi';
 
 /**
  * GObject signal wiring for the Linux backend.
@@ -29,6 +30,11 @@ export const CLOSE_REQUEST_CB_DEF = { args: ['ptr', 'ptr'], returns: 'i32' } as 
 export const DESTROY_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
 /** ABI shape for `WebKitWebView::load-changed`: `(self, load_event, user_data) -> void`. */
 export const LOAD_CHANGED_CB_DEF = { args: ['ptr', 'i32', 'ptr'], returns: 'void' } as const;
+/** ABI shape for `WebKitWebView::load-failed`: `(self, load_event, uri, error, user_data) -> gboolean`. */
+export const LOAD_FAILED_CB_DEF = {
+  args: ['ptr', 'i32', 'ptr', 'ptr', 'ptr'],
+  returns: 'i32',
+} as const;
 /** ABI shape for `script-message-received` (WK6.0): `(manager, value, user_data) -> void`. */
 export const SCRIPT_MESSAGE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 /** ABI shape for a `GObject::notify` signal: `(gobject, pspec, user_data) -> void`. */
@@ -80,15 +86,46 @@ export const makeDestroyCallback = (onClosed: () => void): JSCallback =>
   }, DESTROY_CB_DEF);
 
 /**
- * `WebKitWebView::load-changed` handler. Fires `onDidFinishLoad` when
- * `load_event === WEBKIT_LOAD_FINISHED` (3).
+ * `WebKitWebView::load-changed` handler. Maps the GTK load phases to navigation
+ * events: STARTED → `did-start-loading`, COMMITTED → `did-navigate`, FINISHED →
+ * `did-finish-load` then `did-stop-loading`.
  */
-export const makeLoadChangedCallback = (onDidFinishLoad: () => void): JSCallback =>
+export const makeLoadChangedCallback = (
+  onNavigation: (event: NativeNavigationEvent) => void,
+): JSCallback =>
   new JSCallback((_self: Pointer, loadEvent: number, _userData: Pointer): void => {
-    if (loadEvent === WEBKIT_LOAD_FINISHED) {
-      onDidFinishLoad();
+    if (loadEvent === WEBKIT_LOAD_STARTED) {
+      onNavigation({ type: 'did-start-loading' });
+    } else if (loadEvent === WEBKIT_LOAD_COMMITTED) {
+      onNavigation({ type: 'did-navigate' });
+    } else if (loadEvent === WEBKIT_LOAD_FINISHED) {
+      onNavigation({ type: 'did-finish-load' });
+      onNavigation({ type: 'did-stop-loading' });
     }
   }, LOAD_CHANGED_CB_DEF);
+
+/**
+ * `WebKitWebView::load-failed` handler. Emits `did-fail-load` then
+ * `did-stop-loading`. Returns 0 so WebKit still shows its default error page.
+ * Error detail is not parsed from the `GError` yet (best-effort on Linux).
+ */
+export const makeLoadFailedCallback = (
+  onNavigation: (event: NativeNavigationEvent) => void,
+): JSCallback =>
+  new JSCallback(
+    (
+      _self: Pointer,
+      _loadEvent: number,
+      _uri: Pointer,
+      _error: Pointer,
+      _userData: Pointer,
+    ): number => {
+      onNavigation({ type: 'did-fail-load', errorCode: -1, errorDescription: '' });
+      onNavigation({ type: 'did-stop-loading' });
+      return 0;
+    },
+    LOAD_FAILED_CB_DEF,
+  );
 
 /**
  * `WebKitUserContentManager::script-message-received` handler (WK6.0).

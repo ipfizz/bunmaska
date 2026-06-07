@@ -10,6 +10,7 @@ import { CooperativePump } from '../../run-loop';
 import { cstr } from '../cstr';
 import type {
   NativeApplication,
+  NativeNavigationEvent,
   NativeWebContents,
   NativeWindow,
   NativeWindowOptions,
@@ -24,6 +25,7 @@ import { createLinuxDrain } from './gtk-run-loop';
 import {
   makeCloseRequestCallback,
   makeLoadChangedCallback,
+  makeLoadFailedCallback,
   makeNotifyCallback,
   SignalRegistry,
 } from './gtk-signals';
@@ -56,7 +58,7 @@ class LinuxWebContents implements NativeWebContents {
   readonly #exec: ExecResultChannel;
   #didFinishLoad = false;
   readonly #pendingEnvelopes: string[] = [];
-  readonly #didFinishLoadCallbacks: Array<() => void> = [];
+  readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
 
   constructor(userPreloadSource?: string) {
@@ -96,18 +98,29 @@ class LinuxWebContents implements NativeWebContents {
     this.#registry.connect(
       this.#view,
       'load-changed',
-      makeLoadChangedCallback(() => {
-        this.#didFinishLoad = true;
-        for (const callback of this.#didFinishLoadCallbacks) {
-          callback();
+      makeLoadChangedCallback((event) => {
+        if (event.type === 'did-finish-load') {
+          this.#didFinishLoad = true;
+          const queued = [...this.#pendingEnvelopes];
+          this.#pendingEnvelopes.length = 0;
+          for (const json of queued) {
+            sendToRenderer(this.#view, json);
+          }
         }
-        const queued = [...this.#pendingEnvelopes];
-        this.#pendingEnvelopes.length = 0;
-        for (const json of queued) {
-          sendToRenderer(this.#view, json);
-        }
+        this.#dispatchNavigation(event);
       }),
     );
+    this.#registry.connect(
+      this.#view,
+      'load-failed',
+      makeLoadFailedCallback((event) => this.#dispatchNavigation(event)),
+    );
+  }
+
+  #dispatchNavigation(event: NativeNavigationEvent): void {
+    for (const callback of this.#navigationCallbacks) {
+      callback(event);
+    }
   }
 
   /** The underlying `WebKitWebView*` to embed as the window's child. */
@@ -204,12 +217,8 @@ class LinuxWebContents implements NativeWebContents {
     this.#rendererEnvelopeCallbacks.push(callback);
   }
 
-  onDidFinishLoad(callback: () => void): void {
-    if (this.#didFinishLoad) {
-      callback();
-      return;
-    }
-    this.#didFinishLoadCallbacks.push(callback);
+  onNavigation(callback: (event: NativeNavigationEvent) => void): void {
+    this.#navigationCallbacks.push(callback);
   }
 }
 
@@ -334,8 +343,8 @@ class LinuxWindow implements NativeWindow {
     // ready-to-show: emit once on the first finished load (reuses the web
     // contents' load-changed FINISHED signal).
     let readyToShowEmitted = false;
-    this.#webContents.onDidFinishLoad(() => {
-      if (!readyToShowEmitted) {
+    this.#webContents.onNavigation((event) => {
+      if (event.type === 'did-finish-load' && !readyToShowEmitted) {
         readyToShowEmitted = true;
         this.#emitEvent('ready-to-show');
       }

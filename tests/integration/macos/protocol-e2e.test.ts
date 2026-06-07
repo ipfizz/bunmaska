@@ -47,7 +47,10 @@ if (currentPlatform() === 'macos') {
       app.start();
       const win = app.createWindow({ width: 400, height: 300, title: 'protocol', show: true });
       contents = win.webContents;
-      contents.onDidFinishLoad(() => {
+      contents.onNavigation((navEvent) => {
+        if (navEvent.type !== 'did-finish-load') {
+          return;
+        }
         didFinish = true;
       });
       contents.loadURL('app://host/index.html');

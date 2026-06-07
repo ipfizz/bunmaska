@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ipcMain } from '../../../../src/main/api/ipc-main';
 import { resetWebContentsIdsForTesting, WebContents } from '../../../../src/main/api/web-contents';
 import { decodeEnvelope, encodeEnvelope } from '../../../../src/main/ipc/ipc-protocol';
-import type { NativeWebContents } from '../../../../src/main/platform/native';
+import type {
+  NativeNavigationEvent,
+  NativeWebContents,
+} from '../../../../src/main/platform/native';
 
 const makeFakeNative = (): {
   native: NativeWebContents;
@@ -10,13 +13,13 @@ const makeFakeNative = (): {
   execs: string[];
   zooms: number[];
   fireRenderer: (json: string) => void;
-  fireDidFinishLoad: () => void;
+  fireNavigation: (event: NativeNavigationEvent) => void;
 } => {
   const sent: string[] = [];
   const execs: string[] = [];
   const zooms: number[] = [];
   let onEnvelope: ((json: string) => void) | undefined;
-  let onLoad: (() => void) | undefined;
+  let onNav: ((event: NativeNavigationEvent) => void) | undefined;
   const native: NativeWebContents = {
     loadURL: () => undefined,
     loadHTML: () => undefined,
@@ -36,8 +39,8 @@ const makeFakeNative = (): {
     onRendererEnvelope: (cb) => {
       onEnvelope = cb;
     },
-    onDidFinishLoad: (cb) => {
-      onLoad = cb;
+    onNavigation: (cb) => {
+      onNav = cb;
     },
   };
   return {
@@ -46,7 +49,7 @@ const makeFakeNative = (): {
     execs,
     zooms,
     fireRenderer: (json) => onEnvelope?.(json),
-    fireDidFinishLoad: () => onLoad?.(),
+    fireNavigation: (event) => onNav?.(event),
   };
 };
 
@@ -171,17 +174,40 @@ describe('WebContents <-> ipcMain auto-wiring', () => {
   });
 });
 
-describe('WebContents did-finish-load', () => {
-  test('re-emits the native load completion as a did-finish-load event', () => {
-    const { native, fireDidFinishLoad } = makeFakeNative();
+describe('WebContents navigation events', () => {
+  test('re-emits did-start-loading, did-finish-load, did-stop-loading', () => {
+    const { native, fireNavigation } = makeFakeNative();
     const wc = new WebContents(native);
-    let loads = 0;
-    wc.on('did-finish-load', () => {
-      loads += 1;
+    const seen: string[] = [];
+    for (const type of ['did-start-loading', 'did-finish-load', 'did-stop-loading'] as const) {
+      wc.on(type, () => seen.push(type));
+    }
+    fireNavigation({ type: 'did-start-loading' });
+    fireNavigation({ type: 'did-finish-load' });
+    fireNavigation({ type: 'did-stop-loading' });
+    expect(seen).toEqual(['did-start-loading', 'did-finish-load', 'did-stop-loading']);
+  });
+
+  test('did-navigate carries the current URL', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents({ ...native, getURL: () => 'https://app.test/route' });
+    let url: string | undefined;
+    wc.on('did-navigate', (_event: unknown, navUrl: string) => {
+      url = navUrl;
     });
-    fireDidFinishLoad();
-    fireDidFinishLoad();
-    expect(loads).toBe(2);
+    fireNavigation({ type: 'did-navigate' });
+    expect(url).toBe('https://app.test/route');
+  });
+
+  test('did-fail-load carries the error code and description', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents(native);
+    let captured: { code: number; desc: string } | undefined;
+    wc.on('did-fail-load', (_event: unknown, code: number, desc: string) => {
+      captured = { code, desc };
+    });
+    fireNavigation({ type: 'did-fail-load', errorCode: -105, errorDescription: 'NOT_FOUND' });
+    expect(captured).toEqual({ code: -105, desc: 'NOT_FOUND' });
   });
 });
 
@@ -239,7 +265,7 @@ describe('WebContents navigation', () => {
       setZoomFactor: () => undefined,
       sendEnvelopeToRenderer: () => undefined,
       onRendererEnvelope: () => undefined,
-      onDidFinishLoad: () => undefined,
+      onNavigation: () => undefined,
     };
     const wc = new WebContents(native);
     wc.reload();

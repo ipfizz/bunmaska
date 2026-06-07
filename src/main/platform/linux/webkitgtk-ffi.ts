@@ -21,7 +21,8 @@ import { currentPlatform } from '../../../common/platform';
 
 const LIBWEBKITGTK_PATH = 'libwebkitgtk-6.0.so.4';
 
-/** `WebKitLoadEvent` value matched in `load-changed` to fire `onDidFinishLoad`. */
+export const WEBKIT_LOAD_STARTED = 0;
+export const WEBKIT_LOAD_COMMITTED = 2;
 export const WEBKIT_LOAD_FINISHED = 3;
 /** `WebKitUserContentInjectedFrames`: inject the preload into every frame. */
 export const WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES = 0;

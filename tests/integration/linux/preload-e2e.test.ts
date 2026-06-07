@@ -62,7 +62,10 @@ describe.skipIf(!isLinux)('Linux webPreferences.preload end-to-end', () => {
     const contents = window.webContents;
 
     let didFinish = false;
-    contents.onDidFinishLoad(() => {
+    contents.onNavigation((navEvent) => {
+      if (navEvent.type !== 'did-finish-load') {
+        return;
+      }
       didFinish = true;
     });
 

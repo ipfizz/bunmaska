@@ -4,9 +4,11 @@ import {
   closeRequestDecision,
   DESTROY_CB_DEF,
   LOAD_CHANGED_CB_DEF,
+  LOAD_FAILED_CB_DEF,
   makeCloseRequestCallback,
   makeDestroyCallback,
   makeLoadChangedCallback,
+  makeLoadFailedCallback,
   makeNotifyCallback,
   NOTIFY_CB_DEF,
   SCRIPT_MESSAGE_CB_DEF,
@@ -30,6 +32,11 @@ describe('gtk-signals callback ABI definitions (shape-only)', () => {
     expect(LOAD_CHANGED_CB_DEF.args).toEqual(['ptr', 'i32', 'ptr']);
     expect(LOAD_CHANGED_CB_DEF.args[1]).toBe('i32');
     expect(LOAD_CHANGED_CB_DEF.returns).toBe('void');
+  });
+
+  it('load-failed is (self, load_event, uri, error, user_data) -> i32', () => {
+    expect(LOAD_FAILED_CB_DEF.args).toEqual(['ptr', 'i32', 'ptr', 'ptr', 'ptr']);
+    expect(LOAD_FAILED_CB_DEF.returns).toBe('i32');
   });
 
   it('script-message takes three pointers (WK6.0 JSCValue* direct)', () => {
@@ -60,13 +67,16 @@ describe('gtk-signals JSCallback factories (constructible + closable)', () => {
     cb.close();
   });
 
-  it('builds destroy and load-changed callbacks without throwing', () => {
+  it('builds destroy, load-changed, and load-failed callbacks without throwing', () => {
     const destroy = makeDestroyCallback(noop);
     const loadChanged = makeLoadChangedCallback(noop);
+    const loadFailed = makeLoadFailedCallback(noop);
     expect(typeof destroy.ptr).toBe('number');
     expect(typeof loadChanged.ptr).toBe('number');
+    expect(typeof loadFailed.ptr).toBe('number');
     destroy.close();
     loadChanged.close();
+    loadFailed.close();
   });
 
   it('builds a notify callback exposing a native ptr', () => {

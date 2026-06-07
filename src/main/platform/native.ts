@@ -32,6 +32,22 @@ export type NativeWindowOptions = {
 };
 
 /**
+ * A navigation lifecycle event surfaced from the backend, mapped 1:1 to an
+ * Electron `webContents` event. `did-fail-load` carries the failure detail
+ * (`errorCode`/`errorDescription`); the others carry none.
+ */
+export type NativeNavigationEvent =
+  | { readonly type: 'did-start-loading' }
+  | { readonly type: 'did-stop-loading' }
+  | { readonly type: 'did-navigate' }
+  | { readonly type: 'did-finish-load' }
+  | {
+      readonly type: 'did-fail-load';
+      readonly errorCode: number;
+      readonly errorDescription: string;
+    };
+
+/**
  * The web view embedded in a window. Sambar's `WebContents` delegates to this.
  *
  * The IPC surface (renderer messaging + navigation callbacks) is added to this
@@ -69,8 +85,8 @@ export interface NativeWebContents {
   sendEnvelopeToRenderer(envelopeJson: string): void;
   /** Register a callback for raw IPC envelopes (JSON) posted by the renderer. */
   onRendererEnvelope(callback: (envelopeJson: string) => void): void;
-  /** Register a callback fired when a navigation finishes loading. */
-  onDidFinishLoad(callback: () => void): void;
+  /** Register a callback for navigation lifecycle events. */
+  onNavigation(callback: (event: NativeNavigationEvent) => void): void;
 }
 
 /**
