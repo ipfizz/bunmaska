@@ -17,6 +17,7 @@ type Decoded = { handle: NativeImageHandle; width: number; height: number; empty
 
 let decodeCalls: Array<{ source: string | Uint8Array }>;
 let encodeCalls: NativeImageHandle[];
+let jpegCalls: Array<{ handle: NativeImageHandle; quality: number }>;
 
 const makeFakeBackend = (decoded: Decoded, png: Uint8Array): NativeImageBackend => ({
   decode: (source) => {
@@ -27,11 +28,16 @@ const makeFakeBackend = (decoded: Decoded, png: Uint8Array): NativeImageBackend 
     encodeCalls.push(handle);
     return png;
   },
+  encodeJpeg: (handle, quality) => {
+    jpegCalls.push({ handle, quality });
+    return new Uint8Array([0xff, 0xd8, 0xff]);
+  },
 });
 
 beforeEach(() => {
   decodeCalls = [];
   encodeCalls = [];
+  jpegCalls = [];
 });
 
 afterEach(() => {
@@ -138,6 +144,25 @@ describe('NativeImage type', () => {
     expect(typeof image.isEmpty).toBe('function');
     expect(typeof image.toPNG).toBe('function');
     expect(typeof image.toDataURL).toBe('function');
+  });
+});
+
+describe('NativeImage.toJPEG', () => {
+  test('encodes via the backend at the given quality', () => {
+    setNativeImageBackendForTesting(
+      makeFakeBackend({ handle: 9n, width: 2, height: 2, empty: false }, new Uint8Array([1])),
+    );
+    const bytes = nativeImage.createFromBuffer(new Uint8Array([1])).toJPEG(70);
+    expect(jpegCalls).toEqual([{ handle: 9n, quality: 70 }]);
+    expect(Array.from(bytes.slice(0, 2))).toEqual([0xff, 0xd8]);
+  });
+
+  test('returns an empty buffer for an empty image (no backend call)', () => {
+    setNativeImageBackendForTesting(
+      makeFakeBackend({ handle: 0n, width: 0, height: 0, empty: true }, new Uint8Array([1])),
+    );
+    expect(nativeImage.createEmpty().toJPEG().length).toBe(0);
+    expect(jpegCalls).toHaveLength(0);
   });
 });
 

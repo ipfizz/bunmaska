@@ -2,9 +2,11 @@ import { ptr, toArrayBuffer } from 'bun:ffi';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
 import { nsString } from './cocoa-foundation';
 import {
+  msgSendF64,
   msgSendI64Ptr,
   msgSendPtr,
   msgSendPtrI64,
+  msgSendPtrPtr,
   msgSendReturnsI64,
 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
@@ -35,10 +37,29 @@ import { type Handle, ptrIn } from './objc';
  * `0n` handle and zero dimensions; no fake placeholder image is fabricated.
  */
 
-/** `NSBitmapImageFileTypePNG`. */
+/** `NSBitmapImageFileType` values. */
 const NS_BITMAP_IMAGE_FILE_TYPE_PNG = 4n;
+const NS_BITMAP_IMAGE_FILE_TYPE_JPEG = 3n;
 
 const EMPTY: DecodedImage = { handle: 0n, width: 0, height: 0, empty: true };
+
+/** Copy an `NSData`'s bytes out into an owned `Uint8Array` (empty when nil/empty). */
+const nsDataToBytes = (data: Handle): Uint8Array => {
+  if (data === 0n) {
+    return new Uint8Array(0);
+  }
+  const rt = cocoa();
+  const length = Number(msgSendReturnsI64(data, rt.selectors.get('length')));
+  if (length <= 0) {
+    return new Uint8Array(0);
+  }
+  const bytesPtr = rt.msgSend(data, rt.selectors.get('bytes'));
+  if (bytesPtr === 0n) {
+    return new Uint8Array(0);
+  }
+  // Copy out of the autoreleased NSData-owned buffer so the result owns its bytes.
+  return new Uint8Array(toArrayBuffer(ptrIn(bytesPtr), 0, length).slice(0));
+};
 
 /** `[[NSData alloc] initWithBytes:length:]` from a Uint8Array (copies the bytes). */
 const nsDataFromBytes = (bytes: Uint8Array): Handle => {
@@ -105,19 +126,32 @@ export const cocoaNativeImageBackend: NativeImageBackend = {
       NS_BITMAP_IMAGE_FILE_TYPE_PNG,
       0n,
     );
-    if (data === 0n) {
+    return nsDataToBytes(data);
+  },
+  encodeJpeg: (handle: NativeImageHandle, quality: number): Uint8Array => {
+    if (handle === 0n) {
       return new Uint8Array(0);
     }
-    const length = Number(msgSendReturnsI64(data, rt.selectors.get('length')));
-    if (length <= 0) {
-      return new Uint8Array(0);
-    }
-    const bytesPtr = rt.msgSend(data, rt.selectors.get('bytes'));
-    if (bytesPtr === 0n) {
-      return new Uint8Array(0);
-    }
-    // Copy out of the NSData-owned buffer (the autoreleased NSData may be freed
-    // after this call returns), so the returned Uint8Array owns its bytes.
-    return new Uint8Array(toArrayBuffer(ptrIn(bytesPtr), 0, length).slice(0));
+    const rt = cocoa();
+    // Properties dict { NSImageCompressionFactor: quality/100 } (0.0–1.0).
+    const factor = Math.max(0, Math.min(100, quality)) / 100;
+    const number = msgSendF64(
+      rt.classes.get('NSNumber'),
+      rt.selectors.get('numberWithDouble:'),
+      factor,
+    );
+    const properties = msgSendPtrPtr(
+      rt.classes.get('NSDictionary'),
+      rt.selectors.get('dictionaryWithObject:forKey:'),
+      number,
+      nsString('NSImageCompressionFactor'),
+    );
+    const data = msgSendI64Ptr(
+      handle,
+      rt.selectors.get('representationUsingType:properties:'),
+      NS_BITMAP_IMAGE_FILE_TYPE_JPEG,
+      properties,
+    );
+    return nsDataToBytes(data);
   },
 };

@@ -74,42 +74,51 @@ const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
   return decodeFromPixbuf(pixbuf === null ? null : Number(pixbuf));
 };
 
+/**
+ * Encode a pixbuf to `type` ("png"/"jpeg") via `gdk_pixbuf_save_to_bufferv` with
+ * NULL option arrays (default quality), copying the out buffer then freeing it.
+ */
+const encode = (handle: NativeImageHandle, type: string): Uint8Array => {
+  const pixbuf = handleToPtr(handle);
+  if (pixbuf === null) {
+    return new Uint8Array(0);
+  }
+  const pixbufFFI = loadGdkPixbufFFI();
+  const glib = loadGlibFFI();
+
+  // Out-params: a gchar** slot for the buffer pointer and a gsize* slot for its
+  // length, mirroring the BigInt64Array out-pointer pattern used elsewhere.
+  const bufferOut = new BigUint64Array(1);
+  const sizeOut = new BigUint64Array(1);
+  const ok = pixbufFFI.symbols.gdk_pixbuf_save_to_bufferv(
+    pixbuf as Parameters<typeof pixbufFFI.symbols.gdk_pixbuf_save_to_bufferv>[0],
+    ptr(bufferOut),
+    ptr(sizeOut),
+    cstr(type),
+    null,
+    null,
+    null,
+  );
+  if (ok !== 1) {
+    return new Uint8Array(0);
+  }
+  const outPtr = bufferOut[0] ?? 0n;
+  const size = Number(sizeOut[0] ?? 0n);
+  if (outPtr === 0n || size <= 0) {
+    return new Uint8Array(0);
+  }
+  const copy = new Uint8Array(
+    toArrayBuffer(Number(outPtr) as Parameters<typeof toArrayBuffer>[0], 0, size).slice(0),
+  );
+  glib.symbols.g_free(Number(outPtr) as Parameters<typeof glib.symbols.g_free>[0]);
+  return copy;
+};
+
 /** Linux implementation of {@link NativeImageBackend}. */
 export const gdkNativeImageBackend: NativeImageBackend = {
   decode: (source) => (typeof source === 'string' ? decodePath(source) : decodeBuffer(source)),
-  encodePng: (handle: NativeImageHandle): Uint8Array => {
-    const pixbuf = handleToPtr(handle);
-    if (pixbuf === null) {
-      return new Uint8Array(0);
-    }
-    const pixbufFFI = loadGdkPixbufFFI();
-    const glib = loadGlibFFI();
-
-    // Out-params: a gchar** slot for the buffer pointer and a gsize* slot for
-    // its length, mirroring the BigInt64Array out-pointer pattern used elsewhere.
-    const bufferOut = new BigUint64Array(1);
-    const sizeOut = new BigUint64Array(1);
-    const ok = pixbufFFI.symbols.gdk_pixbuf_save_to_bufferv(
-      pixbuf as Parameters<typeof pixbufFFI.symbols.gdk_pixbuf_save_to_bufferv>[0],
-      ptr(bufferOut),
-      ptr(sizeOut),
-      cstr('png'),
-      null,
-      null,
-      null,
-    );
-    if (ok !== 1) {
-      return new Uint8Array(0);
-    }
-    const outPtr = bufferOut[0] ?? 0n;
-    const size = Number(sizeOut[0] ?? 0n);
-    if (outPtr === 0n || size <= 0) {
-      return new Uint8Array(0);
-    }
-    const copy = new Uint8Array(
-      toArrayBuffer(Number(outPtr) as Parameters<typeof toArrayBuffer>[0], 0, size).slice(0),
-    );
-    glib.symbols.g_free(Number(outPtr) as Parameters<typeof glib.symbols.g_free>[0]);
-    return copy;
-  },
+  encodePng: (handle: NativeImageHandle): Uint8Array => encode(handle, 'png'),
+  // Linux v1 uses GdkPixbuf's default JPEG quality (the `quality` factor is
+  // honored on macOS; option-key arrays for Linux are a follow-up).
+  encodeJpeg: (handle: NativeImageHandle): Uint8Array => encode(handle, 'jpeg'),
 };

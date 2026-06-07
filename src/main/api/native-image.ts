@@ -23,9 +23,10 @@ import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
  *
  * V1 surface: `createFromPath`, `createFromBuffer` (PNG/JPEG bytes),
  * `createFromDataURL`, `createEmpty`; instance `getSize`, `isEmpty`, `toPNG`,
- * `toDataURL`. DEFERRED (documented, not stubbed as fake no-ops): `resize`,
- * `crop`, `toJPEG`, `getScaleFactors`/`getAspectRatio`, template-image flags
- * (`setTemplateImage`/`isTemplateImage`), and the `{ scaleFactor }` option.
+ * `toJPEG`, `toDataURL`. `toJPEG`'s quality is honored on macOS; Linux v1 uses
+ * GdkPixbuf's default quality (option-key arrays are a follow-up). DEFERRED
+ * (documented, not stubbed as fake no-ops): `resize`, `crop`,
+ * `getScaleFactors`/`getAspectRatio`, template-image flags, `{ scaleFactor }`.
  */
 
 /** An opaque native image handle, carried as a `bigint` (macOS) or `Pointer` bigint (Linux). */
@@ -52,6 +53,8 @@ export type NativeImageBackend = {
   decode(source: string | Uint8Array): DecodedImage;
   /** Encode a decoded image's native handle to PNG bytes. */
   encodePng(handle: NativeImageHandle): Uint8Array;
+  /** Encode to JPEG bytes at `quality` (0–100). */
+  encodeJpeg(handle: NativeImageHandle, quality: number): Uint8Array;
 };
 
 const DATA_URL_PREFIX = 'data:image/png;base64,';
@@ -92,6 +95,14 @@ export class NativeImage {
       return new Uint8Array(0);
     }
     return this.#backend.encodePng(this.#handle);
+  }
+
+  /** Encode the image to JPEG bytes at `quality` (0–100). Empty buffer when empty. */
+  toJPEG(quality = 92): Uint8Array {
+    if (this.#empty) {
+      return new Uint8Array(0);
+    }
+    return this.#backend.encodeJpeg(this.#handle, quality);
   }
 
   /** The image as a `data:image/png;base64,...` URL (empty payload when empty). */

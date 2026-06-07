@@ -58,6 +58,14 @@ if (currentPlatform() === 'macos') {
       expect(png[3]).toBe(0x47);
     });
 
+    test('toJPEG returns non-empty bytes starting with the JPEG SOI marker', () => {
+      const jpeg = nativeImage.createFromPath(fixture).toJPEG(80);
+      expect(jpeg.length > 0).toBe(true);
+      // JPEG starts with the SOI marker 0xFF 0xD8.
+      expect(jpeg[0]).toBe(0xff);
+      expect(jpeg[1]).toBe(0xd8);
+    });
+
     test('toDataURL starts with the PNG data-URL prefix and carries a payload', () => {
       const url = nativeImage.createFromPath(fixture).toDataURL();
       expect(url.startsWith('data:image/png;base64,')).toBe(true);

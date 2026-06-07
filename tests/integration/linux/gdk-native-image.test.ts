@@ -73,6 +73,14 @@ if (currentPlatform() === 'linux') {
       }
     });
 
+    test('toJPEG returns non-empty bytes starting with the JPEG SOI marker', () => {
+      setNativeImageBackendForTesting(undefined);
+      const jpeg = nativeImage.createFromBuffer(makeTinyPng()).toJPEG(80);
+      expect(jpeg.length > 0).toBe(true);
+      expect(jpeg[0]).toBe(0xff);
+      expect(jpeg[1]).toBe(0xd8);
+    });
+
     test('a bad path decodes to an empty image (no crash)', () => {
       setNativeImageBackendForTesting(undefined);
       const image = nativeImage.createFromPath('/no/such/sambar/image.png');
