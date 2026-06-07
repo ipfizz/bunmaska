@@ -12,6 +12,27 @@ import { cocoa } from './cocoa-runtime';
 
 const APPLE_INTERFACE_STYLE = 'AppleInterfaceStyle';
 
+/** Apply an app-wide appearance override so web views re-theme (Electron `themeSource`). */
+export const setAppearance = (source: 'system' | 'light' | 'dark'): void => {
+  const rt = cocoa();
+  const name =
+    source === 'dark'
+      ? 'NSAppearanceNameDarkAqua'
+      : source === 'light'
+        ? 'NSAppearanceNameAqua'
+        : undefined;
+  const appearance =
+    name === undefined
+      ? 0n
+      : msgSendPtr(
+          rt.classes.get('NSAppearance'),
+          rt.selectors.get('appearanceNamed:'),
+          nsString(name),
+        );
+  const nsApp = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
+  msgSendPtr(nsApp, rt.selectors.get('setAppearance:'), appearance);
+};
+
 /** Whether the system is currently using a dark appearance. */
 export const shouldUseDarkColors = (): boolean => {
   const rt = cocoa();

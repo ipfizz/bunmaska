@@ -1,24 +1,58 @@
+import { EventEmitter } from 'node:events';
 import { currentPlatform } from '../../common/platform';
-import { shouldUseDarkColors as macosShouldUseDarkColors } from '../platform/macos/cocoa-native-theme';
+import {
+  setAppearance as macosSetAppearance,
+  shouldUseDarkColors as macosShouldUseDarkColors,
+} from '../platform/macos/cocoa-native-theme';
 
 /**
- * System appearance info — a minimal drop-in equivalent of Electron's
- * `nativeTheme`. Today it exposes `shouldUseDarkColors` (read-only); the
- * `themeSource` setter and `updated` event arrive in a later increment.
+ * System appearance — a drop-in equivalent of Electron's `nativeTheme`.
  *
- * Unlike clipboard (where an unsupported platform throws, since silently
- * dropping a write would lose data), this read-only boolean returns a sensible
- * default of `false` (light) on platforms without a backend, so drop-in apps
- * that read it at startup degrade gracefully instead of crashing.
+ * Extends {@link EventEmitter} for the `updated` event (D023). `shouldUseDarkColors`
+ * honors the `themeSource` override ('light'/'dark'), falling back to the OS
+ * appearance for 'system'. Setting `themeSource` applies an app-wide appearance
+ * (so web views re-theme) and emits `updated`. The OS-change observer that fires
+ * `updated` on a system appearance change, and the real Linux OS read, land in a
+ * follow-up; today Linux reads `false` for 'system'.
  */
 
-export type NativeTheme = {
-  /** Whether the OS is currently using a dark appearance. */
-  readonly shouldUseDarkColors: boolean;
+export type ThemeSource = 'system' | 'light' | 'dark';
+
+const osShouldUseDark = (): boolean =>
+  currentPlatform() === 'macos' ? macosShouldUseDarkColors() : false;
+
+const applyThemeSource = (source: ThemeSource): void => {
+  if (currentPlatform() === 'macos') {
+    macosSetAppearance(source);
+  }
 };
 
-export const nativeTheme: NativeTheme = {
+export class NativeThemeImpl extends EventEmitter {
+  #themeSource: ThemeSource = 'system';
+
+  /** Whether a dark appearance should be used, honoring {@link themeSource}. */
   get shouldUseDarkColors(): boolean {
-    return currentPlatform() === 'macos' ? macosShouldUseDarkColors() : false;
-  },
-};
+    if (this.#themeSource === 'dark') {
+      return true;
+    }
+    if (this.#themeSource === 'light') {
+      return false;
+    }
+    return osShouldUseDark();
+  }
+
+  /** The appearance override: `'system'` follows the OS, else forces light/dark. */
+  get themeSource(): ThemeSource {
+    return this.#themeSource;
+  }
+
+  set themeSource(source: ThemeSource) {
+    this.#themeSource = source;
+    applyThemeSource(source);
+    this.emit('updated');
+  }
+}
+
+/** The application appearance singleton. Drop-in equivalent of Electron's `nativeTheme`. */
+export const nativeTheme = new NativeThemeImpl();
+export type NativeTheme = NativeThemeImpl;
