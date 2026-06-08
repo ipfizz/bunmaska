@@ -1,5 +1,6 @@
 import { makeCancelableEvent } from '../common/cancelable-event';
 import { app } from './api/app';
+import { nativeTheme } from './api/native-theme';
 import { nativeApp } from './native-app';
 
 /**
@@ -20,7 +21,12 @@ export const ensureNativeStarted = (): void => {
   }
   started = true;
   const native = nativeApp();
-  native.onReady(() => app.markReady());
+  native.onReady(() => {
+    app.markReady();
+    // The runtime is up (NSApp / GTK initialised), so the OS-appearance observer
+    // can safely attach its native notification hooks now.
+    nativeTheme.startObserving();
+  });
   // macOS Dock-reopen → Electron's `activate` (Linux backends omit onActivate).
   native.onActivate?.((hasVisibleWindows) => {
     app.emit('activate', makeCancelableEvent(), hasVisibleWindows);

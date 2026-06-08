@@ -1,10 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { currentPlatform } from '../../common/platform';
 import {
+  observeAppearanceChange as macosObserveAppearance,
   setAppearance as macosSetAppearance,
   shouldUseDarkColors as macosShouldUseDarkColors,
 } from '../platform/macos/cocoa-native-theme';
-import { shouldUseDarkColors as linuxShouldUseDarkColors } from '../platform/linux/gtk-native-theme';
+import {
+  observeAppearanceChange as linuxObserveAppearance,
+  shouldUseDarkColors as linuxShouldUseDarkColors,
+} from '../platform/linux/gtk-native-theme';
 
 /**
  * System appearance — a drop-in equivalent of Electron's `nativeTheme`.
@@ -14,8 +18,8 @@ import { shouldUseDarkColors as linuxShouldUseDarkColors } from '../platform/lin
  * appearance for 'system'. Setting `themeSource` applies an app-wide appearance
  * (so web views re-theme) and emits `updated`. `shouldUseDarkColors` reads the
  * real OS appearance on both platforms (macOS `AppleInterfaceStyle`, Linux
- * `GtkSettings`). The observer that fires `updated` on an OS-driven appearance
- * change lands in a follow-up; today `updated` fires on `themeSource` changes.
+ * `GtkSettings`). {@link NativeThemeImpl.startObserving} (wired once at startup)
+ * makes `updated` also fire when the OS appearance changes underneath the app.
  */
 
 export type ThemeSource = 'system' | 'light' | 'dark';
@@ -37,8 +41,19 @@ const applyThemeSource = (source: ThemeSource): void => {
   }
 };
 
+/** Register the platform's OS-appearance-change observer, firing `onChange` on a flip. */
+const observeOsAppearance = (onChange: () => void): void => {
+  const platform = currentPlatform();
+  if (platform === 'macos') {
+    macosObserveAppearance(onChange);
+  } else if (platform === 'linux') {
+    linuxObserveAppearance(onChange);
+  }
+};
+
 export class NativeThemeImpl extends EventEmitter {
   #themeSource: ThemeSource = 'system';
+  #observing = false;
 
   /** Whether a dark appearance should be used, honoring {@link themeSource}. */
   get shouldUseDarkColors(): boolean {
@@ -60,6 +75,25 @@ export class NativeThemeImpl extends EventEmitter {
     this.#themeSource = source;
     applyThemeSource(source);
     this.emit('updated');
+  }
+
+  /**
+   * Begin emitting `updated` when the OS appearance changes (idempotent — only
+   * the first call registers an observer). Wired once at startup by the
+   * bootstrap. `observe` is injectable so the wiring is unit-testable without
+   * touching native APIs.
+   */
+  startObserving(observe: (onChange: () => void) => void = observeOsAppearance): void {
+    if (this.#observing) {
+      return;
+    }
+    this.#observing = true;
+    observe(() => this.emit('updated'));
+  }
+
+  /** Reset the observe-once guard. Test-only. */
+  resetObservingForTesting(): void {
+    this.#observing = false;
   }
 }
 

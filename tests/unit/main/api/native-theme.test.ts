@@ -45,3 +45,32 @@ describe('nativeTheme.themeSource', () => {
     expect(fired).toBe(1);
   });
 });
+
+describe('nativeTheme.startObserving', () => {
+  test('registers the observer and emits updated when the OS appearance changes', () => {
+    const t = new NativeThemeImpl();
+    let osChange: (() => void) | undefined;
+    let fired = 0;
+    t.on('updated', () => {
+      fired += 1;
+    });
+    t.startObserving((onChange) => {
+      osChange = onChange;
+    });
+    expect(osChange).toBeDefined();
+    osChange?.();
+    expect(fired).toBe(1);
+  });
+
+  test('is idempotent — only the first call registers an observer', () => {
+    const t = new NativeThemeImpl();
+    let registrations = 0;
+    t.startObserving(() => {
+      registrations += 1;
+    });
+    t.startObserving(() => {
+      registrations += 1;
+    });
+    expect(registrations).toBe(1);
+  });
+});
