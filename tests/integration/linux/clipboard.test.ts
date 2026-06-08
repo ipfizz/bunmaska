@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { GDK_FFI_SYMBOLS, loadGdkFFI } from '../../../src/main/platform/linux/gdk-ffi';
+import { GIO_FFI_SYMBOLS, loadGioFFI } from '../../../src/main/platform/linux/gio-ffi';
 import { GLIB_FFI_SYMBOLS, loadGlibFFI } from '../../../src/main/platform/linux/glib-ffi';
 import { linuxClipboardBackend } from '../../../src/main/platform/linux/gtk-clipboard';
 import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
@@ -61,9 +62,23 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
       expect(name in GDK_FFI_SYMBOLS).toBe(true);
     }
     const glib = loadGlibFFI();
-    for (const name of ['g_bytes_new', 'g_bytes_unref'] as const) {
+    for (const name of [
+      'g_bytes_new',
+      'g_bytes_unref',
+      'g_bytes_get_size',
+      'g_bytes_get_data',
+    ] as const) {
       expect(typeof glib.symbols[name]).toBe('function');
       expect(name in GLIB_FFI_SYMBOLS).toBe(true);
+    }
+    for (const name of ['gdk_clipboard_read_async', 'gdk_clipboard_read_finish'] as const) {
+      expect(typeof gdk.symbols[name]).toBe('function');
+      expect(name in GDK_FFI_SYMBOLS).toBe(true);
+    }
+    const gio = loadGioFFI();
+    for (const name of ['g_input_stream_read_bytes', 'g_input_stream_close'] as const) {
+      expect(typeof gio.symbols[name]).toBe('function');
+      expect(name in GIO_FFI_SYMBOLS).toBe(true);
     }
   });
 
@@ -105,5 +120,25 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.clear();
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe('');
+  });
+
+  test('writeHTML then readHTML round-trips markup in the same process', async () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const markup = '<b>bold</b> &amp; <i>italic</i>';
+    linuxClipboardBackend.writeHTML(markup);
+    const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
+    expect(got).toBe(markup);
+  });
+
+  test('round-trips UTF-8 HTML content', async () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const markup = '<p>café — 日本語 — 🎉</p>';
+    linuxClipboardBackend.writeHTML(markup);
+    const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
+    expect(got).toBe(markup);
   });
 });

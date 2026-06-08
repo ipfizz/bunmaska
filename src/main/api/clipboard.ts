@@ -22,6 +22,10 @@ export type Clipboard = {
   readText(): Promise<string>;
   /** Replace the clipboard's contents with `text` as plain text. */
   writeText(text: string): void;
+  /** Read the clipboard's HTML markup, or `''` if it holds no HTML. */
+  readHTML(): Promise<string>;
+  /** Replace the clipboard's contents with `markup` as HTML. */
+  writeHTML(markup: string): void;
   /** Clear the clipboard. */
   clear(): void;
 };
@@ -37,12 +41,16 @@ export type Clipboard = {
 export type ClipboardBackend = {
   readText(): string | Promise<string>;
   writeText(text: string): void;
+  readHTML(): string | Promise<string>;
+  writeHTML(markup: string): void;
   clear(): void;
 };
 
 const macosBackend: ClipboardBackend = {
   readText: () => macosClipboard.readText(),
   writeText: (text) => macosClipboard.writeText(text),
+  readHTML: () => macosClipboard.readHTML(),
+  writeHTML: (markup) => macosClipboard.writeHTML(markup),
   clear: () => macosClipboard.clear(),
 };
 
@@ -74,6 +82,12 @@ export const clipboard: Clipboard = {
   },
   writeText(text) {
     getBackend().writeText(text);
+  },
+  readHTML() {
+    return Promise.resolve(getBackend().readHTML());
+  },
+  writeHTML(markup) {
+    getBackend().writeHTML(markup);
   },
   clear() {
     getBackend().clear();

@@ -54,6 +54,16 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // (bytes) -> gsize length of the byte buffer.
+  g_bytes_get_size: {
+    args: [FFIType.pointer],
+    returns: FFIType.u64,
+  },
+  // (bytes, size_out /*null ok*/) -> gconstpointer to the raw bytes (owned by GBytes).
+  g_bytes_get_data: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
   // (string) -> GQuark (a guint32 id). Used to build an error domain for the
   // GError handed to webkit_uri_scheme_request_finish_error.
   g_quark_from_string: {

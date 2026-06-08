@@ -57,6 +57,18 @@ export const GIO_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (stream, count /*gsize*/, cancellable /*null*/, error /*null*/) -> transfer-full
+  // GBytes* (0 bytes at EOF, NULL on error). Drains the stream GDK hands back when
+  // reading a non-text clipboard format (e.g. text/html).
+  g_input_stream_read_bytes: {
+    args: [FFIType.pointer, FFIType.u64, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (stream, cancellable /*null*/, error /*null*/) -> gboolean
+  g_input_stream_close: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GIO_FFI_SYMBOLS>> | undefined } = {

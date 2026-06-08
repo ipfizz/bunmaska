@@ -57,6 +57,24 @@ export const GDK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (self, mime_types /*NULL-terminated const char**/, io_priority, cancellable /*null*/,
+  //  GAsyncReadyCallback, user_data /*null*/) -> void; negotiates a format and reads it.
+  gdk_clipboard_read_async: {
+    args: [
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.i32,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.void,
+  },
+  // (self, result, out_mime_type /*null*/, error /*null*/) -> transfer-full GInputStream* (NULL on none)
+  gdk_clipboard_read_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
   // (self, provider /*GdkContentProvider* | null to clear*/) -> gboolean
   gdk_clipboard_set_content: {
     args: [FFIType.pointer, FFIType.pointer],

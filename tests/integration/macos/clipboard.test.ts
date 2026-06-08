@@ -31,5 +31,15 @@ if (currentPlatform() === 'macos') {
       const result = clipboard.readText();
       expect(result).toBeInstanceOf(Promise);
     });
+
+    test('writeHTML then readHTML round-trips markup', async () => {
+      clipboard.writeHTML('<b>bold</b> &amp; <i>italic</i>');
+      expect(await clipboard.readHTML()).toBe('<b>bold</b> &amp; <i>italic</i>');
+    });
+
+    test('round-trips UTF-8 HTML content', async () => {
+      clipboard.writeHTML('<p>café — 日本語 — 🎉</p>');
+      expect(await clipboard.readHTML()).toBe('<p>café — 日本語 — 🎉</p>');
+    });
   });
 }
