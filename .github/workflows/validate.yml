@@ -24,11 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux native deps (GTK 4 + WebKitGTK 6.0 + libnotify + Xvfb)
+      - name: Install Linux native deps (GTK 4 + WebKitGTK 6.0 + libnotify + libsecret + Xvfb)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-1 libwebkitgtk-6.0-4 libnotify4 xvfb
+          sudo apt-get install -y libgtk-4-1 libwebkitgtk-6.0-4 libnotify4 libsecret-1-0 xvfb
 
       - uses: oven-sh/setup-bun@v2
         with:

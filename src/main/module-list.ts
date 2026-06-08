@@ -70,6 +70,7 @@ export const IMPLEMENTED_MODULES = [
   'Notification',
   'powerMonitor',
   'protocol',
+  'safeStorage',
   'screen',
   'session',
   'shell',
