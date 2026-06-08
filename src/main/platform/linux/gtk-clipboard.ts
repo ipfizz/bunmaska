@@ -23,16 +23,28 @@ import { loadGObjectFFI } from './gobject-ffi';
  * HTML uses the same write path with the `text/html` MIME. Reading HTML cannot
  * use the text-only `read_text` helper, so it goes through the general
  * `gdk_clipboard_read_async` (negotiating the `text/html` format) →
- * `gdk_clipboard_read_finish` (a transfer-full `GInputStream*`), which is then
- * drained synchronously chunk-by-chunk and UTF-8 decoded. The stream is local
- * and fully buffered, so the synchronous reads do not block the pump in practice.
+ * `gdk_clipboard_read_finish` (a transfer-full `GInputStream*`).
+ *
+ * DRAINING THE STREAM **ASYNCHRONOUSLY** is load-bearing. For an own-process
+ * clipboard, GDK fulfils the read through an in-process `gdk_pipe_io_stream`
+ * whose data is pushed by a writer `GTask` that ONLY runs when the GMainContext
+ * iterates. A *synchronous* `g_input_stream_read_bytes` here would park on a
+ * `g_cond_wait` for that writer while simultaneously freezing the one thread that
+ * iterates the context → deadlock (this caused a multi-hour CI hang). So the
+ * stream is drained with `g_input_stream_read_bytes_async` chunk-by-chunk: every
+ * `await` yields control back to the pump, keeping the GMainContext free to feed
+ * the pipe. Forward progress therefore requires the event loop to turn between
+ * pump iterations (the app's CooperativePump and the test pump both yield) — this
+ * MUST NOT be driven by a tight synchronous `g_main_context_iteration` loop.
  *
  * JSCallback lifecycle safety (a past SIGSEGV regression — mirrors gtk-dialog's
- * `runAsyncDialog`): the `GAsyncReadyCallback` thunk MUST stay reachable until
+ * `runAsyncDialog`): every `GAsyncReadyCallback` thunk MUST stay reachable until
  * GDK fires it, and it MUST NOT be `close()`d synchronously inside its own
  * invocation (that frees the native trampoline the GDK caller is about to return
  * into). Each in-flight callback is retained in the module-level {@link inFlight}
- * set and its `close()` is deferred to a later tick via `setTimeout(..., 0)`.
+ * set and `close()`d on a later tick via `setTimeout(..., 0)`. The HTML drain
+ * allocates a FRESH one-shot callback per chunk (reads are strictly serial, so
+ * there is never more than one in flight per stream — no `G_IO_ERROR_PENDING`).
  */
 
 /** ABI shape for `GAsyncReadyCallback`: `(source, result, user_data) -> void`. */
@@ -43,7 +55,7 @@ const TEXT_MIME = 'text/plain;charset=utf-8';
 /** The MIME type for HTML markup on the clipboard. */
 const HTML_MIME = 'text/html';
 
-/** Bytes per `g_input_stream_read_bytes` call when draining a clipboard stream. */
+/** Bytes per `g_input_stream_read_bytes_async` call when draining a clipboard stream. */
 const STREAM_CHUNK_SIZE = 65536;
 /** Hard cap on drain iterations — a runaway guard (≈ 1 GiB at the chunk size). */
 const MAX_STREAM_CHUNKS = 16384;
@@ -104,27 +116,37 @@ const readGString = (text: Pointer): string => {
   return value;
 };
 
-/** One read + the final release of a `GInputStream`, abstracted for unit-testing. */
-export type StreamReader = {
-  /** Read up to `count` bytes; an empty result signals EOF (or an error). */
-  read(count: number): Uint8Array;
-  /** Close and release the stream. */
+/** One ASYNC chunk read + the final release of a `GInputStream`, abstracted for unit-testing. */
+export type AsyncStreamReader = {
+  /** Resolve up to `count` bytes; an empty result signals EOF (or a swallowed error). */
+  read(count: number): Promise<Uint8Array>;
+  /** Release the stream (idempotent). */
   close(): void;
 };
 
-/** Drain `reader` fully into a UTF-8 string (capped by {@link MAX_STREAM_CHUNKS}). */
-export const drainStream = (reader: StreamReader): string => {
+/**
+ * Drain `reader` fully into a UTF-8 string (capped by {@link MAX_STREAM_CHUNKS}).
+ * Strictly serial — awaits each read before issuing the next, so only one native
+ * read is ever in flight. `reader.close()` runs in a `finally`, so the stream is
+ * released on every terminal path (EOF, the cap, or a thrown read).
+ */
+export const drainStreamAsync = async (reader: AsyncStreamReader): Promise<string> => {
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (let i = 0; i < MAX_STREAM_CHUNKS; i++) {
-    const chunk = reader.read(STREAM_CHUNK_SIZE);
-    if (chunk.length === 0) {
-      break;
+  try {
+    for (let i = 0; i < MAX_STREAM_CHUNKS; i++) {
+      const chunk = await reader.read(STREAM_CHUNK_SIZE);
+      if (chunk.length === 0) {
+        break;
+      }
+      chunks.push(chunk);
+      total += chunk.length;
     }
-    chunks.push(chunk);
-    total += chunk.length;
+  } finally {
+    reader.close();
   }
-  reader.close();
+  // Concatenate bytes BEFORE decoding so a multibyte char split across a chunk
+  // boundary still decodes correctly.
   const out = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
@@ -134,13 +156,13 @@ export const drainStream = (reader: StreamReader): string => {
   return new TextDecoder().decode(out);
 };
 
-/** Settle inputs for `gdk_clipboard_read_finish`, with finish + drain injectable. */
+/** Settle inputs for `gdk_clipboard_read_finish`, with finish + async drain injectable. */
 export type SettleReadStreamArgs = {
   readonly result: Pointer;
   /** Calls `gdk_clipboard_read_finish`; returns a `GInputStream*` or null; may throw. */
   readonly finish: (result: Pointer) => Pointer | null;
   /** Drains a non-null `GInputStream*` to a string. */
-  readonly drain: (stream: Pointer) => string;
+  readonly drain: (stream: Pointer) => Promise<string>;
 };
 
 /**
@@ -148,7 +170,7 @@ export type SettleReadStreamArgs = {
  * format) or a thrown `finish` (GError path) yields `''`. Pure but for the
  * injected functions, so it is unit-testable without a real clipboard.
  */
-export const settleReadStream = (args: SettleReadStreamArgs): string => {
+export const settleReadStreamAsync = async (args: SettleReadStreamArgs): Promise<string> => {
   let stream: Pointer | null;
   try {
     stream = args.finish(args.result);
@@ -158,30 +180,72 @@ export const settleReadStream = (args: SettleReadStreamArgs): string => {
   return stream === null ? '' : args.drain(stream);
 };
 
-/** A {@link StreamReader} over a real GIO `GInputStream*` (transfer-full; unref on close). */
-const realStreamReader = (stream: Pointer): StreamReader => {
+/**
+ * An {@link AsyncStreamReader} over a real GIO `GInputStream*` (transfer-full).
+ *
+ * Each `read` allocates a FRESH one-shot `GAsyncReadyCallback` (retained in
+ * {@link inFlight}, closed on a deferred tick after its own invocation — never
+ * synchronously), issues the non-blocking `g_input_stream_read_bytes_async`, and
+ * resolves the chunk when the callback fires. `close` drops the transfer-full ref
+ * with `g_object_unref` (GIO auto-closes the stream on its last unref — no
+ * separate, potentially-blocking, synchronous close).
+ */
+const realAsyncStreamReader = (stream: Pointer): AsyncStreamReader => {
   const gio = loadGioFFI();
   const glib = loadGlibFFI();
-  return {
-    read: (count) => {
-      const gbytes = gio.symbols.g_input_stream_read_bytes(stream, BigInt(count), null, null);
-      if (gbytes === null) {
-        return new Uint8Array(0);
-      }
-      const size = Number(glib.symbols.g_bytes_get_size(gbytes));
-      if (size === 0) {
-        glib.symbols.g_bytes_unref(gbytes);
-        return new Uint8Array(0);
-      }
-      const data = glib.symbols.g_bytes_get_data(gbytes, null);
-      // Copy out of the GBytes-owned memory before dropping the ref.
-      const copy =
-        data === null ? new Uint8Array(0) : new Uint8Array(toArrayBuffer(data, 0, size)).slice();
+  let closed = false;
+
+  /** Read the chunk bytes out of a completed read's `GAsyncResult`, then unref the GBytes. */
+  const finishChunk = (result: Pointer): Uint8Array => {
+    const gbytes = gio.symbols.g_input_stream_read_bytes_finish(stream, result, null);
+    if (gbytes === null) {
+      return new Uint8Array(0); // GError → treat as EOF
+    }
+    const size = Number(glib.symbols.g_bytes_get_size(gbytes));
+    if (size === 0) {
       glib.symbols.g_bytes_unref(gbytes);
-      return copy;
-    },
+      return new Uint8Array(0);
+    }
+    const data = glib.symbols.g_bytes_get_data(gbytes, null);
+    // Copy out of the GBytes-owned memory before dropping the ref.
+    const copy =
+      data === null ? new Uint8Array(0) : new Uint8Array(toArrayBuffer(data, 0, size)).slice();
+    glib.symbols.g_bytes_unref(gbytes);
+    return copy;
+  };
+
+  return {
+    read: (count) =>
+      new Promise<Uint8Array>((resolve) => {
+        const cb = new JSCallback((_src: Pointer, result: Pointer, _ud: Pointer) => {
+          let chunk: Uint8Array = new Uint8Array(0);
+          try {
+            chunk = finishChunk(result);
+          } catch {
+            chunk = new Uint8Array(0);
+          }
+          resolve(chunk);
+          // Deferred close: the read just returned INTO this trampoline.
+          setTimeout(() => {
+            inFlight.delete(cb);
+            cb.close();
+          }, 0);
+        }, CLIPBOARD_READ_CB_DEF);
+        inFlight.add(cb);
+        const cbPtr = cb.ptr;
+        if (cbPtr === null) {
+          inFlight.delete(cb);
+          resolve(new Uint8Array(0)); // allocation failure → EOF, ends the drain
+          return;
+        }
+        gio.symbols.g_input_stream_read_bytes_async(stream, BigInt(count), 0, null, cbPtr, null);
+      }),
     close: () => {
-      gio.symbols.g_input_stream_close(stream, null, null);
+      if (closed) {
+        return;
+      }
+      closed = true;
+      // No explicit g_input_stream_close (it can block); GIO closes on last unref.
       loadGObjectFFI().symbols.g_object_unref(stream);
     },
   };
@@ -248,12 +312,13 @@ const readHTML = (): Promise<string> => {
     const mime = new TextEncoder().encode(`${HTML_MIME}\0`);
     const mimeArray = new BigUint64Array([BigInt(ptr(mime)), 0n]);
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
-      const value = settleReadStream({
+      // The drain is async (yields to the pump between chunks); resolve when it
+      // settles. This kickoff callback's own work is done synchronously here.
+      void settleReadStreamAsync({
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
-        drain: (stream) => drainStream(realStreamReader(stream)),
-      });
-      resolve(value);
+        drain: (stream) => drainStreamAsync(realAsyncStreamReader(stream)),
+      }).then(resolve);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);

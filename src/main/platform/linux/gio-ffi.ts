@@ -57,17 +57,27 @@ export const GIO_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (stream, count /*gsize*/, cancellable /*null*/, error /*null*/) -> transfer-full
-  // GBytes* (0 bytes at EOF, NULL on error). Drains the stream GDK hands back when
-  // reading a non-text clipboard format (e.g. text/html).
-  g_input_stream_read_bytes: {
-    args: [FFIType.pointer, FFIType.u64, FFIType.pointer, FFIType.pointer],
-    returns: FFIType.pointer,
+  // (stream, count /*gsize*/, io_priority /*int; G_PRIORITY_DEFAULT=0*/, cancellable /*null*/,
+  //  GAsyncReadyCallback, user_data /*null*/) -> void. Non-blocking; the result is
+  // collected in the callback. Used to drain the stream GDK hands back when reading
+  // a non-text clipboard format (e.g. text/html) WITHOUT freezing the GMainContext
+  // that feeds it (a synchronous read deadlocks; see gtk-clipboard.ts).
+  g_input_stream_read_bytes_async: {
+    args: [
+      FFIType.pointer,
+      FFIType.u64,
+      FFIType.i32,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.void,
   },
-  // (stream, cancellable /*null*/, error /*null*/) -> gboolean
-  g_input_stream_close: {
+  // (stream, result, error /*null*/) -> transfer-full GBytes* (0 bytes at EOF, NULL on
+  // error). Caller g_bytes_unref's the result.
+  g_input_stream_read_bytes_finish: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
-    returns: FFIType.i32,
+    returns: FFIType.pointer,
   },
 } as const;
 

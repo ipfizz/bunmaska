@@ -29,7 +29,12 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /**
  * Await `value` while cooperatively pumping the GLib main context so the GDK
- * read's `GAsyncReadyCallback` actually fires. Bounded by `budgetMs`.
+ * read's `GAsyncReadyCallback` actually fires. HARD-BOUNDED by `budgetMs`: if the
+ * promise has not settled by then it THROWS rather than awaiting forever — a slow
+ * or stuck read fails the test fast instead of hanging the suite (the bug that
+ * once let a deadlocked read run to CI's multi-hour cap). The `sleep` between
+ * drains yields to the event loop so the async drain's chained reads + deferred
+ * callback-closes can make forward progress.
  */
 const awaitWithPump = async <T>(value: T | Promise<T>, budgetMs: number): Promise<T> => {
   const promise = Promise.resolve(value);
@@ -44,6 +49,10 @@ const awaitWithPump = async <T>(value: T | Promise<T>, budgetMs: number): Promis
     await sleep(step);
   }
   drain();
+  if (!done) {
+    // Never `return promise` here: an unsettled promise would await forever.
+    throw new Error(`awaitWithPump: promise did not settle within ${budgetMs}ms`);
+  }
   return promise;
 };
 
@@ -76,12 +85,18 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
       expect(name in GDK_FFI_SYMBOLS).toBe(true);
     }
     const gio = loadGioFFI();
-    for (const name of ['g_input_stream_read_bytes', 'g_input_stream_close'] as const) {
+    for (const name of [
+      'g_input_stream_read_bytes_async',
+      'g_input_stream_read_bytes_finish',
+    ] as const) {
       expect(typeof gio.symbols[name]).toBe('function');
       expect(name in GIO_FFI_SYMBOLS).toBe(true);
     }
   });
 
+  // Each async test carries a 15s bun:test deadline (third arg) on TOP of the 5s
+  // awaitWithPump budget + 20m job ceiling — so a regression fails fast at every
+  // layer instead of hanging.
   test('writeText then readText round-trips plain text in the same process', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return; // No display; the symbol-resolution test above already proved dispatch.
@@ -90,7 +105,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.writeText(value);
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe(value);
-  });
+  }, 15000);
 
   test('writeText replaces previous contents', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
@@ -100,7 +115,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.writeText('sambar-clip-second');
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe('sambar-clip-second');
-  });
+  }, 15000);
 
   test('round-trips UTF-8 content', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
@@ -110,7 +125,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.writeText(value);
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe(value);
-  });
+  }, 15000);
 
   test('clear then readText returns empty string', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
@@ -120,7 +135,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.clear();
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe('');
-  });
+  }, 15000);
 
   test('writeHTML then readHTML round-trips markup in the same process', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
@@ -130,7 +145,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.writeHTML(markup);
     const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
     expect(got).toBe(markup);
-  });
+  }, 15000);
 
   test('round-trips UTF-8 HTML content', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
@@ -140,5 +155,14 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.writeHTML(markup);
     const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
     expect(got).toBe(markup);
-  });
+  }, 15000);
+
+  test('readHTML on a cleared clipboard returns empty string (null-stream / no-format path)', async () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    linuxClipboardBackend.clear();
+    const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
+    expect(got).toBe('');
+  }, 15000);
 });

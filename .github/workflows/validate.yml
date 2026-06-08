@@ -14,6 +14,9 @@ jobs:
   validate:
     name: validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Hard ceiling so a hung native/FFI call (e.g. a blocking GIO read deadlocking
+    # the GTK main loop) fails fast instead of burning hours up to GitHub's 6h cap.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

@@ -1,12 +1,12 @@
 import type { Pointer } from 'bun:ffi';
 import { describe, expect, it } from 'bun:test';
 import {
+  type AsyncStreamReader,
   CLIPBOARD_READ_CB_DEF,
-  drainStream,
+  drainStreamAsync,
   linuxClipboardBackend,
-  settleReadStream,
+  settleReadStreamAsync,
   settleReadText,
-  type StreamReader,
 } from '../../../../../src/main/platform/linux/gtk-clipboard';
 
 describe('CLIPBOARD_READ_CB_DEF (GAsyncReadyCallback ABI, shape-only)', () => {
@@ -26,14 +26,16 @@ describe('linuxClipboardBackend shape', () => {
   });
 });
 
-describe('drainStream (injected StreamReader, no real GInputStream)', () => {
-  /** A reader yielding the given chunks in order, then EOF; records close(). */
-  const makeReader = (chunks: Uint8Array[]): { reader: StreamReader; closed: () => number } => {
+describe('drainStreamAsync (injected AsyncStreamReader, no real GInputStream)', () => {
+  /** A reader resolving the given chunks in order, then EOF; records close(). */
+  const makeReader = (
+    chunks: Uint8Array[],
+  ): { reader: AsyncStreamReader; closed: () => number } => {
     let index = 0;
     let closed = 0;
     return {
       reader: {
-        read: () => chunks[index++] ?? new Uint8Array(0),
+        read: () => Promise.resolve(chunks[index++] ?? new Uint8Array(0)),
         close: () => {
           closed += 1;
         },
@@ -42,35 +44,54 @@ describe('drainStream (injected StreamReader, no real GInputStream)', () => {
     };
   };
 
-  it('concatenates multi-chunk reads and UTF-8 decodes them', () => {
+  it('concatenates multi-chunk reads and UTF-8 decodes them', async () => {
     const enc = new TextEncoder();
     const { reader, closed } = makeReader([enc.encode('<b>café'), enc.encode(' & co</b>')]);
-    expect(drainStream(reader)).toBe('<b>café & co</b>');
+    expect(await drainStreamAsync(reader)).toBe('<b>café & co</b>');
     expect(closed()).toBe(1);
   });
 
-  it('returns empty string and still closes when the stream is immediately EOF', () => {
+  it('decodes a multibyte char split across a chunk boundary (bytes joined before decode)', async () => {
+    // '🎉' is 4 UTF-8 bytes (F0 9F 8E 89); split it 2/2 across two chunks.
+    const party = new TextEncoder().encode('🎉'); // length 4
+    const { reader } = makeReader([party.slice(0, 2), party.slice(2, 4)]);
+    expect(await drainStreamAsync(reader)).toBe('🎉');
+  });
+
+  it('returns empty string and still closes when the stream is immediately EOF', async () => {
     const { reader, closed } = makeReader([]);
-    expect(drainStream(reader)).toBe('');
+    expect(await drainStreamAsync(reader)).toBe('');
     expect(closed()).toBe(1);
+  });
+
+  it('still closes the stream when a read rejects (finally path)', async () => {
+    let closed = 0;
+    const reader: AsyncStreamReader = {
+      read: () => Promise.reject(new Error('boom')),
+      close: () => {
+        closed += 1;
+      },
+    };
+    await expect(drainStreamAsync(reader)).rejects.toThrow('boom');
+    expect(closed).toBe(1);
   });
 });
 
-describe('settleReadStream (injected finish + drain, no real clipboard)', () => {
-  it('drains the stream when finish yields a non-null GInputStream*', () => {
-    const value = settleReadStream({
+describe('settleReadStreamAsync (injected finish + async drain, no real clipboard)', () => {
+  it('drains the stream when finish yields a non-null GInputStream*', async () => {
+    const value = await settleReadStreamAsync({
       result: 1 as unknown as Pointer,
       finish: () => 42 as unknown as Pointer,
       drain: (stream) => {
         expect(stream).toBe(42 as unknown as Pointer);
-        return '<p>html</p>';
+        return Promise.resolve('<p>html</p>');
       },
     });
     expect(value).toBe('<p>html</p>');
   });
 
-  it('returns empty string when finish yields null (no matching format)', () => {
-    const value = settleReadStream({
+  it('returns empty string when finish yields null (no matching format)', async () => {
+    const value = await settleReadStreamAsync({
       result: 0 as unknown as Pointer,
       finish: () => null,
       drain: () => {
@@ -80,13 +101,13 @@ describe('settleReadStream (injected finish + drain, no real clipboard)', () => 
     expect(value).toBe('');
   });
 
-  it('returns empty string when finish throws (GError path)', () => {
-    const value = settleReadStream({
+  it('returns empty string when finish throws (GError path)', async () => {
+    const value = await settleReadStreamAsync({
       result: 0 as unknown as Pointer,
       finish: () => {
         throw new Error('read failed');
       },
-      drain: () => '/should/not/return',
+      drain: () => Promise.resolve('/should/not/return'),
     });
     expect(value).toBe('');
   });
