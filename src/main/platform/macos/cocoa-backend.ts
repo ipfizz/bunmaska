@@ -260,8 +260,20 @@ class MacOSWebContents implements NativeWebContents {
     return nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString')));
   }
 
+  getTitle(): string {
+    return nsStringToString(cocoa().msgSend(this.#webview, cocoa().selectors.get('title')));
+  }
+
   reload(): void {
     cocoa().msgSend(this.#webview, cocoa().selectors.get('reload'));
+  }
+
+  reloadIgnoringCache(): void {
+    cocoa().msgSend(this.#webview, cocoa().selectors.get('reloadFromOrigin'));
+  }
+
+  stop(): void {
+    cocoa().msgSend(this.#webview, cocoa().selectors.get('stopLoading'));
   }
 
   goBack(): void {

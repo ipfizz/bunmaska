@@ -28,7 +28,10 @@ const makeFakeNative = (): {
     loadURL: () => undefined,
     loadHTML: () => undefined,
     getURL: () => '',
+    getTitle: () => 'Fake Title',
     reload: () => undefined,
+    reloadIgnoringCache: () => undefined,
+    stop: () => undefined,
     goBack: () => undefined,
     goForward: () => undefined,
     canGoBack: () => false,
@@ -126,6 +129,30 @@ describe('WebContents.setZoomFactor / getZoomFactor', () => {
     expect(wc.getZoomLevel()).toBeCloseTo(1);
     wc.setZoomLevel(0);
     expect(wc.getZoomLevel()).toBeCloseTo(0);
+  });
+});
+
+describe('WebContents.getTitle / isLoading / stop', () => {
+  test('getTitle delegates to the native title', () => {
+    expect(new WebContents(makeFakeNative().native).getTitle()).toBe('Fake Title');
+  });
+
+  test('isLoading tracks did-start-loading → did-finish-load', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents(native);
+    expect(wc.isLoading()).toBe(false);
+    fireNavigation({ type: 'did-start-loading' });
+    expect(wc.isLoading()).toBe(true);
+    fireNavigation({ type: 'did-finish-load' });
+    expect(wc.isLoading()).toBe(false);
+  });
+
+  test('stop and reloadIgnoringCache do not throw', () => {
+    const wc = new WebContents(makeFakeNative().native);
+    expect(() => {
+      wc.stop();
+      wc.reloadIgnoringCache();
+    }).not.toThrow();
   });
 });
 
@@ -315,7 +342,10 @@ describe('WebContents navigation', () => {
       loadURL: () => undefined,
       loadHTML: () => undefined,
       getURL: () => '',
+      getTitle: () => '',
       reload: () => calls.push('reload'),
+      reloadIgnoringCache: () => calls.push('reloadIgnoringCache'),
+      stop: () => calls.push('stop'),
       goBack: () => calls.push('goBack'),
       goForward: () => calls.push('goForward'),
       canGoBack: () => true,

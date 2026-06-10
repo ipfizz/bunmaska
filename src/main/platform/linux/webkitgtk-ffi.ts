@@ -70,6 +70,16 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // (web_view) -> void; aborts any in-progress load.
+  webkit_web_view_stop_loading: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (web_view) -> const gchar* title (BORROWED — do NOT free; NULL when none).
+  webkit_web_view_get_title: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
   // (web_view, command /*e.g. "Copy","Paste","Cut","SelectAll","Undo","Redo"*/) -> void.
   // Non-blocking — queues into the web process. Backs Menu edit-role clicks on Linux.
   webkit_web_view_execute_editing_command: {

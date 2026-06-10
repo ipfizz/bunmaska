@@ -162,9 +162,24 @@ class LinuxWebContents implements NativeWebContents {
     return readGetUriResult(webkit.symbols.webkit_web_view_get_uri(this.#view));
   }
 
+  getTitle(): string {
+    const webkit = loadWebKitGtkFFI();
+    return readGetUriResult(webkit.symbols.webkit_web_view_get_title(this.#view));
+  }
+
   reload(): void {
     const webkit = loadWebKitGtkFFI();
     webkit.symbols.webkit_web_view_reload(this.#view);
+  }
+
+  reloadIgnoringCache(): void {
+    const webkit = loadWebKitGtkFFI();
+    webkit.symbols.webkit_web_view_reload_bypass_cache(this.#view);
+  }
+
+  stop(): void {
+    const webkit = loadWebKitGtkFFI();
+    webkit.symbols.webkit_web_view_stop_loading(this.#view);
   }
 
   goBack(): void {

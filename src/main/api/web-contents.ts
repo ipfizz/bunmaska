@@ -51,6 +51,7 @@ export class WebContents extends EventEmitter {
   #cssCounter = 0;
   #zoomFactor = 1;
   #userAgent = '';
+  #isLoading = false;
 
   constructor(native: NativeWebContents) {
     super();
@@ -61,6 +62,15 @@ export class WebContents extends EventEmitter {
       void this.#handleRendererEnvelope(json);
     });
     this.#native.onNavigation((event) => {
+      if (event.type === 'did-start-loading') {
+        this.#isLoading = true;
+      } else if (
+        event.type === 'did-stop-loading' ||
+        event.type === 'did-finish-load' ||
+        event.type === 'did-fail-load'
+      ) {
+        this.#isLoading = false;
+      }
       if (event.type === 'did-navigate') {
         this.emit('did-navigate', {}, this.getURL());
       } else if (event.type === 'did-fail-load') {
@@ -87,9 +97,29 @@ export class WebContents extends EventEmitter {
     return this.#native.getURL();
   }
 
+  /** The page's current title, or `''`. */
+  getTitle(): string {
+    return this.#native.getTitle();
+  }
+
+  /** Whether a navigation is currently in progress. */
+  isLoading(): boolean {
+    return this.#isLoading;
+  }
+
   /** Reload the current page. */
   reload(): void {
     this.#native.reload();
+  }
+
+  /** Reload the current page, bypassing the cache. */
+  reloadIgnoringCache(): void {
+    this.#native.reloadIgnoringCache();
+  }
+
+  /** Stop any in-progress load. */
+  stop(): void {
+    this.#native.stop();
   }
 
   /** Navigate back one entry in the session history, if possible. */

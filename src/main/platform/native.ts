@@ -68,8 +68,14 @@ export interface NativeWebContents {
   loadHTML(html: string, baseUrl?: string): void;
   /** The web view's current URL, or `''` before the first navigation. */
   getURL(): string;
+  /** The page's current title, or `''` if none. */
+  getTitle(): string;
   /** Reload the current page. */
   reload(): void;
+  /** Reload the current page, bypassing the cache. */
+  reloadIgnoringCache(): void;
+  /** Stop any in-progress load. */
+  stop(): void;
   /** Navigate back one entry in the session history, if possible. */
   goBack(): void;
   /** Navigate forward one entry in the session history, if possible. */
