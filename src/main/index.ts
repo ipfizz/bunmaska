@@ -29,6 +29,7 @@ export {
 export { nativeTheme, type NativeTheme } from './api/native-theme';
 export { Notification, type NotificationOptions } from './api/notification';
 export { type PowerMonitor, powerMonitor } from './api/power-monitor';
+export { type PowerSaveBlocker, powerSaveBlocker } from './api/power-save-blocker';
 export {
   type ProtocolHandler,
   type ProtocolRequest,

@@ -107,6 +107,27 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // (value /*GVariant* 'u'*/) -> guint32. ABORTS on a non-u32 — guard with the type string.
+  g_variant_get_uint32: {
+    args: [FFIType.pointer],
+    returns: FFIType.u32,
+  },
+  // (string) -> GVariant* 's' (FLOATING). Builds a D-Bus method arg.
+  g_variant_new_string: {
+    args: [FFIType.cstring],
+    returns: FFIType.pointer,
+  },
+  // (value) -> GVariant* 'u' (FLOATING).
+  g_variant_new_uint32: {
+    args: [FFIType.u32],
+    returns: FFIType.pointer,
+  },
+  // (children /*GVariant**/, n_children /*gsize*/) -> GVariant* tuple (FLOATING; SINKS each
+  //  child's floating ref). Explicit builder avoids the fragile varargs g_variant_new.
+  g_variant_new_tuple: {
+    args: [FFIType.pointer, FFIType.u64],
+    returns: FFIType.pointer,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GLIB_FFI_SYMBOLS>> | undefined } = {

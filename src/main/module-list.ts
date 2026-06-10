@@ -69,6 +69,7 @@ export const IMPLEMENTED_MODULES = [
   'nativeTheme',
   'Notification',
   'powerMonitor',
+  'powerSaveBlocker',
   'protocol',
   'safeStorage',
   'screen',

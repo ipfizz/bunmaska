@@ -34,8 +34,13 @@ const LIBGIO_PATH = 'libgio-2.0.so.0';
 
 /** `GBusType` enum (gio/gioenums.h): STARTER=-1, NONE=0, SYSTEM=1, SESSION=2. */
 export const G_BUS_TYPE_SYSTEM = 1;
+export const G_BUS_TYPE_SESSION = 2;
 /** `GDBusSignalFlags` — no special matching. */
 export const G_DBUS_SIGNAL_FLAGS_NONE = 0;
+/** `GDBusCallFlags` — default. */
+export const G_DBUS_CALL_FLAGS_NONE = 0;
+/** Bounded reply timeout (ms). NEVER `G_MAXINT` — a finite backstop against a peer that never answers. */
+export const DBUS_CALL_TIMEOUT_MS = 5000;
 
 /**
  * ABI shape of `GDBusSignalCallback`:
@@ -76,6 +81,31 @@ export const GDBUS_FFI_SYMBOLS = {
   g_dbus_connection_signal_unsubscribe: {
     args: [FFIType.pointer, FFIType.u32],
     returns: FFIType.void,
+  },
+  // Bounded REMOTE method call. SAFE on the pumped thread: the reply is read by the
+  // connection's PRIVATE GDBusWorker thread and call_sync awaits it on its OWN private
+  // GMainContext (gdbusconnection.c), so it blocks only THIS thread for a bounded round
+  // trip and never needs Sambar's pump to turn (unlike the clipboard local-pipe read). A
+  // FINITE timeout_msec (NEVER G_MAXINT) is mandatory. The floating `parameters` GVariant
+  // is consumed by the call; the reply tuple is transfer-full (caller g_variant_unref).
+  // (connection, bus_name, object_path, interface_name, method_name, parameters:GVariant*,
+  //  reply_type:GVariantType*|null, flags:GDBusCallFlags, timeout_msec:gint,
+  //  cancellable|null, error:GError**|null) -> GVariant*
+  g_dbus_connection_call_sync: {
+    args: [
+      FFIType.pointer,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.u32,
+      FFIType.i32,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.pointer,
   },
 } as const;
 

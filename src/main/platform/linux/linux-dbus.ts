@@ -1,8 +1,11 @@
 import { CString, JSCallback, type Pointer } from 'bun:ffi';
 import { cstr } from '../cstr';
 import {
+  DBUS_CALL_TIMEOUT_MS,
   DBUS_SIGNAL_CB_DEF,
+  G_BUS_TYPE_SESSION,
   G_BUS_TYPE_SYSTEM,
+  G_DBUS_CALL_FLAGS_NONE,
   G_DBUS_SIGNAL_FLAGS_NONE,
   loadGDBusFFI,
 } from './gdbus-ffi';
@@ -12,10 +15,14 @@ import {
  *
  * THE RULE (hard-won — a synchronous GIO read once hung CI for hours, see
  * gtk-clipboard.ts): never block Sambar's single pumped thread on a D-Bus reply that
- * only the GMainContext dispatch can deliver. So this module exposes ONLY subscription,
- * never a `*_call_sync`. A subscribed `GDBusSignalCallback` fires on the default
- * GMainContext during ordinary cooperative-pump iterations (gtk-run-loop.ts) — no thread
- * ever blocks for it.
+ * only the GMainContext dispatch can deliver. Signal SUBSCRIPTION never blocks (the
+ * `GDBusSignalCallback` fires on the default GMainContext during ordinary cooperative-pump
+ * iterations, gtk-run-loop.ts). The one method-call helper, {@link callMethodSync}, uses a
+ * BOUNDED `g_dbus_connection_call_sync` whose reply is read by the connection's PRIVATE
+ * GDBusWorker thread and awaited on `call_sync`'s OWN private GMainContext — it stalls the
+ * caller for at most {@link DBUS_CALL_TIMEOUT_MS} and NEVER needs our pump to turn, so it
+ * is categorically unlike the clipboard's local-pipe read (whose reply could only come
+ * from our pump). It is still gated off in CI.
  *
  * `getSystemBus()` is gated behind `SAMBAR_ENABLE_LINUX_POWER` (mirroring the libsecret
  * keyring gate): CI never sets it, so the bus is NEVER touched on the headless runner and
@@ -151,4 +158,77 @@ export const subscribeSignal = (
 /** Reset the system-bus probe cache. Test-only. */
 export const resetSystemBusCacheForTesting = (): void => {
   cache.systemBus = undefined;
+};
+
+// --- Session bus + bounded method call (powerSaveBlocker) -------------------------------
+
+/**
+ * Whether the live SESSION-bus method-call path is enabled. A SEPARATE flag from the
+ * system-bus power flag, so a developer can enable read-only power-monitor signals without
+ * enabling outbound blocker method calls (different bus, different risk surface). CI never
+ * sets it → the session bus is never touched and blocker `acquire` is a no-op.
+ */
+const liveBlockerEnabled = (): boolean => process.env['SAMBAR_ENABLE_LINUX_POWER_BLOCKER'] === '1';
+
+const sessionCache: { sessionBus: Pointer | null | undefined } = { sessionBus: undefined };
+
+/** Call `g_bus_get_sync(SESSION)` directly, bypassing the gate. Never throws (see the system probe). */
+export const probeSessionBusUnchecked = (): Pointer | null => {
+  const gdbus = loadGDBusFFI();
+  try {
+    return gdbus.symbols.g_bus_get_sync(G_BUS_TYPE_SESSION, null, null);
+  } catch {
+    return null;
+  }
+};
+
+/** The session `GDBusConnection*`, or null when the gate is off OR there is no bus. Cached. */
+export const getSessionBus = (): Pointer | null => {
+  if (sessionCache.sessionBus !== undefined) {
+    return sessionCache.sessionBus;
+  }
+  const conn = liveBlockerEnabled() ? probeSessionBusUnchecked() : null;
+  sessionCache.sessionBus = conn;
+  return conn;
+};
+
+/**
+ * A BOUNDED, deadlock-safe synchronous D-Bus method call. The reply is read by the
+ * connection's private GDBusWorker thread and awaited on `call_sync`'s own private
+ * GMainContext, so this blocks only the calling thread for the round-trip (finite
+ * {@link DBUS_CALL_TIMEOUT_MS}), never the pump. Returns the transfer-FULL reply GVariant
+ * tuple (caller `g_variant_unref`) or null on any failure (NULL GError**). `parameters`
+ * (a floating GVariant, or null for no args) is CONSUMED by the call.
+ */
+export const callMethodSync = (
+  conn: Pointer,
+  busName: string,
+  objectPath: string,
+  iface: string,
+  method: string,
+  parameters: Pointer | null,
+): Pointer | null => {
+  const gdbus = loadGDBusFFI();
+  try {
+    return gdbus.symbols.g_dbus_connection_call_sync(
+      conn,
+      cstr(busName),
+      cstr(objectPath),
+      cstr(iface),
+      cstr(method),
+      parameters,
+      null, // reply_type
+      G_DBUS_CALL_FLAGS_NONE,
+      DBUS_CALL_TIMEOUT_MS,
+      null, // cancellable
+      null, // error (NULL return already means "failed")
+    );
+  } catch {
+    return null;
+  }
+};
+
+/** Reset the session-bus probe cache. Test-only. */
+export const resetSessionBusCacheForTesting = (): void => {
+  sessionCache.sessionBus = undefined;
 };

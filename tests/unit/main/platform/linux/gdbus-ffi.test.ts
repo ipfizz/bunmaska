@@ -3,7 +3,9 @@ import { describe, expect, it } from 'bun:test';
 import { UnsupportedPlatformError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
+  DBUS_CALL_TIMEOUT_MS,
   DBUS_SIGNAL_CB_DEF,
+  G_BUS_TYPE_SESSION,
   G_BUS_TYPE_SYSTEM,
   G_DBUS_SIGNAL_FLAGS_NONE,
   GDBUS_FFI_SYMBOLS,
@@ -52,7 +54,28 @@ describe('GDBUS_FFI_SYMBOLS (ABI shape)', () => {
     expect(DBUS_SIGNAL_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr', 'ptr', 'ptr', 'ptr', 'ptr']);
     expect(DBUS_SIGNAL_CB_DEF.returns).toBe('void');
     expect(G_BUS_TYPE_SYSTEM).toBe(1);
+    expect(G_BUS_TYPE_SESSION).toBe(2);
     expect(G_DBUS_SIGNAL_FLAGS_NONE).toBe(0);
+  });
+
+  it('g_dbus_connection_call_sync has 11 args (timeout i32, returns ptr) with a finite timeout', () => {
+    expect(GDBUS_FFI_SYMBOLS.g_dbus_connection_call_sync.args).toEqual([
+      FFIType.pointer,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.u32,
+      FFIType.i32,
+      FFIType.pointer,
+      FFIType.pointer,
+    ]);
+    expect(GDBUS_FFI_SYMBOLS.g_dbus_connection_call_sync.returns).toBe(FFIType.pointer);
+    expect(DBUS_CALL_TIMEOUT_MS).toBe(5000);
+    // Must be a finite backstop, never the infinite G_MAXINT (2147483647).
+    expect(DBUS_CALL_TIMEOUT_MS).toBeLessThan(2_147_483_647);
   });
 });
 
