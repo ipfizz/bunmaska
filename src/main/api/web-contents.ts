@@ -155,6 +155,15 @@ export class WebContents extends EventEmitter {
   }
 
   /**
+   * Render the current page to a PDF and resolve to its bytes (Electron's
+   * `printToPDF`). macOS only for now; rejects on Linux (WebKitGTK has no
+   * page-to-PDF-bytes API).
+   */
+  async printToPDF(): Promise<Buffer> {
+    return Buffer.from(await this.#native.printToPDF());
+  }
+
+  /**
    * Inject a `<style>` block into the page and resolve to a key that
    * {@link removeInsertedCSS} can later use to remove it (Electron semantics).
    * Works on both backends via the page-world exec channel — no native call.

@@ -90,6 +90,11 @@ export interface NativeWebContents {
    * (`JSON.stringify` semantics); a thrown error or rejected Promise rejects.
    */
   executeJavaScript(code: string): Promise<unknown>;
+  /**
+   * Render the page to a PDF and resolve to its bytes (Electron's `printToPDF`).
+   * Rejects on platforms without a page-to-PDF API (Linux/WebKitGTK).
+   */
+  printToPDF(): Promise<Uint8Array>;
   /** Open the native web inspector (devtools) for this view. Best-effort. */
   openDevTools(): void;
   /** Close the native web inspector (devtools) for this view. Best-effort. */

@@ -1,3 +1,4 @@
+import { FFIType } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
 import {
   generateChannelId,
@@ -19,8 +20,10 @@ import type {
 } from '../native';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
+import { nsDataToBytes } from './cocoa-native-image';
 import { cancelMenuTracking, popUpMenu } from './cocoa-menu';
 import {
   msgSendF64,
@@ -313,6 +316,40 @@ class MacOSWebContents implements NativeWebContents {
       }, EXEC_TIMEOUT_MS);
       this.#pendingExecs.set(execId, { resolve, reject, timer });
       this.#evaluateInWorld(buildExecWrapper(execId, EXEC_RESULT_HANDLER_NAME, code), pageWorld());
+    });
+  }
+
+  /**
+   * Render the page to PDF via `-[WKWebView createPDFWithConfiguration:nil
+   * completionHandler:]`. The completion handler is a hand-built ObjC Block
+   * (D022b) that fires on the pumped run loop; we resolve its `NSData` bytes.
+   */
+  printToPDF(): Promise<Uint8Array> {
+    if (this.#destroyed) {
+      return Promise.reject(new Error('printToPDF failed: web contents destroyed'));
+    }
+    return new Promise<Uint8Array>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`printToPDF timed out after ${EXEC_TIMEOUT_MS}ms`));
+      }, EXEC_TIMEOUT_MS);
+      const block = makeOneShotBlock(
+        (pdfData, error) => {
+          clearTimeout(timer);
+          const data = BigInt(pdfData ?? 0);
+          if (data === 0n) {
+            reject(new Error(`printToPDF failed (NSError ${error ?? 'nil'})`));
+            return;
+          }
+          resolve(nsDataToBytes(data));
+        },
+        [FFIType.ptr, FFIType.ptr],
+      );
+      msgSendPtrPtr(
+        this.#webview,
+        cocoa().selectors.get('createPDFWithConfiguration:completionHandler:'),
+        0n,
+        block,
+      );
     });
   }
 

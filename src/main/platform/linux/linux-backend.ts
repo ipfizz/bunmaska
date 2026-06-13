@@ -1,4 +1,5 @@
 import { type Pointer, ptr } from 'bun:ffi';
+import { UnsupportedPlatformError } from '../../../common/errors';
 import {
   generateChannelId,
   generateIsolatedChannelSetup,
@@ -224,6 +225,14 @@ class LinuxWebContents implements NativeWebContents {
    */
   executeJavaScript(code: string): Promise<unknown> {
     return this.#exec.executeJavaScript(code);
+  }
+
+  printToPDF(): Promise<Uint8Array> {
+    // WebKitGTK exposes only a printer/file print operation, not a page→PDF-bytes
+    // API like WKWebView's createPDFWithConfiguration. Deferred (see PARITY.md).
+    return Promise.reject(
+      new UnsupportedPlatformError('webContents.printToPDF is not yet supported on Linux'),
+    );
   }
 
   /** @internal Reject every still-pending exec; called on window close. */

@@ -102,6 +102,22 @@ if (currentPlatform() === 'macos') {
       }
     });
 
+    test('printToPDF renders the page to real PDF bytes via a block completion handler', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({ width: 400, height: 300, title: 't', show: true });
+        win.webContents.loadHTML('<html><body><h1>Sambar PDF</h1></body></html>', 'about:blank');
+        await delay(250);
+        const pdf = await win.webContents.printToPDF();
+        expect(pdf.length).toBeGreaterThan(100);
+        // The PDF file magic is the ASCII bytes "%PDF".
+        expect(new TextDecoder().decode(pdf.slice(0, 4))).toBe('%PDF');
+      } finally {
+        app.quit();
+      }
+    });
+
     test('openDevTools exists and does not throw', async () => {
       const app = createMacOSApplication();
       app.start();

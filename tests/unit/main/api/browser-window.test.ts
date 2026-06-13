@@ -84,6 +84,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     canGoBack: () => false,
     canGoForward: () => false,
     executeJavaScript: () => Promise.resolve(undefined),
+    printToPDF: () => Promise.resolve(new Uint8Array(0)),
     openDevTools: () => undefined,
     closeDevTools: () => undefined,
     setZoomFactor: () => undefined,

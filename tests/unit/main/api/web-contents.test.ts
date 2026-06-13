@@ -40,6 +40,7 @@ const makeFakeNative = (): {
       execs.push(code);
       return Promise.resolve(undefined);
     },
+    printToPDF: () => Promise.resolve(new Uint8Array([1, 2, 3])),
     openDevTools: () => undefined,
     closeDevTools: () => undefined,
     setZoomFactor: (factor) => zooms.push(factor),
@@ -154,6 +155,15 @@ describe('WebContents.getTitle / isLoading / stop', () => {
       wc.stop();
       wc.reloadIgnoringCache();
     }).not.toThrow();
+  });
+});
+
+describe('WebContents.printToPDF', () => {
+  test('resolves the native PDF bytes as a Buffer', async () => {
+    const wc = new WebContents(makeFakeNative().native);
+    const pdf = await wc.printToPDF();
+    expect(Buffer.isBuffer(pdf)).toBe(true);
+    expect([...pdf]).toEqual([1, 2, 3]);
   });
 });
 
@@ -370,6 +380,7 @@ describe('WebContents navigation', () => {
       canGoBack: () => true,
       canGoForward: () => false,
       executeJavaScript: () => Promise.resolve(undefined),
+      printToPDF: () => Promise.resolve(new Uint8Array(0)),
       openDevTools: () => undefined,
       closeDevTools: () => undefined,
       setZoomFactor: () => undefined,
