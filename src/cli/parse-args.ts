@@ -30,6 +30,7 @@ export type BuildOptions = {
 export type Command =
   | { readonly kind: 'help' }
   | { readonly kind: 'version' }
+  | { readonly kind: 'init'; readonly dir: string }
   | { readonly kind: 'run'; readonly entry: string; readonly args: readonly string[] }
   | { readonly kind: 'build'; readonly entry: string; readonly options: BuildOptions }
   | { readonly kind: 'error'; readonly message: string };
@@ -50,6 +51,14 @@ const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', '
 
 const isBuildTarget = (value: string): value is BuildTarget =>
   BUILD_TARGETS.has(value as BuildTarget);
+
+const parseInit = (rest: readonly string[]): Command => {
+  const [dir, ...extra] = rest;
+  if (extra.length > 0) {
+    return { kind: 'error', message: `sambar init: unexpected argument ${extra[0]}` };
+  }
+  return { kind: 'init', dir: dir ?? '.' };
+};
 
 const parseRun = (rest: readonly string[]): Command => {
   const [entry, ...args] = rest;
@@ -125,6 +134,9 @@ export const parseArgs = (argv: readonly string[]): Command => {
   }
   if (head === '--version' || head === '-v') {
     return { kind: 'version' };
+  }
+  if (head === 'init') {
+    return parseInit(rest);
   }
   if (head === 'run') {
     return parseRun(rest);

@@ -15,6 +15,7 @@ import {
   type ConvertIcon,
   type SignApp,
 } from './build-macos';
+import { runInit } from './init';
 import { type Command, parseArgs, resolveTarget } from './parse-args';
 import { runApp } from './run';
 import { currentPlatform } from '../common/platform';
@@ -31,6 +32,7 @@ const err = (text: string): void => {
 const USAGE = `sambar ${SAMBAR_VERSION}
 
 Usage:
+  sambar init [dir]                    Scaffold a new Sambar project (default: .)
   sambar run <entry.ts> [args...]      Launch a Sambar app (bun run <entry>)
   sambar build <entry.ts> [options]    Bundle a distributable app
   sambar --help                        Show this help
@@ -162,6 +164,29 @@ const notarizeCredentials = ():
   return { appleId, teamId, password };
 };
 
+/** Scaffold a new project and print next steps. Returns the exit code. */
+const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => {
+  let result: ReturnType<typeof runInit>;
+  try {
+    result = runInit(command.dir);
+  } catch (error) {
+    err(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+  out(`Scaffolded ${result.name} in ${result.dir}`);
+  for (const path of result.written) {
+    out(`  create ${path}`);
+  }
+  out('');
+  out('Next steps:');
+  if (command.dir !== '.') {
+    out(`  cd ${command.dir}`);
+  }
+  out('  bun install');
+  out('  bun run dev');
+  return 0;
+};
+
 /** Execute a parsed {@link Command} and resolve to the process exit code. */
 export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promise<number> => {
   switch (command.kind) {
@@ -171,6 +196,8 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
     case 'version':
       out(SAMBAR_VERSION);
       return 0;
+    case 'init':
+      return runInitCommand(command);
     case 'run':
       return await runApp(command.entry, command.args);
     case 'build':

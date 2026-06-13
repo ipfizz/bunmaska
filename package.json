@@ -31,6 +31,10 @@
       "types": "./src/renderer/index.ts",
       "import": "./src/renderer/index.ts"
     },
+    "./config": {
+      "types": "./src/config.ts",
+      "import": "./src/config.ts"
+    },
     "./electron": {
       "types": "./src/electron.ts",
       "import": "./src/electron.ts"
