@@ -15,6 +15,8 @@ import {
   type ConvertIcon,
   type SignApp,
 } from './build-macos';
+import { loadConfig } from './config';
+import { resolveDevEntry, runDev } from './dev';
 import { runInit } from './init';
 import { type Command, parseArgs, resolveTarget } from './parse-args';
 import { runApp } from './run';
@@ -33,6 +35,7 @@ const USAGE = `sambar ${SAMBAR_VERSION}
 
 Usage:
   sambar init [dir]                    Scaffold a new Sambar project (default: .)
+  sambar dev [entry.ts]                Run the app, restarting on file changes
   sambar run <entry.ts> [args...]      Launch a Sambar app (bun run <entry>)
   sambar build <entry.ts> [options]    Bundle a distributable app
   sambar --help                        Show this help
@@ -187,6 +190,32 @@ const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => 
   return 0;
 };
 
+/** Block until SIGINT/SIGTERM, then run `stop` and resolve. */
+const awaitInterrupt = (stop: () => void): Promise<void> =>
+  new Promise<void>((resolvePromise) => {
+    const onSignal = (): void => {
+      stop();
+      resolvePromise();
+    };
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
+  });
+
+/** Run the app with file-watch restarts until interrupted. Returns the exit code. */
+const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
+  let entry: string;
+  try {
+    const { config } = await loadConfig(process.cwd());
+    entry = resolveDevEntry(config, command.entry);
+  } catch (error) {
+    err(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+  out(`sambar dev: running ${entry} (Ctrl-C to stop)`);
+  await runDev(process.cwd(), entry, awaitInterrupt);
+  return 0;
+};
+
 /** Execute a parsed {@link Command} and resolve to the process exit code. */
 export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promise<number> => {
   switch (command.kind) {
@@ -198,6 +227,8 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
       return 0;
     case 'init':
       return runInitCommand(command);
+    case 'dev':
+      return await runDevCommand(command);
     case 'run':
       return await runApp(command.entry, command.args);
     case 'build':

@@ -31,6 +31,7 @@ export type Command =
   | { readonly kind: 'help' }
   | { readonly kind: 'version' }
   | { readonly kind: 'init'; readonly dir: string }
+  | { readonly kind: 'dev'; readonly entry?: string }
   | { readonly kind: 'run'; readonly entry: string; readonly args: readonly string[] }
   | { readonly kind: 'build'; readonly entry: string; readonly options: BuildOptions }
   | { readonly kind: 'error'; readonly message: string };
@@ -58,6 +59,14 @@ const parseInit = (rest: readonly string[]): Command => {
     return { kind: 'error', message: `sambar init: unexpected argument ${extra[0]}` };
   }
   return { kind: 'init', dir: dir ?? '.' };
+};
+
+const parseDev = (rest: readonly string[]): Command => {
+  const [entry, ...extra] = rest;
+  if (extra.length > 0) {
+    return { kind: 'error', message: `sambar dev: unexpected argument ${extra[0]}` };
+  }
+  return entry === undefined ? { kind: 'dev' } : { kind: 'dev', entry };
 };
 
 const parseRun = (rest: readonly string[]): Command => {
@@ -137,6 +146,9 @@ export const parseArgs = (argv: readonly string[]): Command => {
   }
   if (head === 'init') {
     return parseInit(rest);
+  }
+  if (head === 'dev') {
+    return parseDev(rest);
   }
   if (head === 'run') {
     return parseRun(rest);
