@@ -15,12 +15,22 @@ import {
   type ConvertIcon,
   type SignApp,
 } from './build-macos';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { loadConfig } from './config';
 import { resolveDevEntry, runDev } from './dev';
 import { runInit } from './init';
-import { type Command, parseArgs, resolveTarget } from './parse-args';
+import {
+  type BuildOptions,
+  type BuildTarget,
+  type Command,
+  parseArgs,
+  resolveTarget,
+} from './parse-args';
 import { runApp } from './run';
-import { currentPlatform } from '../common/platform';
+import { emitUpdateArtifact } from './update-artifact';
+import { DEFAULT_CHANNEL } from '../common/manifest';
+import { currentArch, currentPlatform } from '../common/platform';
 import { SAMBAR_VERSION } from '../common/version';
 
 const out = (text: string): void => {
@@ -56,6 +66,10 @@ build options:
   --notarize         Notarization hook (macOS, with --sign). Requires the env
                      vars APPLE_ID, TEAM_ID and an app-specific password; this
                      build does not submit to Apple — see the docs to release.
+  --update           Also emit the auto-update feed beside the bundle: a
+                     <name>-<channel>-<os>-<arch>.tar.zst and an update.json the
+                     runtime autoUpdater reads. The artifact arch is the host's.
+  --channel <name>   Release channel for --update (default: stable).
 
 'sambar build' produces a macOS .app or a Linux AppDir + .tar.gz + .deb.
 A macOS host can cross-build Linux with --target linux.
@@ -78,6 +92,41 @@ export type DispatchDeps = {
   readonly notarize?: NotarizeHook;
   readonly convertIcon?: ConvertIcon;
   readonly buildDmg?: BuildDmg;
+};
+
+/** Read the app version from the project's package.json, or `0.0.0` if absent. */
+const readAppVersion = (): string => {
+  try {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+      version?: unknown;
+    };
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+};
+
+/** When `--update` was given, emit the `.tar.zst` + `update.json` feed for a bundle. */
+const maybeEmitUpdate = async (
+  bundlePath: string,
+  name: string,
+  target: BuildTarget,
+  options: BuildOptions,
+): Promise<void> => {
+  if (options.update !== true) {
+    return;
+  }
+  const result = await emitUpdateArtifact({
+    bundlePath,
+    outDir: dirname(bundlePath),
+    name,
+    version: readAppVersion(),
+    channel: options.channel ?? DEFAULT_CHANNEL,
+    os: target,
+    arch: currentArch(),
+  });
+  out(result.artifactPath);
+  out(result.manifestPath);
 };
 
 const runBuild = async (
@@ -120,6 +169,7 @@ const runBuild = async (
     out(result.appDir);
     out(result.tarball);
     out(result.deb);
+    await maybeEmitUpdate(result.appDir, name, 'linux', command.options);
     return 0;
   }
 
@@ -151,6 +201,7 @@ const runBuild = async (
       await deps.notarize(appPath);
     }
   }
+  await maybeEmitUpdate(appPath, name, 'macos', command.options);
   return 0;
 };
 

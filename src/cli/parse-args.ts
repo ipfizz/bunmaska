@@ -25,6 +25,10 @@ export type BuildOptions = {
   readonly notarize?: boolean;
   /** Also produce a `.dmg` containing the built `.app` (macOS-only; uses hdiutil). */
   readonly dmg?: boolean;
+  /** Release channel for the update feed (default: `stable`). */
+  readonly channel?: string;
+  /** Also emit the auto-update feed: a `.tar.zst` of the bundle + `update.json`. */
+  readonly update?: boolean;
 };
 
 export type Command =
@@ -37,16 +41,21 @@ export type Command =
   | { readonly kind: 'error'; readonly message: string };
 
 /** `sambar build` flags that take a string value, keyed by argv token. */
-const BUILD_STRING_FLAGS = new Map<string, 'name' | 'id' | 'out' | 'icon' | 'sign'>([
+const BUILD_STRING_FLAGS = new Map<string, 'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel'>([
   ['--name', 'name'],
   ['--id', 'id'],
   ['--out', 'out'],
   ['--icon', 'icon'],
   ['--sign', 'sign'],
+  ['--channel', 'channel'],
 ]);
 
 /** `sambar build` boolean flags that take no value, by argv token. */
-const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>(['--notarize', '--dmg']);
+const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>([
+  '--notarize',
+  '--dmg',
+  '--update',
+]);
 
 const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux']);
 
@@ -92,6 +101,8 @@ const parseBuild = (rest: readonly string[]): Command => {
           options.notarize = true;
         } else if (token === '--dmg') {
           options.dmg = true;
+        } else if (token === '--update') {
+          options.update = true;
         }
         continue;
       }
