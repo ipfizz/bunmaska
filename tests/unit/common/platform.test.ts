@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { SambarError } from '../../../src/common/errors';
 import {
+  type Arch,
+  currentArch,
   currentPlatform,
   isSupported,
+  mapArch,
   mapPlatform,
   type Platform,
 } from '../../../src/common/platform';
@@ -45,5 +48,24 @@ describe('currentPlatform', () => {
     const p = currentPlatform();
     const valid: ReadonlyArray<Platform> = ['macos', 'linux', 'windows'];
     expect(valid).toContain(p);
+  });
+});
+
+describe('mapArch', () => {
+  test('maps x64 and arm64 through', () => {
+    expect(mapArch('x64')).toBe('x64');
+    expect(mapArch('arm64')).toBe('arm64');
+  });
+
+  test('throws SambarError on an unsupported arch', () => {
+    expect(() => mapArch('ia32')).toThrow(SambarError);
+    expect(() => mapArch('ia32')).toThrow(/Unsupported architecture: ia32/);
+  });
+});
+
+describe('currentArch', () => {
+  test('returns a valid Arch tag for the host', () => {
+    const valid: ReadonlyArray<Arch> = ['x64', 'arm64'];
+    expect(valid).toContain(currentArch());
   });
 });
