@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sambar IPC Demo</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        margin: 0;
+        background: #0b0b0f;
+        color: #f4f4f5;
+      }
+      button {
+        font: inherit;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        border: 1px solid #3f3f46;
+        background: #18181b;
+        color: inherit;
+        cursor: pointer;
+      }
+      #out {
+        margin-top: 1rem;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sambar IPC Demo</h1>
+      <button id="ping">Invoke ping</button>
+      <p id="out"></p>
+    </main>
+    <script>
+      const out = document.getElementById('out');
+      document.getElementById('ping').addEventListener('click', async () => {
+        out.textContent = await window.api.ping('hello from the page');
+      });
+    </script>
+  </body>
+</html>

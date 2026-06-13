@@ -15,7 +15,8 @@
       "!**/dist",
       "!**/build",
       "!**/node_modules",
-      "!**/.admin"
+      "!**/.admin",
+      "!examples/**/*.html"
     ]
   },
   "formatter": {
