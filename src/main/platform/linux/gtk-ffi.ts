@@ -36,6 +36,16 @@ export const GTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.i32, FFIType.i32],
     returns: FFIType.void,
   },
+  // (widget, opacity 0..1) -> void
+  gtk_widget_set_opacity: {
+    args: [FFIType.pointer, FFIType.f64],
+    returns: FFIType.void,
+  },
+  // (widget, min_width, min_height) -> void; constrains the window's minimum size.
+  gtk_widget_set_size_request: {
+    args: [FFIType.pointer, FFIType.i32, FFIType.i32],
+    returns: FFIType.void,
+  },
   gtk_window_present: {
     args: [FFIType.pointer],
     returns: FFIType.void,

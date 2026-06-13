@@ -502,6 +502,26 @@ class LinuxWindow implements NativeWindow {
     gtk.symbols.gtk_window_set_default_size(this.#window, width, height);
   }
 
+  setResizable(resizable: boolean): void {
+    const gtk = loadGtkFFI();
+    gtk.symbols.gtk_window_set_resizable(this.#window, resizable ? GTK_TRUE : GTK_FALSE);
+  }
+
+  setOpacity(opacity: number): void {
+    const gtk = loadGtkFFI();
+    gtk.symbols.gtk_widget_set_opacity(this.#window, opacity);
+  }
+
+  setMinimumSize(width: number, height: number): void {
+    const gtk = loadGtkFFI();
+    gtk.symbols.gtk_widget_set_size_request(this.#window, width, height);
+  }
+
+  center(): void {
+    // GTK4 removed programmatic window positioning; the compositor places the
+    // window (and Wayland forbids clients moving themselves). No-op by design.
+  }
+
   getBounds(): Rect {
     const gtk = loadGtkFFI();
     const width = gtk.symbols.gtk_widget_get_width(this.#window);

@@ -69,6 +69,8 @@ const NS_BACKING_STORE_BUFFERED = 2n;
 const NS_ACTIVATION_POLICY_REGULAR = 0n;
 /** `NSWindowStyleMaskFullScreen` (1 << 14). */
 const NS_FULLSCREEN_STYLE_MASK = 16384n;
+/** `NSWindowStyleMaskResizable` (1 << 3). */
+const NS_RESIZABLE_STYLE_MASK = 8n;
 /** `NSFloatingWindowLevel` — above normal windows. */
 const NS_FLOATING_WINDOW_LEVEL = 3n;
 const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
@@ -457,6 +459,26 @@ class MacOSWindow implements NativeWindow {
 
   getBounds(): Rect {
     return this.#bounds;
+  }
+
+  setResizable(resizable: boolean): void {
+    // Read-modify-write the style mask so other bits (titled/closable/…) survive.
+    const mask = msgSendReturnsI64(this.#window, cocoa().selectors.get('styleMask'));
+    const next = resizable ? mask | NS_RESIZABLE_STYLE_MASK : mask & ~NS_RESIZABLE_STYLE_MASK;
+    msgSendI64(this.#window, cocoa().selectors.get('setStyleMask:'), next);
+  }
+
+  setOpacity(opacity: number): void {
+    msgSendF64(this.#window, cocoa().selectors.get('setAlphaValue:'), opacity);
+  }
+
+  setMinimumSize(width: number, height: number): void {
+    // NSSize shares the NSPoint/NSSize 2-double ABI used by msgSendSize.
+    msgSendSize(this.#window, cocoa().selectors.get('setContentMinSize:'), width, height);
+  }
+
+  center(): void {
+    cocoa().msgSend(this.#window, cocoa().selectors.get('center'));
   }
 
   show(): void {

@@ -140,6 +140,14 @@ export interface NativeWindow {
   getTitle(): string;
   setSize(width: number, height: number): void;
   getBounds(): Rect;
+  /** Enable or disable user resizing of the window. */
+  setResizable(resizable: boolean): void;
+  /** Set the window's opacity in `[0, 1]` (`1` = fully opaque). */
+  setOpacity(opacity: number): void;
+  /** Constrain the window's minimum content size. */
+  setMinimumSize(width: number, height: number): void;
+  /** Center the window on the current screen (best-effort on Linux/Wayland). */
+  center(): void;
   show(): void;
   hide(): void;
   isVisible(): boolean;

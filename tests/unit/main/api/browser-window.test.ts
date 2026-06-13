@@ -36,6 +36,14 @@ type FakeWindow = NativeWindow & {
   teardownCount: () => number;
   /** The User-Agent applied to this window's web contents, if any. */
   appliedUserAgent: () => string | undefined;
+  /** The last opacity pushed to the native window, if any. */
+  appliedOpacity: () => number | undefined;
+  /** The last resizable flag pushed to the native window, if any. */
+  appliedResizable: () => boolean | undefined;
+  /** The last minimum size pushed to the native window, if any. */
+  appliedMinSize: () => [number, number] | undefined;
+  /** Whether `center` was called on the native window. */
+  wasCentered: () => boolean;
 };
 
 const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
@@ -59,6 +67,10 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     teardowns += 1;
   };
   let appliedUserAgent: string | undefined;
+  let appliedOpacity: number | undefined;
+  let appliedResizable: boolean | undefined;
+  let appliedMinSize: [number, number] | undefined;
+  let centered = false;
   const webContents: NativeWebContents = {
     loadURL: () => undefined,
     loadHTML: () => undefined,
@@ -93,6 +105,18 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
       bounds = { ...bounds, width: w, height: h };
     },
     getBounds: () => bounds,
+    setResizable: (r) => {
+      appliedResizable = r;
+    },
+    setOpacity: (o) => {
+      appliedOpacity = o;
+    },
+    setMinimumSize: (w, h) => {
+      appliedMinSize = [w, h];
+    },
+    center: () => {
+      centered = true;
+    },
     show: () => {
       visible = true;
     },
@@ -160,6 +184,10 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     },
     teardownCount: () => teardowns,
     appliedUserAgent: () => appliedUserAgent,
+    appliedOpacity: () => appliedOpacity,
+    appliedResizable: () => appliedResizable,
+    appliedMinSize: () => appliedMinSize,
+    wasCentered: () => centered,
   };
 };
 
@@ -214,6 +242,53 @@ describe('BrowserWindow default-session user agent', () => {
   test('does not override the user agent when the session has none', () => {
     new BrowserWindow();
     expect(windows[0]?.appliedUserAgent()).toBeUndefined();
+  });
+});
+
+describe('BrowserWindow runtime setters', () => {
+  test('setResizable toggles the native window and isResizable cache', () => {
+    const win = new BrowserWindow();
+    expect(win.isResizable()).toBe(true);
+    win.setResizable(false);
+    expect(windows[0]?.appliedResizable()).toBe(false);
+    expect(win.isResizable()).toBe(false);
+  });
+
+  test('isResizable reflects the constructor option', () => {
+    expect(new BrowserWindow({ resizable: false }).isResizable()).toBe(false);
+  });
+
+  test('setOpacity clamps to [0,1], pushes native, and getOpacity tracks it', () => {
+    const win = new BrowserWindow();
+    expect(win.getOpacity()).toBe(1);
+    win.setOpacity(0.5);
+    expect(windows[0]?.appliedOpacity()).toBe(0.5);
+    expect(win.getOpacity()).toBe(0.5);
+    win.setOpacity(2);
+    expect(win.getOpacity()).toBe(1);
+    win.setOpacity(-1);
+    expect(win.getOpacity()).toBe(0);
+  });
+
+  test('setMinimumSize pushes native and getMinimumSize tracks it', () => {
+    const win = new BrowserWindow();
+    expect(win.getMinimumSize()).toEqual([0, 0]);
+    win.setMinimumSize(400, 300);
+    expect(windows[0]?.appliedMinSize()).toEqual([400, 300]);
+    expect(win.getMinimumSize()).toEqual([400, 300]);
+  });
+
+  test('getSize derives from the native bounds', () => {
+    const win = new BrowserWindow({ width: 1024, height: 768 });
+    expect(win.getSize()).toEqual([1024, 768]);
+    win.setSize(640, 480);
+    expect(win.getSize()).toEqual([640, 480]);
+  });
+
+  test('center delegates to the native window', () => {
+    const win = new BrowserWindow();
+    win.center();
+    expect(windows[0]?.wasCentered()).toBe(true);
   });
 });
 

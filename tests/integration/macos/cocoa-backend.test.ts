@@ -57,6 +57,24 @@ if (currentPlatform() === 'macos') {
       }
     });
 
+    test('runtime setters (resizable/opacity/minSize/center) drive AppKit without throwing', () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({ width: 400, height: 300, title: 't', show: false });
+        expect(() => {
+          win.setResizable(false);
+          win.setResizable(true);
+          win.setOpacity(0.5);
+          win.setOpacity(1);
+          win.setMinimumSize(320, 240);
+          win.center();
+        }).not.toThrow();
+      } finally {
+        app.quit();
+      }
+    });
+
     test('loadHTML drives the webview URL to the base URL after pumping', async () => {
       const app = createMacOSApplication();
       app.start();

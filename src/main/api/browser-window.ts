@@ -129,6 +129,10 @@ export class BrowserWindow extends EventEmitter {
   readonly webContents: WebContents;
   readonly #native: NativeWindow;
   #destroyed = false;
+  #resizable: boolean;
+  #opacity = 1;
+  #minWidth = 0;
+  #minHeight = 0;
 
   constructor(options: BrowserWindowOptions = {}) {
     super();
@@ -136,6 +140,7 @@ export class BrowserWindow extends EventEmitter {
     this.id = nextId;
     nextId += 1;
 
+    this.#resizable = options.resizable ?? true;
     const preloadScript = readPreloadScript(options.webPreferences?.preload);
     this.#native = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
@@ -227,6 +232,52 @@ export class BrowserWindow extends EventEmitter {
 
   getBounds(): Rect {
     return this.#native.getBounds();
+  }
+
+  /** The window's `[width, height]` in pixels. */
+  getSize(): [number, number] {
+    const bounds = this.#native.getBounds();
+    return [bounds.width, bounds.height];
+  }
+
+  /** Enable or disable user resizing of the window. */
+  setResizable(resizable: boolean): void {
+    this.#native.setResizable(resizable);
+    this.#resizable = resizable;
+  }
+
+  /** Whether the window is user-resizable. */
+  isResizable(): boolean {
+    return this.#resizable;
+  }
+
+  /** Set the window opacity, clamped to `[0, 1]` (`1` = fully opaque). */
+  setOpacity(opacity: number): void {
+    const clamped = Math.min(1, Math.max(0, opacity));
+    this.#native.setOpacity(clamped);
+    this.#opacity = clamped;
+  }
+
+  /** The window's opacity in `[0, 1]`. */
+  getOpacity(): number {
+    return this.#opacity;
+  }
+
+  /** Constrain the window's minimum content size. */
+  setMinimumSize(width: number, height: number): void {
+    this.#native.setMinimumSize(width, height);
+    this.#minWidth = width;
+    this.#minHeight = height;
+  }
+
+  /** The window's minimum `[width, height]` (`[0, 0]` if unset). */
+  getMinimumSize(): [number, number] {
+    return [this.#minWidth, this.#minHeight];
+  }
+
+  /** Center the window on the current screen (best-effort on Linux/Wayland). */
+  center(): void {
+    this.#native.center();
   }
 
   show(): void {

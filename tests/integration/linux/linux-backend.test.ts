@@ -147,4 +147,30 @@ describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
     window.close();
     app.quit();
   });
+
+  test('runtime setters (resizable/opacity/minSize/center) drive GTK without throwing', async () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const app = createLinuxApplication();
+    app.start();
+    const window: NativeWindow = app.createWindow({
+      width: 400,
+      height: 300,
+      title: 'Setters',
+      show: true,
+    });
+    await pump(100);
+    expect(() => {
+      window.setResizable(false);
+      window.setResizable(true);
+      window.setOpacity(0.5);
+      window.setOpacity(1);
+      window.setMinimumSize(320, 240);
+      window.center();
+    }).not.toThrow();
+    await pump(50);
+    window.close();
+    app.quit();
+  });
 });
