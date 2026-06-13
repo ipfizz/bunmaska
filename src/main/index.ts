@@ -1,6 +1,14 @@
 import './bootstrap';
 
 export { App, app } from './api/app';
+export {
+  type AutoUpdater,
+  autoUpdater,
+  type FeedURLOptions,
+  type StagedUpdate,
+  type UpdateCheckResult,
+  type UpdateInfo,
+} from './api/auto-updater';
 export { BrowserWindow, type BrowserWindowOptions } from './api/browser-window';
 export { WebContents } from './api/web-contents';
 export { ipcMain } from './api/ipc-main';

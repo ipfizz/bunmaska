@@ -57,6 +57,7 @@ export type ElectronModuleName = (typeof KNOWN_ELECTRON_MODULES)[number];
 /** The modules Sambar actually ships. Grows phase by phase. */
 export const IMPLEMENTED_MODULES = [
   'app',
+  'autoUpdater',
   'BrowserWindow',
   'WebContents',
   'ipcMain',

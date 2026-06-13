@@ -47,6 +47,61 @@ export type UpdateManifest = {
   readonly artifact: string;
 };
 
+/** Serialize an {@link UpdateManifest} to the pretty JSON written to a feed. */
+export const serializeUpdateManifest = (manifest: UpdateManifest): string =>
+  `${JSON.stringify(manifest, null, 2)}\n`;
+
+/**
+ * Parse + validate an {@link UpdateManifest} from a feed's JSON text. Throws a
+ * descriptive `Error` if a required field is missing or the wrong type, so a
+ * malformed/HTML response from a feed is rejected rather than treated as "no
+ * update".
+ */
+export const parseUpdateManifest = (json: string): UpdateManifest => {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    throw new Error('update manifest: not valid JSON');
+  }
+  if (raw === null || typeof raw !== 'object') {
+    throw new Error('update manifest: must be a JSON object');
+  }
+  const record = raw as Record<string, unknown>;
+  const str = (field: string): string => {
+    const value = record[field];
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error(`update manifest: "${field}" must be a non-empty string`);
+    }
+    return value;
+  };
+  const num = (field: string): number => {
+    const value = record[field];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new Error(`update manifest: "${field}" must be a number`);
+    }
+    return value;
+  };
+  const os = str('os');
+  if (os !== 'macos' && os !== 'linux') {
+    throw new Error(`update manifest: "os" must be macos or linux (got ${os})`);
+  }
+  const arch = str('arch');
+  if (arch !== 'x64' && arch !== 'arm64') {
+    throw new Error(`update manifest: "arch" must be x64 or arm64 (got ${arch})`);
+  }
+  return {
+    name: str('name'),
+    version: str('version'),
+    channel: str('channel'),
+    os,
+    arch,
+    hash: str('hash'),
+    size: num('size'),
+    artifact: str('artifact'),
+  };
+};
+
 /** Lowercase, filesystem-safe slug of an app name (`My App!` -> `my-app`). */
 export const slugifyName = (name: string): string => {
   const slug = name

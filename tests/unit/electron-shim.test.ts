@@ -11,7 +11,7 @@ describe('createElectronShim', () => {
 
   test('throws an actionable error for a known-but-unimplemented module', () => {
     const shim = createElectronShim({});
-    expect(() => shim['autoUpdater']).toThrow(notImplementedMessage('autoUpdater'));
+    expect(() => shim['crashReporter']).toThrow(notImplementedMessage('crashReporter'));
     expect(() => shim['pushNotifications']).toThrow(notImplementedMessage('pushNotifications'));
   });
 

@@ -52,8 +52,12 @@ describe('IMPLEMENTED_MODULES', () => {
     expect(isImplemented('nativeImage')).toBe(true);
   });
 
-  test('does not yet claim still-unshipped modules like autoUpdater', () => {
-    expect(implemented).not.toContain('autoUpdater');
+  test('claims the autoUpdater module', () => {
+    expect(implemented).toContain('autoUpdater');
+  });
+
+  test('does not yet claim still-unshipped modules like crashReporter', () => {
+    expect(implemented).not.toContain('crashReporter');
   });
 });
 
@@ -71,7 +75,7 @@ describe('isImplemented', () => {
   });
 
   test('is false for a known-but-unshipped module', () => {
-    expect(isImplemented('autoUpdater')).toBe(false);
+    expect(isImplemented('crashReporter')).toBe(false);
   });
 
   test('is false for an unknown name', () => {

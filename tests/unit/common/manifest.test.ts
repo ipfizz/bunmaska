@@ -5,7 +5,10 @@ import {
   compareVersions,
   contentHash,
   isNewerVersion,
+  parseUpdateManifest,
+  serializeUpdateManifest,
   slugifyName,
+  type UpdateManifest,
 } from '../../../src/common/manifest';
 
 describe('slugifyName', () => {
@@ -85,5 +88,42 @@ describe('isNewerVersion', () => {
     expect(isNewerVersion('1.0.1', '1.0.0')).toBe(true);
     expect(isNewerVersion('1.0.0', '1.0.0')).toBe(false);
     expect(isNewerVersion('0.9.0', '1.0.0')).toBe(false);
+  });
+});
+
+describe('parseUpdateManifest / serializeUpdateManifest', () => {
+  const sample: UpdateManifest = {
+    name: 'My App',
+    version: '2.0.0',
+    channel: 'stable',
+    os: 'macos',
+    arch: 'arm64',
+    hash: 'deadbeefdeadbeef',
+    size: 1234,
+    artifact: 'my-app-stable-macos-arm64.tar.zst',
+  };
+
+  test('round-trips a valid manifest', () => {
+    expect(parseUpdateManifest(serializeUpdateManifest(sample))).toEqual(sample);
+  });
+
+  test('rejects non-JSON', () => {
+    expect(() => parseUpdateManifest('<html>')).toThrow(/not valid JSON/);
+  });
+
+  test('rejects a missing required field', () => {
+    const { version: _omitted, ...rest } = sample;
+    expect(() => parseUpdateManifest(JSON.stringify(rest))).toThrow(/"version"/);
+  });
+
+  test('rejects an unknown os/arch', () => {
+    expect(() => parseUpdateManifest(JSON.stringify({ ...sample, os: 'windows' }))).toThrow(/"os"/);
+    expect(() => parseUpdateManifest(JSON.stringify({ ...sample, arch: 'riscv' }))).toThrow(
+      /"arch"/,
+    );
+  });
+
+  test('rejects a non-numeric size', () => {
+    expect(() => parseUpdateManifest(JSON.stringify({ ...sample, size: 'big' }))).toThrow(/"size"/);
   });
 });
