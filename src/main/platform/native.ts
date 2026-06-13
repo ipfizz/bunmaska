@@ -92,6 +92,8 @@ export interface NativeWebContents {
   executeJavaScript(code: string): Promise<unknown>;
   /** Open the native web inspector (devtools) for this view. Best-effort. */
   openDevTools(): void;
+  /** Close the native web inspector (devtools) for this view. Best-effort. */
+  closeDevTools(): void;
   /** Set the page zoom factor (`1` = 100%). */
   setZoomFactor(factor: number): void;
   /** Override the User-Agent string sent on subsequent navigations. */

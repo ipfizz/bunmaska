@@ -334,6 +334,19 @@ class MacOSWebContents implements NativeWebContents {
     }
   }
 
+  closeDevTools(): void {
+    try {
+      const rt = cocoa();
+      const inspector = rt.msgSend(this.#webview, rt.selectors.get('_inspector'));
+      if (inspector === 0n) {
+        return;
+      }
+      rt.msgSend(inspector, rt.selectors.get('close'));
+    } catch (error) {
+      log.warn('closeDevTools failed (private inspector SPI unavailable)', error);
+    }
+  }
+
   setZoomFactor(factor: number): void {
     msgSendF64(this.#webview, cocoa().selectors.get('setPageZoom:'), factor);
   }

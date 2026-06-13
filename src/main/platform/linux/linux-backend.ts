@@ -240,6 +240,15 @@ class LinuxWebContents implements NativeWebContents {
     webkit.symbols.webkit_web_inspector_show(inspector);
   }
 
+  closeDevTools(): void {
+    const webkit = loadWebKitGtkFFI();
+    const inspector = webkit.symbols.webkit_web_view_get_inspector(this.#view);
+    if (inspector === null) {
+      return;
+    }
+    webkit.symbols.webkit_web_inspector_close(inspector);
+  }
+
   sendEnvelopeToRenderer(envelopeJson: string): void {
     if (!this.#didFinishLoad) {
       this.#pendingEnvelopes.push(envelopeJson);

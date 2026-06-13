@@ -163,6 +163,7 @@ export class BrowserWindow extends EventEmitter {
 
     this.#native.onClosed(() => {
       this.#destroyed = true;
+      this.webContents.markDestroyed();
       registry.delete(this.id);
       this.emit('closed');
       this.#emitWindowAllClosedIfLast();

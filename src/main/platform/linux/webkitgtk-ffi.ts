@@ -158,6 +158,11 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // (inspector) -> void; closes the inspector window.
+  webkit_web_inspector_close: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
   webkit_user_content_manager_new: {
     args: [],
     returns: FFIType.pointer,

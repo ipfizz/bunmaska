@@ -73,6 +73,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     canGoForward: () => false,
     executeJavaScript: () => Promise.resolve(undefined),
     openDevTools: () => undefined,
+    closeDevTools: () => undefined,
     setZoomFactor: () => undefined,
     setUserAgent: (ua) => {
       appliedUserAgent = ua;

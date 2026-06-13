@@ -41,6 +41,7 @@ const makeFakeNative = (): {
       return Promise.resolve(undefined);
     },
     openDevTools: () => undefined,
+    closeDevTools: () => undefined,
     setZoomFactor: (factor) => zooms.push(factor),
     setUserAgent: (ua) => userAgents.push(ua),
     sendEnvelopeToRenderer: (json) => sent.push(json),
@@ -153,6 +154,24 @@ describe('WebContents.getTitle / isLoading / stop', () => {
       wc.stop();
       wc.reloadIgnoringCache();
     }).not.toThrow();
+  });
+});
+
+describe('WebContents.devtools + isDestroyed', () => {
+  test('toggleDevTools opens then closes; isDevToolsOpened tracks it', () => {
+    const wc = new WebContents(makeFakeNative().native);
+    expect(wc.isDevToolsOpened()).toBe(false);
+    wc.toggleDevTools();
+    expect(wc.isDevToolsOpened()).toBe(true);
+    wc.toggleDevTools();
+    expect(wc.isDevToolsOpened()).toBe(false);
+  });
+
+  test('isDestroyed flips after markDestroyed', () => {
+    const wc = new WebContents(makeFakeNative().native);
+    expect(wc.isDestroyed()).toBe(false);
+    wc.markDestroyed();
+    expect(wc.isDestroyed()).toBe(true);
   });
 });
 
@@ -352,6 +371,7 @@ describe('WebContents navigation', () => {
       canGoForward: () => false,
       executeJavaScript: () => Promise.resolve(undefined),
       openDevTools: () => undefined,
+      closeDevTools: () => undefined,
       setZoomFactor: () => undefined,
       setUserAgent: () => undefined,
       sendEnvelopeToRenderer: () => undefined,

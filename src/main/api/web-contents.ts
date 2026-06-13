@@ -52,6 +52,8 @@ export class WebContents extends EventEmitter {
   #zoomFactor = 1;
   #userAgent = '';
   #isLoading = false;
+  #devToolsOpen = false;
+  #destroyed = false;
 
   constructor(native: NativeWebContents) {
     super();
@@ -218,6 +220,37 @@ export class WebContents extends EventEmitter {
   /** Open the developer tools (web inspector) for this view. Best-effort. */
   openDevTools(): void {
     this.#native.openDevTools();
+    this.#devToolsOpen = true;
+  }
+
+  /** Close the developer tools. Best-effort. */
+  closeDevTools(): void {
+    this.#native.closeDevTools();
+    this.#devToolsOpen = false;
+  }
+
+  /** Open the devtools if closed, close them if open. */
+  toggleDevTools(): void {
+    if (this.#devToolsOpen) {
+      this.closeDevTools();
+    } else {
+      this.openDevTools();
+    }
+  }
+
+  /** Whether the devtools were last opened (by Sambar) and not since closed. */
+  isDevToolsOpened(): boolean {
+    return this.#devToolsOpen;
+  }
+
+  /** Whether the owning window has been closed/destroyed. */
+  isDestroyed(): boolean {
+    return this.#destroyed;
+  }
+
+  /** Mark the contents destroyed — called when the owning window closes. @internal */
+  markDestroyed(): void {
+    this.#destroyed = true;
   }
 
   /** Send an event on a channel to the renderer (`ipcRenderer.on` receives it). */
