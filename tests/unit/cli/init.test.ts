@@ -59,7 +59,7 @@ describe('initTemplateFiles', () => {
   test('package.json is valid JSON with a slugged name and bunmaska dep', () => {
     const pkg = JSON.parse(byPath.get('package.json') ?? '{}');
     expect(pkg.name).toBe('my-app');
-    expect(pkg.dependencies.bunmaska).toMatch(/^\^/);
+    expect(pkg.dependencies['@ipfizz/bunmaska']).toMatch(/^\^/);
     expect(pkg.scripts.dev).toBe('bunmaska dev');
   });
 
@@ -67,14 +67,14 @@ describe('initTemplateFiles', () => {
     const config = byPath.get('bunmaska.config.ts') ?? '';
     expect(config).toContain('name: "My App"');
     expect(config).toContain('id: "com.example.my-app"');
-    expect(config).toContain("from 'bunmaska/config'");
+    expect(config).toContain("from '@ipfizz/bunmaska/config'");
   });
 
   test('main.ts wires the preload and ipc handler', () => {
     const main = byPath.get('src/main.ts') ?? '';
     expect(main).toContain("ipcMain.handle('ping'");
     expect(main).toContain('preload:');
-    expect(main).toContain("from 'bunmaska'");
+    expect(main).toContain("from '@ipfizz/bunmaska'");
   });
 });
 

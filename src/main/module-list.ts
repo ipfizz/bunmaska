@@ -86,4 +86,4 @@ export const isImplemented = (name: string): boolean => implemented.has(name);
 
 /** The actionable error message for a not-yet-implemented Electron module. */
 export const notImplementedMessage = (name: string): string =>
-  `Bunmaska: '${name}' is not yet implemented. Track progress at https://github.com/indrajeetor/bunmaska`;
+  `Bunmaska: '${name}' is not yet implemented. Track progress at https://github.com/ipfizz/bunmaska`;

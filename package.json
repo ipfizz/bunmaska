@@ -1,5 +1,5 @@
 {
-  "name": "bunmaska",
+  "name": "@ipfizz/bunmaska",
   "version": "0.1.0-alpha.0",
   "description": "A drop-in replacement for Electron, built on Bun and system WebKit.",
   "keywords": [
@@ -17,13 +17,13 @@
   ],
   "license": "MIT",
   "author": "Indrajeet O.",
-  "homepage": "https://github.com/indrajeetor/bunmaska",
+  "homepage": "https://github.com/ipfizz/bunmaska",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/indrajeetor/bunmaska.git"
+    "url": "git+https://github.com/ipfizz/bunmaska.git"
   },
   "bugs": {
-    "url": "https://github.com/indrajeetor/bunmaska/issues"
+    "url": "https://github.com/ipfizz/bunmaska/issues"
   },
   "type": "module",
   "bin": {

@@ -56,19 +56,21 @@ We are not going to sell you a fantasy.
 
 ## Install
 
-Not on npm yet (it really is alpha). For now:
-
 ```sh
-git clone https://github.com/indrajeetor/bunmaska.git
-cd bunmaska && bun install
+bun add @ipfizz/bunmaska     # or: npm i @ipfizz/bunmaska
 ```
 
-You need [Bun](https://bun.sh) ≥ 1.3. Yes, that is the entire point.
+Published under the `@ipfizz` scope, and genuinely alpha — pin your version and keep your expectations friendly. You need [Bun](https://bun.sh) ≥ 1.3 (yes, that is the entire point). Want to hack on it directly instead? Clone it:
+
+```sh
+git clone https://github.com/ipfizz/bunmaska.git
+cd bunmaska && bun install
+```
 
 ## Quick start
 
 ```ts
-import { app, BrowserWindow } from 'bunmaska';
+import { app, BrowserWindow } from '@ipfizz/bunmaska';
 
 app.whenReady().then(() => {
   const win = new BrowserWindow({
@@ -101,9 +103,9 @@ Change your imports:
 import { app, BrowserWindow, ipcMain } from 'electron';
 
 // After
-import { app, BrowserWindow, ipcMain } from 'bunmaska';
+import { app, BrowserWindow, ipcMain } from '@ipfizz/bunmaska';
 // or use the explicit shim that throws helpful errors on unimplemented modules:
-import { app, BrowserWindow } from 'bunmaska/electron';
+import { app, BrowserWindow } from '@ipfizz/bunmaska/electron';
 ```
 
 Most core modules behave the same. Anything not yet implemented throws an actionable error naming the exact missing module instead of failing mysteriously at 2 a.m.

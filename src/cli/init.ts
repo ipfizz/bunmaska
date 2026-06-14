@@ -32,7 +32,7 @@ const packageJson = (vars: TemplateVars): string =>
         build: 'bunmaska build',
       },
       dependencies: {
-        bunmaska: `^${BUNMASKA_VERSION}`,
+        '@ipfizz/bunmaska': `^${BUNMASKA_VERSION}`,
       },
     },
     null,
@@ -40,7 +40,7 @@ const packageJson = (vars: TemplateVars): string =>
   )}\n`;
 
 const configTs = (vars: TemplateVars): string =>
-  `import { defineConfig } from 'bunmaska/config';
+  `import { defineConfig } from '@ipfizz/bunmaska/config';
 
 export default defineConfig({
   name: ${JSON.stringify(vars.name)},
@@ -51,7 +51,7 @@ export default defineConfig({
 
 const mainTs = (vars: TemplateVars): string =>
   `import { join } from 'node:path';
-import { app, BrowserWindow, ipcMain } from 'bunmaska';
+import { app, BrowserWindow, ipcMain } from '@ipfizz/bunmaska';
 
 // A demo handler the preload exposes to the page as window.api.ping().
 ipcMain.handle('ping', () => 'pong');
@@ -152,7 +152,7 @@ dist/
 const readme = (vars: TemplateVars): string =>
   `# ${vars.name}
 
-A desktop app built with [Bunmaska](https://github.com/indrajeetor/bunmaska) — a
+A desktop app built with [Bunmaska](https://github.com/ipfizz/bunmaska) — a
 drop-in Electron replacement on Bun + system WebKit.
 
 ## Develop

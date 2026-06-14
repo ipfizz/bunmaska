@@ -11,7 +11,7 @@ root with `bun examples/<name>/main.ts`.
 
 These examples import Bunmaska via a relative path (`../../src/main`) because they
 live inside the repo. In your own project you would `import { app, BrowserWindow }
-from 'bunmaska'` instead — see `bunmaska init` for a scaffold.
+from '@ipfizz/bunmaska'` instead — see `bunmaska init` for a scaffold.
 
 > Note on preloads: a preload script is injected into the page's isolated world
 > *verbatim*, so it must be plain JavaScript and uses the injected `contextBridge`
