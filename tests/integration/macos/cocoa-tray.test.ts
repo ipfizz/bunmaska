@@ -35,7 +35,7 @@ if (currentPlatform() === 'macos') {
       const tray = new Tray('/this/path/does/not/exist.png');
       try {
         expect(tray.isDestroyed()).toBe(false);
-        tray.setToolTip('Sambar');
+        tray.setToolTip('Bunmaska');
         tray.setTitle('S');
       } finally {
         tray.destroy();

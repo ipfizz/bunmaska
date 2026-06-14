@@ -5,7 +5,7 @@ import { FFIError } from '../../../common/errors';
  *
  * Unlike `sel_registerName`, `objc_getClass` returns `NULL` (`0n`) when the
  * named class is not registered with the runtime. We treat that as a programmer
- * error and throw {@link SambarError}, but we deliberately do NOT cache NULL
+ * error and throw {@link BunmaskaError}, but we deliberately do NOT cache NULL
  * results — a dynamically loaded framework may register the class later, and
  * a retry should succeed.
  *

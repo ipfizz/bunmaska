@@ -9,7 +9,7 @@ import {
 } from '../../../src/main/platform/linux/linux-dbus';
 import { linuxTrayBackend, SNI_XML } from '../../../src/main/platform/linux/sni-tray';
 
-// Linux-only (xvfb). The live SNI path is gated by SAMBAR_ENABLE_LINUX_TRAY (CI never sets
+// Linux-only (xvfb). The live SNI path is gated by BUNMASKA_ENABLE_LINUX_TRAY (CI never sets
 // it), so create() is a fast inert no-op here. CI CAN verify: the object-export + GVariant
 // + pixbuf-accessor symbols resolve, and that the embedded introspection XML actually parses
 // + the interface resolves (node-info parsing is local — no bus needed).
@@ -59,7 +59,7 @@ if (currentPlatform() === 'linux') {
     });
 
     test('create() is a fast inert no-op when the gate is off', () => {
-      expect(process.env['SAMBAR_ENABLE_LINUX_TRAY']).not.toBe('1');
+      expect(process.env['BUNMASKA_ENABLE_LINUX_TRAY']).not.toBe('1');
       const start = performance.now();
       const tray = linuxTrayBackend.create('/tmp/nonexistent-icon.png');
       expect(() => {

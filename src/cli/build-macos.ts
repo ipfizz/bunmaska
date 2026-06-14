@@ -1,9 +1,9 @@
 /**
- * macOS `.app` bundler for the `sambar` CLI.
+ * macOS `.app` bundler for the `bunmaska` CLI.
  *
  * The app is compiled to a single self-contained executable with Bun's
  * `--compile`, which embeds the Bun runtime and the app's JS. No WebKit/AppKit
- * framework is bundled: Sambar dlopens the SYSTEM WebKit/AppKit at runtime via
+ * framework is bundled: Bunmaska dlopens the SYSTEM WebKit/AppKit at runtime via
  * bun:ffi, and those frameworks are always present on the user's Mac. The pure
  * parts (plist text, slug, bundle layout) are factored out for unit testing.
  */
@@ -19,7 +19,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SAMBAR_VERSION } from '../common/version';
+import { BUNMASKA_VERSION } from '../common/version';
 
 /** Minimum macOS the bundle declares it supports. */
 const MINIMUM_SYSTEM_VERSION = '11.0';
@@ -46,8 +46,8 @@ export const bundleIdSlug = (name: string): string => {
   return slug.length > 0 ? slug : 'app';
 };
 
-/** The default `com.sambar.<slug>` bundle identifier for a given app name. */
-export const defaultBundleId = (name: string): string => `com.sambar.${bundleIdSlug(name)}`;
+/** The default `com.bunmaska.<slug>` bundle identifier for a given app name. */
+export const defaultBundleId = (name: string): string => `com.bunmaska.${bundleIdSlug(name)}`;
 
 export type InfoPlistOptions = {
   readonly name: string;
@@ -266,7 +266,7 @@ const runTool = async (label: string, argv: string[]): Promise<void> => {
  * folds it into a single `.icns`. Cleans the temp iconset on success or failure.
  */
 export const convertPngToIcns = async (pngPath: string, outIcns: string): Promise<void> => {
-  const work = mkdtempSync(join(tmpdir(), 'sambar-iconset-'));
+  const work = mkdtempSync(join(tmpdir(), 'bunmaska-iconset-'));
   // iconutil only accepts a directory whose name ends in `.iconset`.
   const iconsetDir = join(work, 'icon.iconset');
   mkdirSync(iconsetDir, { recursive: true });
@@ -296,7 +296,7 @@ export type BuildDmgOptions = {
  * with the tool's stderr on a non-zero exit.
  */
 export const buildDmg = async (opts: BuildDmgOptions): Promise<void> => {
-  const staging = mkdtempSync(join(tmpdir(), 'sambar-dmg-'));
+  const staging = mkdtempSync(join(tmpdir(), 'bunmaska-dmg-'));
   try {
     const stagedApp = join(staging, `${opts.name}.app`);
     await runTool('cp', ['cp', '-R', opts.appDir, stagedApp]);
@@ -395,7 +395,7 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   let iconFile: string | undefined;
   if (opts.icon !== undefined) {
     if (!existsSync(opts.icon)) {
-      throw new Error(`sambar build: icon not found: ${opts.icon}`);
+      throw new Error(`bunmaska build: icon not found: ${opts.icon}`);
     }
     if (opts.icon.toLowerCase().endsWith('.png')) {
       // Convert the PNG to a multi-resolution .icns inside the bundle.
@@ -411,8 +411,8 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
 
   const plist = buildInfoPlist(
     iconFile === undefined
-      ? { name: opts.name, bundleId, version: SAMBAR_VERSION }
-      : { name: opts.name, bundleId, version: SAMBAR_VERSION, iconFile },
+      ? { name: opts.name, bundleId, version: BUNMASKA_VERSION }
+      : { name: opts.name, bundleId, version: BUNMASKA_VERSION, iconFile },
   );
   writeFileSync(layout.infoPlistPath, plist);
 

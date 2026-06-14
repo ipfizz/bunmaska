@@ -16,12 +16,12 @@ describe('session.defaultSession', () => {
   });
 
   test('setUserAgent stores the override and getUserAgent returns it', () => {
-    session.defaultSession.setUserAgent('Sambar/1.0');
-    expect(session.defaultSession.getUserAgent()).toBe('Sambar/1.0');
+    session.defaultSession.setUserAgent('Bunmaska/1.0');
+    expect(session.defaultSession.getUserAgent()).toBe('Bunmaska/1.0');
   });
 
   test('resetForTesting clears the override', () => {
-    session.defaultSession.setUserAgent('Sambar/1.0');
+    session.defaultSession.setUserAgent('Bunmaska/1.0');
     session.defaultSession.resetForTesting();
     expect(session.defaultSession.getUserAgent()).toBe('');
   });

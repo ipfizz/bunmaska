@@ -15,9 +15,9 @@ import type { Handle } from './objc';
  * Builds native `NSMenu` trees from a backend-neutral menu spec and routes item
  * clicks back to JS.
  *
- * A single shared `SambarMenuTarget` class (defined once at runtime, D026) holds
- * the `sambarMenuAction:` selector that every clickable item points at. When an
- * item fires, AppKit sends `[target sambarMenuAction:item]`; the IMP looks the
+ * A single shared `BunmaskaMenuTarget` class (defined once at runtime, D026) holds
+ * the `bunmaskaMenuAction:` selector that every clickable item points at. When an
+ * item fires, AppKit sends `[target bunmaskaMenuAction:item]`; the IMP looks the
  * item handle up in a registry and invokes its JS click handler. This mirrors
  * the proven script-message-handler / navigation-delegate pattern.
  */
@@ -55,9 +55,9 @@ const ensureTarget = (): Handle => {
     return sharedTarget;
   }
   const rt = cocoa();
-  targetClass = defineObjcClass('SambarMenuTarget', 'NSObject', [
+  targetClass = defineObjcClass('BunmaskaMenuTarget', 'NSObject', [
     {
-      selector: 'sambarMenuAction:',
+      selector: 'bunmaskaMenuAction:',
       typeEncoding: 'v@:@',
       args: ['object'],
       impl: (_self, _cmd, sender) => {
@@ -80,13 +80,13 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
 
   const checkable = spec.type === 'checkbox' || spec.type === 'radio';
   // A role item's action is the native first-responder selector with a NIL target,
-  // so AppKit routes it up the responder chain (no SambarMenuTarget / clickRegistry).
+  // so AppKit routes it up the responder chain (no BunmaskaMenuTarget / clickRegistry).
   const isRole = spec.roleSelector !== undefined;
   const hasClick = !isRole && (spec.type === 'normal' || checkable) && spec.onClick !== undefined;
   const action = isRole
     ? rt.selectors.get(spec.roleSelector as string)
     : hasClick
-      ? rt.selectors.get('sambarMenuAction:')
+      ? rt.selectors.get('bunmaskaMenuAction:')
       : 0n;
   const item = msgSendPtr3(
     rt.msgSend(rt.classes.get('NSMenuItem'), rt.selectors.get('alloc')),
@@ -168,7 +168,7 @@ export const performMenuItem = (menu: Handle, index: number): void => {
  * BLOCKING: `popUpMenuPositioningItem:atLocation:inView:` runs a nested AppKit tracking loop
  * until the user picks an item or dismisses — the same nested-modal-loop class as the dialog
  * panels' `runModal` (D020: safe; the crash class was a blocking `runUntilDate:`, not an
- * AppKit-owned nested loop). Item clicks route through the shared `SambarMenuTarget` registry
+ * AppKit-owned nested loop). Item clicks route through the shared `BunmaskaMenuTarget` registry
  * exactly as for an application menu. `item = nil` anchors the menu's top-left at the location.
  */
 export const popUpMenu = (menu: Handle, view: Handle, x: number, y: number): boolean =>

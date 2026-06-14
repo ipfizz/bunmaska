@@ -19,21 +19,21 @@ if (currentPlatform() === 'macos') {
     test('worldWithName: returns a non-zero world handle', () => {
       loadWebKit();
       resetContentWorldCacheForTesting();
-      expect(getContentWorld('SambarPreload')).not.toBe(0n);
+      expect(getContentWorld('BunmaskaPreload')).not.toBe(0n);
     });
 
     test('the same name returns the same (interned + memoised) handle', () => {
       loadWebKit();
       resetContentWorldCacheForTesting();
-      const a = getContentWorld('SambarPreload');
-      const b = getContentWorld('SambarPreload');
+      const a = getContentWorld('BunmaskaPreload');
+      const b = getContentWorld('BunmaskaPreload');
       expect(b).toBe(a);
     });
 
     test('a different name returns a different world handle', () => {
       loadWebKit();
       resetContentWorldCacheForTesting();
-      const preload = getContentWorld('SambarPreload');
+      const preload = getContentWorld('BunmaskaPreload');
       const other = getContentWorld('SomethingElse');
       expect(other).not.toBe(preload);
     });
@@ -43,7 +43,7 @@ if (currentPlatform() === 'macos') {
       resetContentWorldCacheForTesting();
       const page = pageWorld();
       expect(page).not.toBe(0n);
-      expect(page).not.toBe(getContentWorld('SambarPreload'));
+      expect(page).not.toBe(getContentWorld('BunmaskaPreload'));
     });
 
     test('defaultClientWorld is non-zero', () => {

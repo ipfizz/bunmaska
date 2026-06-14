@@ -3,19 +3,19 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 
 /**
- * GDBus (D-Bus over GIO) symbols behind Sambar's deadlock-safe signal-subscription
+ * GDBus (D-Bus over GIO) symbols behind Bunmaska's deadlock-safe signal-subscription
  * primitive (from `libgio-2.0.so.0`, a hard dependency of GTK 4).
  *
  * SCOPE IS DELIBERATELY MINIMAL — only `g_bus_get_sync` + signal subscribe/unsubscribe.
  * `g_dbus_connection_call_sync` is INTENTIONALLY ABSENT: it parks the calling thread on
- * a reply that only the GMainContext dispatch can deliver, so on Sambar's single pumped
+ * a reply that only the GMainContext dispatch can deliver, so on Bunmaska's single pumped
  * thread it would DEADLOCK (the same class of hang the synchronous GIO clipboard read
  * caused — see gtk-clipboard.ts). Signal SUBSCRIPTION is safe: the registered
  * `GDBusSignalCallback` fires on the GMainContext during ordinary cooperative-pump
  * iterations (gtk-run-loop.ts), so no thread ever blocks for it.
  *
  * `g_bus_get_sync` IS permitted: its wire handshake runs on GIO's PRIVATE worker context
- * (not Sambar's pump), and it FAILS FAST with NULL when no bus is reachable — it never
+ * (not Bunmaska's pump), and it FAILS FAST with NULL when no bus is reachable — it never
  * needs our pump to turn, so it cannot deadlock. We pass NULL for the `GError**`; a NULL
  * return already means "no/failed bus" (the libsecret-keyring.ts discipline).
  *
@@ -106,7 +106,7 @@ export const GDBUS_FFI_SYMBOLS = {
   // Bounded REMOTE method call. SAFE on the pumped thread: the reply is read by the
   // connection's PRIVATE GDBusWorker thread and call_sync awaits it on its OWN private
   // GMainContext (gdbusconnection.c), so it blocks only THIS thread for a bounded round
-  // trip and never needs Sambar's pump to turn (unlike the clipboard local-pipe read). A
+  // trip and never needs Bunmaska's pump to turn (unlike the clipboard local-pipe read). A
   // FINITE timeout_msec (NEVER G_MAXINT) is mandatory. The floating `parameters` GVariant
   // is consumed by the call; the reply tuple is transfer-full (caller g_variant_unref).
   // (connection, bus_name, object_path, interface_name, method_name, parameters:GVariant*,

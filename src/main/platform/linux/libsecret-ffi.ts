@@ -19,7 +19,7 @@ import { cstr } from '../cstr';
  */
 
 const LIBSECRET_PATH = 'libsecret-1.so.0';
-const SCHEMA_NAME = 'dev.sambar.safeStorage';
+const SCHEMA_NAME = 'dev.bunmaska.safeStorage';
 /** `SECRET_SCHEMA_NONE` — the secret is tagged with the schema name, so a zero-attribute lookup finds it. */
 const SECRET_SCHEMA_NONE = 0;
 

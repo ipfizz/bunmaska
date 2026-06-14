@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
-import { SAMBAR_VERSION } from '../../../src/common/version';
+import { BUNMASKA_VERSION } from '../../../src/common/version';
 
 /**
  * Integration test for the macOS `.app` bundler. It writes a trivial entry
- * (not a real Sambar app — the bundler only packages it), compiles it with
+ * (not a real Bunmaska app — the bundler only packages it), compiles it with
  * `bun build --compile`, lays out the `.app`, then asserts the on-disk
  * structure. The produced binary is exec'd to confirm it actually runs.
  */
@@ -21,7 +21,7 @@ if (currentPlatform() === 'macos') {
     const name = 'Hi App';
 
     beforeAll(() => {
-      workDir = mkdtempSync(join(tmpdir(), 'sambar-cli-build-'));
+      workDir = mkdtempSync(join(tmpdir(), 'bunmaska-cli-build-'));
       entry = join(workDir, 'entry.ts');
       outDir = join(workDir, 'out');
       writeFileSync(entry, "console.log('hi');\nprocess.exit(0);\n");
@@ -48,7 +48,7 @@ if (currentPlatform() === 'macos') {
       expect(plistText).toContain('<key>CFBundleIdentifier</key>');
       expect(plistText).toContain('com.example.hi');
       expect(plistText).toContain(name);
-      expect(plistText).toContain(SAMBAR_VERSION);
+      expect(plistText).toContain(BUNMASKA_VERSION);
 
       const exe = join(appPath, 'Contents', 'MacOS', name);
       expect(existsSync(exe)).toBe(true);
@@ -69,7 +69,7 @@ if (currentPlatform() === 'macos') {
         out: join(workDir, 'out2'),
       });
       const plistText = readFileSync(join(appPath, 'Contents', 'Info.plist'), 'utf8');
-      expect(plistText).toContain('com.sambar.defaulted');
+      expect(plistText).toContain('com.bunmaska.defaulted');
     }, 30000);
   });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../../../src/common/errors';
+import { BunmaskaError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import { cocoa } from '../../../../../src/main/platform/macos/cocoa-runtime';
 
@@ -11,8 +11,8 @@ describe('cocoa export', () => {
 
 if (currentPlatform() !== 'macos') {
   describe('cocoa() on non-macOS hosts', () => {
-    test('throws SambarError (inherited from loadCocoaFFI)', () => {
-      expect(() => cocoa()).toThrow(SambarError);
+    test('throws BunmaskaError (inherited from loadCocoaFFI)', () => {
+      expect(() => cocoa()).toThrow(BunmaskaError);
     });
   });
 }

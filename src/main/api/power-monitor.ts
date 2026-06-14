@@ -16,7 +16,7 @@ import { observePowerEvents as linuxObservePowerEvents } from '../platform/linux
  * the distributed screen-lock notifications (via the shared observer, D034); on
  * Linux, systemd-logind's `PrepareForSleep` + session `Lock`/`Unlock` D-Bus signals
  * over the deadlock-safe GDBus subscription primitive (gated behind
- * `SAMBAR_ENABLE_LINUX_POWER`; a clean no-op when there is no system bus).
+ * `BUNMASKA_ENABLE_LINUX_POWER`; a clean no-op when there is no system bus).
  *
  * Idle-time / on-battery queries (IOKit / UPower) are a separate follow-up.
  */

@@ -3,7 +3,7 @@
  * into every page before its own scripts run (via `WKUserScript` at
  * `documentStart` on macOS).
  *
- * The bootstrap installs `globalThis.__sambar`, the low-level bridge that
+ * The bootstrap installs `globalThis.__bunmaska`, the low-level bridge that
  * `ipcRenderer` / `contextBridge` build on:
  * - `send(channel, ...args)` posts a `send` envelope to main.
  * - `invoke(channel, ...args)` posts an `invoke` envelope and returns a Promise
@@ -12,9 +12,9 @@
  * - `_dispatch(rawJson)` is called by main (via `evaluateJavaScript`) to deliver
  *   inbound envelopes.
  *
- * Transport: renderer→main uses `window.webkit.messageHandlers.sambar.postMessage`
+ * Transport: renderer→main uses `window.webkit.messageHandlers.bunmaska.postMessage`
  * (the `WKScriptMessageHandler` registered by the backend); main→renderer calls
- * `__sambar._dispatch(...)` through `evaluateJavaScript`.
+ * `__bunmaska._dispatch(...)` through `evaluateJavaScript`.
  *
  * Authored as a plain-JS string (not a stringified TS function) so the exact
  * text we wrote reaches the page's JS engine with no transpilation in between.
@@ -24,8 +24,8 @@
 const BOOTSTRAP_SOURCE = `(function () {
   var g = globalThis;
   var channel =
-    g.webkit && g.webkit.messageHandlers && g.webkit.messageHandlers.sambar
-      ? g.webkit.messageHandlers.sambar
+    g.webkit && g.webkit.messageHandlers && g.webkit.messageHandlers.bunmaska
+      ? g.webkit.messageHandlers.bunmaska
       : null;
 
   function post(envelope) {
@@ -38,7 +38,7 @@ const BOOTSTRAP_SOURCE = `(function () {
   var pending = new Map();
   var listeners = new Map();
 
-  var sambar = {
+  var bunmaska = {
     send: function (ch) {
       var args = Array.prototype.slice.call(arguments, 1);
       post({ kind: 'send', channel: ch, args: args });
@@ -119,7 +119,7 @@ const BOOTSTRAP_SOURCE = `(function () {
     },
   };
 
-  g.__sambar = sambar;
+  g.__bunmaska = bunmaska;
 })();`;
 
 /** Return the preload bootstrap as an injectable plain-JavaScript string. */

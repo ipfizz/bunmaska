@@ -71,11 +71,11 @@ beforeEach(() => {
       }
     },
   };
-  Reflect.set(globalThis, '__sambar', bridge);
+  Reflect.set(globalThis, '__bunmaska', bridge);
 });
 
 afterEach(() => {
-  Reflect.deleteProperty(globalThis, '__sambar');
+  Reflect.deleteProperty(globalThis, '__bunmaska');
 });
 
 describe('ipcRenderer.send', () => {
@@ -169,7 +169,7 @@ describe('ipcRenderer.removeAllListeners', () => {
 
 describe('ipcRenderer without a bridge', () => {
   test('throws a clear error if the preload bridge is absent', () => {
-    Reflect.deleteProperty(globalThis, '__sambar');
+    Reflect.deleteProperty(globalThis, '__bunmaska');
     expect(() => createIpcRenderer().send('x')).toThrow(/preload/i);
   });
 });

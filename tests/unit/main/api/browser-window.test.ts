@@ -236,9 +236,9 @@ afterEach(() => {
 
 describe('BrowserWindow default-session user agent', () => {
   test('applies the default session user agent to a new window', () => {
-    session.defaultSession.setUserAgent('Sambar/UA (test)');
+    session.defaultSession.setUserAgent('Bunmaska/UA (test)');
     new BrowserWindow();
-    expect(windows[0]?.appliedUserAgent()).toBe('Sambar/UA (test)');
+    expect(windows[0]?.appliedUserAgent()).toBe('Bunmaska/UA (test)');
   });
 
   test('does not override the user agent when the session has none', () => {
@@ -310,7 +310,7 @@ describe('BrowserWindow runtime setters', () => {
 describe('BrowserWindow construction', () => {
   test('applies default options when none are given', () => {
     new BrowserWindow();
-    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Sambar', show: true });
+    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: true });
   });
 
   test('passes through provided options', () => {
@@ -356,7 +356,7 @@ describe('BrowserWindow webPreferences.preload', () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'sambar-preload-'));
+    dir = mkdtempSync(join(tmpdir(), 'bunmaska-preload-'));
   });
 
   afterEach(() => {
@@ -364,7 +364,7 @@ describe('BrowserWindow webPreferences.preload', () => {
   });
 
   test('reads the preload file and passes its contents as preloadScript', () => {
-    const source = 'window.__sambarPreloadRan = true;\n';
+    const source = 'window.__bunmaskaPreloadRan = true;\n';
     const preloadPath = join(dir, 'preload.js');
     writeFileSync(preloadPath, source);
 

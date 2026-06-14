@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../../../src/common/errors';
+import { BunmaskaError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import { loadCocoaFFI } from '../../../../../src/main/platform/macos/cocoa-ffi';
 
@@ -11,8 +11,8 @@ describe('loadCocoaFFI export', () => {
 
 if (currentPlatform() !== 'macos') {
   describe('loadCocoaFFI on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => loadCocoaFFI()).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => loadCocoaFFI()).toThrow(BunmaskaError);
     });
 
     test('the error message mentions the current platform', () => {

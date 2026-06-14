@@ -1,6 +1,6 @@
 /**
  * The cross-world DOM bridge that makes `contextBridge.exposeInMainWorld` work
- * after context isolation moved the preload (and `__sambar`) into a separate JS
+ * after context isolation moved the preload (and `__bunmaska`) into a separate JS
  * world the page cannot see.
  *
  * Page world ↔ isolated world share the same `document` but have separate
@@ -12,7 +12,7 @@
  *    events and return Promises;
  *  - the ISOLATED-world host ({@link generateIsolatedHostSource}), injected into
  *    the isolated world right after the bootstrap and BEFORE the user preload,
- *    installs `window.__sambar.exposeInMainWorld` (and a `contextBridge` shape).
+ *    installs `window.__bunmaska.exposeInMainWorld` (and a `contextBridge` shape).
  *    When the user preload calls it, the host holds the real `api`, answers
  *    request events, and announces each exposed surface to the page stub.
  *
@@ -37,7 +37,7 @@
  */
 
 /** The shared globalThis key the isolated side reads the channel id from. */
-export const CHANNEL_GLOBAL_KEY = '__sambarBridgeChannel';
+export const CHANNEL_GLOBAL_KEY = '__bunmaskaBridgeChannel';
 
 /** Default per-call timeout (ms) before a page-side method rejects. */
 export const CROSS_WORLD_CALL_TIMEOUT_MS = 30_000;
@@ -48,7 +48,7 @@ export const CROSS_WORLD_CALL_TIMEOUT_MS = 30_000;
  * Not a security boundary — the page can still observe the events.
  */
 export const generateChannelId = (): string =>
-  `__sambar_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  `__bunmaska_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 
 /**
  * The isolated-world snippet that records the channel id on the isolated global
@@ -198,7 +198,7 @@ export const generatePageWorldStub = (channelId: string): string => {
 /**
  * Generate the ISOLATED-world host source. Injected into the isolated world
  * right after the bootstrap and BEFORE the user preload, so the user preload can
- * call `window.__sambar.exposeInMainWorld(key, api)` (also reachable as
+ * call `window.__bunmaska.exposeInMainWorld(key, api)` (also reachable as
  * `contextBridge.exposeInMainWorld`).
  *
  * For each exposed surface it: registers the real handlers, answers page-world
@@ -317,10 +317,10 @@ export const generateIsolatedHostSource = (channelId: string): string => {
     announceOne(entry);
   }
 
-  if (!g.__sambar) {
-    g.__sambar = {};
+  if (!g.__bunmaska) {
+    g.__bunmaska = {};
   }
-  g.__sambar.exposeInMainWorld = expose;
+  g.__bunmaska.exposeInMainWorld = expose;
   if (!g.contextBridge) {
     g.contextBridge = {};
   }
@@ -374,7 +374,7 @@ export const installCrossWorldHost = (
   const factory = new Function(
     'globalThis',
     'document',
-    `${generateIsolatedHostSource(channelId)}\nreturn globalThis.__sambar.exposeInMainWorld;`,
+    `${generateIsolatedHostSource(channelId)}\nreturn globalThis.__bunmaska.exposeInMainWorld;`,
   ) as (g: Record<string, unknown>, doc: EventScope) => ExposeFn;
   return factory(fakeGlobal, scope);
 };

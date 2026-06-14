@@ -6,7 +6,7 @@ import type { NativeApplication, NativeWebContents } from '../../../src/main/pla
 /**
  * `WebContents.executeJavaScript` round-trip on a real WebKitGTK web view.
  *
- * The completion value returns out-of-band through a PAGE-world `sambarExec`
+ * The completion value returns out-of-band through a PAGE-world `bunmaskaExec`
  * script-message handler (a per-call `GAsyncReadyCallback` closed mid-invocation
  * frees its trampoline → SIGSEGV; mirrors the macOS D022 page-world channel).
  * Proves an expression, a Promise, an object, and a throw all settle the
@@ -58,7 +58,7 @@ describe.skipIf(!isLinux)('executeJavaScript over a real WebKitGTK webview', () 
     });
     contents.loadHTML('<!doctype html><html><body>exec</body></html>', 'about:blank');
 
-    // Pump until the page (and its page-world `sambarExec` handler) is live.
+    // Pump until the page (and its page-world `bunmaskaExec` handler) is live.
     // Generous budget: a cold WebKitGTK process under software-GL Xvfb can take
     // several seconds to fire did-finish-load on a loaded CI runner (a 5s budget
     // flaked). pumpUntil early-exits the instant the page is ready.

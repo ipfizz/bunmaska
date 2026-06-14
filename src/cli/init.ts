@@ -1,9 +1,9 @@
 /**
- * `sambar init` — scaffold a new Sambar project from an embedded template.
+ * `bunmaska init` — scaffold a new Bunmaska project from an embedded template.
  *
  * The template is a minimal but real app: a `BrowserWindow` that loads a local
  * page, an isolated `preload` exposing a typed `window.api` over IPC, a matching
- * `ipcMain.handle`, and a `sambar.config.ts`. The file contents are produced
+ * `ipcMain.handle`, and a `bunmaska.config.ts`. The file contents are produced
  * purely (so they are unit-testable), and the disk writes go through injectable
  * seams that refuse to overwrite an existing file.
  */
@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { slugifyName } from '../common/manifest';
-import { SAMBAR_VERSION } from '../common/version';
+import { BUNMASKA_VERSION } from '../common/version';
 
 /** A single file the scaffold writes, addressed relative to the project root. */
 export type ScaffoldFile = { readonly path: string; readonly contents: string };
@@ -27,12 +27,12 @@ const packageJson = (vars: TemplateVars): string =>
       private: true,
       type: 'module',
       scripts: {
-        start: 'sambar run src/main.ts',
-        dev: 'sambar dev',
-        build: 'sambar build',
+        start: 'bunmaska run src/main.ts',
+        dev: 'bunmaska dev',
+        build: 'bunmaska build',
       },
       dependencies: {
-        sambar: `^${SAMBAR_VERSION}`,
+        bunmaska: `^${BUNMASKA_VERSION}`,
       },
     },
     null,
@@ -40,7 +40,7 @@ const packageJson = (vars: TemplateVars): string =>
   )}\n`;
 
 const configTs = (vars: TemplateVars): string =>
-  `import { defineConfig } from 'sambar/config';
+  `import { defineConfig } from 'bunmaska/config';
 
 export default defineConfig({
   name: ${JSON.stringify(vars.name)},
@@ -51,7 +51,7 @@ export default defineConfig({
 
 const mainTs = (vars: TemplateVars): string =>
   `import { join } from 'node:path';
-import { app, BrowserWindow, ipcMain } from 'sambar';
+import { app, BrowserWindow, ipcMain } from 'bunmaska';
 
 // A demo handler the preload exposes to the page as window.api.ping().
 ipcMain.handle('ping', () => 'pong');
@@ -79,13 +79,13 @@ app.on('window-all-closed', () => {
 `;
 
 const preloadJs = (): string =>
-  `// Runs in Sambar's isolated preload world (Electron contextIsolation). It is
+  `// Runs in Bunmaska's isolated preload world (Electron contextIsolation). It is
 // injected verbatim — keep it plain JS. Two globals are available here:
 //   contextBridge.exposeInMainWorld(key, api)  — expose a safe surface to the page
-//   __sambar.invoke(channel, ...args)          — call an ipcMain.handle handler
+//   __bunmaska.invoke(channel, ...args)          — call an ipcMain.handle handler
 // The page can then call window.api.ping(); it cannot reach Node or the bridge.
 contextBridge.exposeInMainWorld('api', {
-  ping: () => __sambar.invoke('ping'),
+  ping: () => __bunmaska.invoke('ping'),
 });
 `;
 
@@ -152,29 +152,29 @@ dist/
 const readme = (vars: TemplateVars): string =>
   `# ${vars.name}
 
-A desktop app built with [Sambar](https://github.com/indrajeetor/sambar) — a
+A desktop app built with [Bunmaska](https://github.com/indrajeetor/bunmaska) — a
 drop-in Electron replacement on Bun + system WebKit.
 
 ## Develop
 
 \`\`\`sh
 bun install
-bun run dev      # sambar dev: runs src/main.ts and reloads on change
+bun run dev      # bunmaska dev: runs src/main.ts and reloads on change
 \`\`\`
 
 ## Build a distributable
 
 \`\`\`sh
-bun run build    # sambar build: a macOS .app or a Linux AppDir/.deb
+bun run build    # bunmaska build: a macOS .app or a Linux AppDir/.deb
 \`\`\`
 
-The app's name, bundle id and entry are declared in \`sambar.config.ts\`.
+The app's name, bundle id and entry are declared in \`bunmaska.config.ts\`.
 `;
 
 /** Produce the full set of template files with `vars` substituted. Pure. */
 export const initTemplateFiles = (vars: TemplateVars): readonly ScaffoldFile[] => [
   { path: 'package.json', contents: packageJson(vars) },
-  { path: 'sambar.config.ts', contents: configTs(vars) },
+  { path: 'bunmaska.config.ts', contents: configTs(vars) },
   { path: 'src/main.ts', contents: mainTs(vars) },
   { path: 'src/preload.js', contents: preloadJs() },
   { path: 'src/index.html', contents: indexHtml(vars) },
@@ -213,7 +213,7 @@ export const scaffoldProject = (
   for (const file of files) {
     const full = join(root, file.path);
     if (deps.exists(full)) {
-      throw new Error(`sambar init: refusing to overwrite existing file ${full}`);
+      throw new Error(`bunmaska init: refusing to overwrite existing file ${full}`);
     }
   }
   const written: string[] = [];
@@ -229,7 +229,7 @@ export const scaffoldProject = (
 /** Derive a project name from a target directory's base name. */
 export const deriveProjectName = (dir: string): string => {
   const base = basename(resolve(dir));
-  return base.length > 0 && base !== '.' ? base : 'sambar-app';
+  return base.length > 0 && base !== '.' ? base : 'bunmaska-app';
 };
 
 /** The result of a successful {@link runInit}. */

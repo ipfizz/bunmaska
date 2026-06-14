@@ -11,17 +11,17 @@ import { loadLibsecretFFI, secretSchema } from './libsecret-ffi';
  * schema.
  *
  * The real store/lookup is SYNCHRONOUS (blocking D-Bus) and is gated behind
- * `SAMBAR_ENABLE_LINUX_KEYRING` — CI never sets it, so the blocking path is
+ * `BUNMASKA_ENABLE_LINUX_KEYRING` — CI never sets it, so the blocking path is
  * unreachable under xvfb (echoing the GIO-read deadlock lesson). Crucially,
  * `isAvailable()` is CHEAP + NON-BLOCKING: it only checks the gate + that the
  * library dlopens; the one blocking keyring round-trip happens lazily inside
  * `getOrCreateKey()` (called once, behind the API's key cache).
  */
 
-const LABEL = 'Sambar safeStorage key';
+const LABEL = 'Bunmaska safeStorage key';
 
 /** Whether the live keyring path is enabled. CI leaves this unset → backend reports unavailable. */
-const liveKeyringEnabled = (): boolean => process.env['SAMBAR_ENABLE_LINUX_KEYRING'] === '1';
+const liveKeyringEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_KEYRING'] === '1';
 
 /** Read a transfer-full `gchar*` into a JS string and `secret_password_free` it. */
 const takePassword = (password: Pointer): string => {

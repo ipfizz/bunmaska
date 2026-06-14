@@ -1,5 +1,5 @@
 /**
- * Pure argument parser for the `sambar` CLI.
+ * Pure argument parser for the `bunmaska` CLI.
  *
  * Maps a raw argv tail (no node/bun/script prefix) to a {@link Command}
  * discriminated union. {@link parseArgs} does no I/O and never reads `process`,
@@ -9,10 +9,10 @@
 
 import { currentPlatform } from '../common/platform';
 
-/** Build targets `sambar build` can produce. */
+/** Build targets `bunmaska build` can produce. */
 export type BuildTarget = 'macos' | 'linux';
 
-/** Options accepted by `sambar build`. All optional; the bundler fills defaults. */
+/** Options accepted by `bunmaska build`. All optional; the bundler fills defaults. */
 export type BuildOptions = {
   readonly name?: string;
   readonly id?: string;
@@ -40,7 +40,7 @@ export type Command =
   | { readonly kind: 'build'; readonly entry: string; readonly options: BuildOptions }
   | { readonly kind: 'error'; readonly message: string };
 
-/** `sambar build` flags that take a string value, keyed by argv token. */
+/** `bunmaska build` flags that take a string value, keyed by argv token. */
 const BUILD_STRING_FLAGS = new Map<string, 'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel'>([
   ['--name', 'name'],
   ['--id', 'id'],
@@ -50,7 +50,7 @@ const BUILD_STRING_FLAGS = new Map<string, 'name' | 'id' | 'out' | 'icon' | 'sig
   ['--channel', 'channel'],
 ]);
 
-/** `sambar build` boolean flags that take no value, by argv token. */
+/** `bunmaska build` boolean flags that take no value, by argv token. */
 const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>([
   '--notarize',
   '--dmg',
@@ -65,7 +65,7 @@ const isBuildTarget = (value: string): value is BuildTarget =>
 const parseInit = (rest: readonly string[]): Command => {
   const [dir, ...extra] = rest;
   if (extra.length > 0) {
-    return { kind: 'error', message: `sambar init: unexpected argument ${extra[0]}` };
+    return { kind: 'error', message: `bunmaska init: unexpected argument ${extra[0]}` };
   }
   return { kind: 'init', dir: dir ?? '.' };
 };
@@ -73,7 +73,7 @@ const parseInit = (rest: readonly string[]): Command => {
 const parseDev = (rest: readonly string[]): Command => {
   const [entry, ...extra] = rest;
   if (extra.length > 0) {
-    return { kind: 'error', message: `sambar dev: unexpected argument ${extra[0]}` };
+    return { kind: 'error', message: `bunmaska dev: unexpected argument ${extra[0]}` };
   }
   return entry === undefined ? { kind: 'dev' } : { kind: 'dev', entry };
 };
@@ -81,7 +81,7 @@ const parseDev = (rest: readonly string[]): Command => {
 const parseRun = (rest: readonly string[]): Command => {
   const [entry, ...args] = rest;
   if (entry === undefined) {
-    return { kind: 'error', message: 'sambar run: missing <entry.ts>' };
+    return { kind: 'error', message: 'bunmaska run: missing <entry.ts>' };
   }
   return { kind: 'run', entry, args };
 };
@@ -109,12 +109,12 @@ const parseBuild = (rest: readonly string[]): Command => {
       if (token === '--target') {
         const value = rest[i + 1];
         if (value === undefined) {
-          return { kind: 'error', message: `sambar build: flag ${token} requires a value` };
+          return { kind: 'error', message: `bunmaska build: flag ${token} requires a value` };
         }
         if (!isBuildTarget(value)) {
           return {
             kind: 'error',
-            message: `sambar build: --target must be macos or linux (got ${value})`,
+            message: `bunmaska build: --target must be macos or linux (got ${value})`,
           };
         }
         options.target = value;
@@ -123,11 +123,11 @@ const parseBuild = (rest: readonly string[]): Command => {
       }
       const key = BUILD_STRING_FLAGS.get(token);
       if (key === undefined) {
-        return { kind: 'error', message: `sambar build: unknown flag ${token}` };
+        return { kind: 'error', message: `bunmaska build: unknown flag ${token}` };
       }
       const value = rest[i + 1];
       if (value === undefined) {
-        return { kind: 'error', message: `sambar build: flag ${token} requires a value` };
+        return { kind: 'error', message: `bunmaska build: flag ${token} requires a value` };
       }
       options[key] = value;
       i += 1;
@@ -137,11 +137,11 @@ const parseBuild = (rest: readonly string[]): Command => {
       entry = token;
       continue;
     }
-    return { kind: 'error', message: `sambar build: unexpected argument ${token}` };
+    return { kind: 'error', message: `bunmaska build: unexpected argument ${token}` };
   }
 
   if (entry === undefined) {
-    return { kind: 'error', message: 'sambar build: missing <entry.ts>' };
+    return { kind: 'error', message: 'bunmaska build: missing <entry.ts>' };
   }
   return { kind: 'build', entry, options };
 };
@@ -167,7 +167,7 @@ export const parseArgs = (argv: readonly string[]): Command => {
   if (head === 'build') {
     return parseBuild(rest);
   }
-  return { kind: 'error', message: `sambar: unknown command '${head}'` };
+  return { kind: 'error', message: `bunmaska: unknown command '${head}'` };
 };
 
 /**

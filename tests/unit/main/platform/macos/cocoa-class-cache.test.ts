@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../../../src/common/errors';
+import { BunmaskaError } from '../../../../../src/common/errors';
 import {
   type ClassResolver,
   ClassCache,
@@ -52,11 +52,11 @@ describe('ClassCache.get', () => {
     expect(calls).toEqual(['NSWindow', 'NSApplication']);
   });
 
-  test('throws SambarError when the resolver returns 0n', () => {
+  test('throws BunmaskaError when the resolver returns 0n', () => {
     const nullResolver: ClassResolver = () => 0n;
     const cache = new ClassCache(nullResolver);
 
-    expect(() => cache.get('MissingClass')).toThrow(SambarError);
+    expect(() => cache.get('MissingClass')).toThrow(BunmaskaError);
     expect(() => cache.get('MissingClass')).toThrow(/Objective-C class not found: MissingClass/);
   });
 
@@ -68,7 +68,7 @@ describe('ClassCache.get', () => {
     };
     const cache = new ClassCache(resolver);
 
-    expect(() => cache.get('LateLoaded')).toThrow(SambarError);
+    expect(() => cache.get('LateLoaded')).toThrow(BunmaskaError);
     expect(cache.get('LateLoaded')).toBe(99n);
     expect(count).toBe(2);
   });
@@ -90,7 +90,7 @@ describe('ClassCache.has', () => {
   test('remains false after a failed (NULL) lookup', () => {
     const nullResolver: ClassResolver = () => 0n;
     const cache = new ClassCache(nullResolver);
-    expect(() => cache.get('MissingClass')).toThrow(SambarError);
+    expect(() => cache.get('MissingClass')).toThrow(BunmaskaError);
     expect(cache.has('MissingClass')).toBe(false);
   });
 });

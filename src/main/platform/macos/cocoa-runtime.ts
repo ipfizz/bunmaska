@@ -7,12 +7,12 @@ import type { Handle } from './objc';
 /**
  * The live Cocoa runtime — caches backed by the real `libobjc` symbols.
  *
- * Sambar uses {@link cocoa} as a process-wide singleton. The first call opens
+ * Bunmaska uses {@link cocoa} as a process-wide singleton. The first call opens
  * `libobjc.A.dylib` + `Foundation.framework` via `bun:ffi`, builds the selector
  * and class caches with the live registrar / resolver, and returns the shared
  * runtime object. Subsequent calls return the same instance.
  *
- * Handles are exposed as `bigint` throughout Sambar (D016). The underlying FFI
+ * Handles are exposed as `bigint` throughout Bunmaska (D016). The underlying FFI
  * declares the `id`/`SEL`/`Class` slots as `u64`, so Bun hands us full-precision
  * bigints directly — no `Pointer` round-trip and no tagged-pointer truncation
  * (D029).

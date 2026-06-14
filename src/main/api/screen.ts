@@ -1,4 +1,4 @@
-import { SambarError, UnsupportedPlatformError } from '../../common/errors';
+import { BunmaskaError, UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { gdkScreenBackend } from '../platform/linux/gdk-screen';
 import { cocoaScreenBackend } from '../platform/macos/cocoa-screen';
@@ -129,7 +129,7 @@ const nearestRaw = (point: Point): RawDisplay => {
   const displays = rawDisplays();
   const first = displays[0];
   if (first === undefined) {
-    throw new SambarError('screen: no displays available');
+    throw new BunmaskaError('screen: no displays available');
   }
   let best = first;
   let bestDist = distanceSqToRect(point, best.bounds);
@@ -151,7 +151,7 @@ const getPrimaryDisplay = (): Display => {
   const displays = rawDisplays();
   const first = displays[0];
   if (first === undefined) {
-    throw new SambarError('screen: no displays available');
+    throw new BunmaskaError('screen: no displays available');
   }
   const primary = displays.find((d) => d.primary) ?? first;
   return toDisplay(primary);
@@ -170,7 +170,7 @@ const getCursorScreenPoint = (): Point => getBackend().getCursorScreenPoint();
 const getDisplayMatching = (rect: Rect): Display => {
   const displays = rawDisplays();
   if (displays.length === 0) {
-    throw new SambarError('screen: no displays available');
+    throw new BunmaskaError('screen: no displays available');
   }
   let best: RawDisplay | undefined;
   let bestArea = 0;

@@ -11,7 +11,7 @@ import type { NativeApplication, NativeWindow } from '../../../src/main/platform
  * End-to-end proof that `webPreferences.preload` runs at document-start AFTER
  * the built-in bridge, in the ISOLATED world, against a real WKWebView.
  *
- * The preload records whether `window.__sambar` existed when it ran, then (on a
+ * The preload records whether `window.__bunmaska` existed when it ran, then (on a
  * `go` trigger dispatched into the isolated world) posts that back over IPC —
  * proving both bridge-before-preload ordering and that the preload shares the
  * isolated world with the bridge.
@@ -26,14 +26,14 @@ if (currentPlatform() === 'macos') {
     let dir: string;
 
     beforeAll(() => {
-      dir = mkdtempSync(join(tmpdir(), 'sambar-preload-e2e-'));
+      dir = mkdtempSync(join(tmpdir(), 'bunmaska-preload-e2e-'));
       // The preload runs in the isolated world before page scripts; it captures
       // whether the bridge is present at that instant, and on 'go' posts it back.
       const preloadSource = [
-        'window.__sambarPreloadRan = true;',
-        'window.__sambarBridgeAtPreload = typeof window.__sambar !== "undefined";',
-        "window.__sambar.on('go', function () {",
-        "  window.__sambar.send('preload-check', window.__sambarPreloadRan === true, window.__sambarBridgeAtPreload === true);",
+        'window.__bunmaskaPreloadRan = true;',
+        'window.__bunmaskaBridgeAtPreload = typeof window.__bunmaska !== "undefined";',
+        "window.__bunmaska.on('go', function () {",
+        "  window.__bunmaska.send('preload-check', window.__bunmaskaPreloadRan === true, window.__bunmaskaBridgeAtPreload === true);",
         '});',
       ].join('\n');
       writeFileSync(join(dir, 'preload.js'), preloadSource);

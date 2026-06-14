@@ -14,7 +14,7 @@ import {
  * Deadlock-safe GDBus signal-subscription primitive for the Linux backend.
  *
  * THE RULE (hard-won — a synchronous GIO read once hung CI for hours, see
- * gtk-clipboard.ts): never block Sambar's single pumped thread on a D-Bus reply that
+ * gtk-clipboard.ts): never block Bunmaska's single pumped thread on a D-Bus reply that
  * only the GMainContext dispatch can deliver. Signal SUBSCRIPTION never blocks (the
  * `GDBusSignalCallback` fires on the default GMainContext during ordinary cooperative-pump
  * iterations, gtk-run-loop.ts). The one method-call helper, {@link callMethodSync}, uses a
@@ -24,7 +24,7 @@ import {
  * is categorically unlike the clipboard's local-pipe read (whose reply could only come
  * from our pump). It is still gated off in CI.
  *
- * `getSystemBus()` is gated behind `SAMBAR_ENABLE_LINUX_POWER` (mirroring the libsecret
+ * `getSystemBus()` is gated behind `BUNMASKA_ENABLE_LINUX_POWER` (mirroring the libsecret
  * keyring gate): CI never sets it, so the bus is NEVER touched on the headless runner and
  * the backend is a guaranteed no-op there. When the flag IS set, it calls
  * `g_bus_get_sync(SYSTEM)`. That IS blocking socket I/O on the calling thread, but the
@@ -63,7 +63,7 @@ export type SignalEvent = {
 };
 
 /** Whether the live system-bus path is enabled. CI leaves this unset → no bus is touched. */
-const liveSystemBusEnabled = (): boolean => process.env['SAMBAR_ENABLE_LINUX_POWER'] === '1';
+const liveSystemBusEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_POWER'] === '1';
 
 /** Cached system-bus result: `undefined` = not probed, `null` = absent/disabled, else the connection. */
 const cache: { systemBus: Pointer | null | undefined } = { systemBus: undefined };
@@ -168,7 +168,8 @@ export const resetSystemBusCacheForTesting = (): void => {
  * enabling outbound blocker method calls (different bus, different risk surface). CI never
  * sets it → the session bus is never touched and blocker `acquire` is a no-op.
  */
-const liveBlockerEnabled = (): boolean => process.env['SAMBAR_ENABLE_LINUX_POWER_BLOCKER'] === '1';
+const liveBlockerEnabled = (): boolean =>
+  process.env['BUNMASKA_ENABLE_LINUX_POWER_BLOCKER'] === '1';
 
 const sessionCache: { sessionBus: Pointer | null | undefined } = { sessionBus: undefined };
 

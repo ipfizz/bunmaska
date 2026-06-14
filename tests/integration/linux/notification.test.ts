@@ -9,7 +9,7 @@ import { loadLibnotifyFFI } from '../../../src/main/platform/linux/libnotify-ffi
  * `notify_notification_show` returns FALSE / no-ops there — that is EXPECTED and
  * NOT a failure. This test asserts only that:
  *   - every libnotify symbol resolves,
- *   - `notify_init('Sambar')` succeeds,
+ *   - `notify_init('Bunmaska')` succeeds,
  *   - construct + show + close run WITHOUT THROWING.
  * It deliberately does NOT assert a banner appeared. A `gtk_init_check` guard
  * keeps the construct/show steps from running where there is no display at all.
@@ -47,7 +47,7 @@ describe.skipIf(!isLinux)('libnotify FFI + Linux notification backend (Linux)', 
     }
     expect(() => {
       const handle = linuxNotificationBackend.present({
-        title: 'Sambar test',
+        title: 'Bunmaska test',
         body: 'Integration body',
         subtitle: '',
         silent: false,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../src/common/errors';
+import { BunmaskaError } from '../../../src/common/errors';
 import { currentPlatform } from '../../../src/common/platform';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
@@ -39,8 +39,8 @@ if (currentPlatform() === 'macos') {
       expect(cls).not.toBe(0n);
     });
 
-    test('classes.get throws SambarError for an unknown class', () => {
-      expect(() => cocoa().classes.get('SambarNonexistentClass_xyzxyz')).toThrow(SambarError);
+    test('classes.get throws BunmaskaError for an unknown class', () => {
+      expect(() => cocoa().classes.get('BunmaskaNonexistentClass_xyzxyz')).toThrow(BunmaskaError);
     });
 
     test('classes.get resolves NSWindow to a non-zero bigint', () => {

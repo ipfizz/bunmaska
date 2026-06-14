@@ -1,8 +1,8 @@
 /**
- * The pure `sambar.config` schema: types, validation, and the `defineConfig`
+ * The pure `bunmaska.config` schema: types, validation, and the `defineConfig`
  * helper, with no filesystem dependency. The CLI's loader (`src/cli/config.ts`)
  * layers file discovery and dynamic import on top of this; the public
- * `sambar/config` entry re-exports only this module, so a project's config file
+ * `bunmaska/config` entry re-exports only this module, so a project's config file
  * never drags the loader's `node:fs` code into the app's runtime bundle.
  */
 
@@ -10,15 +10,15 @@ import { InvalidArgumentError } from './errors';
 import { type Channel, DEFAULT_CHANNEL } from './manifest';
 
 /** Auto-update feed configuration. */
-export type SambarUpdatesConfig = {
+export type BunmaskaUpdatesConfig = {
   /** Base URL of the channel feed (where `update.json` + artifacts are served). */
   readonly url?: string;
   /** Release channel name. Defaults to `stable`. */
   readonly channel?: Channel;
 };
 
-/** A project's `sambar.config` shape. Every field is optional. */
-export type SambarConfig = {
+/** A project's `bunmaska.config` shape. Every field is optional. */
+export type BunmaskaConfig = {
   /** Display/bundle name. */
   readonly name?: string;
   /** Bundle identifier (reverse-DNS, e.g. `com.example.app`). */
@@ -28,21 +28,21 @@ export type SambarConfig = {
   /** App icon path — a `.icns`/`.png` on macOS, a `.png` on Linux. */
   readonly icon?: string;
   /** Auto-update feed configuration. */
-  readonly updates?: SambarUpdatesConfig;
+  readonly updates?: BunmaskaUpdatesConfig;
 };
 
 /** The config file names searched for, in priority order. */
 export const CONFIG_FILE_NAMES: readonly string[] = [
-  'sambar.config.ts',
-  'sambar.config.js',
-  'sambar.config.mjs',
+  'bunmaska.config.ts',
+  'bunmaska.config.js',
+  'bunmaska.config.mjs',
 ];
 
 /**
  * Identity helper giving config authors type-checking and editor completion:
  * `export default defineConfig({ name: 'My App' })`.
  */
-export const defineConfig = (config: SambarConfig): SambarConfig => config;
+export const defineConfig = (config: BunmaskaConfig): BunmaskaConfig => config;
 
 const assertOptionalString = (
   value: unknown,
@@ -59,16 +59,16 @@ const assertOptionalString = (
 };
 
 /**
- * Validate an untrusted, freshly-imported config value into a {@link SambarConfig}.
+ * Validate an untrusted, freshly-imported config value into a {@link BunmaskaConfig}.
  * Pure — never reads disk. Throws {@link InvalidArgumentError} naming the bad
  * field. `source` labels the file in error messages.
  */
-export const validateConfig = (raw: unknown, source = 'sambar.config'): SambarConfig => {
+export const validateConfig = (raw: unknown, source = 'bunmaska.config'): BunmaskaConfig => {
   if (raw === null || typeof raw !== 'object') {
     throw new InvalidArgumentError(`${source}: config must be an object`);
   }
   const record = raw as Record<string, unknown>;
-  const config: { -readonly [K in keyof SambarConfig]: SambarConfig[K] } = {};
+  const config: { -readonly [K in keyof BunmaskaConfig]: BunmaskaConfig[K] } = {};
 
   const name = assertOptionalString(record['name'], 'name', source);
   if (name !== undefined) {
@@ -105,5 +105,5 @@ export const validateConfig = (raw: unknown, source = 'sambar.config'): SambarCo
 };
 
 /** The release channel a config selects, falling back to the default. */
-export const configChannel = (config: SambarConfig): Channel =>
+export const configChannel = (config: BunmaskaConfig): Channel =>
   config.updates?.channel ?? DEFAULT_CHANNEL;

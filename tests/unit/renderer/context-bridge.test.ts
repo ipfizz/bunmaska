@@ -103,7 +103,7 @@ const makeIsolatedHost = (
   const factory = new Function(
     'globalThis',
     'document',
-    `${generateIsolatedHostSource(channel)}\nreturn globalThis.__sambar.exposeInMainWorld;`,
+    `${generateIsolatedHostSource(channel)}\nreturn globalThis.__bunmaska.exposeInMainWorld;`,
   );
   return factory(g, doc) as (key: string, api: Record<string, unknown>) => void;
 };

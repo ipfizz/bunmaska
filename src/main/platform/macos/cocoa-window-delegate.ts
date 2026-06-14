@@ -55,7 +55,7 @@ const ensureDelegateClass = (): Handle => {
   if (delegateClass !== undefined) {
     return delegateClass;
   }
-  delegateClass = defineObjcClass('SambarWindowDelegate', 'NSObject', [
+  delegateClass = defineObjcClass('BunmaskaWindowDelegate', 'NSObject', [
     // windowShouldClose: returns a BOOL — return 0 (NO) to veto, 1 (YES) to
     // allow. The runtime-class IMP returns void, so the veto is routed through a
     // dedicated u8-returning method registered below by overriding buildCallback;

@@ -11,14 +11,14 @@ import { loadGMenuFFI } from './gtk-menu-ffi';
  *
  * A GTK menu is a `GMenu` *model* paired with a `GSimpleActionGroup`. Each
  * clickable item is given a uniquely named `GSimpleAction` (e.g. `menu-0`); the
- * model entry references it as `"sambar.menu-0"`. Activating the action — by a
+ * model entry references it as `"bunmaska.menu-0"`. Activating the action — by a
  * click, an accelerator, or `g_action_group_activate_action` — emits the
  * action's `activate` signal, which fires the item's JS `onClick`. This mirrors
- * the macOS `sambarMenuAction:` registry pattern.
+ * the macOS `bunmaskaMenuAction:` registry pattern.
  *
  * One action group is shared by the whole tree (submenus add their actions to
  * the SAME group), so a single `gtk_widget_insert_action_group(window,
- * "sambar", group)` makes every item live.
+ * "bunmaska", group)` makes every item live.
  *
  * JSCallback lifecycle: the `activate` thunks are LONG-LIVED — they must stay
  * reachable for the menu's lifetime or GObject jumps into freed memory on the
@@ -35,14 +35,14 @@ import { loadGMenuFFI } from './gtk-menu-ffi';
 export const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
 /** The action-group namespace prefix inserted into the window. */
-const ACTION_GROUP_PREFIX = 'sambar';
+const ACTION_GROUP_PREFIX = 'bunmaska';
 
 let actionCounter = 0;
 
 /** A fresh, process-unique action name like `menu-0`, `menu-1`, … */
 export const actionName = (): string => `menu-${actionCounter++}`;
 
-/** Namespace an action name for a `GMenu` `detailed_action` (e.g. `sambar.menu-0`). */
+/** Namespace an action name for a `GMenu` `detailed_action` (e.g. `bunmaska.menu-0`). */
 export const detailedAction = (name: string): string => `${ACTION_GROUP_PREFIX}.${name}`;
 
 /**

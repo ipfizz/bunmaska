@@ -78,7 +78,7 @@ class LinuxWebContents implements NativeWebContents {
           callback(json);
         }
       },
-      // The page-world `sambarExec` return channel for `executeJavaScript`. The
+      // The page-world `bunmaskaExec` return channel for `executeJavaScript`. The
       // exec channel is constructed below (it needs the view), so forward late.
       onExecMessage: (json: string) => {
         this.#exec.deliverExecResult(json);
@@ -220,7 +220,7 @@ class LinuxWebContents implements NativeWebContents {
   /**
    * Evaluate `code` in the PAGE world (world_name = NULL) and resolve to its
    * completion value. The result returns out-of-band through the page-world
-   * `sambarExec` handler (mirrors macOS, D022) — NO per-call native callback, so
+   * `bunmaskaExec` handler (mirrors macOS, D022) — NO per-call native callback, so
    * nothing is freed mid-invocation.
    */
   executeJavaScript(code: string): Promise<unknown> {
@@ -393,7 +393,7 @@ class LinuxWindow implements NativeWindow {
       const box = menu.symbols.gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
       menu.symbols.gtk_box_append(box, menu.symbols.gtk_popover_menu_bar_new_from_model(model));
       menu.symbols.gtk_box_append(box, view);
-      menu.symbols.gtk_widget_insert_action_group(this.#window, cstr('sambar'), group);
+      menu.symbols.gtk_widget_insert_action_group(this.#window, cstr('bunmaska'), group);
       gtk.symbols.gtk_window_set_child(this.#window, box);
     }
 
@@ -496,7 +496,7 @@ class LinuxWindow implements NativeWindow {
     for (const callback of this.#closedCallbacks) {
       callback();
     }
-    // Reject any executeJavaScript Promise still awaiting a `sambarExec` result
+    // Reject any executeJavaScript Promise still awaiting a `bunmaskaExec` result
     // it can no longer receive, THEN disconnect signals + close the retained
     // JSCallbacks (including the shared exec handler) — never per-call.
     this.#webContents.rejectPendingExecs();
@@ -688,7 +688,7 @@ class LinuxWindow implements NativeWindow {
     // Insert the menu's action group so its items are live (mirrors the menu-bar path).
     menu.symbols.gtk_widget_insert_action_group(
       popover,
-      cstr('sambar'),
+      cstr('bunmaska'),
       Number(entry.group) as unknown as Pointer,
     );
     // GdkRectangle { x, y, width:1, height:1 } — a 1×1 rect is a point (window-relative coords).

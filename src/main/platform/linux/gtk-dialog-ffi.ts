@@ -3,7 +3,7 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 
 /**
- * Loads the GTK 4 native-dialog symbols behind Sambar's `dialog` API:
+ * Loads the GTK 4 native-dialog symbols behind Bunmaska's `dialog` API:
  * `GtkAlertDialog` (message boxes) and `GtkFileDialog` (open/save panels), both
  * added in GTK 4.10. CI runs on ubuntu-latest (24.04 → GTK 4.12+), so these are
  * always available there.

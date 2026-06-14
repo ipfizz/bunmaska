@@ -22,7 +22,7 @@ if (currentPlatform() === 'macos') {
     const name = 'Signed App';
 
     beforeAll(async () => {
-      workDir = mkdtempSync(join(tmpdir(), 'sambar-cli-sign-'));
+      workDir = mkdtempSync(join(tmpdir(), 'bunmaska-cli-sign-'));
       entry = join(workDir, 'entry.ts');
       outDir = join(workDir, 'out');
       writeFileSync(entry, "console.log('hi');\nprocess.exit(0);\n");

@@ -52,10 +52,10 @@ export { Tray, type TrayBackend, type TrayInstance } from './api/tray';
 export {
   FFIError,
   InvalidArgumentError,
-  SambarError,
-  type SambarErrorOptions,
+  BunmaskaError,
+  type BunmaskaErrorOptions,
   UnsupportedPlatformError,
 } from '../common/errors';
 export { currentPlatform, isSupported, mapPlatform, type Platform } from '../common/platform';
-export { SAMBAR_VERSION } from '../common/version';
+export { BUNMASKA_VERSION } from '../common/version';
 export type { Rect } from './platform/native';

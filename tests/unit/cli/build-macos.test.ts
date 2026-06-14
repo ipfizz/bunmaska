@@ -23,8 +23,8 @@ describe('bundleIdSlug', () => {
 });
 
 describe('defaultBundleId', () => {
-  test('namespaces the slug under com.sambar', () => {
-    expect(defaultBundleId('My App')).toBe('com.sambar.my-app');
+  test('namespaces the slug under com.bunmaska', () => {
+    expect(defaultBundleId('My App')).toBe('com.bunmaska.my-app');
   });
 });
 

@@ -146,6 +146,6 @@ export const deleteMacosKeychainItem = (service: string, account: string): void 
 
 /** The production macOS Keychain backend. */
 export const macosKeychainBackend = makeMacosKeychainBackend(
-  'dev.sambar.safeStorage',
+  'dev.bunmaska.safeStorage',
   'master-key',
 );

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../src/common/errors';
+import { BunmaskaError } from '../../../src/common/errors';
 import {
   type Arch,
   currentArch,
@@ -23,8 +23,8 @@ describe('mapPlatform', () => {
     expect(mapPlatform('win32')).toBe('windows');
   });
 
-  test('throws SambarError on unknown platform tag', () => {
-    expect(() => mapPlatform('freebsd')).toThrow(SambarError);
+  test('throws BunmaskaError on unknown platform tag', () => {
+    expect(() => mapPlatform('freebsd')).toThrow(BunmaskaError);
     expect(() => mapPlatform('freebsd')).toThrow(/Unsupported platform: freebsd/);
   });
 });
@@ -57,8 +57,8 @@ describe('mapArch', () => {
     expect(mapArch('arm64')).toBe('arm64');
   });
 
-  test('throws SambarError on an unsupported arch', () => {
-    expect(() => mapArch('ia32')).toThrow(SambarError);
+  test('throws BunmaskaError on an unsupported arch', () => {
+    expect(() => mapArch('ia32')).toThrow(BunmaskaError);
     expect(() => mapArch('ia32')).toThrow(/Unsupported architecture: ia32/);
   });
 });

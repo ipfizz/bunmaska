@@ -9,31 +9,31 @@ import {
 } from '../../../../../src/main/platform/linux/webkit-ipc';
 
 describe('webkit-ipc constants', () => {
-  it('posts to and registers the "sambar" handler name', () => {
-    expect(HANDLER_NAME).toBe('sambar');
+  it('posts to and registers the "bunmaska" handler name', () => {
+    expect(HANDLER_NAME).toBe('bunmaska');
   });
 
-  it('connects the detailed script-message-received::sambar signal', () => {
-    expect(SIGNAL).toBe('script-message-received::sambar');
+  it('connects the detailed script-message-received::bunmaska signal', () => {
+    expect(SIGNAL).toBe('script-message-received::bunmaska');
   });
 
-  it('uses the SambarPreload isolated world name (matches the macOS backend)', () => {
-    expect(PRELOAD_WORLD_NAME).toBe('SambarPreload');
+  it('uses the BunmaskaPreload isolated world name (matches the macOS backend)', () => {
+    expect(PRELOAD_WORLD_NAME).toBe('BunmaskaPreload');
   });
 
-  it('uses the page-world "sambarExec" exec return-channel handler (matches macOS)', () => {
-    expect(EXEC_HANDLER_NAME).toBe('sambarExec');
+  it('uses the page-world "bunmaskaExec" exec return-channel handler (matches macOS)', () => {
+    expect(EXEC_HANDLER_NAME).toBe('bunmaskaExec');
   });
 
-  it('connects the detailed script-message-received::sambarExec signal', () => {
-    expect(EXEC_SIGNAL).toBe('script-message-received::sambarExec');
+  it('connects the detailed script-message-received::bunmaskaExec signal', () => {
+    expect(EXEC_SIGNAL).toBe('script-message-received::bunmaskaExec');
   });
 });
 
 describe('buildDispatchScript', () => {
-  it('calls __sambar._dispatch with a JS-string-escaped JSON envelope', () => {
+  it('calls __bunmaska._dispatch with a JS-string-escaped JSON envelope', () => {
     const script = buildDispatchScript('{"a":1}');
-    expect(script).toContain('window.__sambar._dispatch(');
+    expect(script).toContain('window.__bunmaska._dispatch(');
     expect(script).toContain(JSON.stringify('{"a":1}'));
   });
 
@@ -44,7 +44,7 @@ describe('buildDispatchScript', () => {
     expect(() => new Function(`return ${JSON.stringify(envelope)};`)).not.toThrow();
   });
 
-  it('guards on window.__sambar before dispatching', () => {
-    expect(buildDispatchScript('{}')).toContain('window.__sambar &&');
+  it('guards on window.__bunmaska before dispatching', () => {
+    expect(buildDispatchScript('{}')).toContain('window.__bunmaska &&');
   });
 });

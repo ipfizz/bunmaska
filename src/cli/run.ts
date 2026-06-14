@@ -1,5 +1,5 @@
 /**
- * `sambar run <entry>` — launch a Sambar app by spawning `bun run <entry>`
+ * `bunmaska run <entry>` — launch a Bunmaska app by spawning `bun run <entry>`
  * with inherited stdio so the app owns the terminal. The spawner is injected
  * so tests can assert the command/args without launching a real GUI process.
  */

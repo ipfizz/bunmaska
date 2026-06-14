@@ -9,7 +9,7 @@ if (currentPlatform() === 'macos') {
     });
 
     test('nsString -> nsStringToString round-trips ASCII', () => {
-      expect(nsStringToString(nsString('Sambar'))).toBe('Sambar');
+      expect(nsStringToString(nsString('Bunmaska'))).toBe('Bunmaska');
     });
 
     test('round-trips the empty string', () => {

@@ -19,7 +19,7 @@ describe.skipIf(!isMac)('cocoa-notification (macOS, un-bundled)', () => {
   test('present() builds and best-effort delivers without throwing', () => {
     expect(() =>
       macosNotificationBackend.present({
-        title: 'Sambar test',
+        title: 'Bunmaska test',
         body: 'Integration body',
         subtitle: 'Integration subtitle',
         silent: false,
@@ -29,7 +29,7 @@ describe.skipIf(!isMac)('cocoa-notification (macOS, un-bundled)', () => {
 
   test('the returned handle close()/onClosed() do not throw', () => {
     const handle = macosNotificationBackend.present({
-      title: 'Sambar test',
+      title: 'Bunmaska test',
       body: 'body',
       subtitle: '',
       silent: true,

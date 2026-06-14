@@ -13,7 +13,7 @@ import { macOSLibraryAccessor } from './objc';
  * `IOPMAssertionCreateWithName(assertionType, level, name, &id)` creates a named assertion
  * held by `powerd`; `IOPMAssertionRelease(id)` drops it. Both are SYNCHRONOUS C calls (a
  * Mach round-trip to powerd) that need NO CFRunLoop and no window, so they are safe on
- * Sambar's pumped main thread with nothing running.
+ * Bunmaska's pumped main thread with nothing running.
  *
  * Type → assertion (verified against IOKit's IOPMLib.h):
  *  - 'prevent-app-suspension' → kIOPMAssertPreventUserIdleSystemSleep  ("PreventUserIdleSystemSleep")
@@ -40,7 +40,7 @@ const ASSERTION_TYPE: Record<PowerSaveBlockerType, string> = {
 };
 
 /** Human-readable assertion name shown by `pmset -g assertions`. */
-const ASSERTION_NAME = 'Sambar powerSaveBlocker';
+const ASSERTION_NAME = 'Bunmaska powerSaveBlocker';
 
 const IOKIT_SYMBOLS = {
   // (assertionType:CFStringRef[u64], level:IOPMAssertionLevel[u32], name:CFStringRef[u64],

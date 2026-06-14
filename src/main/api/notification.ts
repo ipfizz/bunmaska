@@ -17,7 +17,7 @@ import { macosNotificationBackend } from '../platform/macos/cocoa-notification';
  *
  * `click` (and other user-action events) are DEFERRED in v1: they require an OS
  * delegate/action wiring that is not yet implemented. They are intentionally not
- * advertised so consumers do not rely on events Sambar does not deliver.
+ * advertised so consumers do not rely on events Bunmaska does not deliver.
  *
  * The native backend is injectable (mirrors `menu`/`dialog`/`shell`) so the
  * class's option-mapping, event wiring, and lifecycle are unit-testable with a

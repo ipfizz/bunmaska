@@ -33,7 +33,7 @@ const ensureDelegateClass = (): Handle => {
   if (delegateClass !== undefined) {
     return delegateClass;
   }
-  delegateClass = defineObjcClass('SambarNavigationDelegate', 'NSObject', [
+  delegateClass = defineObjcClass('BunmaskaNavigationDelegate', 'NSObject', [
     {
       selector: 'webView:didStartProvisionalNavigation:',
       typeEncoding: 'v@:@@',

@@ -11,7 +11,7 @@ import {
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'sambar-artifact-'));
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-artifact-'));
   tmpDirs.push(dir);
   return dir;
 };
@@ -72,7 +72,7 @@ describe('emitUpdateArtifact (real tar + zstd)', () => {
     const root = makeTmpDir();
     const bundle = join(root, 'Demo.app');
     mkdirSync(bundle, { recursive: true });
-    writeFileSync(join(bundle, 'payload.txt'), 'hello sambar update');
+    writeFileSync(join(bundle, 'payload.txt'), 'hello bunmaska update');
     const outDir = join(root, 'out');
     mkdirSync(outDir);
 

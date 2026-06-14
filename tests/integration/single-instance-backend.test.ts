@@ -18,7 +18,7 @@ describe('createLockBackend — pidfile', () => {
   let lockPath: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'sambar-lock-'));
+    dir = mkdtempSync(join(tmpdir(), 'bunmaska-lock-'));
     lockPath = join(dir, 'app.lock');
   });
 
@@ -63,7 +63,7 @@ describe('createLockBackend — socket hand-off', () => {
   let lockPath: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'sambar-sock-'));
+    dir = mkdtempSync(join(tmpdir(), 'bunmaska-sock-'));
     socketPath = join(dir, 'app.sock');
     lockPath = join(dir, 'app.lock');
   });

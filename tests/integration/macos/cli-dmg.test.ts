@@ -23,7 +23,7 @@ if (currentPlatform() === 'macos') {
     const name = 'Dmg App';
 
     beforeAll(async () => {
-      workDir = mkdtempSync(join(tmpdir(), 'sambar-cli-dmg-'));
+      workDir = mkdtempSync(join(tmpdir(), 'bunmaska-cli-dmg-'));
       entry = join(workDir, 'entry.ts');
       outDir = join(workDir, 'out');
       writeFileSync(entry, "console.log('hi');\nprocess.exit(0);\n");

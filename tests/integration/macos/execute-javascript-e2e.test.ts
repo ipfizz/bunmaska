@@ -6,7 +6,7 @@ import type { NativeApplication, NativeWebContents } from '../../../src/main/pla
 /**
  * `WebContents.executeJavaScript` round-trip on a real WKWebView.
  *
- * The completion value returns out-of-band through a page-world `sambarExec`
+ * The completion value returns out-of-band through a page-world `bunmaskaExec`
  * script-message handler (a completion-handler block crashes Bun, D022). Proves
  * an expression, a Promise, an object, and a throw all settle the returned
  * Promise correctly. The page is loaded (and the run loop pumped) before the

@@ -13,7 +13,7 @@ import {
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'sambar-init-'));
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-init-'));
   tmpDirs.push(dir);
   return dir;
 };
@@ -45,7 +45,7 @@ describe('initTemplateFiles', () => {
   test('includes the core project files', () => {
     for (const path of [
       'package.json',
-      'sambar.config.ts',
+      'bunmaska.config.ts',
       'src/main.ts',
       'src/preload.js',
       'src/index.html',
@@ -56,25 +56,25 @@ describe('initTemplateFiles', () => {
     }
   });
 
-  test('package.json is valid JSON with a slugged name and sambar dep', () => {
+  test('package.json is valid JSON with a slugged name and bunmaska dep', () => {
     const pkg = JSON.parse(byPath.get('package.json') ?? '{}');
     expect(pkg.name).toBe('my-app');
-    expect(pkg.dependencies.sambar).toMatch(/^\^/);
-    expect(pkg.scripts.dev).toBe('sambar dev');
+    expect(pkg.dependencies.bunmaska).toMatch(/^\^/);
+    expect(pkg.scripts.dev).toBe('bunmaska dev');
   });
 
   test('config substitutes the name and id', () => {
-    const config = byPath.get('sambar.config.ts') ?? '';
+    const config = byPath.get('bunmaska.config.ts') ?? '';
     expect(config).toContain('name: "My App"');
     expect(config).toContain('id: "com.example.my-app"');
-    expect(config).toContain("from 'sambar/config'");
+    expect(config).toContain("from 'bunmaska/config'");
   });
 
   test('main.ts wires the preload and ipc handler', () => {
     const main = byPath.get('src/main.ts') ?? '';
     expect(main).toContain("ipcMain.handle('ping'");
     expect(main).toContain('preload:');
-    expect(main).toContain("from 'sambar'");
+    expect(main).toContain("from 'bunmaska'");
   });
 });
 

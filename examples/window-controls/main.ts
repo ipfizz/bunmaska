@@ -1,5 +1,5 @@
 /**
- * Sambar "window controls" — exercising BrowserWindow's runtime setters.
+ * Bunmaska "window controls" — exercising BrowserWindow's runtime setters.
  *
  * Run from the repo root with:  bun examples/window-controls/main.ts
  *

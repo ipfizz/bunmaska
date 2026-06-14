@@ -133,7 +133,7 @@ const cache: { ffi: ReturnType<typeof dlopen<typeof GTK_FFI_SYMBOLS>> | undefine
 };
 
 /**
- * Open `libgtk-4.so.1` and expose the GTK 4 window/widget symbols Sambar needs.
+ * Open `libgtk-4.so.1` and expose the GTK 4 window/widget symbols Bunmaska needs.
  * Mirrors {@link loadCocoaFFI}'s shape: platform-guarded, lazy single-`dlopen`,
  * throws on non-Linux so the module is safely importable on macOS for unit
  * testing.

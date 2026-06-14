@@ -8,7 +8,7 @@
  */
 
 /** The page-world script-message handler name the dom-ready script posts to. */
-export const DOM_READY_HANDLER_NAME = 'sambarDomReady';
+export const DOM_READY_HANDLER_NAME = 'bunmaskaDomReady';
 
 /** The page-world script that fires once the document is ready. */
 export const generateDomReadyScript = (): string =>

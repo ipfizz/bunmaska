@@ -7,11 +7,11 @@ import type { NativeApplication, NativeWebContents } from '../../../src/main/pla
 /**
  * Isolation proof on a real WKWebView.
  *
- * The `__sambar` bridge + user preload run in the isolated `SambarPreload`
+ * The `__bunmaska` bridge + user preload run in the isolated `BunmaskaPreload`
  * world; the page world cannot see them. We prove this two ways:
  *  - the isolated-world preload registers an `iso-typeof` listener that posts
- *    `typeof window.__sambar` back over IPC — it answers `'object'`.
- *  - a PAGE-world `executeJavaScript` probe checks `typeof window.__sambar` and
+ *    `typeof window.__bunmaska` back over IPC — it answers `'object'`.
+ *  - a PAGE-world `executeJavaScript` probe checks `typeof window.__bunmaska` and
  *    posts the result onto the DOM (a CustomEvent the isolated preload relays
  *    back over IPC) — it answers `'undefined'`.
  *
@@ -27,15 +27,15 @@ if (currentPlatform() === 'macos') {
     let contents: NativeWebContents;
     const received: string[] = [];
 
-    // The isolated-world preload: it sees __sambar, and it relays the page
+    // The isolated-world preload: it sees __bunmaska, and it relays the page
     // world's DOM probe back over IPC. The page world shares the DOM but not the
     // bridge, so the relay listener must live here (isolated world).
     const isolatedPreload = [
-      "window.__sambar.on('iso-typeof-req', function () {",
-      "  window.__sambar.send('iso-typeof', typeof window.__sambar);",
+      "window.__bunmaska.on('iso-typeof-req', function () {",
+      "  window.__bunmaska.send('iso-typeof', typeof window.__bunmaska);",
       '});',
-      "document.addEventListener('sambar-page-typeof', function (e) {",
-      "  window.__sambar.send('page-typeof', e.detail);",
+      "document.addEventListener('bunmaska-page-typeof', function (e) {",
+      "  window.__bunmaska.send('page-typeof', e.detail);",
       '});',
     ].join('\n');
 
@@ -69,19 +69,19 @@ if (currentPlatform() === 'macos') {
       return undefined;
     };
 
-    test('isolated world sees __sambar as object; page world sees undefined', async () => {
+    test('isolated world sees __bunmaska as object; page world sees undefined', async () => {
       contents.loadHTML('<html><body>iso</body></html>', 'about:blank');
 
       // PAGE-world probe: executeJavaScript runs in the page world. typeof of an
       // undeclared global is 'undefined' (no ReferenceError), so this is safe.
       const pageProbe =
-        "document.dispatchEvent(new CustomEvent('sambar-page-typeof', { detail: typeof window.__sambar }));";
+        "document.dispatchEvent(new CustomEvent('bunmaska-page-typeof', { detail: typeof window.__bunmaska }));";
 
       const deadline = Date.now() + 8000;
       let isolated: ReturnType<typeof decodeEnvelope> | undefined;
       let pageTypeof: ReturnType<typeof decodeEnvelope> | undefined;
       while (Date.now() < deadline && (isolated === undefined || pageTypeof === undefined)) {
-        // Ask the isolated world to report its view of __sambar.
+        // Ask the isolated world to report its view of __bunmaska.
         contents.sendEnvelopeToRenderer(
           JSON.stringify({ kind: 'send', channel: 'iso-typeof-req', args: [] }),
         );

@@ -19,8 +19,8 @@ import { callMethodSync, getSessionBus } from './linux-dbus';
  * `Inhibit(what='sleep')` fd path (a future upgrade), which also blocks lid/explicit sleep.
  *
  * DEADLOCK-SAFE: the only blocking call is the bounded {@link callMethodSync} (5s timeout),
- * whose reply is delivered by GIO's private worker thread, not Sambar's pump. CI-HANG-SAFE:
- * gated behind `SAMBAR_ENABLE_LINUX_POWER_BLOCKER` (CI never sets it), so `getSessionBus()`
+ * whose reply is delivered by GIO's private worker thread, not Bunmaska's pump. CI-HANG-SAFE:
+ * gated behind `BUNMASKA_ENABLE_LINUX_POWER_BLOCKER` (CI never sets it), so `getSessionBus()`
  * returns null and `acquire` is a no-op (`start()` still returns an id).
  */
 
@@ -29,7 +29,7 @@ const SS_PATH = '/org/freedesktop/ScreenSaver';
 const SS_IFACE = 'org.freedesktop.ScreenSaver';
 const INHIBIT = 'Inhibit';
 const UNINHIBIT = 'UnInhibit';
-const APP_NAME = 'Sambar';
+const APP_NAME = 'Bunmaska';
 
 const reasonFor = (type: PowerSaveBlockerType): string =>
   type === 'prevent-display-sleep' ? 'Preventing display sleep' : 'Preventing app suspension';

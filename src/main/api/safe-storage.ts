@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { InvalidArgumentError, SambarError } from '../../common/errors';
+import { InvalidArgumentError, BunmaskaError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxLibsecretBackend } from '../platform/linux/libsecret-keyring';
 import { macosKeychainBackend } from '../platform/macos/cocoa-safe-storage';
@@ -9,14 +9,14 @@ import { macosKeychainBackend } from '../platform/macos/cocoa-safe-storage';
  * Electron's `safeStorage`.
  *
  * The key is a random 32-byte secret kept in the OS keyring (macOS Keychain,
- * Linux libsecret) and never written to disk by Sambar. Strings are sealed with
+ * Linux libsecret) and never written to disk by Bunmaska. Strings are sealed with
  * AES-256-GCM (authenticated — tampering throws on decrypt).
  *
  * DIVERGENCE FROM ELECTRON (deliberate): Electron falls back to a `basic_text`
  * scheme (an obfuscated, effectively-plaintext key) when no OS keyring exists.
- * Sambar does NOT — a key sitting next to the ciphertext is not protection. With
+ * Bunmaska does NOT — a key sitting next to the ciphertext is not protection. With
  * no keyring, `isEncryptionAvailable()` returns `false` and
- * `encryptString`/`decryptString` throw. Sambar also does not promise
+ * `encryptString`/`decryptString` throw. Bunmaska also does not promise
  * Electron-blob compatibility: a native, versioned blob format is used.
  */
 
@@ -86,7 +86,7 @@ const decryptWithKey = (key: Buffer, blob: Buffer): string => {
 const unavailableBackend: KeyringBackend = {
   isAvailable: () => false,
   getOrCreateKey: () => {
-    throw new SambarError(`safeStorage has no keyring backend on ${currentPlatform()}`);
+    throw new BunmaskaError(`safeStorage has no keyring backend on ${currentPlatform()}`);
   },
 };
 
@@ -125,7 +125,7 @@ const getKey = (): Buffer => {
   if (cachedKey === undefined) {
     const key = getBackend().getOrCreateKey();
     if (key.length !== KEY_LENGTH) {
-      throw new SambarError(
+      throw new BunmaskaError(
         `safeStorage: keyring returned a ${key.length}-byte key, expected ${KEY_LENGTH}`,
       );
     }
@@ -147,13 +147,13 @@ export const safeStorage: SafeStorage = {
   },
   encryptString(plainText) {
     if (!isAvailable()) {
-      throw new SambarError('safeStorage: encryption is not available (no OS keyring)');
+      throw new BunmaskaError('safeStorage: encryption is not available (no OS keyring)');
     }
     return encryptWithKey(getKey(), plainText);
   },
   decryptString(encrypted) {
     if (!isAvailable()) {
-      throw new SambarError('safeStorage: encryption is not available (no OS keyring)');
+      throw new BunmaskaError('safeStorage: encryption is not available (no OS keyring)');
     }
     return decryptWithKey(getKey(), encrypted);
   },

@@ -6,7 +6,7 @@ import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 /**
  * Define Objective-C classes at runtime with JS-backed methods.
  *
- * This is how Sambar provides the delegate/handler objects AppKit and WebKit
+ * This is how Bunmaska provides the delegate/handler objects AppKit and WebKit
  * require (navigation delegates, `WKScriptMessageHandler`, the app delegate,
  * Phase-3 target/action): `objc_allocateClassPair` → `class_addMethod` with a
  * `JSCallback` as the IMP → `objc_registerClassPair` (D026).

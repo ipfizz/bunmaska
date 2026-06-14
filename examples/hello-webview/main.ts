@@ -1,5 +1,5 @@
 /**
- * Sambar "hello, webview" — the smallest real app.
+ * Bunmaska "hello, webview" — the smallest real app.
  *
  * Run from the repo root with:  bun examples/hello-webview/main.ts
  *
@@ -13,7 +13,7 @@ app.whenReady().then(() => {
   const win = new BrowserWindow({
     width: 960,
     height: 720,
-    title: 'Hello Sambar',
+    title: 'Hello Bunmaska',
     show: true,
   });
   win.loadURL('https://example.com');

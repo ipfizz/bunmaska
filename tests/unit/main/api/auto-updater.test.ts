@@ -44,7 +44,7 @@ const makeUpdater = (overrides: Partial<AutoUpdaterDeps>, feedVersion = '2.0.0')
       decompressed.push(bytes);
       return TAR;
     },
-    stage: async (_tar, m) => `/tmp/sambar-update-${m.hash}.tar`,
+    stage: async (_tar, m) => `/tmp/bunmaska-update-${m.hash}.tar`,
     install: (s) => {
       staged.push(s);
     },

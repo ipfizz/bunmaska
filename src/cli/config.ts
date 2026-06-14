@@ -1,9 +1,9 @@
 /**
- * `sambar.config.ts` loader for the CLI.
+ * `bunmaska.config.ts` loader for the CLI.
  *
- * A Sambar project may drop a `sambar.config.ts` (or `.js`/`.mjs`) at its root
+ * A Bunmaska project may drop a `bunmaska.config.ts` (or `.js`/`.mjs`) at its root
  * to declare the app's name, bundle id, entry, icon and update feed once,
- * instead of repeating `sambar build` flags. `sambar init`/`dev`/`build` all
+ * instead of repeating `bunmaska build` flags. `bunmaska init`/`dev`/`build` all
  * read it. The pure schema + validation live in {@link ../common/config-schema}
  * (re-exported here); this module adds the filesystem discovery and dynamic
  * import.
@@ -11,15 +11,15 @@
 
 import { existsSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
-import { CONFIG_FILE_NAMES, type SambarConfig, validateConfig } from '../common/config-schema';
+import { CONFIG_FILE_NAMES, type BunmaskaConfig, validateConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 
 export {
   CONFIG_FILE_NAMES,
   configChannel,
   defineConfig,
-  type SambarConfig,
-  type SambarUpdatesConfig,
+  type BunmaskaConfig,
+  type BunmaskaUpdatesConfig,
   validateConfig,
 } from '../common/config-schema';
 
@@ -42,7 +42,7 @@ export const findConfigFile = (cwd: string): string | undefined => {
  * or a named `config` export. Throws {@link InvalidArgumentError} if neither is
  * present or the value is malformed.
  */
-export const loadConfigFile = async (path: string): Promise<SambarConfig> => {
+export const loadConfigFile = async (path: string): Promise<BunmaskaConfig> => {
   const absolute = isAbsolute(path) ? path : resolve(path);
   const module = (await import(absolute)) as Record<string, unknown>;
   const value = module['default'] ?? module['config'];
@@ -59,7 +59,7 @@ export const loadConfigFile = async (path: string): Promise<SambarConfig> => {
  */
 export const loadConfig = async (
   cwd: string = process.cwd(),
-): Promise<{ readonly config: SambarConfig; readonly configPath: string | undefined }> => {
+): Promise<{ readonly config: BunmaskaConfig; readonly configPath: string | undefined }> => {
   const configPath = findConfigFile(cwd);
   if (configPath === undefined) {
     return { config: {}, configPath: undefined };

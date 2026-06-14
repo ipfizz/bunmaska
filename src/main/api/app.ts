@@ -201,7 +201,7 @@ export class App extends EventEmitter {
     return this.#environment().locale;
   }
 
-  /** The system locale; for Sambar this matches {@link getLocale}. */
+  /** The system locale; for Bunmaska this matches {@link getLocale}. */
   getSystemLocale(): string {
     return this.#environment().locale;
   }

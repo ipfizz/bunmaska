@@ -24,7 +24,7 @@ if (currentPlatform() === 'macos') {
 
     test('the runtime invokes a hand-built block with the right argument', () => {
       const rt = cocoa();
-      const str = nsString('sambar-block');
+      const str = nsString('bunmaska-block');
       const arr = msgSendPtr(rt.classes.get('NSArray'), rt.selectors.get('arrayWithObject:'), str);
 
       let fired = 0;

@@ -23,12 +23,12 @@ import { WebContents } from './web-contents';
 export type WebPreferences = {
   /**
    * Path to a JavaScript file run before the page's own scripts, after the
-   * built-in `window.__sambar` bridge. Resolved to an absolute path and read
+   * built-in `window.__bunmaska` bridge. Resolved to an absolute path and read
    * synchronously at window construction.
    *
    * Runs in a dedicated ISOLATED JavaScript world (Electron
    * `contextIsolation: true`): it shares the page's DOM but has its own global,
-   * so `window.__sambar`, `ipcRenderer`, and anything the preload defines are
+   * so `window.__bunmaska`, `ipcRenderer`, and anything the preload defines are
    * invisible to page scripts. Use `contextBridge.exposeInMainWorld` to expose a
    * controlled, async, structured-clone-copyable surface to the page.
    */
@@ -72,7 +72,7 @@ const readPreloadScript = (preload: string | undefined): string | undefined => {
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
-const DEFAULT_TITLE = 'Sambar';
+const DEFAULT_TITLE = 'Bunmaska';
 
 /** The non-preventable lifecycle events re-emitted verbatim from the seam. */
 const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [

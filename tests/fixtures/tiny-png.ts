@@ -77,7 +77,7 @@ export const makeTinyPng = (): Uint8Array => {
 
 /** Write the fixture PNG to a unique temp file and return its absolute path. */
 export const writeTinyPngFile = (): string => {
-  const path = join(tmpdir(), `sambar-native-image-${process.pid}-${Date.now()}.png`);
+  const path = join(tmpdir(), `bunmaska-native-image-${process.pid}-${Date.now()}.png`);
   writeFileSync(path, makeTinyPng());
   return path;
 };

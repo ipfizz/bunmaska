@@ -21,7 +21,7 @@ if (currentPlatform() === 'macos') {
     let result: { appDir: string; tarball: string; deb?: string };
 
     beforeAll(async () => {
-      workDir = mkdtempSync(join(tmpdir(), 'sambar-cli-build-linux-'));
+      workDir = mkdtempSync(join(tmpdir(), 'bunmaska-cli-build-linux-'));
       outDir = join(workDir, 'out');
       const entry = join(workDir, 'entry.ts');
       Bun.write(entry, "console.log('hi');\nprocess.exit(0);\n");

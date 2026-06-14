@@ -6,9 +6,9 @@ import type { NativeApplication, NativeWebContents } from '../../../src/main/pla
 
 /**
  * Phase B proof on a real WKWebView: a contextBridge surface exposed in the
- * ISOLATED world via the REAL `window.__sambar.exposeInMainWorld` is callable
+ * ISOLATED world via the REAL `window.__bunmaska.exposeInMainWorld` is callable
  * from the PAGE world via the cross-world DOM channel, returns a Promise, AND
- * the page still cannot reach `__sambar`. If the isolated host injection
+ * the page still cannot reach `__bunmaska`. If the isolated host injection
  * regressed, `exposeInMainWorld` would be undefined and this test would time
  * out — so this exercises the actual injected host end-to-end.
  */
@@ -23,18 +23,18 @@ if (currentPlatform() === 'macos') {
 
     // Isolated-world preload: use the REAL exposeInMainWorld the backend
     // injects, then relay the page world's call result and its `typeof
-    // __sambar` probe back over IPC.
+    // __bunmaska` probe back over IPC.
     const isolatedPreload = [
-      "window.__sambar.exposeInMainWorld('myApi', {",
+      "window.__bunmaska.exposeInMainWorld('myApi', {",
       '  add: function (a, b) { return a + b; },',
       '  version: 7,',
       '});',
       // Relay the page world's findings back over IPC.
       "document.addEventListener('cb-result', function (e) {",
-      "  window.__sambar.send('cb-result', e.detail);",
+      "  window.__bunmaska.send('cb-result', e.detail);",
       '});',
-      "document.addEventListener('cb-sambar-typeof', function (e) {",
-      "  window.__sambar.send('cb-sambar-typeof', e.detail);",
+      "document.addEventListener('cb-bunmaska-typeof', function (e) {",
+      "  window.__bunmaska.send('cb-bunmaska-typeof', e.detail);",
       '});',
     ].join('\n');
 
@@ -68,14 +68,14 @@ if (currentPlatform() === 'macos') {
       return undefined;
     };
 
-    test('page calls window.myApi.add (Promise) and cannot see __sambar', async () => {
+    test('page calls window.myApi.add (Promise) and cannot see __bunmaska', async () => {
       contents.loadHTML('<html><body>cb</body></html>', 'about:blank');
 
       // PAGE-world script: call the exposed (proxied) method and report both its
-      // resolved value and the page's view of __sambar, via the shared DOM.
+      // resolved value and the page's view of __bunmaska, via the shared DOM.
       const pageScript = [
         '(function () {',
-        "  document.dispatchEvent(new CustomEvent('cb-sambar-typeof', { detail: typeof window.__sambar }));",
+        "  document.dispatchEvent(new CustomEvent('cb-bunmaska-typeof', { detail: typeof window.__bunmaska }));",
         '  if (window.myApi && typeof window.myApi.add === "function") {',
         '    window.myApi.add(20, 22).then(function (r) {',
         "      document.dispatchEvent(new CustomEvent('cb-result', { detail: { value: r, version: window.myApi.version } }));",
@@ -86,13 +86,13 @@ if (currentPlatform() === 'macos') {
 
       const deadline = Date.now() + 8000;
       let result: ReturnType<typeof decodeEnvelope> | undefined;
-      let sambarTypeof: ReturnType<typeof decodeEnvelope> | undefined;
-      while (Date.now() < deadline && (result === undefined || sambarTypeof === undefined)) {
+      let bunmaskaTypeof: ReturnType<typeof decodeEnvelope> | undefined;
+      while (Date.now() < deadline && (result === undefined || bunmaskaTypeof === undefined)) {
         // Fire-and-forget; swallow a late teardown rejection.
         contents.executeJavaScript(pageScript).catch(() => undefined);
         await delay(150);
         result = find((e) => e.kind === 'send' && e.channel === 'cb-result');
-        sambarTypeof = find((e) => e.kind === 'send' && e.channel === 'cb-sambar-typeof');
+        bunmaskaTypeof = find((e) => e.kind === 'send' && e.channel === 'cb-bunmaska-typeof');
       }
 
       expect(result).toBeDefined();
@@ -101,10 +101,10 @@ if (currentPlatform() === 'macos') {
       expect(resultArgs[0]).toMatchObject({ value: 42, version: 7 });
 
       // The page world still cannot reach the isolated bridge.
-      expect(sambarTypeof).toBeDefined();
-      expect(sambarTypeof).toMatchObject({
+      expect(bunmaskaTypeof).toBeDefined();
+      expect(bunmaskaTypeof).toMatchObject({
         kind: 'send',
-        channel: 'cb-sambar-typeof',
+        channel: 'cb-bunmaska-typeof',
         args: ['undefined'],
       });
     });

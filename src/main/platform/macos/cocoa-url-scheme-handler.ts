@@ -35,8 +35,8 @@ import type { Handle } from './objc';
 
 const log = createLogger('macos-url-scheme-handler');
 
-/** The Sambar error domain for a failed custom-scheme task. */
-const ERROR_DOMAIN = 'SambarProtocol';
+/** The Bunmaska error domain for a failed custom-scheme task. */
+const ERROR_DOMAIN = 'BunmaskaProtocol';
 /** `NSURLErrorResourceUnavailable`-ish code for an unhandled/declined request. */
 const ERROR_CODE_NO_HANDLER = -1100n;
 
@@ -155,7 +155,7 @@ const ensureHandlerClass = (): Handle => {
   if (handlerClass !== undefined) {
     return handlerClass;
   }
-  handlerClass = defineObjcClass('SambarURLSchemeHandler', 'NSObject', [
+  handlerClass = defineObjcClass('BunmaskaURLSchemeHandler', 'NSObject', [
     {
       selector: 'webView:startURLSchemeTask:',
       typeEncoding: 'v@:@@',

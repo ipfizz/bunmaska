@@ -78,7 +78,7 @@ const makeFakeBindings = (): { bindings: Bindings; calls: Call[] } => {
     gActionMapAddAction: (group, action) => {
       // Record the action under its name so activate() can find it.
       if (action === lastNewAction && lastNewActionName !== undefined) {
-        groupActions.get(group)?.set(`sambar.${lastNewActionName}`, action);
+        groupActions.get(group)?.set(`bunmaska.${lastNewActionName}`, action);
       }
       calls.push({ fn: 'gActionMapAddAction', args: [group, action] });
     },
@@ -119,7 +119,7 @@ describe('action-name helpers', () => {
   });
 
   it('detailedAction prefixes the action group namespace', () => {
-    expect(detailedAction('menu-7')).toBe('sambar.menu-7');
+    expect(detailedAction('menu-7')).toBe('bunmaska.menu-7');
   });
 });
 

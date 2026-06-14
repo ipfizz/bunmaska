@@ -1,5 +1,5 @@
 /**
- * Minimal leveled diagnostics for Sambar.
+ * Minimal leveled diagnostics for Bunmaska.
  *
  * Exists because Biome bans `console.*` in committed code and the FFI layer
  * needs a place to report which library failed to load or which selector did

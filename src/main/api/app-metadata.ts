@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
  * Pure resolution of the consuming app's name and version.
  *
  * Electron derives `app.getName()`/`app.getVersion()` from the application's
- * `package.json`. Sambar does the same: it walks up from the main module's
+ * `package.json`. Bunmaska does the same: it walks up from the main module's
  * directory to the nearest `package.json` and reads `productName`/`name`/
  * `version`. The file-reading is injected ({@link ManifestReader}) so the
  * walk-up logic unit-tests without touching disk; the `app` layer supplies a
@@ -12,12 +12,12 @@ import { dirname, join } from 'node:path';
  */
 
 /** Default name when no `package.json` is found (matches no real app). */
-export const DEFAULT_APP_NAME = 'sambar-app';
+export const DEFAULT_APP_NAME = 'bunmaska-app';
 /** Default version when the manifest omits one. */
 export const DEFAULT_APP_VERSION = '0.0.0';
 
 /**
- * The fields Sambar reads from a `package.json`. Each is explicitly
+ * The fields Bunmaska reads from a `package.json`. Each is explicitly
  * `| undefined` (not merely optional) so a parsed manifest can set a key to
  * `undefined` under `exactOptionalPropertyTypes`.
  */

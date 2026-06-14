@@ -7,8 +7,8 @@ import type { Handle } from './objc';
 /**
  * A reusable Cocoa notification observer (D034).
  *
- * One shared `SambarNotificationObserver` class (defined once at runtime, D026)
- * carries a single `sambarNotify:` selector; each registration owns an instance
+ * One shared `BunmaskaNotificationObserver` class (defined once at runtime, D026)
+ * carries a single `bunmaskaNotify:` selector; each registration owns an instance
  * whose JS handler is looked up by the instance handle (the same registry trick
  * as `cocoa-menu`'s click routing). It works against ANY `NSNotificationCenter`:
  * `nativeTheme` uses the distributed center (system appearance), `powerMonitor`
@@ -26,9 +26,9 @@ const ensureObserverClass = (): Handle => {
   if (observerClass !== undefined) {
     return observerClass;
   }
-  observerClass = defineObjcClass('SambarNotificationObserver', 'NSObject', [
+  observerClass = defineObjcClass('BunmaskaNotificationObserver', 'NSObject', [
     {
-      selector: 'sambarNotify:',
+      selector: 'bunmaskaNotify:',
       typeEncoding: 'v@:@',
       args: ['object'],
       impl: (self) => {
@@ -69,7 +69,7 @@ export const observeNotification = (center: Handle, name: string, onPost: () => 
     center,
     rt.selectors.get('addObserver:selector:name:object:'),
     observer,
-    rt.selectors.get('sambarNotify:'),
+    rt.selectors.get('bunmaskaNotify:'),
     nsString(name),
     0n,
   );

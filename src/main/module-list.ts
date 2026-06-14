@@ -1,6 +1,6 @@
 /**
  * The canonical map of Electron's main-process module names and which ones
- * Sambar implements today (D028).
+ * Bunmaska implements today (D028).
  *
  * This is the single source of truth for drop-in parity: the Phase-5 compat
  * suite checks against {@link KNOWN_ELECTRON_MODULES}, and consumers reaching
@@ -54,7 +54,7 @@ export const KNOWN_ELECTRON_MODULES = [
 
 export type ElectronModuleName = (typeof KNOWN_ELECTRON_MODULES)[number];
 
-/** The modules Sambar actually ships. Grows phase by phase. */
+/** The modules Bunmaska actually ships. Grows phase by phase. */
 export const IMPLEMENTED_MODULES = [
   'app',
   'autoUpdater',
@@ -81,9 +81,9 @@ export const IMPLEMENTED_MODULES = [
 
 const implemented: ReadonlySet<string> = new Set(IMPLEMENTED_MODULES);
 
-/** Whether Sambar implements the given module today. */
+/** Whether Bunmaska implements the given module today. */
 export const isImplemented = (name: string): boolean => implemented.has(name);
 
 /** The actionable error message for a not-yet-implemented Electron module. */
 export const notImplementedMessage = (name: string): string =>
-  `Sambar: '${name}' is not yet implemented. Track progress at https://github.com/indrajeetor/sambar`;
+  `Bunmaska: '${name}' is not yet implemented. Track progress at https://github.com/indrajeetor/bunmaska`;

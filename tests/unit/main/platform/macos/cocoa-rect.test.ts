@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../../../src/common/errors';
+import { BunmaskaError } from '../../../../../src/common/errors';
 import {
   CG_RECT_SIZE,
   type CGRect,
@@ -58,9 +58,9 @@ describe('unpackCGRect', () => {
     expect(unpackCGRect(packCGRect(r))).toEqual(r);
   });
 
-  test('throws SambarError when buffer is smaller than CG_RECT_SIZE', () => {
+  test('throws BunmaskaError when buffer is smaller than CG_RECT_SIZE', () => {
     const small = new ArrayBuffer(16);
-    expect(() => unpackCGRect(small)).toThrow(SambarError);
+    expect(() => unpackCGRect(small)).toThrow(BunmaskaError);
     expect(() => unpackCGRect(small)).toThrow(/CGRect buffer must be at least 32 bytes/);
   });
 

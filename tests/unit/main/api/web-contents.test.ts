@@ -203,9 +203,9 @@ describe('WebContents.setUserAgent / getUserAgent', () => {
   test('setUserAgent applies natively and updates getUserAgent', () => {
     const { native, userAgents } = makeFakeNative();
     const wc = new WebContents(native);
-    wc.setUserAgent('Sambar/1.0 (test)');
-    expect(userAgents).toEqual(['Sambar/1.0 (test)']);
-    expect(wc.getUserAgent()).toBe('Sambar/1.0 (test)');
+    wc.setUserAgent('Bunmaska/1.0 (test)');
+    expect(userAgents).toEqual(['Bunmaska/1.0 (test)']);
+    expect(wc.getUserAgent()).toBe('Bunmaska/1.0 (test)');
   });
 });
 

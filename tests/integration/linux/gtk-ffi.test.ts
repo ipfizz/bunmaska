@@ -69,7 +69,7 @@ if (currentPlatform() === 'linux') {
       }
       const window = lib.symbols.gtk_window_new();
       expect(window).not.toBeNull();
-      lib.symbols.gtk_window_set_title(window, cstr('Sambar'));
+      lib.symbols.gtk_window_set_title(window, cstr('Bunmaska'));
       lib.symbols.gtk_window_set_default_size(window, 400, 300);
       lib.symbols.gtk_widget_set_visible(window, 1);
       lib.symbols.gtk_window_present(window);

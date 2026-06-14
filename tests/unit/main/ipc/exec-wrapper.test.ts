@@ -20,7 +20,7 @@ const runWrapper = (source: string): Promise<Outcome> =>
     const fakeWindow = {
       webkit: {
         messageHandlers: {
-          sambarExec: {
+          bunmaskaExec: {
             postMessage: (json: string): void => resolve(JSON.parse(json) as Outcome),
           },
         },
@@ -31,9 +31,9 @@ const runWrapper = (source: string): Promise<Outcome> =>
 
 describe('buildExecWrapper', () => {
   test('embeds the exec id, handler name, and user code', () => {
-    const source = buildExecWrapper(7, 'sambarExec', '1 + 1');
+    const source = buildExecWrapper(7, 'bunmaskaExec', '1 + 1');
     expect(source).toContain('7');
-    expect(source).toContain('sambarExec');
+    expect(source).toContain('bunmaskaExec');
     // The user code is JSON-encoded into the wrapper so it round-trips safely.
     expect(source).toContain(JSON.stringify('1 + 1'));
     expect(source).toContain('postMessage');
@@ -41,12 +41,12 @@ describe('buildExecWrapper', () => {
 
   test('safely embeds code containing quotes and newlines', () => {
     const code = 'const s = "a\nb\'c"; s';
-    const source = buildExecWrapper(1, 'sambarExec', code);
+    const source = buildExecWrapper(1, 'bunmaskaExec', code);
     expect(source).toContain(JSON.stringify(code));
   });
 
   test('returns the completion value of an expression', async () => {
-    expect(await runWrapper(buildExecWrapper(42, 'sambarExec', '1 + 1'))).toMatchObject({
+    expect(await runWrapper(buildExecWrapper(42, 'bunmaskaExec', '1 + 1'))).toMatchObject({
       execId: 42,
       ok: true,
       result: 2,
@@ -55,12 +55,14 @@ describe('buildExecWrapper', () => {
 
   test('resolves a Promise result to its fulfilled value', async () => {
     expect(
-      await runWrapper(buildExecWrapper(5, 'sambarExec', 'Promise.resolve("hi")')),
+      await runWrapper(buildExecWrapper(5, 'bunmaskaExec', 'Promise.resolve("hi")')),
     ).toMatchObject({ execId: 5, ok: true, result: 'hi' });
   });
 
   test('reports a thrown error as an unsuccessful outcome', async () => {
-    const outcome = await runWrapper(buildExecWrapper(9, 'sambarExec', 'throw new Error("boom")'));
+    const outcome = await runWrapper(
+      buildExecWrapper(9, 'bunmaskaExec', 'throw new Error("boom")'),
+    );
     expect(outcome.ok).toBe(false);
     expect(outcome.execId).toBe(9);
     expect(outcome.error).toContain('boom');

@@ -37,14 +37,14 @@ describe.skipIf(!isLinux)('Linux webPreferences.preload end-to-end', () => {
       return;
     }
 
-    const dir = mkdtempSync(join(tmpdir(), 'sambar-preload-e2e-'));
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-preload-e2e-'));
     // The preload (isolated world) records whether the bridge exists at the
     // instant it runs, and on 'go' posts its findings back.
     const preloadSource = [
-      'window.__sambarPreloadRan = true;',
-      'window.__sambarBridgeAtPreload = typeof window.__sambar !== "undefined";',
-      "window.__sambar.on('go', function () {",
-      "  window.__sambar.send('preload-check', window.__sambarPreloadRan === true, window.__sambarBridgeAtPreload === true);",
+      'window.__bunmaskaPreloadRan = true;',
+      'window.__bunmaskaBridgeAtPreload = typeof window.__bunmaska !== "undefined";',
+      "window.__bunmaska.on('go', function () {",
+      "  window.__bunmaska.send('preload-check', window.__bunmaskaPreloadRan === true, window.__bunmaskaBridgeAtPreload === true);",
       '});',
     ].join('\n');
     writeFileSync(join(dir, 'preload.js'), preloadSource);

@@ -13,7 +13,7 @@ import type { Platform } from '../../common/platform';
  * platforms from a single host.
  */
 
-/** Every directory name Sambar resolves for `app.getPath` / `app.setPath`. */
+/** Every directory name Bunmaska resolves for `app.getPath` / `app.setPath`. */
 export type AppPathName =
   | 'home'
   | 'appData'

@@ -25,7 +25,7 @@ let appKitLib: unknown;
 
 /**
  * Open `libobjc.A.dylib` plus `Foundation.framework` and expose the three
- * foundational Objective-C runtime symbols Sambar relies on:
+ * foundational Objective-C runtime symbols Bunmaska relies on:
  *
  * - `sel_registerName(const char *name) -> SEL`
  * - `objc_getClass(const char *name) -> Class`
@@ -42,7 +42,7 @@ let appKitLib: unknown;
  * (`NSGetSizeAndAlignment`, `NSApplicationMain`) without invoking them. The
  * handles are kept at module scope to prevent GC from closing the libraries.
  *
- * Only callable on macOS — throws {@link SambarError} on any other platform so
+ * Only callable on macOS — throws {@link BunmaskaError} on any other platform so
  * that this module remains safely *importable* on Linux/Windows (the failure
  * happens at call time, not at module load).
  */

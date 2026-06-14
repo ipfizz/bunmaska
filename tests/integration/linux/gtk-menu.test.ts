@@ -22,7 +22,7 @@ import type { NativeWindow } from '../../../src/main/platform/native';
  * realizer with an `onClick` that sets a flag, then fire the action through
  * `g_action_group_activate_action(group, "menu-N", null)` and assert the JS
  * `onClick` ran. Note the BARE action name (`menu-N`): a `GSimpleActionGroup`
- * keys actions by their own name; the `sambar.` prefix only applies when the
+ * keys actions by their own name; the `bunmaska.` prefix only applies when the
  * group is resolved through the window's inserted action namespace (the menu
  * bar). This proves click routing end-to-end (action model → signal → JSCallback
  * → JS) WITHOUT a synthetic pointer event.

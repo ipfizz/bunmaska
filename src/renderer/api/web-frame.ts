@@ -91,7 +91,7 @@ export const createWebFrame = (scope?: WebFrameScope): WebFrame => {
       const mount = doc.head ?? doc.documentElement;
       mount.appendChild(style);
       counter += 1;
-      const key = `sambar-css-${counter}`;
+      const key = `bunmaska-css-${counter}`;
       inserted.set(key, style);
       return key;
     },

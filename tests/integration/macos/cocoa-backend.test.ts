@@ -36,9 +36,14 @@ if (currentPlatform() === 'macos') {
       const app = createMacOSApplication();
       app.start();
       try {
-        const win = app.createWindow({ width: 480, height: 320, title: 'Sambar Test', show: true });
+        const win = app.createWindow({
+          width: 480,
+          height: 320,
+          title: 'Bunmaska Test',
+          show: true,
+        });
         expect(win.isVisible()).toBe(true);
-        expect(win.getTitle()).toBe('Sambar Test');
+        expect(win.getTitle()).toBe('Bunmaska Test');
         expect(win.getBounds().width).toBe(480);
       } finally {
         app.quit();
@@ -80,7 +85,7 @@ if (currentPlatform() === 'macos') {
       app.start();
       try {
         const win = app.createWindow({ width: 400, height: 300, title: 't', show: true });
-        win.webContents.loadHTML('<html><body><h1>Sambar</h1></body></html>', 'about:blank');
+        win.webContents.loadHTML('<html><body><h1>Bunmaska</h1></body></html>', 'about:blank');
         await delay(250);
         expect(win.webContents.getURL()).toBe('about:blank');
       } finally {
@@ -107,7 +112,7 @@ if (currentPlatform() === 'macos') {
       app.start();
       try {
         const win = app.createWindow({ width: 400, height: 300, title: 't', show: true });
-        win.webContents.loadHTML('<html><body><h1>Sambar PDF</h1></body></html>', 'about:blank');
+        win.webContents.loadHTML('<html><body><h1>Bunmaska PDF</h1></body></html>', 'about:blank');
         await delay(250);
         const pdf = await win.webContents.printToPDF();
         expect(pdf.length).toBeGreaterThan(100);

@@ -6,7 +6,7 @@ import type { NativeWindow } from '../../../src/main/platform/native';
 /**
  * Linux split-eval proof on real GTK4 + WebKitGTK 6.0: the PUBLIC
  * `executeJavaScript` runs in the PAGE world (world_name = NULL), while internal
- * dispatch runs in the ISOLATED `SambarPreload` world. They have separate
+ * dispatch runs in the ISOLATED `BunmaskaPreload` world. They have separate
  * globals.
  *
  * Runs only in CI ubuntu under `xvfb-run -a`. Inert on macOS via
@@ -34,8 +34,8 @@ describe.skipIf(!isLinux)('Linux split eval semantics', () => {
 
     const isolatedPreload = [
       'window.__isoMarker = "from-isolated";',
-      "window.__sambar.on('report', function () {",
-      "  window.__sambar.send('report-result', window.__isoMarker, typeof window.__pageMarker);",
+      "window.__bunmaska.on('report', function () {",
+      "  window.__bunmaska.send('report-result', window.__isoMarker, typeof window.__pageMarker);",
       '});',
     ].join('\n');
 

@@ -1,5 +1,5 @@
 /**
- * Sambar "IPC demo" — contextBridge + ipcMain.handle end-to-end.
+ * Bunmaska "IPC demo" — contextBridge + ipcMain.handle end-to-end.
  *
  * Run from the repo root with:  bun examples/ipc-demo/main.ts
  *
@@ -16,7 +16,7 @@ app.whenReady().then(() => {
   const win = new BrowserWindow({
     width: 720,
     height: 540,
-    title: 'Sambar IPC Demo',
+    title: 'Bunmaska IPC Demo',
     webPreferences: {
       preload: join(import.meta.dir, 'preload.js'),
     },

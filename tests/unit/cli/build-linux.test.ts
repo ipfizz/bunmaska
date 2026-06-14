@@ -82,16 +82,16 @@ describe('buildControlFile', () => {
   const text = buildControlFile({
     slug: 'my-app',
     version: '1.0.0',
-    maintainer: 'Sambar <noreply@sambar.dev>',
-    description: 'My App built with Sambar',
+    maintainer: 'Bunmaska <noreply@bunmaska.dev>',
+    description: 'My App built with Bunmaska',
   });
 
   test('emits the debian control fields', () => {
     expect(text).toContain('Package: my-app');
     expect(text).toContain('Version: 1.0.0');
     expect(text).toContain('Architecture: amd64');
-    expect(text).toContain('Maintainer: Sambar <noreply@sambar.dev>');
-    expect(text).toContain('Description: My App built with Sambar');
+    expect(text).toContain('Maintainer: Bunmaska <noreply@bunmaska.dev>');
+    expect(text).toContain('Description: My App built with Bunmaska');
   });
 
   test('ends with a trailing newline', () => {

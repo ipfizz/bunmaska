@@ -7,24 +7,24 @@ import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
 /**
- * macOS status-bar items via `NSStatusItem` — the macOS half of Sambar's `Tray`.
+ * macOS status-bar items via `NSStatusItem` — the macOS half of Bunmaska's `Tray`.
  *
  * A status item is created from the system status bar and configured through its
  * `NSStatusBarButton` (the `-[NSStatusItem button]`): the icon (`NSImage` loaded
  * from a file path), the tooltip, and the title text shown next to the icon.
  *
  * RETAIN: `[NSStatusBar systemStatusBar] statusItemWithLength:` returns an
- * autoreleased item that AppKit otherwise owns; Sambar retains it on creation so
+ * autoreleased item that AppKit otherwise owns; Bunmaska retains it on creation so
  * the bigint handle stays valid for the tray's whole lifetime, and releases it in
  * {@link TrayInstance.destroy} after `removeStatusItem:`.
  *
  * CONTEXT MENU: a tray context menu is an `NSMenu` set on the status item via
  * `setMenu:`. We reuse the exact `cocoa-menu` realizer (`realizeMenu`) that the
  * `Menu` API uses, so item click routing flows through the shared
- * `SambarMenuTarget` registry. When a menu is set, AppKit shows it on click.
+ * `BunmaskaMenuTarget` registry. When a menu is set, AppKit shows it on click.
  *
  * CLICK: the status button's target/action is wired to a retained
- * `SambarTrayTarget` (mirroring `SambarMenuTarget`) whose IMP looks the button up
+ * `BunmaskaTrayTarget` (mirroring `BunmaskaMenuTarget`) whose IMP looks the button up
  * in a registry and fires the JS `click` callback. The target object and its
  * `JSCallback` are retained for the runtime's lifetime (the class is registered
  * once and never torn down), so the IMP is never freed inside its own
@@ -46,9 +46,9 @@ const ensureTarget = (): Handle => {
     return sharedTarget;
   }
   const rt = cocoa();
-  targetClass = defineObjcClass('SambarTrayTarget', 'NSObject', [
+  targetClass = defineObjcClass('BunmaskaTrayTarget', 'NSObject', [
     {
-      selector: 'sambarTrayAction:',
+      selector: 'bunmaskaTrayAction:',
       typeEncoding: 'v@:@',
       args: ['object'],
       impl: (_self, _cmd, sender) => {
@@ -124,7 +124,7 @@ const create = (image: string): TrayInstance => {
     },
     setContextMenu: (menu: Menu | null) => {
       // Reuse the Menu realizer so tray-menu clicks route through the shared
-      // SambarMenuTarget registry, exactly like an application menu.
+      // BunmaskaMenuTarget registry, exactly like an application menu.
       const nsMenu: Handle = menu === null ? 0n : menu.realize();
       msgSendPtr(item, rt.selectors.get('setMenu:'), nsMenu);
     },
@@ -135,7 +135,7 @@ const create = (image: string): TrayInstance => {
       }
       clickRegistry.set(btn, cb);
       msgSendPtr(btn, rt.selectors.get('setTarget:'), ensureTarget());
-      msgSendPtr(btn, rt.selectors.get('setAction:'), rt.selectors.get('sambarTrayAction:'));
+      msgSendPtr(btn, rt.selectors.get('setAction:'), rt.selectors.get('bunmaskaTrayAction:'));
     },
     destroy: () => {
       if (destroyed) {

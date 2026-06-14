@@ -9,7 +9,7 @@ import { macOSLibraryAccessor } from './objc';
  * global hot key on macOS: it works from a plain `bun main.ts` process (no
  * Accessibility permission, no app bundle), and the fired events flow through
  * the application's Carbon event target — which is serviced by the same main
- * run loop Sambar already pumps (`CFRunLoopRunInMode`, D020). So a registered
+ * run loop Bunmaska already pumps (`CFRunLoopRunInMode`, D020). So a registered
  * hot key dispatches through the cooperative pump with no extra wiring.
  *
  * ── EventHotKeyID struct-by-value (load-bearing, verified on this arm64 host) ──

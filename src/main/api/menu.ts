@@ -1,4 +1,4 @@
-import { InvalidArgumentError, SambarError, UnsupportedPlatformError } from '../../common/errors';
+import { InvalidArgumentError, BunmaskaError, UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import type { BrowserWindow } from './browser-window';
 import { linuxMenuRealizer } from '../platform/linux/gtk-menu';
@@ -49,7 +49,7 @@ export type MenuRole =
  * A "macro" role that expands to a whole standard submenu (Electron's
  * `editMenu`/`windowMenu`). `appMenu`/`viewMenu` are deferred — `appMenu` needs
  * the app name (a menu→app import cycle) and `viewMenu` needs reload/zoom/
- * devtools menu roles Sambar doesn't expose yet.
+ * devtools menu roles Bunmaska doesn't expose yet.
  */
 export type MenuMacroRole = 'editMenu' | 'windowMenu';
 
@@ -483,7 +483,7 @@ export class Menu {
    */
   popup(options?: MenuPopupOptions): void {
     if (windowResolver === undefined) {
-      throw new SambarError('Menu.popup is unavailable: no window backend installed');
+      throw new BunmaskaError('Menu.popup is unavailable: no window backend installed');
     }
     const target = resolvePopupTarget(options, windowResolver);
     this.#popupTarget = target;

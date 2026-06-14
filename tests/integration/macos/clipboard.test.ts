@@ -15,8 +15,8 @@ const PNG_1x1 = new Uint8Array(
 if (currentPlatform() === 'macos') {
   describe('clipboard on macOS', () => {
     test('writeText then readText round-trips plain text', async () => {
-      clipboard.writeText('sambar clipboard test');
-      expect(await clipboard.readText()).toBe('sambar clipboard test');
+      clipboard.writeText('bunmaska clipboard test');
+      expect(await clipboard.readText()).toBe('bunmaska clipboard test');
     });
 
     test('writeText replaces previous contents', async () => {

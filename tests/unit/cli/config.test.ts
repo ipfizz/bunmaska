@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SambarError } from '../../../src/common/errors';
+import { BunmaskaError } from '../../../src/common/errors';
 import {
   configChannel,
   findConfigFile,
@@ -13,7 +13,7 @@ import {
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'sambar-config-'));
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-config-'));
   tmpDirs.push(dir);
   return dir;
 };
@@ -50,7 +50,7 @@ describe('validateConfig', () => {
   });
 
   test('rejects a non-object config', () => {
-    expect(() => validateConfig(null)).toThrow(SambarError);
+    expect(() => validateConfig(null)).toThrow(BunmaskaError);
     expect(() => validateConfig('nope')).toThrow(/must be an object/);
   });
 
@@ -79,9 +79,9 @@ describe('findConfigFile', () => {
     expect(findConfigFile(makeTmpDir())).toBeUndefined();
   });
 
-  test('finds sambar.config.mjs', () => {
+  test('finds bunmaska.config.mjs', () => {
     const dir = makeTmpDir();
-    const path = join(dir, 'sambar.config.mjs');
+    const path = join(dir, 'bunmaska.config.mjs');
     writeFileSync(path, 'export default {}');
     expect(findConfigFile(dir)).toBe(path);
   });
@@ -90,21 +90,21 @@ describe('findConfigFile', () => {
 describe('loadConfigFile / loadConfig', () => {
   test('imports a default export and validates it', async () => {
     const dir = makeTmpDir();
-    const path = join(dir, 'sambar.config.mjs');
+    const path = join(dir, 'bunmaska.config.mjs');
     writeFileSync(path, "export default { name: 'Fixture', entry: 'src/main.ts' }");
     expect(await loadConfigFile(path)).toEqual({ name: 'Fixture', entry: 'src/main.ts' });
   });
 
   test('imports a named "config" export when there is no default', async () => {
     const dir = makeTmpDir();
-    const path = join(dir, 'sambar.config.mjs');
+    const path = join(dir, 'bunmaska.config.mjs');
     writeFileSync(path, "export const config = { name: 'Named' }");
     expect(await loadConfigFile(path)).toEqual({ name: 'Named' });
   });
 
   test('throws when no usable export is present', async () => {
     const dir = makeTmpDir();
-    const path = join(dir, 'sambar.config.mjs');
+    const path = join(dir, 'bunmaska.config.mjs');
     writeFileSync(path, "export const other = { name: 'x' }");
     await expect(loadConfigFile(path)).rejects.toThrow(/expected a default export/);
   });
@@ -115,7 +115,7 @@ describe('loadConfigFile / loadConfig', () => {
 
   test('loadConfig finds and loads the project config', async () => {
     const dir = makeTmpDir();
-    const path = join(dir, 'sambar.config.mjs');
+    const path = join(dir, 'bunmaska.config.mjs');
     writeFileSync(path, "export default { name: 'Loaded' }");
     expect(await loadConfig(dir)).toEqual({ config: { name: 'Loaded' }, configPath: path });
   });

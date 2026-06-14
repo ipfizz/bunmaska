@@ -9,10 +9,10 @@ import { connectSignal } from './gtk-signals';
 import { loadLibnotifyFFI } from './libnotify-ffi';
 
 /**
- * Linux notifications via libnotify — the Linux half of Sambar's `Notification`.
+ * Linux notifications via libnotify — the Linux half of Bunmaska's `Notification`.
  *
  * libnotify forwards to the session's notification daemon over D-Bus.
- * `notify_init('Sambar')` is called once per process before the first
+ * `notify_init('Bunmaska')` is called once per process before the first
  * notification. `notify_notification_new(title, body, NULL)` builds the
  * notification; `notify_notification_show(n, NULL)` displays it (returns FALSE if
  * there is no daemon — e.g. headless CI — which is expected and not an error);
@@ -44,14 +44,14 @@ const liveCallbacks = new Set<JSCallback>();
 
 let initialized = false;
 
-/** Ensure `notify_init('Sambar')` has run once. Returns whether init succeeded. */
+/** Ensure `notify_init('Bunmaska')` has run once. Returns whether init succeeded. */
 const ensureInit = (): boolean => {
   const notify = loadLibnotifyFFI();
   if (initialized || notify.symbols.notify_is_initted() !== 0) {
     initialized = true;
     return true;
   }
-  const ok = notify.symbols.notify_init(cstr('Sambar')) !== 0;
+  const ok = notify.symbols.notify_init(cstr('Bunmaska')) !== 0;
   initialized = ok;
   return ok;
 };

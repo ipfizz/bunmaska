@@ -4,7 +4,7 @@ import { currentPlatform } from '../../../common/platform';
 
 /**
  * Loads GdkPixbuf's load/query/encode symbols — the Linux primitives behind
- * Sambar's `nativeImage`.
+ * Bunmaska's `nativeImage`.
  *
  * GdkPixbuf is a small, stable library that decodes the common raster formats
  * (PNG/JPEG/…) and is a transitive dependency of GTK 4, but it ships as its own

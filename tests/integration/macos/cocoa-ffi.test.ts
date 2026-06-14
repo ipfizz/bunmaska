@@ -39,7 +39,7 @@ if (currentPlatform() === 'macos') {
 
     test('objc_getClass returns 0n for an unknown class name', () => {
       const lib = loadCocoaFFI();
-      const cls = lib.symbols.objc_getClass(cstr('SambarNonexistentClass_xyzxyz'));
+      const cls = lib.symbols.objc_getClass(cstr('BunmaskaNonexistentClass_xyzxyz'));
       expect(cls).toBe(0n);
     });
 

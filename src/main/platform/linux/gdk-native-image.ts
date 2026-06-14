@@ -24,7 +24,7 @@ import { loadGObjectFFI } from './gobject-ffi';
  * with `toArrayBuffer` then `g_free` it.
  *
  * The decoded handle carries the live `GdkPixbuf*` (as a bigint). We do NOT
- * unref it here — its lifetime is the JS `NativeImage`'s, and Sambar has no
+ * unref it here — its lifetime is the JS `NativeImage`'s, and Bunmaska has no
  * finalizer hook yet, so the pixbuf is intentionally leaked for the image's
  * lifetime (documented; matches how other Linux handles are retained). The
  * transient `GBytes` and `GInputStream` of the buffer path ARE freed.

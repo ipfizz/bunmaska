@@ -4,15 +4,15 @@ import { currentPlatform } from '../../../common/platform';
 
 /**
  * Loads the GIO `GMenu`/`GAction` model symbols and the GTK 4
- * `GtkPopoverMenuBar`/`GtkBox` widget symbols behind Sambar's Linux `Menu`
+ * `GtkPopoverMenuBar`/`GtkBox` widget symbols behind Bunmaska's Linux `Menu`
  * backend.
  *
  * A GTK 4 application menu bar is built from a backend-neutral *model* (`GMenu`,
  * a `GMenuModel`) wired to an *action group* (`GSimpleActionGroup`): each
- * clickable item names a `GAction` (e.g. `"sambar.menu-0"`), and activating
+ * clickable item names a `GAction` (e.g. `"bunmaska.menu-0"`), and activating
  * that action — via a click, an accelerator, or `g_action_group_activate_action`
  * — fires the action's `activate` signal. A `GtkPopoverMenuBar` renders the
- * model; the action group is inserted into the window under the `"sambar"`
+ * model; the action group is inserted into the window under the `"bunmaska"`
  * prefix with `gtk_widget_insert_action_group`.
  *
  * Declared separately from the loaders so unit tests can assert ABI shapes (arg
@@ -36,7 +36,7 @@ export const GMENU_FFI_SYMBOLS = {
     args: [],
     returns: FFIType.pointer,
   },
-  // (menu, label, detailed_action /*e.g. "sambar.menu-0"*/) -> void
+  // (menu, label, detailed_action /*e.g. "bunmaska.menu-0"*/) -> void
   g_menu_append: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.cstring],
     returns: FFIType.void,
@@ -102,7 +102,7 @@ export const GTK_MENU_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (widget, prefix /*e.g. "sambar"*/, group /*GActionGroup* | null*/) -> void
+  // (widget, prefix /*e.g. "bunmaska"*/, group /*GActionGroup* | null*/) -> void
   gtk_widget_insert_action_group: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer],
     returns: FFIType.void,

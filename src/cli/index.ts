@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * The `sambar` command-line interface: `run`, `build`, `--help`, `--version`.
+ * The `bunmaska` command-line interface: `run`, `build`, `--help`, `--version`.
  *
  * This is the user-facing build/launch tool, not a runtime module — it uses
  * Bun/Node filesystem and process APIs only. Output goes through
@@ -31,7 +31,7 @@ import { runApp } from './run';
 import { emitUpdateArtifact } from './update-artifact';
 import { DEFAULT_CHANNEL } from '../common/manifest';
 import { currentArch, currentPlatform } from '../common/platform';
-import { SAMBAR_VERSION } from '../common/version';
+import { BUNMASKA_VERSION } from '../common/version';
 
 const out = (text: string): void => {
   process.stdout.write(`${text}\n`);
@@ -41,20 +41,20 @@ const err = (text: string): void => {
   process.stderr.write(`${text}\n`);
 };
 
-const USAGE = `sambar ${SAMBAR_VERSION}
+const USAGE = `bunmaska ${BUNMASKA_VERSION}
 
 Usage:
-  sambar init [dir]                    Scaffold a new Sambar project (default: .)
-  sambar dev [entry.ts]                Run the app, restarting on file changes
-  sambar run <entry.ts> [args...]      Launch a Sambar app (bun run <entry>)
-  sambar build <entry.ts> [options]    Bundle a distributable app
-  sambar --help                        Show this help
-  sambar --version                     Print the Sambar version
+  bunmaska init [dir]                    Scaffold a new Bunmaska project (default: .)
+  bunmaska dev [entry.ts]                Run the app, restarting on file changes
+  bunmaska run <entry.ts> [args...]      Launch a Bunmaska app (bun run <entry>)
+  bunmaska build <entry.ts> [options]    Bundle a distributable app
+  bunmaska --help                        Show this help
+  bunmaska --version                     Print the Bunmaska version
 
 build options:
   --target <os>      Build target: macos | linux (default: host platform)
   --name <Name>      Display/bundle name (default: derived from <entry>)
-  --id <bundle.id>   Bundle identifier (default: com.sambar.<name-slug>)
+  --id <bundle.id>   Bundle identifier (default: com.bunmaska.<name-slug>)
   --out <dir>        Output directory (default: current directory)
   --icon <path>      App icon. macOS accepts a .icns (copied as-is) or a .png
                      (converted to .icns via sips/iconutil); linux takes a .png.
@@ -71,7 +71,7 @@ build options:
                      runtime autoUpdater reads. The artifact arch is the host's.
   --channel <name>   Release channel for --update (default: stable).
 
-'sambar build' produces a macOS .app or a Linux AppDir + .tar.gz + .deb.
+'bunmaska build' produces a macOS .app or a Linux AppDir + .tar.gz + .deb.
 A macOS host can cross-build Linux with --target linux.
 --sign and --notarize are macOS-only (codesign/notarytool are macOS tools).`;
 
@@ -79,7 +79,7 @@ A macOS host can cross-build Linux with --target linux.
 const deriveName = (entry: string): string => {
   const base = entry.split(/[\\/]/).pop() ?? entry;
   const stem = base.replace(/\.[^.]+$/, '');
-  return stem.length > 0 ? stem : 'SambarApp';
+  return stem.length > 0 ? stem : 'BunmaskaApp';
 };
 
 /** Argv builder + runner for the `xcrun notarytool submit` release hook. */
@@ -137,23 +137,25 @@ const runBuild = async (
   // Only macOS hosts can produce a macOS .app; Linux distributables cross-build
   // from macOS (and build natively on Linux).
   if (target === 'macos' && currentPlatform() !== 'macos') {
-    err(`sambar build: --target macos requires a macOS host (this host is ${currentPlatform()}).`);
+    err(
+      `bunmaska build: --target macos requires a macOS host (this host is ${currentPlatform()}).`,
+    );
     return 1;
   }
   // codesign/notarytool are macOS tools and only meaningful for the macOS .app.
   if (command.options.sign !== undefined && (target !== 'macos' || currentPlatform() !== 'macos')) {
-    err('sambar build: --sign is macOS-only (codesign), with a macOS target on a macOS host.');
+    err('bunmaska build: --sign is macOS-only (codesign), with a macOS target on a macOS host.');
     return 1;
   }
   if (command.options.notarize === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
     err(
-      'sambar build: --notarize is macOS-only (notarytool), with a macOS target on a macOS host.',
+      'bunmaska build: --notarize is macOS-only (notarytool), with a macOS target on a macOS host.',
     );
     return 1;
   }
   // hdiutil is a macOS tool and the .dmg only wraps the macOS .app.
   if (command.options.dmg === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
-    err('sambar build: --dmg is macOS-only (hdiutil), with a macOS target on a macOS host.');
+    err('bunmaska build: --dmg is macOS-only (hdiutil), with a macOS target on a macOS host.');
     return 1;
   }
 
@@ -194,8 +196,8 @@ const runBuild = async (
     const creds = notarizeCredentials();
     if (creds === undefined) {
       err(
-        'sambar build: notarization requires APPLE_ID/TEAM_ID and an app-specific password ' +
-          '(env SAMBAR_NOTARIZE_PASSWORD) — see docs. Skipping notarization.',
+        'bunmaska build: notarization requires APPLE_ID/TEAM_ID and an app-specific password ' +
+          '(env BUNMASKA_NOTARIZE_PASSWORD) — see docs. Skipping notarization.',
       );
     } else if (deps.notarize !== undefined) {
       await deps.notarize(appPath);
@@ -211,7 +213,7 @@ const notarizeCredentials = ():
   | undefined => {
   const appleId = process.env['APPLE_ID'];
   const teamId = process.env['TEAM_ID'];
-  const password = process.env['SAMBAR_NOTARIZE_PASSWORD'];
+  const password = process.env['BUNMASKA_NOTARIZE_PASSWORD'];
   if (appleId === undefined || teamId === undefined || password === undefined) {
     return undefined;
   }
@@ -262,7 +264,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
     err(error instanceof Error ? error.message : String(error));
     return 1;
   }
-  out(`sambar dev: running ${entry} (Ctrl-C to stop)`);
+  out(`bunmaska dev: running ${entry} (Ctrl-C to stop)`);
   await runDev(process.cwd(), entry, awaitInterrupt);
   return 0;
 };
@@ -274,7 +276,7 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
       out(USAGE);
       return 0;
     case 'version':
-      out(SAMBAR_VERSION);
+      out(BUNMASKA_VERSION);
       return 0;
     case 'init':
       return runInitCommand(command);

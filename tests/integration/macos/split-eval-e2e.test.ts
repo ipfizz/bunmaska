@@ -24,8 +24,8 @@ if (currentPlatform() === 'macos') {
     // its own global and whether it can see the page-world global.
     const isolatedPreload = [
       'window.__isoMarker = "from-isolated";',
-      "window.__sambar.on('report', function () {",
-      '  window.__sambar.send(',
+      "window.__bunmaska.on('report', function () {",
+      '  window.__bunmaska.send(',
       "    'report-result',",
       '    window.__isoMarker,',
       '    typeof window.__pageMarker',

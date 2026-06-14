@@ -83,7 +83,7 @@ if (currentPlatform() === 'linux') {
 
     test('a bad path decodes to an empty image (no crash)', () => {
       setNativeImageBackendForTesting(undefined);
-      const image = nativeImage.createFromPath('/no/such/sambar/image.png');
+      const image = nativeImage.createFromPath('/no/such/bunmaska/image.png');
       expect(image.isEmpty()).toBe(true);
       expect(image.getSize()).toEqual({ width: 0, height: 0 });
       expect(image.toPNG().length).toBe(0);

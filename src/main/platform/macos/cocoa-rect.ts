@@ -1,4 +1,4 @@
-import { SambarError } from '../../../common/errors';
+import { BunmaskaError } from '../../../common/errors';
 
 /**
  * A Cocoa rectangle in user-space coordinates.
@@ -33,11 +33,11 @@ export const packCGRect = (rect: CGRect): ArrayBuffer => {
 
 /**
  * Read a `CGRect` from a buffer laid out as `[x, y, width, height]` little-endian f64s.
- * Throws {@link SambarError} when the buffer is shorter than {@link CG_RECT_SIZE}.
+ * Throws {@link BunmaskaError} when the buffer is shorter than {@link CG_RECT_SIZE}.
  */
 export const unpackCGRect = (buffer: ArrayBufferLike): CGRect => {
   if (buffer.byteLength < CG_RECT_SIZE) {
-    throw new SambarError(
+    throw new BunmaskaError(
       `CGRect buffer must be at least ${CG_RECT_SIZE} bytes, got ${buffer.byteLength}`,
     );
   }

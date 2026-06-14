@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { InvalidArgumentError, SambarError } from '../../../../src/common/errors';
+import { InvalidArgumentError, BunmaskaError } from '../../../../src/common/errors';
 import {
   type KeyringBackend,
   safeStorage,
@@ -97,10 +97,10 @@ describe('safeStorage availability + dispatch', () => {
     expect(safeStorage.isEncryptionAvailable()).toBe(false);
   });
 
-  test('encrypt/decrypt throw SambarError when encryption is unavailable', () => {
+  test('encrypt/decrypt throw BunmaskaError when encryption is unavailable', () => {
     setSafeStorageBackendForTesting(fakeUnavailable);
-    expect(() => safeStorage.encryptString('x')).toThrow(SambarError);
-    expect(() => safeStorage.decryptString(Buffer.alloc(29))).toThrow(SambarError);
+    expect(() => safeStorage.encryptString('x')).toThrow(BunmaskaError);
+    expect(() => safeStorage.decryptString(Buffer.alloc(29))).toThrow(BunmaskaError);
   });
 
   test('the keyring key is fetched exactly once and cached across ops', () => {

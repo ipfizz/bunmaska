@@ -3,7 +3,7 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 
 /**
- * Loads the libnotify symbols behind Sambar's `Notification` API on Linux.
+ * Loads the libnotify symbols behind Bunmaska's `Notification` API on Linux.
  *
  * libnotify is the freedesktop desktop-notification client library; it forwards
  * to the session's notification daemon over D-Bus. CI runs headless (xvfb) with

@@ -4,14 +4,14 @@ import { currentPlatform } from '../../../common/platform';
 
 /**
  * Loads GDK 4's display, system-beep, and clipboard symbols — the Linux
- * primitives behind Sambar's `shell.beep` and `clipboard`.
+ * primitives behind Bunmaska's `shell.beep` and `clipboard`.
  *
  * In GTK 4 there is no standalone `libgdk-4.so`: GDK is compiled INTO the GTK 4
  * shared object, so its symbols are resolved from `libgtk-4.so.1` (the same
  * library {@link loadGtkFFI} opens). `gdk_display_get_default()` returns the
  * default `GdkDisplay*` (NULL if GTK was never initialised / there is no
  * display); `gdk_display_beep(display)` rings the system bell (a no-op under a
- * bell-less Xvfb session, which is fine — Sambar only needs it to not crash).
+ * bell-less Xvfb session, which is fine — Bunmaska only needs it to not crash).
  *
  * Clipboard: `gdk_display_get_clipboard(display)` returns the display's
  * `GdkClipboard*` (owned by GDK, NOT to be freed). Reads are async-only:

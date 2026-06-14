@@ -13,7 +13,7 @@ import { app } from './app';
 
 /**
  * Application self-update — a drop-in subset of Electron's `autoUpdater`, built
- * on the same `version.json` contract `sambar build` emits.
+ * on the same `version.json` contract `bunmaska build` emits.
  *
  * An {@link EventEmitter} (D023) emitting Electron's event names:
  * `checking-for-update`, `update-available`, `update-not-available`,
@@ -89,7 +89,7 @@ const httpFetchBytes = async (url: string): Promise<Uint8Array> => {
 };
 
 const stageToTmp = async (tarBytes: Uint8Array, manifest: UpdateManifest): Promise<string> => {
-  const tarPath = join(tmpdir(), `sambar-update-${manifest.hash}.tar`);
+  const tarPath = join(tmpdir(), `bunmaska-update-${manifest.hash}.tar`);
   writeFileSync(tarPath, tarBytes);
   return tarPath;
 };

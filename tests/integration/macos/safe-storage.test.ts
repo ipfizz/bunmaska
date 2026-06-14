@@ -7,10 +7,10 @@ import {
 import { secConstants } from '../../../src/main/platform/macos/security-ffi';
 
 // Exercises the REAL login Keychain under a PROBE item so the production
-// 'dev.sambar.safeStorage' key is never touched. GitHub's macOS runners run in an
+// 'dev.bunmaska.safeStorage' key is never touched. GitHub's macOS runners run in an
 // unlocked login session, so SecItemAdd/CopyMatching/Delete complete without a
 // prompt (verified on the arm64 host during design).
-const PROBE_SERVICE = 'dev.sambar.safeStorage.integration-probe';
+const PROBE_SERVICE = 'dev.bunmaska.safeStorage.integration-probe';
 const PROBE_ACCOUNT = 'master-key-probe';
 
 if (currentPlatform() === 'macos') {

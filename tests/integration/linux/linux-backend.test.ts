@@ -6,7 +6,7 @@ import type { NativeWindow } from '../../../src/main/platform/native';
 /**
  * Full Linux backend lifecycle + IPC round-trip against real GTK4 + WebKitGTK.
  *
- * `__sambar` now lives in the ISOLATED `SambarPreload` world (context
+ * `__bunmaska` now lives in the ISOLATED `BunmaskaPreload` world (context
  * isolation), so the renderer-side IPC logic ships as a PRELOAD (which runs in
  * that world); the inbound 'ping' is posted on a 'go' trigger dispatched into
  * the isolated world, and the echo round-trip is driven the same way.
@@ -46,11 +46,11 @@ describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
     // Isolated-world preload: registers the echo listener and, on 'go', posts an
     // inbound 'ping'. The bridge is invisible to page scripts now.
     const preload = [
-      "window.__sambar.on('echo', function (payload) {",
-      "  window.__sambar.send('echoed', payload);",
+      "window.__bunmaska.on('echo', function (payload) {",
+      "  window.__bunmaska.send('echoed', payload);",
       '});',
-      "window.__sambar.on('go', function () {",
-      "  window.__sambar.send('ping', { hello: 'world' });",
+      "window.__bunmaska.on('go', function () {",
+      "  window.__bunmaska.send('ping', { hello: 'world' });",
       '});',
     ].join('\n');
 

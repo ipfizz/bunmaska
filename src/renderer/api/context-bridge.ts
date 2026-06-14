@@ -1,4 +1,4 @@
-import { SambarError } from '../../common/errors';
+import { BunmaskaError } from '../../common/errors';
 import {
   CHANNEL_GLOBAL_KEY,
   type CustomEventCtor,
@@ -11,7 +11,7 @@ import {
  * real context isolation.
  *
  * The preload (and this `contextBridge`) run in a dedicated isolated JS world
- * (`WKContentWorld 'SambarPreload'` on macOS; the `SambarPreload` named world on
+ * (`WKContentWorld 'BunmaskaPreload'` on macOS; the `BunmaskaPreload` named world on
  * Linux), invisible to page scripts. `exposeInMainWorld(key, api)` therefore
  * cannot just freeze `api` onto the isolated global — the page would never see
  * it. Instead it installs a cross-world host over a shared-`document`
@@ -75,8 +75,8 @@ export const createContextBridge = (override?: ContextBridgeTransport): ContextB
       if (expose === undefined) {
         const transport = resolveTransport(override);
         if (transport === undefined) {
-          throw new SambarError(
-            'contextBridge: no cross-world channel is available; exposeInMainWorld must run in the Sambar isolated preload world',
+          throw new BunmaskaError(
+            'contextBridge: no cross-world channel is available; exposeInMainWorld must run in the Bunmaska isolated preload world',
           );
         }
         expose = installCrossWorldHost(
@@ -88,7 +88,7 @@ export const createContextBridge = (override?: ContextBridgeTransport): ContextB
       try {
         expose(key, api);
       } catch (error) {
-        throw new SambarError(error instanceof Error ? error.message : String(error));
+        throw new BunmaskaError(error instanceof Error ? error.message : String(error));
       }
     },
   };

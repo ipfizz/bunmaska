@@ -6,12 +6,12 @@ import { EXEC_HANDLER_NAME, evalInPageWorld } from './webkit-ipc';
 /**
  * `WebContents.executeJavaScript` on Linux (WebKitGTK 6.0).
  *
- * The result returns out-of-band through a PAGE-world `sambarExec`
+ * The result returns out-of-band through a PAGE-world `bunmaskaExec`
  * script-message handler — EXACTLY mirroring the macOS implementation. A
  * per-call `GAsyncReadyCallback` (a `bun:ffi` {@link JSCallback}) cannot be used:
  * closing it during its own invocation frees the native trampoline WebKit is
  * still returning into → SIGSEGV. Instead a wrapper runs the user code and posts
- * `{ execId, ok, result?, error? }` to the `sambarExec` handler (registered once
+ * `{ execId, ok, result?, error? }` to the `bunmaskaExec` handler (registered once
  * in `createWebViewWithIpc` and closed only on window teardown), which settles
  * the matching pending Promise here.
  *
@@ -34,7 +34,7 @@ type PendingExec = {
 /**
  * Per-`LinuxWebContents` registry of in-flight `executeJavaScript` calls. Issues
  * a monotonic `execId`, injects the wrapper, and settles each Promise when the
- * matching `sambarExec` message arrives (or on timeout / teardown). There is NO
+ * matching `bunmaskaExec` message arrives (or on timeout / teardown). There is NO
  * native callback to close — the page-world handler is shared and torn down with
  * the window — so this is SAFE.
  */
@@ -70,7 +70,7 @@ export class ExecResultChannel {
 
   /**
    * Settle the pending exec for the `{ execId, ok, result?, error? }` JSON the
-   * page-world `sambarExec` handler posted. Malformed / unknown ids are dropped.
+   * page-world `bunmaskaExec` handler posted. Malformed / unknown ids are dropped.
    */
   deliverExecResult(json: string): void {
     let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };

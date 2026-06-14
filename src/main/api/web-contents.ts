@@ -30,7 +30,7 @@ export const resetWebContentsIdsForTesting = (): void => {
 const buildInsertCssScript = (key: string, css: string): string =>
   `(() => {
     const style = document.createElement('style');
-    style.setAttribute('data-sambar-css-key', ${JSON.stringify(key)});
+    style.setAttribute('data-bunmaska-css-key', ${JSON.stringify(key)});
     style.textContent = ${JSON.stringify(css)};
     (document.head || document.documentElement).appendChild(style);
   })()`;
@@ -38,8 +38,8 @@ const buildInsertCssScript = (key: string, css: string): string =>
 /** Build the page-world script that removes the keyed `<style>` for `removeInsertedCSS`. */
 const buildRemoveCssScript = (key: string): string =>
   `(() => {
-    for (const el of document.querySelectorAll('style[data-sambar-css-key]')) {
-      if (el.getAttribute('data-sambar-css-key') === ${JSON.stringify(key)}) {
+    for (const el of document.querySelectorAll('style[data-bunmaska-css-key]')) {
+      if (el.getAttribute('data-bunmaska-css-key') === ${JSON.stringify(key)}) {
         el.remove();
       }
     }
@@ -179,7 +179,7 @@ export class WebContents extends EventEmitter {
    */
   async insertCSS(css: string): Promise<string> {
     this.#cssCounter += 1;
-    const key = `sambar-inserted-css-${this.id}-${this.#cssCounter}`;
+    const key = `bunmaska-inserted-css-${this.id}-${this.#cssCounter}`;
     await this.#native.executeJavaScript(buildInsertCssScript(key, css));
     return key;
   }
@@ -256,7 +256,7 @@ export class WebContents extends EventEmitter {
     }
   }
 
-  /** Whether the devtools were last opened (by Sambar) and not since closed. */
+  /** Whether the devtools were last opened (by Bunmaska) and not since closed. */
   isDevToolsOpened(): boolean {
     return this.#devToolsOpen;
   }

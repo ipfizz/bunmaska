@@ -7,8 +7,8 @@ import type { Handle } from './objc';
  * `WKContentWorld` accessors — the macOS half of context isolation.
  *
  * A `WKContentWorld` is a named JavaScript world that shares the page's DOM but
- * has its own global object. Injecting the `__sambar` bridge + user preload into
- * a dedicated named world (`SambarPreload`) keeps them invisible to page scripts
+ * has its own global object. Injecting the `__bunmaska` bridge + user preload into
+ * a dedicated named world (`BunmaskaPreload`) keeps them invisible to page scripts
  * (Electron `contextIsolation: true`).
  *
  * The class resolves through the normal Objective-C class cache via

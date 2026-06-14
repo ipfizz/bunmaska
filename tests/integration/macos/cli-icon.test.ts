@@ -25,7 +25,7 @@ if (currentPlatform() === 'macos') {
     const name = 'Icon App';
 
     beforeAll(async () => {
-      workDir = mkdtempSync(join(tmpdir(), 'sambar-cli-icon-'));
+      workDir = mkdtempSync(join(tmpdir(), 'bunmaska-cli-icon-'));
       entry = join(workDir, 'entry.ts');
       outDir = join(workDir, 'out');
       pngPath = join(workDir, 'logo.png');

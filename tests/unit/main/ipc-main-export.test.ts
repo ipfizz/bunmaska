@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import * as sambar from '../../../src/main';
+import * as bunmaska from '../../../src/main';
 
 describe('public barrel exports ipcMain', () => {
   test('ipcMain is reachable from the package entry point', () => {
-    expect(sambar.ipcMain).toBeDefined();
+    expect(bunmaska.ipcMain).toBeDefined();
   });
 
   test('ipcMain exposes the Electron-compatible surface', () => {
@@ -15,7 +15,7 @@ describe('public barrel exports ipcMain', () => {
       'handleOnce',
       'removeHandler',
     ]) {
-      expect(typeof (sambar.ipcMain as unknown as Record<string, unknown>)[method]).toBe(
+      expect(typeof (bunmaska.ipcMain as unknown as Record<string, unknown>)[method]).toBe(
         'function',
       );
     }

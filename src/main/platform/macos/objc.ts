@@ -5,7 +5,7 @@ import { currentPlatform } from '../../../common/platform';
 /**
  * Shared Objective-C FFI primitives for the macOS backend.
  *
- * Every Sambar Objective-C handle (`id`, `SEL`, `Class`, `IMP`) flows through
+ * Every Bunmaska Objective-C handle (`id`, `SEL`, `Class`, `IMP`) flows through
  * the codebase as a `bigint` (D016); the only place the `Pointer ↔ bigint`
  * conversion happens is here and at each `objc_msgSend` boundary. Centralising
  * these helpers keeps the runtime, the message-send variants, and the FFI

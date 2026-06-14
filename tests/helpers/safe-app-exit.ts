@@ -23,7 +23,7 @@ export const installSafeAppExit = (): void => {
   app.setEnvironmentForTesting(
     buildAppEnvironment({
       platform: 'macos',
-      home: '/tmp/sambar-home',
+      home: '/tmp/bunmaska-home',
       temp: '/tmp',
       execPath: '/opt/homebrew/bin/bun',
       mainScript: '',

@@ -24,7 +24,7 @@ if (currentPlatform() === 'linux') {
       expect(window).not.toBeNull();
 
       // 3. Title, size, present — the actual "open a window" choreography.
-      lib.symbols.gtk_window_set_title(window, cstr('Sambar'));
+      lib.symbols.gtk_window_set_title(window, cstr('Bunmaska'));
       lib.symbols.gtk_window_set_default_size(window, 400, 300);
       lib.symbols.gtk_window_present(window);
 

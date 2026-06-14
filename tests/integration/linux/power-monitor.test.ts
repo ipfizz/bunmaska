@@ -11,7 +11,7 @@ import { observePowerEvents } from '../../../src/main/platform/linux/linux-power
 
 // Linux-only (xvfb). Proves the GDBus symbols resolve and — critically — that the bus
 // calls resolve FAST and never hang (the 4-hour-hang scar class). The live system-bus
-// path is gated by SAMBAR_ENABLE_LINUX_POWER, which CI never sets, so getSystemBus() is a
+// path is gated by BUNMASKA_ENABLE_LINUX_POWER, which CI never sets, so getSystemBus() is a
 // deterministic null no-op here; probeSystemBusUnchecked() exercises the REAL
 // g_bus_get_sync to confirm it returns promptly whether or not a system bus is present.
 if (currentPlatform() === 'linux') {

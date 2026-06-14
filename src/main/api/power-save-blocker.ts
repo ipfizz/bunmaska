@@ -12,7 +12,7 @@ import { cocoaPowerSaveBlockerBackend } from '../platform/macos/cocoa-power-save
  *
  * Backends: macOS holds an IOKit `IOPMAssertion` (synchronous, no run loop); Linux holds
  * an `org.freedesktop.ScreenSaver` inhibition cookie over the deadlock-safe bounded GDBus
- * method-call primitive (gated behind `SAMBAR_ENABLE_LINUX_POWER_BLOCKER`; a clean no-op
+ * method-call primitive (gated behind `BUNMASKA_ENABLE_LINUX_POWER_BLOCKER`; a clean no-op
  * when there is no session bus).
  *
  * NO-MECHANISM SEMANTICS (matches Electron, which "always returns an integer identifying

@@ -8,7 +8,7 @@ import {
 
 // Verifies the libsecret library + symbol NAMES resolve under xvfb (dlopen of the
 // whole table), and that isAvailable() is FALSE + non-blocking in CI: the
-// SAMBAR_ENABLE_LINUX_KEYRING gate is unset, so the blocking D-Bus store/lookup
+// BUNMASKA_ENABLE_LINUX_KEYRING gate is unset, so the blocking D-Bus store/lookup
 // path is never reached (no keyring daemon is installed — by design).
 if (currentPlatform() === 'linux') {
   describe('libsecret safeStorage backend (Linux)', () => {
@@ -23,7 +23,7 @@ if (currentPlatform() === 'linux') {
 
     test('isAvailable() returns false without the env gate and never blocks', () => {
       // The gate is unset in CI → no keyring round-trip is attempted.
-      expect(process.env['SAMBAR_ENABLE_LINUX_KEYRING']).not.toBe('1');
+      expect(process.env['BUNMASKA_ENABLE_LINUX_KEYRING']).not.toBe('1');
       expect(linuxLibsecretBackend.isAvailable()).toBe(false);
     });
   });

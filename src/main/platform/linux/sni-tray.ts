@@ -35,7 +35,7 @@ import {
  *
  * DEADLOCK/HANG-SAFE: the only blocking call is the bounded {@link callMethodSync} (5s); the
  * vtable callbacks fire on the GMainContext via the cooperative pump. CI-HANG-SAFE: gated
- * behind `SAMBAR_ENABLE_LINUX_TRAY` (CI never sets it) → `create` returns an INERT no-op
+ * behind `BUNMASKA_ENABLE_LINUX_TRAY` (CI never sets it) → `create` returns an INERT no-op
  * instance, no bus touched, no object exported.
  *
  * LIFETIME (load-bearing, blind — verified by review, not CI): `register_object` COPIES the
@@ -52,7 +52,7 @@ const OBJECT_PATH = '/StatusNotifierItem';
 const SNI_IFACE = 'org.kde.StatusNotifierItem';
 const WATCHER_NAME = 'org.kde.StatusNotifierWatcher';
 const WATCHER_PATH = '/StatusNotifierWatcher';
-const APP_ID = 'sambar';
+const APP_ID = 'bunmaska';
 
 /** The interface we export. Only properties we actually serve are declared (a host uses
  *  defaults for anything absent), so GetAll never hits an unserved property. */
@@ -78,7 +78,7 @@ export const SNI_XML = `<node>
 </node>`;
 
 /** Whether the live SNI path is enabled. CI leaves this unset → an inert no-op tray. */
-const liveTrayEnabled = (): boolean => process.env['SAMBAR_ENABLE_LINUX_TRAY'] === '1';
+const liveTrayEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_TRAY'] === '1';
 
 // Process-lifetime retains (never freed — see the module note): the vtable JSCallbacks
 // (the copied vtable holds their raw fn-pointers) + every icon ARGB buffer (referenced by
@@ -270,7 +270,7 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   }
 
   const state: State = {
-    title: 'Sambar',
+    title: 'Bunmaska',
     toolTip: '',
     icon: decodeIcon(initialImage),
     click: null,

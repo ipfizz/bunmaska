@@ -43,7 +43,7 @@ export const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START = 0;
  *   world_name is {@link FFIType.pointer} (nullable; 0 = default world).
  * - `webkit_user_script_new_for_world` is the named-world variant of
  *   `webkit_user_script_new`; its 4th arg (`world_name`) is {@link FFIType.cstring}
- *   (a real world name, e.g. `SambarPreload`) — the isolated-world injection path.
+ *   (a real world name, e.g. `BunmaskaPreload`) — the isolated-world injection path.
  */
 export const WEBKITGTK_FFI_SYMBOLS = {
   webkit_web_view_new: {

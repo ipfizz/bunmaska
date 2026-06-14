@@ -1,9 +1,9 @@
-import { SambarError } from '../../common/errors';
+import { BunmaskaError } from '../../common/errors';
 
 /**
  * Renderer-side IPC — the drop-in equivalent of Electron's `ipcRenderer`.
  *
- * A thin, typed wrapper over the `globalThis.__sambar` bridge installed by the
+ * A thin, typed wrapper over the `globalThis.__bunmaska` bridge installed by the
  * preload bootstrap. `on` listeners receive an event object as their first
  * argument to match Electron's `(event, ...args)` shape (the event is a
  * placeholder for now; sender/port details arrive in a later phase).
@@ -34,10 +34,10 @@ export type IpcRenderer = {
 };
 
 const getBridge = (): RendererBridge => {
-  const bridge = Reflect.get(globalThis, '__sambar') as RendererBridge | undefined;
+  const bridge = Reflect.get(globalThis, '__bunmaska') as RendererBridge | undefined;
   if (bridge === undefined) {
-    throw new SambarError(
-      'Sambar preload bridge is not available; ensure a preload script ran before renderer code',
+    throw new BunmaskaError(
+      'Bunmaska preload bridge is not available; ensure a preload script ran before renderer code',
     );
   }
   return bridge;

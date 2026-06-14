@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SambarError } from '../../../../../src/common/errors';
+import { BunmaskaError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
   msgSendF64,
@@ -90,76 +90,76 @@ describe('msgSendPtrPtrI64Ptr export', () => {
 
 if (currentPlatform() !== 'macos') {
   describe('msgSendInitWithContentRect on non-macOS hosts', () => {
-    test('throws SambarError', () => {
+    test('throws BunmaskaError', () => {
       expect(() => msgSendInitWithContentRect(0n, 0n, [0, 0, 0, 0], 0n, 0n, false)).toThrow(
-        SambarError,
+        BunmaskaError,
       );
     });
   });
 
   describe('msgSendPtr on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendPtr(0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendPtr(0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendU8 on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendU8(0n, 0n, 0)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendU8(0n, 0n, 0)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendF64 on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendF64(0n, 0n, 0)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendF64(0n, 0n, 0)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendI64 on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendI64(0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendI64(0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendI64Ptr on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendI64Ptr(0n, 0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendI64Ptr(0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendReturnsU8 on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendReturnsU8(0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendReturnsU8(0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendPtr4 on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendPtr4(0n, 0n, 0n, 0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendPtr4(0n, 0n, 0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendPtrI64U8Ptr on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendPtrI64U8Ptr(0n, 0n, 0n, 0n, 0, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendPtrI64U8Ptr(0n, 0n, 0n, 0n, 0, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendPtrI64 on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendPtrI64(0n, 0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendPtrI64(0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendPtrI64Ptr on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendPtrI64Ptr(0n, 0n, 0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendPtrI64Ptr(0n, 0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 
   describe('msgSendPtrPtrI64Ptr on non-macOS hosts', () => {
-    test('throws SambarError', () => {
-      expect(() => msgSendPtrPtrI64Ptr(0n, 0n, 0n, 0n, 0n, 0n)).toThrow(SambarError);
+    test('throws BunmaskaError', () => {
+      expect(() => msgSendPtrPtrI64Ptr(0n, 0n, 0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
     });
   });
 }

@@ -21,7 +21,7 @@ const ensureDelegateClass = (): Handle => {
   if (delegateClass !== undefined) {
     return delegateClass;
   }
-  delegateClass = defineObjcClass('SambarUIDelegate', 'NSObject', [
+  delegateClass = defineObjcClass('BunmaskaUIDelegate', 'NSObject', [
     {
       selector: 'webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:',
       typeEncoding: '@@:@@@@',

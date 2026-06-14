@@ -4,11 +4,11 @@ import { currentPlatform } from '../../../common/platform';
 
 /**
  * Loads GIO's default-handler URI launcher — the Linux primitive behind
- * Sambar's `shell.openExternal`/`openPath`/`showItemInFolder`.
+ * Bunmaska's `shell.openExternal`/`openPath`/`showItemInFolder`.
  *
  * `g_app_info_launch_default_for_uri(uri, context, error)` hands a URI to the
  * desktop's default handler (browser for `http(s):`, file manager for
- * `file:`) and returns a `gboolean`. Sambar passes `context = NULL` and
+ * `file:`) and returns a `gboolean`. Bunmaska passes `context = NULL` and
  * `error = NULL` and relies on the boolean return rather than `GError`
  * unwrapping. `libgio-2.0` is a hard dependency of GTK 4, so it is always
  * present wherever `libgtk-4` is.

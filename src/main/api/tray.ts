@@ -16,7 +16,7 @@ import type { Menu } from './menu';
  * - macOS: real `NSStatusItem`; works un-bundled (`bun main.ts`).
  * - Linux: a `StatusNotifierItem` exported over D-Bus (a host like KDE, the GNOME
  *   AppIndicator extension, Waybar or swaybar draws the icon). Gated behind
- *   `SAMBAR_ENABLE_LINUX_TRAY`; without it (and in CI) the tray is an inert no-op
+ *   `BUNMASKA_ENABLE_LINUX_TRAY`; without it (and in CI) the tray is an inert no-op
  *   rather than a throw, so cross-platform code constructs a Tray safely. v1 ships
  *   icon + tooltip + left-click; the context menu (a `com.canonical.dbusmenu`
  *   service) is DEFERRED, so {@link setContextMenu} is accepted but not yet shown

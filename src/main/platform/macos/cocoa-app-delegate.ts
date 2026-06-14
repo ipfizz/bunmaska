@@ -35,7 +35,7 @@ const ensureDelegateClass = (): Handle => {
   if (delegateClass !== undefined) {
     return delegateClass;
   }
-  delegateClass = defineObjcClass('SambarAppDelegate', 'NSObject', [
+  delegateClass = defineObjcClass('BunmaskaAppDelegate', 'NSObject', [
     {
       // BOOL applicationShouldHandleReopen:(id)sender hasVisibleWindows:(BOOL)flag
       selector: 'applicationShouldHandleReopen:hasVisibleWindows:',

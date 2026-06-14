@@ -1,7 +1,7 @@
 import { InvalidArgumentError } from '../../common/errors';
 
 /**
- * Wire protocol for Sambar IPC (D021). Messages cross the in-process boundary
+ * Wire protocol for Bunmaska IPC (D021). Messages cross the in-process boundary
  * (renderer ⇄ main) as JSON strings: the renderer posts them through a
  * `WKScriptMessageHandler`, the main side delivers them via `evaluateJavaScript`.
  *

@@ -1,7 +1,7 @@
 /**
  * The distributable artifact naming + update-manifest contract.
  *
- * This is the single source of truth shared by the `sambar build` packager
+ * This is the single source of truth shared by the `bunmaska build` packager
  * (which *writes* `version.json` next to each artifact) and the runtime
  * `autoUpdater` (which *reads* a channel feed's `update.json` to decide whether
  * a newer build is available). The flat `name-channel-os-arch` artifact naming

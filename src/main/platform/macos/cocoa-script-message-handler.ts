@@ -23,7 +23,7 @@ const ensureHandlerClass = (): Handle => {
     return handlerClass;
   }
   const rt = cocoa();
-  handlerClass = defineObjcClass('SambarScriptMessageHandler', 'NSObject', [
+  handlerClass = defineObjcClass('BunmaskaScriptMessageHandler', 'NSObject', [
     {
       selector: 'userContentController:didReceiveScriptMessage:',
       typeEncoding: 'v@:@@',

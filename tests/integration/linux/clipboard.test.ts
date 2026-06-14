@@ -114,7 +114,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return; // No display; the symbol-resolution test above already proved dispatch.
     }
-    const value = 'sambar-clip-roundtrip-stable';
+    const value = 'bunmaska-clip-roundtrip-stable';
     linuxClipboardBackend.writeText(value);
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe(value);
@@ -124,10 +124,10 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return;
     }
-    linuxClipboardBackend.writeText('sambar-clip-first');
-    linuxClipboardBackend.writeText('sambar-clip-second');
+    linuxClipboardBackend.writeText('bunmaska-clip-first');
+    linuxClipboardBackend.writeText('bunmaska-clip-second');
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
-    expect(got).toBe('sambar-clip-second');
+    expect(got).toBe('bunmaska-clip-second');
   }, 15000);
 
   test('round-trips UTF-8 content', async () => {
@@ -144,7 +144,7 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return;
     }
-    linuxClipboardBackend.writeText('sambar-clip-to-be-cleared');
+    linuxClipboardBackend.writeText('bunmaska-clip-to-be-cleared');
     linuxClipboardBackend.clear();
     const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
     expect(got).toBe('');

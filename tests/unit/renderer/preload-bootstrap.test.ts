@@ -20,11 +20,11 @@ const evalBootstrap = (): { bridge: Bridge; posted: string[] } => {
   const posted: string[] = [];
   const scope: Record<string, unknown> = {};
   scope['webkit'] = {
-    messageHandlers: { sambar: { postMessage: (msg: string) => posted.push(msg) } },
+    messageHandlers: { bunmaska: { postMessage: (msg: string) => posted.push(msg) } },
   };
   const fn = new Function('globalThis', generatePreloadBootstrap());
   fn(scope);
-  return { bridge: scope['__sambar'] as Bridge, posted };
+  return { bridge: scope['__bunmaska'] as Bridge, posted };
 };
 
 describe('generatePreloadBootstrap output', () => {
@@ -38,12 +38,12 @@ describe('generatePreloadBootstrap output', () => {
     expect(src).not.toMatch(/\bas\s+(Record|string|number|unknown)\b/);
   });
 
-  test('installs a __sambar object on the global', () => {
+  test('installs a __bunmaska object on the global', () => {
     expect(evalBootstrap().bridge).toBeDefined();
   });
 });
 
-describe('__sambar.send', () => {
+describe('__bunmaska.send', () => {
   test('posts a send envelope through the message handler', () => {
     const { bridge, posted } = evalBootstrap();
     bridge.send('ping', 1, 'two');
@@ -55,7 +55,7 @@ describe('__sambar.send', () => {
   });
 });
 
-describe('__sambar.invoke', () => {
+describe('__bunmaska.invoke', () => {
   test('posts an invoke envelope with a numeric id and returns a promise', () => {
     const { bridge, posted } = evalBootstrap();
     const promise = bridge.invoke('compute', 41);
@@ -91,7 +91,7 @@ describe('__sambar.invoke', () => {
   });
 });
 
-describe('__sambar.on', () => {
+describe('__bunmaska.on', () => {
   test('delivers a send envelope from main to a registered listener', () => {
     const { bridge } = evalBootstrap();
     const received: unknown[][] = [];
@@ -117,7 +117,7 @@ describe('__sambar.on', () => {
   });
 });
 
-describe('__sambar.once', () => {
+describe('__bunmaska.once', () => {
   test('fires exactly once then auto-removes', () => {
     const { bridge } = evalBootstrap();
     let calls = 0;
@@ -150,7 +150,7 @@ describe('__sambar.once', () => {
   });
 });
 
-describe('__sambar.removeListener', () => {
+describe('__bunmaska.removeListener', () => {
   test('removes the specific listener and leaves the others', () => {
     const { bridge } = evalBootstrap();
     const hits: string[] = [];
@@ -196,7 +196,7 @@ describe('__sambar.removeListener', () => {
   });
 });
 
-describe('__sambar.removeAllListeners', () => {
+describe('__bunmaska.removeAllListeners', () => {
   test('clears a single channel when given one', () => {
     const { bridge } = evalBootstrap();
     const hits: string[] = [];

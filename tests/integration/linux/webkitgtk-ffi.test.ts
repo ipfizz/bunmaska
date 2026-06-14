@@ -67,7 +67,7 @@ if (currentPlatform() === 'linux') {
       expect(ucm).not.toBeNull();
       webkit.symbols.webkit_user_content_manager_register_script_message_handler(
         ucm,
-        cstr('sambar'),
+        cstr('bunmaska'),
         null,
       );
       const script = webkit.symbols.webkit_user_script_new(cstr('void 0;'), 0, 0, null, null);
@@ -98,7 +98,7 @@ if (currentPlatform() === 'linux') {
       expect(settings).not.toBeNull();
       // Must resolve + not crash; the UA takes effect on the next navigation.
       expect(() =>
-        webkit.symbols.webkit_settings_set_user_agent(settings, cstr('Sambar/1.0 (integration)')),
+        webkit.symbols.webkit_settings_set_user_agent(settings, cstr('Bunmaska/1.0 (integration)')),
       ).not.toThrow();
     });
 

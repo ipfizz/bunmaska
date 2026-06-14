@@ -3,7 +3,7 @@ import { Tray, setTrayBackendForTesting } from '../../../../src/main/api/tray';
 
 /**
  * The Linux Tray is now a StatusNotifierItem over D-Bus, gated behind
- * `SAMBAR_ENABLE_LINUX_TRAY`. WITHOUT the gate (and in CI), constructing a Tray must be a
+ * `BUNMASKA_ENABLE_LINUX_TRAY`. WITHOUT the gate (and in CI), constructing a Tray must be a
  * safe INERT no-op — NOT a throw — so cross-platform code can build a Tray unconditionally.
  *
  * Overriding `process.platform` drives the Linux dispatch branch on any host; with the gate
@@ -26,7 +26,7 @@ afterEach(() => {
 describe('Tray on Linux (gated-off no-op)', () => {
   test('constructing a Tray does NOT throw when the gate is off', () => {
     setPlatform('linux');
-    expect(process.env['SAMBAR_ENABLE_LINUX_TRAY']).not.toBe('1');
+    expect(process.env['BUNMASKA_ENABLE_LINUX_TRAY']).not.toBe('1');
     expect(() => new Tray('/tmp/icon.png')).not.toThrow();
   });
 

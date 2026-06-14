@@ -9,7 +9,7 @@ import { msgSendPtr, msgSendPtrPtr } from '../../../src/main/platform/macos/coco
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 /**
- * Drives the runtime `SambarAppDelegate` against the real Objective-C runtime.
+ * Drives the runtime `BunmaskaAppDelegate` against the real Objective-C runtime.
  * The delegate-callback routing uses the same `defineObjcClass` JSCallback
  * mechanism as the (CI-proven) window/navigation delegates; here we prove the
  * class builds, installs as `NSApp`'s delegate, and routes `openURLs:`/`openFile:`
@@ -24,7 +24,7 @@ const NOOP_HANDLERS: AppDelegateHandlers = {
 };
 
 if (currentPlatform() === 'macos') {
-  describe('SambarAppDelegate on the real macOS runtime', () => {
+  describe('BunmaskaAppDelegate on the real macOS runtime', () => {
     test('createAppDelegate returns a live instance', () => {
       const delegate = createAppDelegate(NOOP_HANDLERS);
       expect(delegate.handle).not.toBe(0n);
@@ -80,9 +80,9 @@ if (currentPlatform() === 'macos') {
         delegate.handle,
         rt.selectors.get('application:openFile:'),
         nsApp,
-        nsString('/tmp/sambar-open.txt'),
+        nsString('/tmp/bunmaska-open.txt'),
       );
-      expect(seen).toBe('/tmp/sambar-open.txt');
+      expect(seen).toBe('/tmp/bunmaska-open.txt');
     });
   });
 }

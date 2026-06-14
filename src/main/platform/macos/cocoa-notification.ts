@@ -10,10 +10,10 @@ import type { Handle } from './objc';
 
 /**
  * macOS notifications via the deprecated `NSUserNotification` /
- * `NSUserNotificationCenter` API — the macOS half of Sambar's `Notification`.
+ * `NSUserNotificationCenter` API — the macOS half of Bunmaska's `Notification`.
  *
  * WHY the deprecated API: the modern `UNUserNotificationCenter` REQUIRES a real
- * app bundle (Info.plist + bundle id). Sambar runs un-bundled (`bun main.ts`),
+ * app bundle (Info.plist + bundle id). Bunmaska runs un-bundled (`bun main.ts`),
  * so `UNUserNotificationCenter` is non-viable here. `NSUserNotification` is the
  * un-bundled-friendlier path.
  *
@@ -33,7 +33,7 @@ import type { Handle } from './objc';
  *   a center exists, delivers it; if the center is nil it no-ops cleanly without
  *   throwing. We do NOT fake delivery.
  *
- * Reliable macOS delivery is a PACKAGING follow-up (ship Sambar as a code-signed
+ * Reliable macOS delivery is a PACKAGING follow-up (ship Bunmaska as a code-signed
  * .app bundle with a bundle id, then migrate to `UNUserNotificationCenter`).
  *
  * `close` event wiring (an `NSUserNotificationCenterDelegate`) is NOT wired here:

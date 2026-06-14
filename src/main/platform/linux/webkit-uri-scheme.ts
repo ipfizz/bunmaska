@@ -30,8 +30,8 @@ import { loadWebKitGtkFFI } from './webkitgtk-ffi';
 
 const log = createLogger('linux-uri-scheme');
 
-/** The Sambar error domain for a failed custom-scheme request. */
-const ERROR_DOMAIN = 'SambarProtocol';
+/** The Bunmaska error domain for a failed custom-scheme request. */
+const ERROR_DOMAIN = 'BunmaskaProtocol';
 /** Error code for an unhandled/declined request. */
 const ERROR_CODE_NO_HANDLER = 1;
 

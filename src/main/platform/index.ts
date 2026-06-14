@@ -21,6 +21,6 @@ export const createNativeApplication = (): NativeApplication => {
     case 'linux':
       return createLinuxApplication();
     default:
-      throw new UnsupportedPlatformError(`No Sambar backend for platform: ${platform}`);
+      throw new UnsupportedPlatformError(`No Bunmaska backend for platform: ${platform}`);
   }
 };

@@ -1,10 +1,10 @@
 /**
- * Linux distributable builder for the `sambar` CLI.
+ * Linux distributable builder for the `bunmaska` CLI.
  *
  * The app is cross/native compiled to a single self-contained executable with
  * Bun's `--compile --target=bun-linux-x64`, which embeds the Bun runtime and the
  * app's JS into a Linux ELF (this works even from a macOS host). No GTK/WebKitGTK
- * libraries are bundled: Sambar dlopens the SYSTEM GTK/WebKitGTK at runtime via
+ * libraries are bundled: Bunmaska dlopens the SYSTEM GTK/WebKitGTK at runtime via
  * bun:ffi on the user's Linux box. The output is an AppDir-style tree packaged as
  * a `.tar.gz` plus a `.deb`. The pure parts (layout paths, .desktop text, control
  * text, archive names) are factored out for unit testing.
@@ -12,7 +12,7 @@
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { SAMBAR_VERSION } from '../common/version';
+import { BUNMASKA_VERSION } from '../common/version';
 import { bundleIdSlug } from './build-macos';
 
 export type LinuxLayout = {
@@ -171,8 +171,8 @@ export type BuildLinuxAppResult = {
 export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLinuxAppResult> => {
   const out = opts.out ?? process.cwd();
   const layout = linuxLayout(out, opts.name);
-  const maintainer = `${opts.id ?? `com.sambar.${layout.slug}`} <noreply@sambar.dev>`;
-  const description = `${opts.name} built with Sambar`;
+  const maintainer = `${opts.id ?? `com.bunmaska.${layout.slug}`} <noreply@bunmaska.dev>`;
+  const description = `${opts.name} built with Bunmaska`;
 
   mkdirSync(dirname(layout.binPath), { recursive: true });
   mkdirSync(dirname(layout.desktopPath), { recursive: true });
@@ -187,7 +187,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 
   if (opts.icon !== undefined) {
     if (!existsSync(opts.icon)) {
-      throw new Error(`sambar build: icon not found: ${opts.icon}`);
+      throw new Error(`bunmaska build: icon not found: ${opts.icon}`);
     }
     mkdirSync(dirname(layout.iconPath), { recursive: true });
     copyFileSync(opts.icon, layout.iconPath);
@@ -200,7 +200,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   const deb = await packageDeb({
     layout,
     out,
-    version: SAMBAR_VERSION,
+    version: BUNMASKA_VERSION,
     name: opts.name,
     maintainer,
     description,

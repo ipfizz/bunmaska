@@ -1,7 +1,7 @@
 /**
- * `sambar dev` — run the app and restart it when source files change.
+ * `bunmaska dev` — run the app and restart it when source files change.
  *
- * The entry is taken from the argument or `sambar.config.ts`. A recursive watch
+ * The entry is taken from the argument or `bunmaska.config.ts`. A recursive watch
  * over the project triggers a debounced restart of the `bun run <entry>` child,
  * ignoring `node_modules`, VCS, build output and dotfiles. The restart
  * supervisor takes injectable spawn/watch/timer seams so its behaviour is
@@ -10,7 +10,7 @@
 
 import { watch as fsWatch } from 'node:fs';
 import { resolve } from 'node:path';
-import type { SambarConfig } from '../common/config-schema';
+import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 
 /** The entry used when neither an argument nor a config entry is given. */
@@ -23,7 +23,7 @@ export const DEV_DEBOUNCE_MS = 120;
  * Resolve the dev entry: the explicit argument wins, then the config's `entry`,
  * then {@link DEV_DEFAULT_ENTRY}. Pure.
  */
-export const resolveDevEntry = (config: SambarConfig, explicit?: string): string =>
+export const resolveDevEntry = (config: BunmaskaConfig, explicit?: string): string =>
   explicit ?? config.entry ?? DEV_DEFAULT_ENTRY;
 
 const IGNORED_SEGMENTS: ReadonlySet<string> = new Set(['node_modules', '.git', 'dist']);
@@ -174,7 +174,7 @@ export const runDev = async (
 ): Promise<void> => {
   const dir = resolve(targetDir);
   if (entry.trim().length === 0) {
-    throw new InvalidArgumentError('sambar dev: entry must not be empty');
+    throw new InvalidArgumentError('bunmaska dev: entry must not be empty');
   }
   const effectiveDeps =
     deps ?? defaultDevDeps(dir, (message) => process.stdout.write(`${message}\n`));

@@ -1,68 +1,68 @@
 import { describe, expect, test } from 'bun:test';
-import * as sambarMain from '../../src/main';
-import * as sambar from '../../src';
+import * as bunmaskaMain from '../../src/main';
+import * as bunmaska from '../../src';
 
-describe('sambar/main entry barrel', () => {
+describe('bunmaska/main entry barrel', () => {
   test('exports the app singleton', () => {
-    expect(sambarMain.app).toBeDefined();
+    expect(bunmaskaMain.app).toBeDefined();
   });
 
   test('exports the App class', () => {
-    expect(sambarMain.App).toBeDefined();
-    expect(sambarMain.app).toBeInstanceOf(sambarMain.App);
+    expect(bunmaskaMain.App).toBeDefined();
+    expect(bunmaskaMain.app).toBeInstanceOf(bunmaskaMain.App);
   });
 
-  test('exports SambarError', () => {
-    expect(sambarMain.SambarError).toBeDefined();
-    expect(new sambarMain.SambarError('x')).toBeInstanceOf(sambarMain.SambarError);
+  test('exports BunmaskaError', () => {
+    expect(bunmaskaMain.BunmaskaError).toBeDefined();
+    expect(new bunmaskaMain.BunmaskaError('x')).toBeInstanceOf(bunmaskaMain.BunmaskaError);
   });
 
   test('exports currentPlatform', () => {
-    expect(typeof sambarMain.currentPlatform).toBe('function');
+    expect(typeof bunmaskaMain.currentPlatform).toBe('function');
   });
 
   test('exports the Notification class', () => {
-    expect(sambarMain.Notification).toBeDefined();
-    expect(typeof sambarMain.Notification.isSupported).toBe('function');
+    expect(bunmaskaMain.Notification).toBeDefined();
+    expect(typeof bunmaskaMain.Notification.isSupported).toBe('function');
   });
 
   test('exports the screen module', () => {
-    expect(sambarMain.screen).toBeDefined();
-    expect(typeof sambarMain.screen.getAllDisplays).toBe('function');
-    expect(typeof sambarMain.screen.getPrimaryDisplay).toBe('function');
+    expect(bunmaskaMain.screen).toBeDefined();
+    expect(typeof bunmaskaMain.screen.getAllDisplays).toBe('function');
+    expect(typeof bunmaskaMain.screen.getPrimaryDisplay).toBe('function');
   });
 
   test('exports the Tray class', () => {
-    expect(sambarMain.Tray).toBeDefined();
-    expect(typeof sambarMain.Tray).toBe('function');
+    expect(bunmaskaMain.Tray).toBeDefined();
+    expect(typeof bunmaskaMain.Tray).toBe('function');
   });
 
   test('exports the protocol module', () => {
-    expect(sambarMain.protocol).toBeDefined();
-    expect(typeof sambarMain.protocol.handle).toBe('function');
-    expect(typeof sambarMain.protocol.isProtocolHandled).toBe('function');
-    expect(typeof sambarMain.protocol.getRegisteredSchemes).toBe('function');
+    expect(bunmaskaMain.protocol).toBeDefined();
+    expect(typeof bunmaskaMain.protocol.handle).toBe('function');
+    expect(typeof bunmaskaMain.protocol.isProtocolHandled).toBe('function');
+    expect(typeof bunmaskaMain.protocol.getRegisteredSchemes).toBe('function');
   });
 
   test('exports the nativeImage module and class', () => {
-    expect(sambarMain.nativeImage).toBeDefined();
-    expect(typeof sambarMain.nativeImage.createFromPath).toBe('function');
-    expect(typeof sambarMain.nativeImage.createFromBuffer).toBe('function');
-    expect(typeof sambarMain.nativeImage.createEmpty).toBe('function');
-    expect(typeof sambarMain.NativeImage).toBe('function');
+    expect(bunmaskaMain.nativeImage).toBeDefined();
+    expect(typeof bunmaskaMain.nativeImage.createFromPath).toBe('function');
+    expect(typeof bunmaskaMain.nativeImage.createFromBuffer).toBe('function');
+    expect(typeof bunmaskaMain.nativeImage.createEmpty).toBe('function');
+    expect(typeof bunmaskaMain.NativeImage).toBe('function');
   });
 });
 
-describe('sambar (root) entry barrel', () => {
-  test('re-exports the same app singleton as sambar/main', () => {
-    expect(sambar.app).toBe(sambarMain.app);
+describe('bunmaska (root) entry barrel', () => {
+  test('re-exports the same app singleton as bunmaska/main', () => {
+    expect(bunmaska.app).toBe(bunmaskaMain.app);
   });
 
   test('re-exports the App class', () => {
-    expect(sambar.App).toBe(sambarMain.App);
+    expect(bunmaska.App).toBe(bunmaskaMain.App);
   });
 
-  test('re-exports SambarError', () => {
-    expect(sambar.SambarError).toBe(sambarMain.SambarError);
+  test('re-exports BunmaskaError', () => {
+    expect(bunmaska.BunmaskaError).toBe(bunmaskaMain.BunmaskaError);
   });
 });

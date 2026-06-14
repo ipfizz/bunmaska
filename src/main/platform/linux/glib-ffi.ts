@@ -5,7 +5,7 @@ import { currentPlatform } from '../../../common/platform';
 /**
  * Loads GLib's main-context iteration symbols plus `g_free`.
  *
- * GLib (not GTK directly) owns the main-loop primitives Sambar uses to pump the
+ * GLib (not GTK directly) owns the main-loop primitives Bunmaska uses to pump the
  * Linux UI cooperatively, mirroring the macOS CoreFoundation pump (D020).
  * `libglib-2.0` is a hard dependency of GTK 4, so it is always present wherever
  * `libgtk-4` is.

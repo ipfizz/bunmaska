@@ -11,7 +11,7 @@ import { linuxPowerSaveBlockerBackend } from '../../../src/main/platform/linux/l
 
 // Linux-only (xvfb). Proves the method-call symbols resolve and that the SESSION-bus path
 // resolves FAST and never hangs (the bounded call_sync + the gate). The live path is gated
-// by SAMBAR_ENABLE_LINUX_POWER_BLOCKER, which CI never sets, so getSessionBus() is a
+// by BUNMASKA_ENABLE_LINUX_POWER_BLOCKER, which CI never sets, so getSessionBus() is a
 // deterministic null no-op; probeSessionBusUnchecked() exercises the REAL g_bus_get_sync.
 if (currentPlatform() === 'linux') {
   describe('Linux powerSaveBlocker backend (GDBus/ScreenSaver)', () => {

@@ -55,7 +55,7 @@ export type NativeNavigationEvent =
     };
 
 /**
- * The web view embedded in a window. Sambar's `WebContents` delegates to this.
+ * The web view embedded in a window. Bunmaska's `WebContents` delegates to this.
  *
  * The IPC surface (renderer messaging + navigation callbacks) is added to this
  * interface in the IPC phase, alongside its implementation — kept out until

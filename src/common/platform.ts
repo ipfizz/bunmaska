@@ -1,5 +1,5 @@
 /**
- * Platform identification for Sambar.
+ * Platform identification for Bunmaska.
  *
  * This is the *only* module that is allowed to read `process.platform` and
  * `process.arch`. All other code calls {@link currentPlatform},
@@ -27,7 +27,7 @@ const RAW_TO_ARCH = new Map<string, Arch>([
 const SUPPORTED: ReadonlySet<Platform> = new Set<Platform>(['macos', 'linux']);
 
 /**
- * Map a Node-style platform tag (`'darwin'`, `'linux'`, `'win32'`) to Sambar's
+ * Map a Node-style platform tag (`'darwin'`, `'linux'`, `'win32'`) to Bunmaska's
  * canonical platform tag. Throws on anything unrecognised.
  */
 export const mapPlatform = (raw: string): Platform => {
@@ -39,20 +39,20 @@ export const mapPlatform = (raw: string): Platform => {
 };
 
 /**
- * Whether Sambar currently ships a working backend for this platform.
+ * Whether Bunmaska currently ships a working backend for this platform.
  * macOS and Linux are supported; Windows is deferred (see `.admin/WINDOWS.md`).
  */
 export const isSupported = (platform: Platform): boolean => SUPPORTED.has(platform);
 
 /**
  * The canonical platform tag of the host this code is running on.
- * Throws if the host OS is not one Sambar knows how to recognise at all.
+ * Throws if the host OS is not one Bunmaska knows how to recognise at all.
  */
 export const currentPlatform = (): Platform => mapPlatform(process.platform);
 
 /**
- * Map a Node-style architecture tag (`'x64'`, `'arm64'`) to Sambar's canonical
- * arch tag. Throws on anything Sambar does not build distributables for.
+ * Map a Node-style architecture tag (`'x64'`, `'arm64'`) to Bunmaska's canonical
+ * arch tag. Throws on anything Bunmaska does not build distributables for.
  */
 export const mapArch = (raw: string): Arch => {
   const mapped = RAW_TO_ARCH.get(raw);
@@ -64,6 +64,6 @@ export const mapArch = (raw: string): Arch => {
 
 /**
  * The canonical architecture tag of the host this code is running on.
- * Throws if the host CPU is not one Sambar builds distributables for.
+ * Throws if the host CPU is not one Bunmaska builds distributables for.
  */
 export const currentArch = (): Arch => mapArch(process.arch);

@@ -8,9 +8,9 @@ import type { NativeWindow } from '../../../src/main/platform/native';
  * UNVERIFIED-IN-DOCS gap: that a non-NULL `world_name` passed from the UI
  * process targets a named isolated world without a web-process extension.
  *
- * The `__sambar` bridge + user preload run in the `SambarPreload` world; the
+ * The `__bunmaska` bridge + user preload run in the `BunmaskaPreload` world; the
  * page world cannot see them. The isolated-world preload reports
- * `typeof window.__sambar` (object) and relays the page world's DOM probe
+ * `typeof window.__bunmaska` (object) and relays the page world's DOM probe
  * (undefined) back over IPC.
  *
  * Runs only in CI ubuntu under `xvfb-run -a` with the same GPU-less env as
@@ -31,19 +31,19 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
 };
 
 describe.skipIf(!isLinux)('Linux context isolation end-to-end', () => {
-  test('isolated world sees __sambar as object; page world sees undefined', async () => {
+  test('isolated world sees __bunmaska as object; page world sees undefined', async () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return;
     }
 
-    // The isolated-world preload sees __sambar and relays the page world's DOM
+    // The isolated-world preload sees __bunmaska and relays the page world's DOM
     // probe back over IPC. The page world shares the DOM but not the bridge.
     const isolatedPreload = [
-      "window.__sambar.on('iso-typeof-req', function () {",
-      "  window.__sambar.send('iso-typeof', typeof window.__sambar);",
+      "window.__bunmaska.on('iso-typeof-req', function () {",
+      "  window.__bunmaska.send('iso-typeof', typeof window.__bunmaska);",
       '});',
-      "document.addEventListener('sambar-page-typeof', function (e) {",
-      "  window.__sambar.send('page-typeof', e.detail);",
+      "document.addEventListener('bunmaska-page-typeof', function (e) {",
+      "  window.__bunmaska.send('page-typeof', e.detail);",
       '});',
     ].join('\n');
 
@@ -70,11 +70,11 @@ describe.skipIf(!isLinux)('Linux context isolation end-to-end', () => {
       didFinish = true;
     });
 
-    // The page (main world) probes typeof __sambar and dispatches it on the DOM;
+    // The page (main world) probes typeof __bunmaska and dispatches it on the DOM;
     // the isolated preload relays it. typeof of an undeclared global is safe.
     const html =
       '<!doctype html><html><body><script>' +
-      "document.dispatchEvent(new CustomEvent('sambar-page-typeof', { detail: typeof window.__sambar }));" +
+      "document.dispatchEvent(new CustomEvent('bunmaska-page-typeof', { detail: typeof window.__bunmaska }));" +
       '</script></body></html>';
     contents.loadHTML(html);
 

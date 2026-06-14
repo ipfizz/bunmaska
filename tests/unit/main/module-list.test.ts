@@ -19,7 +19,7 @@ describe('IMPLEMENTED_MODULES', () => {
   const implemented: readonly string[] = IMPLEMENTED_MODULES;
   const known: readonly string[] = KNOWN_ELECTRON_MODULES;
 
-  test('contains the modules Sambar ships today', () => {
+  test('contains the modules Bunmaska ships today', () => {
     for (const name of ['app', 'BrowserWindow', 'WebContents', 'ipcMain']) {
       expect(implemented).toContain(name);
     }
@@ -31,7 +31,7 @@ describe('IMPLEMENTED_MODULES', () => {
     }
   });
 
-  test('claims the Tier-2 modules Sambar now ships', () => {
+  test('claims the Tier-2 modules Bunmaska now ships', () => {
     expect(implemented).toContain('Menu');
     expect(implemented).toContain('MenuItem');
     expect(implemented).toContain('dialog');
@@ -87,7 +87,7 @@ describe('notImplementedMessage', () => {
   test('names the module and the project', () => {
     const message = notImplementedMessage('Tray');
     expect(message).toMatch(/Tray/);
-    expect(message).toMatch(/Sambar/);
+    expect(message).toMatch(/Bunmaska/);
     expect(message).toMatch(/not yet implemented/i);
   });
 });

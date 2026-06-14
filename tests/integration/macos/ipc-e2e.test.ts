@@ -8,11 +8,11 @@ import type { NativeApplication, NativeWindow } from '../../../src/main/platform
 /**
  * IPC end-to-end over a real WKWebView.
  *
- * `__sambar` now lives in the ISOLATED `SambarPreload` world (context
+ * `__bunmaska` now lives in the ISOLATED `BunmaskaPreload` world (context
  * isolation), so the renderer-side test logic ships as a PRELOAD (which runs in
  * that world) and is triggered via `sendEnvelopeToRenderer` (which also targets
  * the isolated world). Page-world `executeJavaScript` can no longer reach
- * `__sambar` — that is the isolation guarantee, proven in `isolation-e2e.test.ts`.
+ * `__bunmaska` — that is the isolation guarantee, proven in `isolation-e2e.test.ts`.
  */
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -61,8 +61,8 @@ if (currentPlatform() === 'macos') {
     test('renderer -> main: postMessage reaches the native script message handler', async () => {
       // Preload runs in the isolated world; on 'go' it posts a send envelope.
       const preload = [
-        "window.__sambar.on('go', function () {",
-        "  window.__sambar.send('hello', 1, 2);",
+        "window.__bunmaska.on('go', function () {",
+        "  window.__bunmaska.send('hello', 1, 2);",
         '});',
       ].join('\n');
       const win = app.createWindow({
@@ -92,11 +92,11 @@ if (currentPlatform() === 'macos') {
       // Preload (isolated world): on 'go' it invokes 'add' once and reports the
       // resolved value back on 'result'. A guard flag keeps the retry idempotent.
       const preload = [
-        "window.__sambar.on('go', function () {",
+        "window.__bunmaska.on('go', function () {",
         '  if (window.__sentInvoke) { return; }',
         '  window.__sentInvoke = true;',
-        "  window.__sambar.invoke('add', 20, 22).then(function (r) {",
-        "    window.__sambar.send('result', r);",
+        "  window.__bunmaska.invoke('add', 20, 22).then(function (r) {",
+        "    window.__bunmaska.send('result', r);",
         '  });',
         '});',
       ].join('\n');

@@ -105,13 +105,13 @@ const nsImageToPng = (image: Handle): Uint8Array => {
 /** `NSFloatingWindowLevel` — above normal windows. */
 const NS_FLOATING_WINDOW_LEVEL = 3n;
 const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
-const SCRIPT_MESSAGE_HANDLER_NAME = 'sambar';
+const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
 /** Page-world handler name `executeJavaScript` posts its result to (D022). */
-const EXEC_RESULT_HANDLER_NAME = 'sambarExec';
+const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
 /** Reject + clear a pending `executeJavaScript` after this long (ms). */
 const EXEC_TIMEOUT_MS = 30_000;
 /** Name of the isolated `WKContentWorld` the bridge + user preload run in. */
-export const PRELOAD_WORLD_NAME = 'SambarPreload';
+export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 
 /** A pending `executeJavaScript` awaiting its page-world result message. */
 type PendingExec = {
@@ -121,7 +121,7 @@ type PendingExec = {
 };
 
 const dispatchScript = (envelopeJson: string): string =>
-  `window.__sambar && window.__sambar._dispatch(${JSON.stringify(envelopeJson)});`;
+  `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(envelopeJson)});`;
 
 /**
  * Turn on `developerExtrasEnabled` on a `WKPreferences` via KVC so the inspector
@@ -202,7 +202,7 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   /**
-   * @internal Called by the page-world `sambarExec` handler with the JSON
+   * @internal Called by the page-world `bunmaskaExec` handler with the JSON
    * `{ execId, ok, result?, error? }` outcome of an `executeJavaScript` call.
    */
   deliverExecResult(json: string): void {
@@ -329,7 +329,7 @@ class MacOSWebContents implements NativeWebContents {
    * Evaluate `code` in the PAGE world (Electron's main world) and resolve to its
    * completion value. A completion-handler block crashes Bun (D022), so the
    * result returns out-of-band: a wrapper runs the code and posts the outcome to
-   * the page-world `sambarExec` handler, which settles the matching Promise.
+   * the page-world `bunmaskaExec` handler, which settles the matching Promise.
    */
   executeJavaScript(code: string): Promise<unknown> {
     if (this.#destroyed) {
@@ -462,7 +462,7 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
-    // Internal dispatch targets the ISOLATED world, where `__sambar` lives.
+    // Internal dispatch targets the ISOLATED world, where `__bunmaska` lives.
     this.#evaluateInWorld(dispatchScript(envelopeJson), this.#isolatedWorld);
   }
 
@@ -886,8 +886,8 @@ class MacOSApplication implements NativeApplication {
     const channelId = generateChannelId();
 
     // Isolated world: record the channel id, then the bridge, then the
-    // contextBridge host (installs `__sambar.exposeInMainWorld`), then the user
-    // preload — so `window.__sambar` + the channel + exposeInMainWorld all exist
+    // contextBridge host (installs `__bunmaska.exposeInMainWorld`), then the user
+    // preload — so `window.__bunmaska` + the channel + exposeInMainWorld all exist
     // when the user preload runs and calls exposeInMainWorld.
     addUserScript(generateIsolatedChannelSetup(channelId), isolatedWorld);
     addUserScript(generatePreloadBootstrap(), isolatedWorld);
