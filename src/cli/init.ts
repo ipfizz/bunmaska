@@ -32,7 +32,7 @@ const packageJson = (vars: TemplateVars): string =>
         build: 'bunmaska build',
       },
       dependencies: {
-        '@ipfizz/bunmaska': `^${BUNMASKA_VERSION}`,
+        bunmaska: `^${BUNMASKA_VERSION}`,
       },
     },
     null,
@@ -40,7 +40,7 @@ const packageJson = (vars: TemplateVars): string =>
   )}\n`;
 
 const configTs = (vars: TemplateVars): string =>
-  `import { defineConfig } from '@ipfizz/bunmaska/config';
+  `import { defineConfig } from 'bunmaska/config';
 
 export default defineConfig({
   name: ${JSON.stringify(vars.name)},
@@ -51,7 +51,7 @@ export default defineConfig({
 
 const mainTs = (vars: TemplateVars): string =>
   `import { join } from 'node:path';
-import { app, BrowserWindow, ipcMain } from '@ipfizz/bunmaska';
+import { app, BrowserWindow, ipcMain } from 'bunmaska';
 
 // A demo handler the preload exposes to the page as window.api.ping().
 ipcMain.handle('ping', () => 'pong');
