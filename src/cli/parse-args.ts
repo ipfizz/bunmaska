@@ -37,7 +37,7 @@ export type EngineSubcommand =
   | { readonly action: 'which'; readonly target?: string }
   | { readonly action: 'install'; readonly source: string }
   | { readonly action: 'use'; readonly id: string; readonly for?: string }
-  | { readonly action: 'prune'; readonly dryRun: boolean }
+  | { readonly action: 'prune'; readonly dryRun: boolean; readonly force: boolean }
   | { readonly action: 'verify'; readonly id: string };
 
 export type Command =
@@ -205,7 +205,14 @@ const parseEngine = (rest: readonly string[]): Command => {
       };
     }
     case 'prune':
-      return { kind: 'engine', sub: { action: 'prune', dryRun: args.includes('--dry-run') } };
+      return {
+        kind: 'engine',
+        sub: {
+          action: 'prune',
+          dryRun: args.includes('--dry-run'),
+          force: args.includes('--force'),
+        },
+      };
     case 'verify': {
       const id = args[0];
       if (id === undefined) {

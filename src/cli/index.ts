@@ -61,6 +61,7 @@ engine subcommands:
   install <path>        Install a local engine directory into the shared store
   use <id> [--for dir]  Pin an engine per-project (there is no global switch)
   prune [--dry-run]     Garbage-collect engines no installed app references
+                        (use --force to prune when no app has registered yet)
   verify <id>           Structurally verify an installed engine
 
 build options:

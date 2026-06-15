@@ -134,9 +134,29 @@ describe('engine prune', () => {
     const root = makeTmpDir();
     await installFromDir(root, makeEngineDir(root, ID));
     const c = capture(root);
-    await runEngine({ action: 'prune', dryRun: true }, c.deps);
+    await runEngine({ action: 'prune', dryRun: true, force: false }, c.deps);
     expect(c.text()).toMatch(/dry run/i);
     expect(c.text()).toContain(ID);
+    expect(c.deps.root && (await import('node:fs')).existsSync(`${root}/${ID}`)).toBeTruthy();
+  });
+
+  test('refuses to wipe the whole store when no app has registered (no --force)', async () => {
+    const root = makeTmpDir();
+    await installFromDir(root, makeEngineDir(root, ID));
+    const c = capture(root);
+    await runEngine({ action: 'prune', dryRun: false, force: false }, c.deps);
+    expect(c.text()).toMatch(/Refusing to prune/);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(`${root}/${ID}`)).toBe(true);
+  });
+
+  test('--force prunes the unreferenced engine', async () => {
+    const root = makeTmpDir();
+    await installFromDir(root, makeEngineDir(root, ID));
+    const c = capture(root);
+    await runEngine({ action: 'prune', dryRun: false, force: true }, c.deps);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(`${root}/${ID}`)).toBe(false);
   });
 });
 
