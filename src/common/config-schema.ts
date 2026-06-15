@@ -17,6 +17,22 @@ export type BunmaskaUpdatesConfig = {
   readonly channel?: Channel;
 };
 
+/**
+ * Pinned-WebKit engine configuration — the "tested == shipped" knob. Many engine
+ * versions coexist in the shared store; this declares which one THIS app pins.
+ */
+export type BunmaskaEngineConfig = {
+  /**
+   * The WebKit engine to pin: a full engine-id
+   * (`webkitgtk-6.0-2.52.4-bunmaska1-linux-x64`), a bare upstream version
+   * (`2.52.4`, resolved to the host's id at build time), or `system` (the
+   * default — use the OS WebView, no pinning).
+   */
+  readonly webkit?: string;
+  /** Copy the pinned engine into the bundle for offline/airgapped installs. */
+  readonly embed?: boolean;
+};
+
 /** A project's `bunmaska.config` shape. Every field is optional. */
 export type BunmaskaConfig = {
   /** Display/bundle name. */
@@ -29,6 +45,8 @@ export type BunmaskaConfig = {
   readonly icon?: string;
   /** Auto-update feed configuration. */
   readonly updates?: BunmaskaUpdatesConfig;
+  /** Pinned-WebKit engine configuration (defaults to the system WebView). */
+  readonly engine?: BunmaskaEngineConfig;
 };
 
 /** The config file names searched for, in priority order. */
@@ -54,6 +72,20 @@ const assertOptionalString = (
   }
   if (typeof value !== 'string') {
     throw new InvalidArgumentError(`${source}: "${field}" must be a string`);
+  }
+  return value;
+};
+
+const assertOptionalBoolean = (
+  value: unknown,
+  field: string,
+  source: string,
+): boolean | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'boolean') {
+    throw new InvalidArgumentError(`${source}: "${field}" must be a boolean`);
   }
   return value;
 };
@@ -98,6 +130,20 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
     config.updates = {
       ...(url !== undefined ? { url } : {}),
       ...(channel !== undefined ? { channel } : {}),
+    };
+  }
+
+  const engine = record['engine'];
+  if (engine !== undefined) {
+    if (engine === null || typeof engine !== 'object') {
+      throw new InvalidArgumentError(`${source}: "engine" must be an object`);
+    }
+    const engineRecord = engine as Record<string, unknown>;
+    const webkit = assertOptionalString(engineRecord['webkit'], 'engine.webkit', source);
+    const embed = assertOptionalBoolean(engineRecord['embed'], 'engine.embed', source);
+    config.engine = {
+      ...(webkit !== undefined ? { webkit } : {}),
+      ...(embed !== undefined ? { embed } : {}),
     };
   }
 
