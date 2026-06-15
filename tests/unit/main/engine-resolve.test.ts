@@ -61,6 +61,18 @@ describe('resolveEngineWith', () => {
     expect(r.mode).toBe('system');
     expect(r.warnings.length).toBe(1);
   });
+
+  test('store-resolved pinned carries the engine id + root (for refcount linking)', () => {
+    const r = resolve({ env: {}, readBakedId: () => ID });
+    expect(r.id).toBe(ID);
+    expect(r.root).toBe(ROOT);
+  });
+
+  test('explicit BUNMASKA_WEBKIT_PATH pin carries no id/root (nothing to refcount)', () => {
+    const r = resolve({ env: { BUNMASKA_WEBKIT_PATH: '/opt/webkit/lib' } });
+    expect(r.id).toBeUndefined();
+    expect(r.root).toBeUndefined();
+  });
 });
 
 describe('bakedIdCandidates', () => {
@@ -143,5 +155,52 @@ describe('prepareEngineForLoad', () => {
     expect(target['LD_LIBRARY_PATH']).toBe('/usr/lib');
     expect(target['GIO_EXTRA_MODULES']).toBeUndefined();
     expect(writes).toEqual([]);
+  });
+
+  test('store-pinned: registers an app→engine link exactly once (refcount)', () => {
+    const pinned: EngineResolution = {
+      mode: 'pinned',
+      libDir: `${ROOT}/${ID}/lib`,
+      id: ID,
+      root: ROOT,
+      warnings: [],
+    };
+    const links: Array<[string, string, string]> = [];
+    const deps = {
+      appPath: '/opt/MyApp',
+      link: (root: string, app: string, id: string) => {
+        links.push([root, app, id]);
+      },
+    };
+    prepareEngineForLoad(pinned, {}, () => undefined, deps);
+    prepareEngineForLoad(pinned, {}, () => undefined, deps); // second loader call = no-op
+    expect(links).toEqual([[ROOT, '/opt/MyApp', ID]]);
+  });
+
+  test('explicit-dir pin (no id/root) does not link — nothing to refcount', () => {
+    const links: unknown[] = [];
+    prepareEngineForLoad(
+      { mode: 'pinned', libDir: '/opt/lib', warnings: [] },
+      {},
+      () => undefined,
+      {
+        appPath: '/a',
+        link: (...a) => {
+          links.push(a);
+        },
+      },
+    );
+    expect(links).toEqual([]);
+  });
+
+  test('system mode does not link', () => {
+    const links: unknown[] = [];
+    prepareEngineForLoad({ mode: 'system', warnings: [] }, {}, () => undefined, {
+      appPath: '/a',
+      link: (...a) => {
+        links.push(a);
+      },
+    });
+    expect(links).toEqual([]);
   });
 });
