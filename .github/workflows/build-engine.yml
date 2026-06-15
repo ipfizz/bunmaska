@@ -1,0 +1,51 @@
+name: build-engine
+
+# Builds a relocatable WebKitGTK engine from the runner's apt WebKitGTK and
+# proves it loads from the store with its dependency closure resolved via the
+# engine's own $ORIGIN rpaths. This is the start of the hosted-engine pipeline;
+# it runs on demand and on the engine branch, not on every push.
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/relocatable-engine]
+
+jobs:
+  build:
+    name: relocate WebKitGTK (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WebKitGTK 6.0 + GTK 4 + patchelf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkitgtk-6.0-4 libgtk-4-1 patchelf
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build the relocatable engine
+        run: |
+          chmod +x tools/engine/build-webkitgtk-linux.sh
+          mkdir -p "$RUNNER_TEMP/store"
+          tools/engine/build-webkitgtk-linux.sh "$RUNNER_TEMP/store" webkitgtk-6.0-built-linux-x64
+          touch "$RUNNER_TEMP/store/webkitgtk-6.0-built-linux-x64/INSTALLATION_COMPLETE"
+          echo "--- engine tree ---"
+          find "$RUNNER_TEMP/store/webkitgtk-6.0-built-linux-x64" -maxdepth 2 | head -40
+
+      - name: Prove it loads from the store via $ORIGIN (no LD_LIBRARY_PATH)
+        run: |
+          set -o pipefail
+          OUT=$(BUNMASKA_ENGINES_PATH="$RUNNER_TEMP/store" \
+                BUNMASKA_WEBKIT_ID=webkitgtk-6.0-built-linux-x64 \
+                bun tools/engine/engine-load-probe.ts 2>&1)
+          echo "probe: $OUT"
+          N=$(printf '%s\n' "$OUT" | sed -n 's/^STORE_LIBS=//p')
+          if [ -z "$N" ] || [ "$N" -lt 5 ]; then
+            echo "FAIL: ${N:-0} libraries loaded from the relocated engine (expected the closure via \$ORIGIN)"
+            exit 1
+          fi
+          echo "PASS: $N libraries loaded from the relocated engine via \$ORIGIN"
