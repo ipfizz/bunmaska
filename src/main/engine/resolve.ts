@@ -14,7 +14,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../../common/engine-id';
 import {
   engineDir,
@@ -43,10 +43,24 @@ export type ResolveDeps = {
   readonly enginesRoot?: string;
 };
 
+/**
+ * Candidate paths for the baked `engine.id`, in priority order: the explicit env
+ * override, then the install layout `usr/share/<slug>/engine.id` (relative to the
+ * executable at `usr/bin/<slug>`), then a flat sibling fallback. Pure + testable.
+ */
+export const bakedIdCandidates = (execPath: string, env: StoreEnv): string[] => {
+  const explicit = env['BUNMASKA_ENGINE_ID_FILE'];
+  if (explicit !== undefined && explicit.length > 0) {
+    return [explicit];
+  }
+  const dir = dirname(execPath); // .../usr/bin
+  const slug = basename(execPath);
+  return [join(dir, '..', 'share', slug, 'engine.id'), join(dir, 'engine.id')];
+};
+
 /** Default reader for the baked `engine.id`: env override, else beside the executable. */
 const defaultReadBakedId = (env: StoreEnv): string | null => {
-  const explicit = env['BUNMASKA_ENGINE_ID_FILE'];
-  const candidates = explicit ? [explicit] : [join(dirname(process.execPath), 'engine.id')];
+  const candidates = bakedIdCandidates(process.execPath, env);
   for (const path of candidates) {
     try {
       const value = readFileSync(path, 'utf8').trim();

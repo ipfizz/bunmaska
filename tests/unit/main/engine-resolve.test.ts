@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  bakedIdCandidates,
   engineEnv,
   engineLibPath,
   type ResolveDeps,
@@ -56,6 +57,20 @@ describe('resolveEngineWith', () => {
     const r = resolve({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } });
     expect(r.mode).toBe('system');
     expect(r.warnings.length).toBe(1);
+  });
+});
+
+describe('bakedIdCandidates', () => {
+  test('prefers the install layout usr/share/<slug>/engine.id', () => {
+    const c = bakedIdCandidates('/opt/app/usr/bin/my-app', {});
+    expect(c[0]).toBe('/opt/app/usr/share/my-app/engine.id');
+    expect(c[1]).toBe('/opt/app/usr/bin/engine.id');
+  });
+
+  test('an explicit BUNMASKA_ENGINE_ID_FILE wins outright', () => {
+    expect(
+      bakedIdCandidates('/opt/app/usr/bin/my-app', { BUNMASKA_ENGINE_ID_FILE: '/x/id' }),
+    ).toEqual(['/x/id']);
   });
 });
 
