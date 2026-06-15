@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   bakedIdCandidates,
   type EngineResolution,
@@ -113,6 +113,9 @@ describe('engineEnv', () => {
 });
 
 describe('prepareEngineForLoad', () => {
+  // Reset BEFORE each test too: on Linux the real GTK/WebKitGTK loaders run in
+  // the same process and set this one-shot guard, which would otherwise leak in.
+  beforeEach(() => resetEnginePreparation());
   afterEach(() => resetEnginePreparation());
 
   test('pinned: exports the engine env and prints warnings, exactly once', () => {
