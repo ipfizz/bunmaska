@@ -18,6 +18,8 @@ import {
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadConfig } from './config';
+import { runDoctor, runEngine } from './engine-command';
+import { enginesPath } from './engine-store';
 import { resolveDevEntry, runDev } from './dev';
 import { runInit } from './init';
 import {
@@ -48,8 +50,18 @@ Usage:
   bunmaska dev [entry.ts]                Run the app, restarting on file changes
   bunmaska run <entry.ts> [args...]      Launch a Bunmaska app (bun run <entry>)
   bunmaska build <entry.ts> [options]    Bundle a distributable app
+  bunmaska engine <subcommand>           Manage the pinned-WebKit engine store
+  bunmaska doctor [dir]                   Report runtime, store, and the engine pin
   bunmaska --help                        Show this help
   bunmaska --version                     Print the Bunmaska version
+
+engine subcommands:
+  list                  Installed engines (side by side) and their refcounts
+  which [dir]           The engine-id a project resolves (defaults to system)
+  install <path>        Install a local engine directory into the shared store
+  use <id> [--for dir]  Pin an engine per-project (there is no global switch)
+  prune [--dry-run]     Garbage-collect engines no installed app references
+  verify <id>           Structurally verify an installed engine
 
 build options:
   --target <os>      Build target: macos | linux (default: host platform)
@@ -243,6 +255,15 @@ const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => 
   return 0;
 };
 
+/** Shared dependencies for the `engine`/`doctor` commands (real store + config). */
+const engineCommandDeps = (): Parameters<typeof runEngine>[1] => ({
+  root: enginesPath(),
+  env: process.env,
+  out,
+  err,
+  readConfig: async (target) => (await loadConfig(target)).config,
+});
+
 /** Block until SIGINT/SIGTERM, then run `stop` and resolve. */
 const awaitInterrupt = (stop: () => void): Promise<void> =>
   new Promise<void>((resolvePromise) => {
@@ -286,6 +307,10 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
       return await runApp(command.entry, command.args);
     case 'build':
       return await runBuild(command, deps);
+    case 'engine':
+      return await runEngine(command.sub, engineCommandDeps());
+    case 'doctor':
+      return await runDoctor(command.target, engineCommandDeps());
     case 'error':
       err(command.message);
       err('');
