@@ -30,17 +30,21 @@ jobs:
       - name: Build the relocatable engine
         run: |
           chmod +x tools/engine/build-webkitgtk-linux.sh
+          WK_VER=$(dpkg-query -W -f='${Version}' libwebkitgtk-6.0-4 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          ENGINE_ID="webkitgtk-6.0-${WK_VER:-0.0.0}-built1-linux-x64"
+          echo "ENGINE_ID=$ENGINE_ID" >> "$GITHUB_ENV"
+          echo "Building engine id: $ENGINE_ID"
           mkdir -p "$RUNNER_TEMP/store"
-          tools/engine/build-webkitgtk-linux.sh "$RUNNER_TEMP/store" webkitgtk-6.0-built-linux-x64
-          touch "$RUNNER_TEMP/store/webkitgtk-6.0-built-linux-x64/INSTALLATION_COMPLETE"
+          tools/engine/build-webkitgtk-linux.sh "$RUNNER_TEMP/store" "$ENGINE_ID"
+          touch "$RUNNER_TEMP/store/$ENGINE_ID/INSTALLATION_COMPLETE"
           echo "--- engine tree ---"
-          find "$RUNNER_TEMP/store/webkitgtk-6.0-built-linux-x64" -maxdepth 2 | head -40
+          find "$RUNNER_TEMP/store/$ENGINE_ID" -maxdepth 2 | head -40
 
       - name: Prove it loads from the store via $ORIGIN (no LD_LIBRARY_PATH)
         run: |
           set -o pipefail
           OUT=$(BUNMASKA_ENGINES_PATH="$RUNNER_TEMP/store" \
-                BUNMASKA_WEBKIT_ID=webkitgtk-6.0-built-linux-x64 \
+                BUNMASKA_WEBKIT_ID="$ENGINE_ID" \
                 bun tools/engine/engine-load-probe.ts 2>&1)
           echo "probe: $OUT"
           N=$(printf '%s\n' "$OUT" | sed -n 's/^STORE_LIBS=//p')
