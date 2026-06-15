@@ -163,3 +163,38 @@ export const engineEnv = (
     GIO_EXTRA_MODULES: join(resolution.libDir, 'gio', 'modules'),
   };
 };
+
+const prep: { done: boolean } = { done: false };
+
+/**
+ * Apply a resolution to the process before the first `dlopen`: print any
+ * fallback warnings, and (in pinned mode) export `LD_LIBRARY_PATH` /
+ * `GIO_EXTRA_MODULES` so the engine's bundled deps win. Runs once per process —
+ * both Linux loaders (GTK + WebKitGTK) call it, but only the first takes effect,
+ * keeping them on a single shared engine.
+ */
+export const prepareEngineForLoad = (
+  resolution: EngineResolution,
+  target: StoreEnv,
+  write: (text: string) => void,
+): void => {
+  if (prep.done) {
+    return;
+  }
+  prep.done = true;
+  for (const warning of resolution.warnings) {
+    write(`${warning}\n`);
+  }
+  const env = engineEnv(resolution, target);
+  if (env.LD_LIBRARY_PATH !== undefined) {
+    target['LD_LIBRARY_PATH'] = env.LD_LIBRARY_PATH;
+  }
+  if (env.GIO_EXTRA_MODULES !== undefined) {
+    target['GIO_EXTRA_MODULES'] = env.GIO_EXTRA_MODULES;
+  }
+};
+
+/** Reset the one-shot preparation guard (test seam only). */
+export const resetEnginePreparation = (): void => {
+  prep.done = false;
+};
