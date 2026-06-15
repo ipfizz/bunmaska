@@ -127,7 +127,23 @@ const runUse = (id: string, forDir: string | undefined, deps: EngineCommandDeps)
   return 0;
 };
 
-const runPrune = async (dryRun: boolean, deps: EngineCommandDeps): Promise<number> => {
+const runPrune = async (
+  dryRun: boolean,
+  force: boolean,
+  deps: EngineCommandDeps,
+): Promise<number> => {
+  // Refcounts are populated by apps at launch. Before any app has registered,
+  // every engine looks unreferenced — so a plain prune would wipe the whole
+  // store. Refuse that case unless explicitly forced (or just previewing).
+  const installed = listInstalled(deps.root);
+  if (!dryRun && !force && installed.length > 0 && readLinks(deps.root).length === 0) {
+    deps.out(
+      `Refusing to prune: no app has registered a dependency yet, so all ${installed.length} ` +
+        'installed engine(s) look unreferenced. Apps register on launch — re-run with --force ' +
+        'to prune anyway, or --dry-run to preview.',
+    );
+    return 0;
+  }
   const result = await gc(deps.root, { dryRun });
   if (result.removed.length === 0) {
     deps.out('Nothing to prune — every installed engine is still referenced.');
@@ -177,7 +193,7 @@ export const runEngine = async (
     case 'use':
       return runUse(sub.id, sub.for, deps);
     case 'prune':
-      return await runPrune(sub.dryRun, deps);
+      return await runPrune(sub.dryRun, sub.force, deps);
     case 'verify':
       return runVerify(sub.id, deps);
   }

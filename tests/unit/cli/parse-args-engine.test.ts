@@ -48,14 +48,18 @@ describe('parseArgs — engine subcommands', () => {
     expect(parseArgs(['engine', 'use', ID, '--global'])).toMatchObject({ kind: 'error' });
   });
 
-  test('engine prune and engine prune --dry-run', () => {
+  test('engine prune, --dry-run, and --force', () => {
     expect(parseArgs(['engine', 'prune'])).toEqual({
       kind: 'engine',
-      sub: { action: 'prune', dryRun: false },
+      sub: { action: 'prune', dryRun: false, force: false },
     });
     expect(parseArgs(['engine', 'prune', '--dry-run'])).toEqual({
       kind: 'engine',
-      sub: { action: 'prune', dryRun: true },
+      sub: { action: 'prune', dryRun: true, force: false },
+    });
+    expect(parseArgs(['engine', 'prune', '--force'])).toEqual({
+      kind: 'engine',
+      sub: { action: 'prune', dryRun: false, force: true },
     });
   });
 
