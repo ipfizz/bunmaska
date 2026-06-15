@@ -105,11 +105,12 @@ describe('engineLibPath', () => {
 });
 
 describe('engineEnv', () => {
-  test('pinned -> prepends the lib dir to LD_LIBRARY_PATH and sets GIO_EXTRA_MODULES', () => {
+  test('pinned -> sets LD_LIBRARY_PATH, GIO_EXTRA_MODULES, and WEBKIT_EXEC_PATH', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     const env = engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' });
     expect(env.LD_LIBRARY_PATH).toBe(`${ROOT}/${ID}/lib:/usr/lib`);
     expect(env.GIO_EXTRA_MODULES).toBe(`${ROOT}/${ID}/lib/gio/modules`);
+    expect(env.WEBKIT_EXEC_PATH).toBe(`${ROOT}/${ID}/libexec`);
   });
 
   test('pinned with no prior LD_LIBRARY_PATH -> just the lib dir', () => {

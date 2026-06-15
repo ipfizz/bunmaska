@@ -152,12 +152,15 @@ export const engineLibPath = (resolution: EngineResolution, soname: string): str
 /**
  * The environment overrides needed for a pinned engine: prepend its `lib/` to
  * `LD_LIBRARY_PATH` so its bundled GTK/libsoup/ICU/GStreamer win over the
- * distro's, and point `GIO_EXTRA_MODULES` at its gio modules. Empty in system mode.
+ * distro's, point `GIO_EXTRA_MODULES` at its gio modules, and point
+ * `WEBKIT_EXEC_PATH` at its `libexec/` so WebKit spawns the engine's OWN helper
+ * processes (WebKitNetworkProcess/WebProcess/GPUProcess) rather than the system's.
+ * Empty in system mode.
  */
 export const engineEnv = (
   resolution: EngineResolution,
   env: StoreEnv,
-): { LD_LIBRARY_PATH?: string; GIO_EXTRA_MODULES?: string } => {
+): { LD_LIBRARY_PATH?: string; GIO_EXTRA_MODULES?: string; WEBKIT_EXEC_PATH?: string } => {
   if (resolution.mode !== 'pinned' || resolution.libDir === undefined) {
     return {};
   }
@@ -166,6 +169,7 @@ export const engineEnv = (
     LD_LIBRARY_PATH:
       prior !== undefined && prior.length > 0 ? `${resolution.libDir}:${prior}` : resolution.libDir,
     GIO_EXTRA_MODULES: join(resolution.libDir, 'gio', 'modules'),
+    WEBKIT_EXEC_PATH: join(resolution.libDir, '..', 'libexec'),
   };
 };
 
@@ -207,6 +211,9 @@ export const prepareEngineForLoad = (
   }
   if (env.GIO_EXTRA_MODULES !== undefined) {
     target['GIO_EXTRA_MODULES'] = env.GIO_EXTRA_MODULES;
+  }
+  if (env.WEBKIT_EXEC_PATH !== undefined) {
+    target['WEBKIT_EXEC_PATH'] = env.WEBKIT_EXEC_PATH;
   }
   // Auto-link only a STORE pin (it has an id + root); an explicit-dir pin and
   // system mode have nothing to refcount.
