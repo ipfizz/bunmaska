@@ -3,9 +3,13 @@ import {
   buildControlFile,
   buildDesktopEntry,
   debFileName,
+  DEFAULT_LINUX_DEPENDS,
   linuxLayout,
+  resolveBuildEngineId,
   tarballName,
 } from '../../../src/cli/build-linux';
+
+const ENGINE_ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
 
 describe('linuxLayout', () => {
   const layout = linuxLayout('/tmp/out', 'My App');
@@ -28,6 +32,10 @@ describe('linuxLayout', () => {
 
   test('places the icon under hicolor/512x512/apps', () => {
     expect(layout.iconPath).toBe('/tmp/out/My App/usr/share/icons/hicolor/512x512/apps/my-app.png');
+  });
+
+  test('bakes engine.id under usr/share/<slug>', () => {
+    expect(layout.engineIdPath).toBe('/tmp/out/My App/usr/share/my-app/engine.id');
   });
 });
 
@@ -96,5 +104,44 @@ describe('buildControlFile', () => {
 
   test('ends with a trailing newline', () => {
     expect(text.endsWith('\n')).toBe(true);
+  });
+
+  test('emits a Depends line on the system WebKitGTK when given deps (the bug fix)', () => {
+    const withDeps = buildControlFile({
+      slug: 'my-app',
+      version: '1.0.0',
+      maintainer: 'Bunmaska <noreply@bunmaska.dev>',
+      description: 'My App built with Bunmaska',
+      depends: DEFAULT_LINUX_DEPENDS,
+    });
+    expect(withDeps).toContain('Depends: libwebkitgtk-6.0-4, libgtk-4-1');
+    // Depends precedes Description (Debian field ordering).
+    expect(withDeps.indexOf('Depends:')).toBeLessThan(withDeps.indexOf('Description:'));
+  });
+
+  test('omits the Depends field entirely when deps are empty (embedded engine)', () => {
+    const noDeps = buildControlFile({
+      slug: 'my-app',
+      version: '1.0.0',
+      maintainer: 'Bunmaska <noreply@bunmaska.dev>',
+      description: 'x',
+      depends: [],
+    });
+    expect(noDeps).not.toContain('Depends:');
+  });
+});
+
+describe('resolveBuildEngineId', () => {
+  test('passes a full engine-id through', () => {
+    expect(resolveBuildEngineId(ENGINE_ID)).toBe(ENGINE_ID);
+  });
+
+  test('maps absent / system to the system sentinel', () => {
+    expect(resolveBuildEngineId(undefined)).toBe('system');
+    expect(resolveBuildEngineId('system')).toBe('system');
+  });
+
+  test('downgrades a bare upstream version to system (catalog is a follow-up)', () => {
+    expect(resolveBuildEngineId('2.52.4')).toBe('system');
   });
 });

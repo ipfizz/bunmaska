@@ -12,6 +12,7 @@
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundleIdSlug } from './build-macos';
 
@@ -21,6 +22,8 @@ export type LinuxLayout = {
   readonly binPath: string;
   readonly desktopPath: string;
   readonly iconPath: string;
+  /** The baked engine-id, read at launch (resolves `usr/bin/<slug>` -> here). */
+  readonly engineIdPath: string;
 };
 
 /** Compute every on-disk path of an `<out>/<Name>` AppDir-style tree. Pure. */
@@ -33,7 +36,26 @@ export const linuxLayout = (out: string, name: string): LinuxLayout => {
     binPath: join(appDir, 'usr', 'bin', slug),
     desktopPath: join(appDir, 'usr', 'share', 'applications', `${slug}.desktop`),
     iconPath: join(appDir, 'usr', 'share', 'icons', 'hicolor', '512x512', 'apps', `${slug}.png`),
+    engineIdPath: join(appDir, 'usr', 'share', slug, 'engine.id'),
   };
+};
+
+/**
+ * The engine-id to bake from a project's `engine.webkit` pin: a full id verbatim,
+ * else the `system` sentinel. A bare upstream version (e.g. `2.52.4`) downgrades
+ * to `system` for now — resolving it to a full id needs the engine catalog (a
+ * follow-up); the caller should surface that.
+ */
+export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
+  if (webkitPin === undefined || isSystemEngine(webkitPin)) {
+    return 'system';
+  }
+  try {
+    parseEngineId(webkitPin);
+    return webkitPin;
+  } catch {
+    return 'system';
+  }
 };
 
 /** File name of the `.tar.gz` distributable for an app. Pure. */
@@ -68,7 +90,17 @@ export type ControlFileOptions = {
   readonly version: string;
   readonly maintainer: string;
   readonly description: string;
+  /** Runtime package dependencies (`Depends:`). Omitted from the field when empty. */
+  readonly depends?: readonly string[];
 };
+
+/**
+ * Runtime packages a non-embedded Bunmaska `.deb` needs: the system WebKitGTK 6.0
+ * web view and its GTK 4 toolkit. Without this, an `apt install` on a minimal box
+ * leaves the app to crash at the first `dlopen` (the latent bug this fixes). Debian
+ * package names confirmed on sid: `libwebkitgtk-6.0-4`, `libgtk-4-1`.
+ */
+export const DEFAULT_LINUX_DEPENDS: readonly string[] = ['libwebkitgtk-6.0-4', 'libgtk-4-1'];
 
 /** Build the Debian `control` file text. Pure. */
 export const buildControlFile = (opts: ControlFileOptions): string =>
@@ -77,6 +109,9 @@ export const buildControlFile = (opts: ControlFileOptions): string =>
     `Version: ${opts.version}`,
     'Architecture: amd64',
     `Maintainer: ${opts.maintainer}`,
+    ...(opts.depends !== undefined && opts.depends.length > 0
+      ? [`Depends: ${opts.depends.join(', ')}`]
+      : []),
     `Description: ${opts.description}`,
     '',
   ].join('\n');
@@ -156,6 +191,10 @@ export type BuildLinuxAppOptions = {
   readonly id?: string;
   readonly out?: string;
   readonly icon?: string;
+  /** Engine-id to bake (the per-app pin); `system` (the default) = OS WebView. */
+  readonly engineId?: string;
+  /** Engine shipped inside the bundle — drops the system WebKitGTK `Depends:`. */
+  readonly embedEngine?: boolean;
 };
 
 export type BuildLinuxAppResult = {
@@ -193,10 +232,17 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
     copyFileSync(opts.icon, layout.iconPath);
   }
 
+  // Bake the engine-id the app pins, read at launch by the engine resolver.
+  mkdirSync(dirname(layout.engineIdPath), { recursive: true });
+  writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
+
   // .tar.gz of the AppDir (use the system tar; -C keeps paths relative).
   const tarball = join(out, tarballName(opts.name));
   await spawnOk(['tar', '-czf', tarball, '-C', out, opts.name]);
 
+  // An embedded engine ships its own WebKitGTK; otherwise the app needs the
+  // system WebKitGTK + GTK (this Depends line is the fix for the latent crash).
+  const depends = opts.embedEngine === true ? [] : DEFAULT_LINUX_DEPENDS;
   const deb = await packageDeb({
     layout,
     out,
@@ -204,6 +250,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
     name: opts.name,
     maintainer,
     description,
+    depends,
   });
 
   return { appDir: layout.appDir, tarball, deb };
@@ -222,15 +269,16 @@ const packageDeb = async (args: {
   readonly name: string;
   readonly maintainer: string;
   readonly description: string;
+  readonly depends: readonly string[];
 }): Promise<string> => {
-  const { layout, out, version, name, maintainer, description } = args;
+  const { layout, out, version, name, maintainer, description, depends } = args;
   const staging = join(out, `.deb-${layout.slug}`);
   const controlDir = join(staging, 'control-root');
   mkdirSync(controlDir, { recursive: true });
 
   writeFileSync(
     join(controlDir, 'control'),
-    buildControlFile({ slug: layout.slug, version, maintainer, description }),
+    buildControlFile({ slug: layout.slug, version, maintainer, description, depends }),
   );
 
   const controlTar = join(staging, 'control.tar.gz');
