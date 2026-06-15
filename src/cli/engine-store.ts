@@ -19,6 +19,7 @@
 
 import {
   closeSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -175,6 +176,103 @@ export const installFromSource = async (
     rmSync(staging, { recursive: true, force: true });
     throw error;
   }
+};
+
+/** The `engine.json` manifest shipped inside every engine dir. */
+export type EngineManifest = {
+  readonly id: string;
+  readonly soname: string;
+  readonly hash?: string;
+  readonly size?: number;
+};
+
+/** Read + validate an engine's `engine.json` from a dir. Throws if missing/invalid. */
+export const readEngineManifest = (dir: string): EngineManifest => {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8'));
+  } catch {
+    throw new BunmaskaError(`engine: no readable engine.json in ${dir}`, {
+      code: 'ERR_ENGINE_MANIFEST',
+    });
+  }
+  const record = (raw ?? {}) as Record<string, unknown>;
+  if (typeof record['id'] !== 'string' || typeof record['soname'] !== 'string') {
+    throw new BunmaskaError(`engine: engine.json in ${dir} must have string "id" and "soname"`, {
+      code: 'ERR_ENGINE_MANIFEST',
+    });
+  }
+  return {
+    id: record['id'],
+    soname: record['soname'],
+    ...(typeof record['hash'] === 'string' ? { hash: record['hash'] } : {}),
+    ...(typeof record['size'] === 'number' ? { size: record['size'] } : {}),
+  };
+};
+
+/**
+ * Install an engine from a local, already-extracted engine DIRECTORY (a `lib/` +
+ * `engine.json` tree the developer built or fetched deliberately — the trusted
+ * local source for Phase 1; remote hash-verified installs are the follow-up).
+ * Copies the tree in atomically and writes the marker last. Idempotent.
+ */
+export const installFromDir = async (
+  root: string,
+  sourceDir: string,
+  deps: { readonly copyTree?: (from: string, to: string) => void } = {},
+): Promise<InstallResult> => {
+  const manifest = readEngineManifest(sourceDir);
+  if (isInstalled(root, manifest.id)) {
+    return { id: manifest.id, installed: false };
+  }
+  const copyTree = deps.copyTree ?? ((from, to) => cpSync(from, to, { recursive: true }));
+  mkdirSync(root, { recursive: true });
+  const staging = mkdtempSync(join(root, '.tmp-'));
+  try {
+    copyTree(sourceDir, staging);
+    const dest = engineDir(root, manifest.id);
+    rmSync(dest, { recursive: true, force: true });
+    renameSync(staging, dest);
+    writeFileSync(markerPath(root, manifest.id), `${new Date().toISOString()}\n`);
+    return { id: manifest.id, installed: true };
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true });
+    throw error;
+  }
+};
+
+/** The outcome of {@link verifyEngine}: structural integrity of an installed engine. */
+export type VerifyResult = {
+  readonly id: string;
+  readonly ok: boolean;
+  readonly problems: string[];
+};
+
+/**
+ * Structurally verify an installed engine: the marker is present, `engine.json`
+ * parses and its id matches the dir, and the declared `soname` exists in `lib/`.
+ */
+export const verifyEngine = (root: string, id: string): VerifyResult => {
+  const problems: string[] = [];
+  const dir = engineDir(root, id);
+  if (!existsSync(dir)) {
+    return { id, ok: false, problems: [`not installed (no directory ${dir})`] };
+  }
+  if (!isInstalled(root, id)) {
+    problems.push('missing INSTALLATION_COMPLETE marker (incomplete install)');
+  }
+  try {
+    const manifest = readEngineManifest(dir);
+    if (manifest.id !== id) {
+      problems.push(`engine.json id ${manifest.id} does not match dir ${id}`);
+    }
+    if (!existsSync(join(dir, 'lib', manifest.soname))) {
+      problems.push(`missing lib/${manifest.soname}`);
+    }
+  } catch (error) {
+    problems.push(error instanceof Error ? error.message : String(error));
+  }
+  return { id, ok: problems.length === 0, problems };
 };
 
 /** Injectable side effects for {@link gc}. */

@@ -7,6 +7,7 @@ import {
   enginesPath,
   engineDir,
   gc,
+  installFromDir,
   installFromSource,
   type InstallSource,
   isInstalled,
@@ -16,6 +17,7 @@ import {
   markerPath,
   readLinks,
   unlinkApp,
+  verifyEngine,
   withLock,
 } from '../../../src/cli/engine-store';
 
@@ -170,6 +172,62 @@ describe('gc', () => {
     expect(result.droppedLinks).toBe(1);
     expect(result.removed).toEqual([ID]);
     expect(readLinks(root)).toEqual([]);
+  });
+});
+
+/** Build a valid, already-extracted engine source dir (lib/ + engine.json). */
+const makeEngineDir = (parent: string, id: string, soname = 'libwebkitgtk-6.0.so.4'): string => {
+  const { mkdirSync } = require('node:fs') as typeof import('node:fs');
+  const dir = join(parent, `src-${id}`);
+  mkdirSync(join(dir, 'lib'), { recursive: true });
+  writeFileSync(join(dir, 'lib', soname), 'SO');
+  writeFileSync(join(dir, 'engine.json'), JSON.stringify({ id, soname }));
+  return dir;
+};
+
+describe('installFromDir', () => {
+  test('copies a local engine tree in and marks it complete; idempotent', async () => {
+    const root = makeTmpDir();
+    const src = makeEngineDir(root, ID);
+    const first = await installFromDir(root, src);
+    expect(first).toEqual({ id: ID, installed: true });
+    expect(isInstalled(root, ID)).toBe(true);
+    expect(existsSync(join(engineDir(root, ID), 'lib', 'libwebkitgtk-6.0.so.4'))).toBe(true);
+
+    const second = await installFromDir(root, src);
+    expect(second).toEqual({ id: ID, installed: false });
+  });
+
+  test('rejects a source dir with no readable engine.json', async () => {
+    const root = makeTmpDir();
+    const { mkdirSync } = await import('node:fs');
+    const bogus = join(root, 'bogus');
+    mkdirSync(bogus, { recursive: true });
+    await expect(installFromDir(root, bogus)).rejects.toThrow(/engine\.json/i);
+  });
+});
+
+describe('verifyEngine', () => {
+  test('ok for a well-formed installed engine', async () => {
+    const root = makeTmpDir();
+    await installFromDir(root, makeEngineDir(root, ID));
+    expect(verifyEngine(root, ID)).toEqual({ id: ID, ok: true, problems: [] });
+  });
+
+  test('reports a missing soname lib', async () => {
+    const root = makeTmpDir();
+    await installFromDir(root, makeEngineDir(root, ID));
+    rmSync(join(engineDir(root, ID), 'lib', 'libwebkitgtk-6.0.so.4'), { force: true });
+    const result = verifyEngine(root, ID);
+    expect(result.ok).toBe(false);
+    expect(result.problems.join(' ')).toMatch(/missing lib/);
+  });
+
+  test('reports a not-installed engine', () => {
+    const root = makeTmpDir();
+    const result = verifyEngine(root, ID);
+    expect(result.ok).toBe(false);
+    expect(result.problems.length).toBeGreaterThan(0);
   });
 });
 
