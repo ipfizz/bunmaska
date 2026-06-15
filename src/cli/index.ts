@@ -7,7 +7,7 @@
  * `process.stdout`/`process.stderr` because Biome bans `console.*`.
  */
 
-import { buildLinuxApp } from './build-linux';
+import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
 import {
   type BuildDmg,
   type BuildMacAppOptions,
@@ -173,9 +173,21 @@ const runBuild = async (
 
   const name = command.options.name ?? deriveName(command.entry);
   if (target === 'linux') {
+    const { config } = await loadConfig(process.cwd());
+    const webkitPin = config.engine?.webkit;
+    const engineId = resolveBuildEngineId(webkitPin);
+    if (webkitPin !== undefined && engineId === 'system' && webkitPin !== 'system') {
+      err(
+        `bunmaska build: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
+          'resolving it to a full engine-id needs the engine catalog (a follow-up). ' +
+          'Baking the system WebKit for now.',
+      );
+    }
     const result = await buildLinuxApp({
       entry: command.entry,
       name,
+      engineId,
+      ...(config.engine?.embed === true ? { embedEngine: true } : {}),
       ...(command.options.id !== undefined ? { id: command.options.id } : {}),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
