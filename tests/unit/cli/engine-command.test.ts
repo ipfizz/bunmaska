@@ -106,10 +106,35 @@ describe('engine install', () => {
     expect(c.text()).toContain(`installed ${ID}`);
   });
 
-  test('errors (exit 1) on a non-directory source, honestly noting no remote feed', async () => {
+  test('errors (exit 1) on a source that is neither a dir nor a URL', async () => {
     const c = capture(makeTmpDir());
     expect(await runEngine({ action: 'install', source: ID }, c.deps)).toBe(1);
-    expect(c.err.join('\n')).toMatch(/not available yet|local engine directory/i);
+    expect(c.err.join('\n')).toMatch(/local engine directory|feed URL/i);
+  });
+
+  test('remote URL install runs the verified-feed path when a public key is set', async () => {
+    const c = capture(makeTmpDir());
+    let seen: { root: string; url: string; key: string } | undefined;
+    const deps = {
+      ...c.deps,
+      env: { BUNMASKA_ENGINE_PUBKEY: 'PEM-KEY' },
+      installUrl: async (root: string, url: string, key: string) => {
+        seen = { root, url, key };
+        return { id: ID, installed: true };
+      },
+    };
+    expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, deps)).toBe(0);
+    expect(seen?.url).toBe('https://feed/x.tar.zst');
+    expect(seen?.key).toBe('PEM-KEY');
+    expect(c.text()).toContain(`installed ${ID}`);
+  });
+
+  test('remote URL install errors (exit 1) when no public key is configured', async () => {
+    const c = capture(makeTmpDir());
+    expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, c.deps)).toBe(
+      1,
+    );
+    expect(c.err.join('\n')).toMatch(/public key/i);
   });
 });
 
