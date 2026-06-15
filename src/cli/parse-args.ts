@@ -31,6 +31,15 @@ export type BuildOptions = {
   readonly update?: boolean;
 };
 
+/** Subcommands of `bunmaska engine`, for managing the pinned-WebKit store. */
+export type EngineSubcommand =
+  | { readonly action: 'list' }
+  | { readonly action: 'which'; readonly target?: string }
+  | { readonly action: 'install'; readonly source: string }
+  | { readonly action: 'use'; readonly id: string; readonly for?: string }
+  | { readonly action: 'prune'; readonly dryRun: boolean }
+  | { readonly action: 'verify'; readonly id: string };
+
 export type Command =
   | { readonly kind: 'help' }
   | { readonly kind: 'version' }
@@ -38,6 +47,8 @@ export type Command =
   | { readonly kind: 'dev'; readonly entry?: string }
   | { readonly kind: 'run'; readonly entry: string; readonly args: readonly string[] }
   | { readonly kind: 'build'; readonly entry: string; readonly options: BuildOptions }
+  | { readonly kind: 'engine'; readonly sub: EngineSubcommand }
+  | { readonly kind: 'doctor'; readonly target?: string }
   | { readonly kind: 'error'; readonly message: string };
 
 /** `bunmaska build` flags that take a string value, keyed by argv token. */
@@ -146,6 +157,67 @@ const parseBuild = (rest: readonly string[]): Command => {
   return { kind: 'build', entry, options };
 };
 
+/** Parse the `bunmaska engine <action> …` tail into a {@link Command}. */
+const parseEngine = (rest: readonly string[]): Command => {
+  const [action, ...args] = rest;
+  if (action === undefined) {
+    return { kind: 'error', message: 'bunmaska engine: missing subcommand' };
+  }
+  switch (action) {
+    case 'list':
+      return { kind: 'engine', sub: { action: 'list' } };
+    case 'which': {
+      const target = args[0];
+      return {
+        kind: 'engine',
+        sub: target === undefined ? { action: 'which' } : { action: 'which', target },
+      };
+    }
+    case 'install': {
+      const source = args[0];
+      if (source === undefined) {
+        return { kind: 'error', message: 'bunmaska engine install: missing <id|path>' };
+      }
+      return { kind: 'engine', sub: { action: 'install', source } };
+    }
+    case 'use': {
+      const id = args[0];
+      if (id === undefined) {
+        return { kind: 'error', message: 'bunmaska engine use: missing <engine-id>' };
+      }
+      let forDir: string | undefined;
+      for (let i = 1; i < args.length; i += 1) {
+        const token = args[i];
+        if (token === '--for') {
+          const value = args[i + 1];
+          if (value === undefined) {
+            return { kind: 'error', message: 'bunmaska engine use: --for requires a directory' };
+          }
+          forDir = value;
+          i += 1;
+          continue;
+        }
+        return { kind: 'error', message: `bunmaska engine use: unexpected argument ${token}` };
+      }
+      return {
+        kind: 'engine',
+        sub: forDir === undefined ? { action: 'use', id } : { action: 'use', id, for: forDir },
+      };
+    }
+    case 'prune':
+      return { kind: 'engine', sub: { action: 'prune', dryRun: args.includes('--dry-run') } };
+    case 'verify': {
+      const id = args[0];
+      if (id === undefined) {
+        return { kind: 'error', message: 'bunmaska engine verify: missing <engine-id>' };
+      }
+      return { kind: 'engine', sub: { action: 'verify', id } };
+    }
+    default:
+      return { kind: 'error', message: `bunmaska engine: unknown subcommand '${action}'` };
+  }
+};
+
 /** Parse the argv tail into a {@link Command}. Never throws. */
 export const parseArgs = (argv: readonly string[]): Command => {
   const [head, ...rest] = argv;
@@ -166,6 +238,13 @@ export const parseArgs = (argv: readonly string[]): Command => {
   }
   if (head === 'build') {
     return parseBuild(rest);
+  }
+  if (head === 'engine') {
+    return parseEngine(rest);
+  }
+  if (head === 'doctor') {
+    const target = rest[0];
+    return target === undefined ? { kind: 'doctor' } : { kind: 'doctor', target };
   }
   return { kind: 'error', message: `bunmaska: unknown command '${head}'` };
 };
