@@ -1,0 +1,95 @@
+import { describe, expect, test } from 'bun:test';
+import {
+  engineEnv,
+  engineLibPath,
+  type ResolveDeps,
+  resolveEngineWith,
+} from '../../../src/main/engine/resolve';
+
+const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
+const ROOT = '/store/webkit';
+
+const resolve = (deps: ResolveDeps) =>
+  resolveEngineWith({ enginesRoot: ROOT, exists: () => true, readBakedId: () => null, ...deps });
+
+describe('resolveEngineWith', () => {
+  test('BUNMASKA_WEBKIT_PATH wins — explicit pinned dir, highest precedence', () => {
+    const r = resolve({ env: { BUNMASKA_WEBKIT_PATH: '/opt/webkit/lib' } });
+    expect(r.mode).toBe('pinned');
+    expect(r.libDir).toBe('/opt/webkit/lib');
+    expect(r.warnings).toEqual([]);
+  });
+
+  test('no id anywhere -> system (the default, no warning)', () => {
+    const r = resolve({ env: {}, readBakedId: () => null });
+    expect(r.mode).toBe('system');
+    expect(r.warnings).toEqual([]);
+  });
+
+  test("the 'system' sentinel -> system", () => {
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: 'system' } });
+    expect(r.mode).toBe('system');
+  });
+
+  test('baked id with a present marker -> pinned at <root>/<id>/lib', () => {
+    const r = resolve({ env: {}, readBakedId: () => ID, exists: () => true });
+    expect(r.mode).toBe('pinned');
+    expect(r.libDir).toBe(`${ROOT}/${ID}/lib`);
+    expect(r.warnings).toEqual([]);
+  });
+
+  test('baked id but missing marker -> system fallback, loud warning names the id', () => {
+    const r = resolve({ env: {}, readBakedId: () => ID, exists: () => false });
+    expect(r.mode).toBe('system');
+    expect(r.warnings.length).toBe(1);
+    expect(r.warnings[0]).toContain(ID);
+    expect(r.warnings[0]).toMatch(/tested|system|install/i);
+  });
+
+  test('BUNMASKA_WEBKIT_ID overrides the baked id', () => {
+    const other = 'webkitgtk-6.0-2.46.0-bunmaska1-linux-x64';
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: other }, readBakedId: () => ID });
+    expect(r.libDir).toBe(`${ROOT}/${other}/lib`);
+  });
+
+  test('a malformed id -> system fallback with a warning', () => {
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } });
+    expect(r.mode).toBe('system');
+    expect(r.warnings.length).toBe(1);
+  });
+});
+
+describe('engineLibPath', () => {
+  test('pinned -> absolute path into the engine lib dir', () => {
+    const r = resolve({ env: {}, readBakedId: () => ID });
+    expect(engineLibPath(r, 'libwebkitgtk-6.0.so.4')).toBe(
+      `${ROOT}/${ID}/lib/libwebkitgtk-6.0.so.4`,
+    );
+    expect(engineLibPath(r, 'libgtk-4.so.1')).toBe(`${ROOT}/${ID}/lib/libgtk-4.so.1`);
+  });
+
+  test('system -> the bare soname (ld.so default search)', () => {
+    const r = resolve({ env: {} });
+    expect(engineLibPath(r, 'libwebkitgtk-6.0.so.4')).toBe('libwebkitgtk-6.0.so.4');
+  });
+});
+
+describe('engineEnv', () => {
+  test('pinned -> prepends the lib dir to LD_LIBRARY_PATH and sets GIO_EXTRA_MODULES', () => {
+    const r = resolve({ env: {}, readBakedId: () => ID });
+    const env = engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' });
+    expect(env.LD_LIBRARY_PATH).toBe(`${ROOT}/${ID}/lib:/usr/lib`);
+    expect(env.GIO_EXTRA_MODULES).toBe(`${ROOT}/${ID}/lib/gio/modules`);
+  });
+
+  test('pinned with no prior LD_LIBRARY_PATH -> just the lib dir', () => {
+    const r = resolve({ env: {}, readBakedId: () => ID });
+    const env = engineEnv(r, {});
+    expect(env.LD_LIBRARY_PATH).toBe(`${ROOT}/${ID}/lib`);
+  });
+
+  test('system -> no env changes', () => {
+    const r = resolve({ env: {} });
+    expect(engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' })).toEqual({});
+  });
+});
