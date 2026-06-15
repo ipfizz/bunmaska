@@ -20,6 +20,7 @@ import {
   engineDir,
   enginesPath,
   INSTALLATION_COMPLETE,
+  linkApp,
   type StoreEnv,
 } from '../../cli/engine-store';
 
@@ -28,6 +29,10 @@ export type EngineResolution = {
   readonly mode: 'system' | 'pinned';
   /** The pinned engine's `lib/` dir (absolute). Absent in system mode. */
   readonly libDir?: string;
+  /** The resolved engine-id (store pins only; absent for an explicit-dir pin/system). */
+  readonly id?: string;
+  /** The store root the id was resolved against (store pins only). */
+  readonly root?: string;
   /** Non-fatal warnings to surface on stderr (e.g. a broken pin fell back). */
   readonly warnings: readonly string[];
 };
@@ -113,7 +118,7 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
       ],
     };
   }
-  return { mode: 'pinned', libDir: join(dir, 'lib'), warnings: [] };
+  return { mode: 'pinned', libDir: join(dir, 'lib'), id, root, warnings: [] };
 };
 
 const cache: { value: EngineResolution | undefined } = { value: undefined };
@@ -166,17 +171,28 @@ export const engineEnv = (
 
 const prep: { done: boolean } = { done: false };
 
+/** Injectable seams for {@link prepareEngineForLoad}'s auto-link side effect. */
+export type PrepareDeps = {
+  /** This installed app's stable identity (default: `process.execPath`). */
+  readonly appPath?: string;
+  /** Register an app→engine refcount link (default: the store's `linkApp`). */
+  readonly link?: (root: string, appPath: string, engineId: string) => void;
+};
+
 /**
  * Apply a resolution to the process before the first `dlopen`: print any
- * fallback warnings, and (in pinned mode) export `LD_LIBRARY_PATH` /
- * `GIO_EXTRA_MODULES` so the engine's bundled deps win. Runs once per process —
- * both Linux loaders (GTK + WebKitGTK) call it, but only the first takes effect,
- * keeping them on a single shared engine.
+ * fallback warnings, export `LD_LIBRARY_PATH` / `GIO_EXTRA_MODULES` for a pinned
+ * engine's bundled deps, and — for a STORE pin — register this app in the store's
+ * refcount (`.links`) so GC/prune know the engine is needed. Runs once per
+ * process: both Linux loaders call it, only the first takes effect, keeping them
+ * on a single shared engine. The link write is best-effort (a read-only store
+ * must not stop the app from launching).
  */
 export const prepareEngineForLoad = (
   resolution: EngineResolution,
   target: StoreEnv,
   write: (text: string) => void,
+  deps: PrepareDeps = {},
 ): void => {
   if (prep.done) {
     return;
@@ -191,6 +207,21 @@ export const prepareEngineForLoad = (
   }
   if (env.GIO_EXTRA_MODULES !== undefined) {
     target['GIO_EXTRA_MODULES'] = env.GIO_EXTRA_MODULES;
+  }
+  // Auto-link only a STORE pin (it has an id + root); an explicit-dir pin and
+  // system mode have nothing to refcount.
+  if (
+    resolution.mode === 'pinned' &&
+    resolution.id !== undefined &&
+    resolution.root !== undefined
+  ) {
+    const appPath = deps.appPath ?? process.execPath;
+    const link = deps.link ?? linkApp;
+    try {
+      link(resolution.root, appPath, resolution.id);
+    } catch {
+      // Best-effort: a read-only/locked store must not block launch.
+    }
   }
 };
 
