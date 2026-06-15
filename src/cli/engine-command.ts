@@ -11,6 +11,7 @@ import { compareEngineIds, isSystemEngine, parseEngineId } from '../common/engin
 import type { BunmaskaConfig } from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import type { EngineSubcommand } from './parse-args';
+import { defaultRemoteFetch, installFromUrl } from './engine-remote';
 import {
   gc,
   type InstallResult,
@@ -31,8 +32,10 @@ export type EngineCommandDeps = {
   readonly err: (text: string) => void;
   /** Read a project's validated config (empty `{}` when none). */
   readonly readConfig: (target: string) => Promise<BunmaskaConfig>;
-  /** Install seam (default: {@link installFromDir}). */
+  /** Local-dir install seam (default: {@link installFromDir}). */
   readonly installDir?: (root: string, sourceDir: string) => Promise<InstallResult>;
+  /** Remote (feed) install seam (default: {@link installFromUrl} + real fetch). */
+  readonly installUrl?: (root: string, url: string, publicKeyPem: string) => Promise<InstallResult>;
 };
 
 /** Sort engine ids ascending, tolerating any non-id dir names. */
@@ -84,21 +87,43 @@ const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Pr
   return 0;
 };
 
+const installedMessage = (result: InstallResult): string =>
+  result.installed ? `installed ${result.id}` : `${result.id} is already installed (nothing to do)`;
+
 const runInstall = async (source: string, deps: EngineCommandDeps): Promise<number> => {
+  // A http(s) source is a published feed artifact: verify its signature + hash.
+  if (/^https?:\/\//.test(source)) {
+    const publicKey = deps.env['BUNMASKA_ENGINE_PUBKEY'];
+    if (publicKey === undefined || publicKey.length === 0) {
+      deps.err(
+        'bunmaska engine install: a remote install needs the release public key, and none is ' +
+          'shipped yet. Set BUNMASKA_ENGINE_PUBKEY (PEM) to a trusted key, or install from a ' +
+          'local engine directory.',
+      );
+      return 1;
+    }
+    const installUrl =
+      deps.installUrl ??
+      ((root, url, key) => installFromUrl(root, url, key, { fetch: defaultRemoteFetch }));
+    try {
+      deps.out(installedMessage(await installUrl(deps.root, source, publicKey)));
+      return 0;
+    } catch (error) {
+      deps.err(
+        `bunmaska engine install: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 1;
+    }
+  }
+  // Otherwise a local, already-extracted engine directory.
   if (existsSync(source) && statSync(source).isDirectory()) {
     const install = deps.installDir ?? installFromDir;
-    const result = await install(deps.root, source);
-    deps.out(
-      result.installed
-        ? `installed ${result.id}`
-        : `${result.id} is already installed (nothing to do)`,
-    );
+    deps.out(installedMessage(await install(deps.root, source)));
     return 0;
   }
   deps.err(
-    `bunmaska engine install: ${JSON.stringify(source)} is not a local engine directory. ` +
-      'Hosted/remote engine installs are not available yet — pass a path to a built engine dir ' +
-      '(see .admin/ENGINE-STORE-PLAN.md). ',
+    `bunmaska engine install: ${JSON.stringify(source)} is neither a local engine directory nor ` +
+      'an http(s) feed URL. Pass a built engine dir, or a published .tar.zst URL.',
   );
   return 1;
 };
