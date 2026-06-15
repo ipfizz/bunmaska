@@ -1,6 +1,7 @@
 import { dlopen, FFIType } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine/resolve';
 
 const LIBGTK_PATH = 'libgtk-4.so.1';
 
@@ -154,7 +155,13 @@ export const loadGtkFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGTK_PATH, GTK_FFI_SYMBOLS);
+  // Share the engine resolution with the WebKitGTK loader: in pinned mode GTK
+  // must come from the SAME store `lib/` as WebKit, or two GTK symbol sets land
+  // in one process and crash. `prepareEngineForLoad` is a one-shot no-op after
+  // the first loader, so whichever fires first fixes the engine for both.
+  const engine = resolveEngine();
+  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
+  const ffi = dlopen(engineLibPath(engine, LIBGTK_PATH), GTK_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

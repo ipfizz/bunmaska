@@ -1,6 +1,7 @@
 import { CString, dlopen, FFIType, type Pointer } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine/resolve';
 
 /**
  * Loads WebKitGTK 6.0 — the Linux system-WebKit web view (the role
@@ -238,7 +239,12 @@ export const loadWebKitGtkFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBWEBKITGTK_PATH, WEBKITGTK_FFI_SYMBOLS);
+  // Resolve the pinned engine (if any) before dlopen, so a `bunmaska build`-baked
+  // engine-id loads its own WebKitGTK from the shared store instead of the
+  // system soname. System mode (the default) passes the bare soname through.
+  const engine = resolveEngine();
+  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
+  const ffi = dlopen(engineLibPath(engine, LIBWEBKITGTK_PATH), WEBKITGTK_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

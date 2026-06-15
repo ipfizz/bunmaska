@@ -1,9 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import {
   bakedIdCandidates,
+  type EngineResolution,
   engineEnv,
   engineLibPath,
+  prepareEngineForLoad,
   type ResolveDeps,
+  resetEnginePreparation,
   resolveEngineWith,
 } from '../../../src/main/engine/resolve';
 
@@ -106,5 +109,36 @@ describe('engineEnv', () => {
   test('system -> no env changes', () => {
     const r = resolve({ env: {} });
     expect(engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' })).toEqual({});
+  });
+});
+
+describe('prepareEngineForLoad', () => {
+  afterEach(() => resetEnginePreparation());
+
+  test('pinned: exports the engine env and prints warnings, exactly once', () => {
+    const pinned: EngineResolution = {
+      mode: 'pinned',
+      libDir: '/store/x/lib',
+      warnings: ['heads up'],
+    };
+    const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
+    const writes: string[] = [];
+    prepareEngineForLoad(pinned, target, (s) => writes.push(s));
+    expect(target['LD_LIBRARY_PATH']).toBe('/store/x/lib:/usr/lib');
+    expect(target['GIO_EXTRA_MODULES']).toBe('/store/x/lib/gio/modules');
+    expect(writes).toEqual(['heads up\n']);
+
+    // A second call (e.g. the other loader) is a no-op — single shared engine.
+    prepareEngineForLoad(pinned, { LD_LIBRARY_PATH: '/other' }, (s) => writes.push(s));
+    expect(writes).toEqual(['heads up\n']);
+  });
+
+  test('system: applies no env and prints nothing', () => {
+    const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
+    const writes: string[] = [];
+    prepareEngineForLoad({ mode: 'system', warnings: [] }, target, (s) => writes.push(s));
+    expect(target['LD_LIBRARY_PATH']).toBe('/usr/lib');
+    expect(target['GIO_EXTRA_MODULES']).toBeUndefined();
+    expect(writes).toEqual([]);
   });
 });
