@@ -1,6 +1,6 @@
 # Bun Maska
 
-> The bread and butter of desktop apps: Electron's familiar APIs on Bun and your operating system's own WebKit. No bundled Chromium — because shipping 150 MB of browser with every app is one of those ideas that made sense in 2013 and has been quietly ruining laptop fans ever since.
+> The bread and butter of desktop apps: Electron's familiar APIs on Bun and your operating system's own WebKit. No bundled Chromium - because shipping 150 MB of browser with every app is one of those ideas that made sense in 2013 and has been quietly ruining laptop fans ever since.
 
 ## What
 
@@ -16,21 +16,21 @@ Most "lighter Electron" projects are just better at gzipping. Bun Maska does som
 
 Need to talk to a serial port, USB device, system keychain, IOKit, a custom sensor, or anything else the OS exposes? In Electron this usually means `node-gyp`, N-API, `electron-rebuild`, and hoping the prebuilts match your exact Electron version forever. In Bun Maska you write a small TypeScript file that `dlopen`s `libSystem`, `libc`, or `IOKit` and calls it directly. No compiler. No build step. No ABI compatibility matrix. No Python summoning ritual when you upgrade.
 
-This is not a roadmap item. It is how Bun Maska itself is built — thirty-plus system libraries wired with **zero** `cc` calls anywhere in the tree.
+This is not a roadmap item. It is how Bun Maska itself is built - thirty-plus system libraries wired with **zero** `cc` calls anywhere in the tree.
 
 Add the fact that we ship **no browser engine at all**, and your updates stop being hostage situations, your users stop getting Chromium CVEs that have nothing to do with your code, and your laptop fan gets a long-overdue vacation.
 
-That combination — buildless native extensibility + no engine tax — is the thing no amount of tree-shaking inside a bundled Chromium can ever give you.
+That combination - buildless native extensibility + no engine tax - is the thing no amount of tree-shaking inside a bundled Chromium can ever give you.
 
 ## Why (the non-marketing reasons)
 
 Your laptop fan has strong opinions about RAM. Your users have data caps and limited patience. And we are allergic to lying in README files.
 
-Honest measured numbers: a packaged Bun Maska app is roughly a **16–23 MB download** and lands at about **61 MB on disk** once Bun unpacks itself. The equivalent minimal Electron app starts north of 150 MB and only grows from there. Updates are tiny because there is no 150 MB engine to re-download. Your OS already patches WebKit. We do not make you participate in the Chromium CVE re-shipping treadmill.
+Honest measured numbers: a packaged Bun Maska app is roughly a **16-23 MB download** and lands at about **61 MB on disk** once Bun unpacks itself. The equivalent minimal Electron app starts north of 150 MB and only grows from there. Updates are tiny because there is no 150 MB engine to re-download. Your OS already patches WebKit. We do not make you participate in the Chromium CVE re-shipping treadmill.
 
 ## "But then I can't pin the WebKit version"
 
-Fair. By default you render on whatever WebKit the machine already has — that's the whole reason the apps are small. When you'd rather ship the exact build you tested, Bun Maska has a content-addressed engine store: pin an engine in `bunmaska.config`, and at launch the app resolves *that* build from `~/.bunmaska/webkit/<id>/` — downloaded once, shared by every app, so they stay tiny. Different apps can pin different versions and run side by side; there is no global "switch the version for everything" footgun. If the pinned engine isn't there, the app quietly falls back to the system WebKit and tells you so.
+Fair. By default you render on whatever WebKit the machine already has - that's the whole reason the apps are small. When you'd rather ship the exact build you tested, Bun Maska has a content-addressed engine store: pin an engine in `bunmaska.config`, and at launch the app resolves *that* build from `~/.bunmaska/webkit/<id>/` - downloaded once, shared by every app, so they stay tiny. Different apps can pin different versions and run side by side; there is no global "switch the version for everything" footgun. If the pinned engine isn't there, the app quietly falls back to the system WebKit and tells you so.
 
 ```sh
 bunmaska engine list        # what's installed, side by side
@@ -39,13 +39,13 @@ bunmaska engine install …   # a local build, or a signature- and hash-verified
 bunmaska doctor             # runtime, store, and the resolved pin
 ```
 
-Where this honestly is: we now build a **self-contained, relocatable WebKit** — its whole dependency closure travels with it and loads via `$ORIGIN` — and CI confirms an app loads it **from the store, not the system**. What's still in progress is *publishing* the prebuilt engines to install from, plus the final render pass. macOS pinning is designed and feasible (it just means shipping our own signed `WebKit.framework`); Windows is its own saga (below). So the plumbing is real and proven; the hosted engines are the next milestone, not a finished promise.
+Where this honestly is: we now build a **self-contained, relocatable WebKit** - its whole dependency closure travels with it and loads via `$ORIGIN` - and CI confirms an app loads it **from the store, not the system**. What's still in progress is *publishing* the prebuilt engines to install from, plus the final render pass. macOS pinning is designed and feasible (it just means shipping our own signed `WebKit.framework`); Windows is its own saga (below). So the plumbing is real and proven; the hosted engines are the next milestone, not a finished promise.
 
 ## Status
 
 **Alpha.** Held together with optimism, `strict: true`, and roughly 1,400 tests that were green the last time CI ran.
 
-It works properly on both **macOS** and **Linux** today. You get real native windows, system WebKit rendering, full Electron-style IPC with context isolation, application and context menus, tray icons, dialogs, clipboard (text + HTML + images), `nativeImage`, `safeStorage`, `powerMonitor`, `printToPDF`, `capturePage`, and a growing list of other modules — all implemented with pure `bun:ffi` and zero compiled code in the framework.
+It works properly on both **macOS** and **Linux** today. You get real native windows, system WebKit rendering, full Electron-style IPC with context isolation, application and context menus, tray icons, dialogs, clipboard (text + HTML + images), `nativeImage`, `safeStorage`, `powerMonitor`, `printToPDF`, `capturePage`, and a growing list of other modules - all implemented with pure `bun:ffi` and zero compiled code in the framework.
 
 There is also a CLI that scaffolds projects, runs them with hot reload, and packages real distributables (`.app`/`.dmg` on macOS, AppDir + `.deb` on Linux) with optional auto-update support.
 
@@ -56,16 +56,16 @@ If you are already running this in production, we admire your courage and declin
 We are not going to sell you a fantasy.
 
 - **Single process.** No Chromium sandbox. No per-window crash isolation. A nasty WebKit or JavaScriptCore crash takes the whole app with it. This is the architectural price of the lightness.
-- **No Windows support yet.** Windows ships no system WebKit, so doing it our way means bringing our own — WinCairo WebKit, not WebView2 (that's Chromium with extra steps). It's deferred, not abandoned, and it lands behind macOS + Linux. We are aware this is a hill. We are comfortable dying on it.
-- **~70–80% weighted API parity** for the things most real apps actually use. The long tail (`BrowserView`, sync IPC, Web Serial/WebHID/WebUSB from the renderer, deeply Chromium-internal surfaces) is either out of scope by design or will throw a clear error so you know immediately what is missing.
+- **No Windows support yet.** Windows ships no system WebKit, so doing it our way means bringing our own - WinCairo WebKit, not WebView2 (that's Chromium with extra steps). It's deferred, not abandoned, and it lands behind macOS + Linux. We are aware this is a hill. We are comfortable dying on it.
+- **~70-80% weighted API parity** for the things most real apps actually use. The long tail (`BrowserView`, sync IPC, Web Serial/WebHID/WebUSB from the renderer, deeply Chromium-internal surfaces) is either out of scope by design or will throw a clear error so you know immediately what is missing.
 
 ## Platforms
 
 | OS      | Status                                                                 |
 |---------|------------------------------------------------------------------------|
-| macOS   | Actively developed — AppKit + WKWebView via `objc_msgSend` and hand-built ObjC blocks |
-| Linux   | Actively developed — GTK 4 + WebKitGTK 6 via `dlopen`                  |
-| Windows | Deferred — will bring WinCairo WebKit, never WebView2/Chromium         |
+| macOS   | Actively developed - AppKit + WKWebView via `objc_msgSend` and hand-built ObjC blocks |
+| Linux   | Actively developed - GTK 4 + WebKitGTK 6 via `dlopen`                  |
+| Windows | Deferred - will bring WinCairo WebKit, never WebView2/Chromium         |
 
 ## Install
 
@@ -73,7 +73,7 @@ We are not going to sell you a fantasy.
 bun add bunmaska     # or: npm i bunmaska
 ```
 
-Genuinely alpha — so pin your version and keep your expectations friendly. You need [Bun](https://bun.sh) ≥ 1.3 (yes, that is the entire point). Want to hack on it directly instead? Clone it:
+Genuinely alpha - so pin your version and keep your expectations friendly. You need [Bun](https://bun.sh) ≥ 1.3 (yes, that is the entire point). Want to hack on it directly instead? Clone it:
 
 ```sh
 git clone https://github.com/ipfizz/bunmaska.git
@@ -109,7 +109,7 @@ bunmaska engine list     # manage the pinned-WebKit engine store (install/which/
 bunmaska doctor          # report the runtime, the store, and the resolved engine
 ```
 
-The CLI is *your* dev tool — it never ships. `bunmaska build` hands you a standalone executable (a `.app` or a `.deb`) your users double-click; they never install `bunmaska` or open a terminal.
+The CLI is *your* dev tool - it never ships. `bunmaska build` hands you a standalone executable (a `.app` or a `.deb`) your users double-click; they never install `bunmaska` or open a terminal.
 
 ## Migrating from Electron
 
