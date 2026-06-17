@@ -112,12 +112,11 @@ describe('engine install', () => {
     expect(c.err.join('\n')).toMatch(/local engine directory|feed URL/i);
   });
 
-  test('remote URL install runs the verified-feed path when a public key is set', async () => {
-    const c = capture(makeTmpDir());
+  test('remote URL install uses the self-hosted feed key from bunmaska.config', async () => {
+    const c = capture(makeTmpDir(), { engine: { feed: { publicKey: 'CONFIG-KEY' } } });
     let seen: { root: string; url: string; key: string } | undefined;
     const deps = {
       ...c.deps,
-      env: { BUNMASKA_ENGINE_PUBKEY: 'PEM-KEY' },
       installUrl: async (root: string, url: string, key: string) => {
         seen = { root, url, key };
         return { id: ID, installed: true };
@@ -125,16 +124,16 @@ describe('engine install', () => {
     };
     expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, deps)).toBe(0);
     expect(seen?.url).toBe('https://feed/x.tar.zst');
-    expect(seen?.key).toBe('PEM-KEY');
+    expect(seen?.key).toBe('CONFIG-KEY');
     expect(c.text()).toContain(`installed ${ID}`);
   });
 
-  test('remote URL install errors (exit 1) when no public key is configured', async () => {
+  test('remote URL install errors (exit 1) when no signing key is available', async () => {
     const c = capture(makeTmpDir());
     expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, c.deps)).toBe(
       1,
     );
-    expect(c.err.join('\n')).toMatch(/public key/i);
+    expect(c.err.join('\n')).toMatch(/signing key|publicKey/i);
   });
 });
 

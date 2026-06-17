@@ -9,10 +9,40 @@
 
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
 
+/**
+ * The Bunmaska release engine-signing public key — the **baked-in trust anchor**
+ * (D041). It is public (not a secret) and is verified automatically, with no
+ * user knob. Empty until the real keypair is generated alongside the hosted
+ * feed; the resolution order below fills in for dev/self-hosted in the meantime.
+ */
+export const RELEASE_ENGINE_PUBKEY = '';
+
 /** A PEM-encoded Ed25519 key pair (SPKI public, PKCS8 private). */
 export type SigningKeyPair = {
   readonly publicKey: string;
   readonly privateKey: string;
+};
+
+/**
+ * Resolve the public key to verify an engine artifact, in priority order:
+ * the baked release anchor → a self-hosted feed key from `bunmaska.config`
+ * (`engine.feed.publicKey`) → a dev/test `BUNMASKA_ENGINE_PUBKEY` env fallback.
+ * Returns undefined when none is available. The env path is intentionally last
+ * and undocumented — config + the baked anchor are the real sources (D041).
+ */
+export const resolveEnginePublicKey = (opts: {
+  readonly feedPublicKey?: string | undefined;
+  readonly env?: Record<string, string | undefined>;
+}): string | undefined => {
+  if (RELEASE_ENGINE_PUBKEY.length > 0) {
+    return RELEASE_ENGINE_PUBKEY;
+  }
+  if (opts.feedPublicKey !== undefined && opts.feedPublicKey.length > 0) {
+    return opts.feedPublicKey;
+  }
+  const env = opts.env ?? process.env;
+  const envKey = env['BUNMASKA_ENGINE_PUBKEY'];
+  return envKey !== undefined && envKey.length > 0 ? envKey : undefined;
 };
 
 /** Generate an Ed25519 signing key pair (release tooling + tests). */

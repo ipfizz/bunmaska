@@ -45,4 +45,24 @@ describe('validateConfig — engine field', () => {
     const cfg = defineConfig({ engine: { webkit: '2.52.4', embed: false } });
     expect(cfg.engine).toEqual({ webkit: '2.52.4', embed: false });
   });
+
+  test('accepts a self-hosted engine.feed { url, publicKey }', () => {
+    const cfg = {
+      engine: {
+        feed: { url: 'https://engines.example/', publicKey: '-----BEGIN PUBLIC KEY-----' },
+      },
+    };
+    expect(validateConfig(cfg)).toEqual(cfg);
+  });
+
+  test('accepts engine.feed with just a url', () => {
+    expect(validateConfig({ engine: { feed: { url: 'https://e.example/' } } })).toEqual({
+      engine: { feed: { url: 'https://e.example/' } },
+    });
+  });
+
+  test('rejects a non-object engine.feed and a non-string feed.url', () => {
+    expect(() => validateConfig({ engine: { feed: 'https://e' } })).toThrow(InvalidArgumentError);
+    expect(() => validateConfig({ engine: { feed: { url: 5 } } })).toThrow(InvalidArgumentError);
+  });
 });
