@@ -39,7 +39,7 @@ bunmaska engine install …   # a local build, or a signature- and hash-verified
 bunmaska doctor             # runtime, store, and the resolved pin
 ```
 
-Where this honestly is: the resolve → store → load path is built and **proven on Linux** — an app loads its pinned WebKit from the store instead of the system one, verified in CI. The part still in progress is *publishing* the prebuilt engine binaries to install from. macOS pinning is designed and feasible (it just means shipping our own signed `WebKit.framework`); Windows is its own saga (below). So the plumbing is real; the hosted engines are the next milestone, not a finished promise.
+Where this honestly is: we now build a **self-contained, relocatable WebKit** — its whole dependency closure travels with it and loads via `$ORIGIN` — and CI confirms an app loads it **from the store, not the system**. What's still in progress is *publishing* the prebuilt engines to install from, plus the final render pass. macOS pinning is designed and feasible (it just means shipping our own signed `WebKit.framework`); Windows is its own saga (below). So the plumbing is real and proven; the hosted engines are the next milestone, not a finished promise.
 
 ## Status
 
@@ -108,6 +108,8 @@ bunmaska build --update  # also emit the auto-update feed (update.json + .tar.zs
 bunmaska engine list     # manage the pinned-WebKit engine store (install/which/prune/…)
 bunmaska doctor          # report the runtime, the store, and the resolved engine
 ```
+
+The CLI is *your* dev tool — it never ships. `bunmaska build` hands you a standalone executable (a `.app` or a `.deb`) your users double-click; they never install `bunmaska` or open a terminal.
 
 ## Migrating from Electron
 
