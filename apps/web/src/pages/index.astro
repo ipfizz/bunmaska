@@ -1,0 +1,417 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import InstallTabs from "../components/InstallTabs.tsx";
+import CodeBlock from "../components/CodeBlock.astro";
+import Platforms from "../components/Platforms.astro";
+import { Icon } from "astro-icon/components";
+
+const nativeModule = `// notify.ts - a native module. No build step. No bindings.gyp. Just Bun.
+import { dlopen, FFIType } from "bun:ffi";
+
+const { symbols: libc } = dlopen("libc.so.6", {
+  getpid: { args: [], returns: FFIType.i32 },
+});
+
+export const pid = () => libc.getpid();`;
+
+const helloApp = `import { app, BrowserWindow } from "bunmaska";
+
+app.whenReady().then(() => {
+  const win = new BrowserWindow({ width: 960, height: 720 });
+  win.loadURL("https://example.com");
+});`;
+
+const pinExample = `import { defineConfig } from "bunmaska/config";
+
+export default defineConfig({
+  // Pin the exact WebKit you tested. Shared across apps. No global switch.
+  engine: { webkit: "webkitgtk-6.0-2.52.4-bunmaska1-linux-x64" },
+});`;
+
+const cliCommands = `# scaffold · develop · package
+bunmaska init my-app     # a full starter: main + preload + renderer + config
+bunmaska dev             # run it, hot-reloading on save
+bunmaska build           # a standalone .app / .deb your users double-click
+bunmaska build --update  # ...plus the auto-update feed (update.json + .tar.zst)
+
+# pin & manage the WebKit engine - the "tested == shipped" tier
+bunmaska engine list     # what's installed, side by side
+bunmaska engine which    # the engine this project resolves
+bunmaska engine install  # a local dir, or a signed feed URL
+
+# is everything wired up?
+bunmaska doctor          # runtime, store, and the resolved engine`;
+
+const stats = [
+  { num: "~16-23 MB", label: "download" },
+  { num: "~60 MB", label: "installed" },
+  { num: "0", label: "runtime deps" },
+  { num: "0", label: "compiled native code" },
+];
+
+const features = [
+  { icon: "lucide:zap", t: "Pure bun:ffi", d: "Zero compiled native code. Zero runtime deps. The whole framework is TypeScript calling the OS." },
+  { icon: "lucide:globe", t: "WebKit, not Chromium", d: "Renders on WebKit - WKWebView on macOS, WebKitGTK on Linux. No browser engine bundled into your app." },
+  { icon: "lucide:blocks", t: "Electron-shaped API", d: "app, BrowserWindow, ipcMain, Menu, Tray, dialog… the names you already know. Drop-in shim included." },
+  { icon: "lucide:terminal", t: "A real CLI", d: "bunmaska init / dev / run / build. Scaffold, hot-reload, and package to .dmg or .deb." },
+  { icon: "lucide:monitor", t: "macOS + Linux", d: "Two platforms that actually work. Windows is on the list, not in the build. We'll be honest about it." },
+  { icon: "lucide:gauge", t: "Fast cold start", d: "No Chromium to boot, no V8 snapshot to thaw. Bun + JavaScriptCore, up before your splash screen would've loaded." },
+];
+
+const compare = [
+  ["Download size", "150 MB+", "~16-23 MB"],
+  ["Installed size", "~220 MB", "~60 MB"],
+  ["Rendering engine", "Bundled Chromium (every app, again)", "OS-native WebKit (not bundled)"],
+  ["Native modules", "node-gyp / N-API / electron-rebuild", "a .ts file that dlopens the OS"],
+  ["Compile step", "Yes, and it'll fail somewhere", "None"],
+  ["Runtime deps", "Several", "Zero"],
+  ["Runtime", "Node + V8", "Bun + JavaScriptCore"],
+  ["Platforms", "Win / macOS / Linux", "macOS + Linux (Windows: not yet)"],
+  ["Familiar API", "The original", "Drop-in, ~70-80% parity"],
+];
+
+const faqs = [
+  ["Windows?", "macOS and Linux today. Windows is on the list, not in the build - we'd rather ship two platforms that work than three that sort of do. Windows folks: we see you. Hang tight."],
+  ["Production-ready?", "It says alpha for a reason. Use it for the thing you were going to rewrite anyway."],
+  ["Why no Chromium?", "Because it's already on your computer, and shipping a second one is how we got here."],
+  ["What's the catch?", "~70-80% of Electron's surface, and we publish the parity matrix so you can check before you commit."],
+  ["What's the bigger picture?", "Bunmaska is the foundation. We're also building Chai on top of it - an app store and launcher for genuinely small native apps. That's a separate thing for later; the framework comes first."],
+];
+
+// Type discipline: body 16px, small 14px (`text-sm`), one heading tier, one hero display.
+const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+const DISPLAY = "font-serif leading-[1.04] text-balance text-[clamp(2.5rem,5.5vw,3.5rem)]";
+---
+
+<Base>
+  <Nav />
+
+  <main>
+    <!-- 1. HERO -->
+    <section class="relative overflow-hidden">
+      <div
+        class="pointer-events-none absolute inset-0 -z-10"
+        style="background: radial-gradient(60% 50% at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);"
+      >
+      </div>
+      <div class="wrap pt-24 pb-20 text-center sm:pt-32 sm:pb-28">
+        <p class="eyebrow mb-6">Desktop apps on Bun + WebKit</p>
+        <h1 class={`mx-auto max-w-[20ch] ${DISPLAY}`} style="letter-spacing:-0.01em;">
+          Build an app before you finish your <span class="italic text-accent-text">bun-maska &amp;&nbsp;chai.</span>
+        </h1>
+        <p class="mx-auto mt-7 max-w-[48ch] text-text-muted">
+          A drop-in Electron replacement - the same APIs, none of the Chromium. Tiny downloads, native modules that are just .ts files, and a laptop fan that finally gets a rest.
+        </p>
+
+        <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <a href="/docs/quickstart" class="btn btn-accent">Get started →</a>
+          <a href="https://github.com/ipfizz/bunmaska" target="_blank" rel="noopener" class="btn btn-ghost">GitHub</a>
+        </div>
+
+        <div class="mt-9 flex justify-center">
+          <InstallTabs client:visible />
+        </div>
+
+        <p class="mt-6 text-base text-text-muted">
+          <span class="text-[1.1em] italic" style="font-family:var(--font-serif);">Alpha - and we'll admit it.</span> macOS + Linux.
+        </p>
+      </div>
+    </section>
+
+    <!-- 2. STATUS STRIP -->
+    <section class="border-y border-border bg-bg-subtle">
+      <div class="wrap flex flex-col items-center gap-4 py-6 text-center sm:flex-row sm:justify-between sm:text-left">
+        <p class="max-w-[56ch] text-text-muted">
+          No logos of companies we can't name yet. Just the truth: it's open, it's built on <span class="text-text"
+            >Bun + WebKit</span
+          >, and it's early.
+        </p>
+        <div class="flex flex-wrap items-center justify-center gap-2">
+          <span class="tag">zero runtime deps</span>
+          <span class="tag">zero compiled code</span>
+          <span class="tag">MIT</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. SIZE / SPEED PROOF -->
+    <section class="wrap py-24 sm:py-28">
+      <div class="mx-auto max-w-[42ch] text-center">
+        <p class="eyebrow mb-4">The whole thing</p>
+        <h2 class={HEAD}>
+          ~16 MB. Yes, <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);">all of it.</span>
+        </h2>
+        <p class="mt-4 text-text-muted">
+          Electron asks for 150 MB+ before it's done anything. Bunmaska is the download you won't notice and the app you
+          can't hear running.
+        </p>
+      </div>
+
+      <!-- The size story, at a glance -->
+      <div class="mx-auto mt-12 max-w-2xl space-y-5">
+        <div>
+          <div class="mb-2 flex items-baseline justify-between">
+            <span class="text-sm text-text-muted">A minimal Electron app</span>
+            <span class="font-mono text-sm text-text-faint">150 MB+</span>
+          </div>
+          <div class="h-2.5 w-full overflow-hidden rounded-full bg-bg-muted">
+            <div class="h-full w-full rounded-full bg-border-strong"></div>
+          </div>
+        </div>
+        <div>
+          <div class="mb-2 flex items-baseline justify-between">
+            <span class="text-sm font-medium text-text">The same app, on Bunmaska</span>
+            <span class="font-mono text-sm text-accent-text">~16-23 MB</span>
+          </div>
+          <div class="h-2.5 w-full overflow-hidden rounded-full bg-bg-muted">
+            <div class="h-full rounded-full bg-accent" style="width:13%;"></div>
+          </div>
+        </div>
+        <p class="text-center text-sm text-text-faint">
+          Same app. One bundles a whole browser; the other just doesn't.
+        </p>
+      </div>
+
+      <div class="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-4">
+        {
+          stats.map((s) => (
+            <div class="bg-bg px-5 py-9 text-center">
+              <div class="whitespace-nowrap text-[1.5rem] font-semibold tracking-tight">{s.num}</div>
+              <div class="mt-1.5 text-sm text-text-muted">{s.label}</div>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- 4. THE MOAT - BUILDLESS NATIVE MODULES -->
+    <section class="border-t border-border bg-bg-subtle">
+      <div class="wrap grid items-center gap-12 py-24 sm:py-28 lg:grid-cols-2">
+        <div>
+          <p class="eyebrow mb-4">The part worth paying attention to</p>
+          <h2 class={HEAD}>
+            A native module is just a <span class="font-mono text-[0.8em] text-accent-text">.ts</span> file.
+          </h2>
+          <p class="mt-5 max-w-[48ch] text-text-muted">
+            It <code class="rounded bg-bg-muted px-1 font-mono text-[0.85em] text-text">dlopen</code>s the OS and gets on
+            with its life. No <code class="font-mono text-[0.85em]">node-gyp</code>. No
+            <code class="font-mono text-[0.85em]">N-API</code>. No
+            <code class="font-mono text-[0.85em]">electron-rebuild</code>. No 40-minute compile that fails on the one
+            machine that matters.
+          </p>
+          <p class="mt-5 max-w-[48ch] serif-note text-text">
+            Nothing to rebuild, because there was never anything to build.
+          </p>
+        </div>
+
+        <div>
+          <CodeBlock code={nativeModule} lang="ts" title="notify.ts" />
+          <p class="mt-3 text-sm text-text-faint">
+            The Electron version of this starts with <code class="font-mono text-[0.85em]">npm install node-gyp</code> and
+            ends with a Stack Overflow tab. We skipped to the end.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. FEATURE GRID -->
+    <section class="wrap py-24 sm:py-28">
+      <div class="mx-auto max-w-[46ch] text-center">
+        <h2 class={HEAD}>
+          Built on WebKit, <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+            >not Chromium.</span
+          >
+        </h2>
+        <p class="mt-4 text-text-muted">
+          Your apps render on WebKit instead of a bundled browser. No Chromium shipped - ever.
+        </p>
+      </div>
+
+      <div class="mt-12 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+        {
+          features.map((f) => (
+            <div class="group bg-bg p-7 transition-colors duration-200 hover:bg-bg-subtle">
+              <div
+                class="mb-4 flex h-9 w-9 items-center justify-center rounded-md border border-border-strong text-accent-text transition-colors duration-200 group-hover:border-accent-text"
+                aria-hidden="true"
+              >
+                <Icon name={f.icon} class="h-[18px] w-[18px]" />
+              </div>
+              <h3 class="font-semibold">{f.t}</h3>
+              <p class="mt-2 text-text-muted">{f.d}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- 5.6 PINNED ENGINE - TESTED == SHIPPED -->
+    <section class="border-t border-border bg-bg-subtle">
+      <div class="wrap py-24 sm:py-28">
+        <div class="mx-auto max-w-[52ch] text-center">
+          <p class="eyebrow mb-4">When "works on my machine" isn't enough</p>
+          <h2 class={HEAD}>
+            Pin the WebKit you <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+              >actually tested.</span
+            >
+          </h2>
+          <p class="mt-4 text-text-muted">
+            By default you render on the system's WebKit - that's why the apps are tiny. When you'd rather
+            ship the exact build you tested, pin it. The app resolves <span class="text-text">that</span> engine from a
+            shared store, downloaded once and shared by every app. Different apps can pin different versions, side by
+            side. No global switch.
+          </p>
+        </div>
+        <div class="mx-auto mt-12 max-w-2xl">
+          <CodeBlock code={pinExample} lang="ts" title="bunmaska.config.ts" />
+        </div>
+        <p class="mx-auto mt-5 max-w-[66ch] text-center text-sm text-text-faint">
+          This is an opt-in, Linux-first tier today: pinning, the shared store, and the engine CLI work now. Downloadable
+          prebuilt engines and full macOS + Windows support are on the way - Windows brings its own WebKit (WinCairo,
+          never Chromium). Most apps never need it; it's here for when byte-for-byte consistency matters.
+        </p>
+      </div>
+    </section>
+
+    <!-- 5.5 PLATFORM SUPPORT -->
+    <Platforms />
+
+    <!-- 6. QUICKSTART WALKTHROUGH -->
+    <section class="border-t border-border bg-bg-subtle">
+      <div class="wrap py-24 sm:py-28">
+        <div class="mx-auto max-w-[48ch] text-center">
+          <p class="eyebrow mb-4">Developer experience</p>
+          <h2 class={HEAD}>
+            From zero to a window in about <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+              >ninety seconds.</span
+            >
+          </h2>
+          <p class="mt-4 text-text-muted">
+            <code class="font-mono text-[0.85em]">bunmaska init</code> →
+            <code class="font-mono text-[0.85em]">bunmaska dev</code> → a real window. Then
+            <code class="font-mono text-[0.85em]">bunmaska build</code> → one executable you can hand someone. The other
+            steps are optional, and so is your patience.
+          </p>
+        </div>
+        <div class="mx-auto mt-12 max-w-2xl">
+          <CodeBlock code={helloApp} lang="ts" title="src/main.ts" />
+          <p class="mt-3 text-sm text-text-faint">
+            What ships is a standalone <code class="font-mono text-[0.85em]">.app</code> or
+            <code class="font-mono text-[0.85em]">.deb</code> - your users double-click it. They never install Bunmaska
+            or open a terminal. The CLI is your dev tool, not theirs.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6.5 THE CLI -->
+    <section class="wrap py-24 sm:py-28">
+      <div class="mx-auto max-w-[50ch] text-center">
+        <p class="eyebrow mb-4">One command</p>
+        <h2 class={HEAD}>
+          The whole loop is <span class="font-mono text-[0.82em] text-accent-text">bunmaska</span>.
+        </h2>
+        <p class="mt-4 text-text-muted">
+          Scaffold, develop, package, and manage engines - one CLI, pure Bun, no Xcode project and no
+          electron-builder. It's <span class="text-text">your</span> dev tool; it never ships inside your app.
+        </p>
+      </div>
+      <div class="mx-auto mt-12 max-w-2xl">
+        <CodeBlock code={cliCommands} lang="sh" title="Terminal" />
+      </div>
+      <p class="mx-auto mt-4 max-w-2xl text-center text-sm text-text-faint">
+        Most days you live in <code class="font-mono text-[0.85em]">init</code> →
+        <code class="font-mono text-[0.85em]">dev</code> → <code class="font-mono text-[0.85em]">build</code>. The rest
+        is there the day you need it. Full reference in <a href="/docs/cli" class="underline decoration-border underline-offset-2 hover:decoration-accent">the CLI docs</a>.
+      </p>
+    </section>
+
+    <!-- 7. VS ELECTRON -->
+    <section class="wrap py-24 sm:py-28">
+      <div class="mx-auto max-w-[42ch] text-center">
+        <h2 class={HEAD}>
+          Same shape. <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+            >A tenth of the weight.</span
+          >
+        </h2>
+      </div>
+
+      <div class="mx-auto mt-12 max-w-3xl overflow-hidden rounded-lg border border-border">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-bg-subtle text-left">
+              <th class="px-4 py-3 font-medium text-text-faint"></th>
+              <th class="px-4 py-3 font-semibold">Electron</th>
+              <th class="px-4 py-3 font-semibold text-accent-text">Bunmaska</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              compare.map(([label, e, b]) => (
+                <tr class="border-t border-border align-top transition-colors duration-150 hover:bg-bg-subtle">
+                  <td class="px-4 py-3 text-text-muted">{label}</td>
+                  <td class="px-4 py-3 text-text-muted">{e}</td>
+                  <td class="px-4 py-3 font-medium text-text">{b}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="mx-auto mt-4 max-w-3xl text-sm text-text-faint">
+        We left a few rows where Electron still wins. We're allergic to lying in tables too.
+      </p>
+    </section>
+
+    <!-- 8. HONEST TRADE-OFFS -->
+    <section class="border-t border-border bg-bg-subtle">
+      <div class="wrap py-24 sm:py-28">
+        <div class="mx-auto max-w-[50ch] text-center">
+          <h2 class={HEAD}>
+            It's alpha. We're <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+              >not going to pretend</span
+            > otherwise.
+          </h2>
+          <p class="mt-4 text-text-muted">
+            Things will move. Some things will break. We'll tell you which ones. If it's still 2027 and this still says
+            <span class="text-text">alpha</span>, open an issue titled <span class="text-text">"are you OK."</span>
+          </p>
+        </div>
+
+        <div class="mx-auto mt-12 grid max-w-3xl gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+          {
+            faqs.map(([q, a]) => (
+              <div class="bg-bg p-6 transition-colors duration-200 hover:bg-bg-subtle">
+                <h3 class="font-semibold">{q}</h3>
+                <p class="mt-2 text-text-muted">{a}</p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. FINAL CTA -->
+    <section class="relative overflow-hidden">
+      <div
+        class="pointer-events-none absolute inset-0 -z-10"
+        style="background: radial-gradient(55% 60% at 50% 100%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%);"
+      >
+      </div>
+      <div class="wrap py-28 text-center sm:py-32">
+        <h2 class={`mx-auto max-w-[18ch] ${DISPLAY}`} style="letter-spacing:-0.01em;">
+          Same APIs. <span class="italic text-accent-text">Hold the&nbsp;Chromium.</span>
+        </h2>
+        <p class="mx-auto mt-6 max-w-[42ch] text-text-muted">Try it in a weekend. Hate it by Monday, or don't.</p>
+        <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <a href="/docs/quickstart" class="btn btn-accent">Get started →</a>
+          <a href="https://github.com/ipfizz/bunmaska" target="_blank" rel="noopener" class="btn btn-ghost">GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Base>

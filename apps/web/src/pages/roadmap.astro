@@ -1,0 +1,222 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import { Icon } from "astro-icon/components";
+
+const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+const DISPLAY = "font-serif leading-[1.04] text-balance text-[clamp(2.5rem,5.5vw,3.5rem)]";
+
+type Status = "shipping" | "in-progress" | "planned" | "future";
+
+const STATUS: Record<Status, { dot: string; text: string; label: string }> = {
+  shipping: { dot: "var(--success)", text: "text-success", label: "Shipping now" },
+  "in-progress": { dot: "var(--accent)", text: "text-accent-text", label: "In progress" },
+  planned: { dot: "var(--border-strong)", text: "text-text-muted", label: "Planned" },
+  future: { dot: "var(--border-strong)", text: "text-text-faint", label: "Future · v3+" },
+};
+
+const phases: { status: Status; title: string; note?: string; items: string[] }[] = [
+  {
+    status: "shipping",
+    title: "The framework + the engine store",
+    note: "macOS + Linux. Alpha, and we'll admit it.",
+    items: [
+      "An Electron-shaped API on Bun + WebKit - ~70-80% parity, macOS and Linux.",
+      "Buildless native modules: a .ts file that dlopens the OS. No node-gyp. No rebuild. Ever.",
+      "The CLI - init / dev / build - producing real .app and .deb distributables, plus a pure-Bun auto-updater.",
+      'The pinned-WebKit engine store: side-by-side, content-addressed, signature-verified installs - the "tested == shipped" tier.',
+      "A self-contained, relocatable WebKit you can pin and ship - its full dependency closure travels with it, loaded from the shared store.",
+    ],
+  },
+  {
+    status: "in-progress",
+    title: "The road to public",
+    note: "everything between here and `npm i bunmaska`.",
+    items: [
+      "Host the prebuilt engines on a signed CDN (Cloudflare R2 - zero egress fees on big binaries).",
+      "The render pass for the relocatable engine: it loads today; next it draws.",
+      "Publish the first bunmaska to npm; bunmaska.org goes live.",
+      "Starter boilerplates - React + Tailwind + Bunmaska, ready to clone.",
+    ],
+  },
+  {
+    status: "planned",
+    title: "Depth + macOS pinning",
+    items: [
+      "Fill the API gaps: session.cookies, BrowserWindow setters, richer webContents events.",
+      "Cross-distro engine builds (an old-glibc base, so one build runs across distros).",
+      "A pinned macOS engine - opt-in, after a notarization spike. System WKWebView stays the default.",
+      "Engine delivery to end users: embed-in-bundle, or fetch-on-first-run. Never something the user types.",
+    ],
+  },
+  {
+    status: "future",
+    title: "Windows",
+    note: "deliberately last - and on our terms.",
+    items: [
+      "A from-scratch Win32 backend (~5k LOC - the real work, and it's the same regardless of engine).",
+      "WinCairo WebKit, brought via the same engine store. Never WebView2 - that's Chromium.",
+      "ARM64 + x64 only. Never 32-bit.",
+    ],
+  },
+];
+---
+
+<Base title="Roadmap" description="What Bunmaska is building, where it is today, and the honest plan - including Windows (WinCairo on ARM64 + x64, never WebView2).">
+  <Nav />
+
+  <main>
+    <!-- INTRO -->
+    <section class="relative overflow-hidden">
+      <div
+        class="pointer-events-none absolute inset-0 -z-10"
+        style="background: radial-gradient(55% 45% at 50% 0%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%);"
+      >
+      </div>
+      <div class="wrap pt-24 pb-14 text-center sm:pt-28">
+        <p class="eyebrow mb-5">Roadmap</p>
+        <h1 class={`mx-auto max-w-[20ch] ${DISPLAY}`} style="letter-spacing:-0.01em;">
+          Where this is <span class="italic text-accent-text">actually going.</span>
+        </h1>
+        <p class="mx-auto mt-6 max-w-[56ch] text-text-muted">
+          The goal: an Electron-class developer experience that ships tiny apps on WebKit instead of a bundled
+          browser - with native modules that don't need a compiler. Here's what's done, what's next, and the parts
+          we're deliberately taking slowly. No vapor; if it isn't built, it says so.
+        </p>
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <span class="tag">v0.1.0-alpha.2</span>
+          <span class="tag">macOS + Linux</span>
+          <span class="tag">MIT</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- WHERE WE ARE -->
+    <section class="border-y border-border bg-bg-subtle">
+      <div class="wrap py-8">
+        <p class="mx-auto max-w-[68ch] text-center text-text-muted">
+          <span class="font-medium text-text">Where we are today:</span> the framework works on macOS and Linux, the
+          pinned-engine store and CLI are in place, and a self-contained, relocatable WebKit can be built and loaded
+          from the store. The next milestone is hosting those engines and going public on npm.
+        </p>
+      </div>
+    </section>
+
+    <!-- THE PHASES -->
+    <section class="wrap py-20 sm:py-24">
+      <div class="mx-auto max-w-2xl">
+        <div class="relative border-l border-border">
+          {
+            phases.map((phase) => (
+              <div class="relative pb-14 pl-8 last:pb-0 sm:pl-10">
+                <span
+                  class="absolute left-0 top-1.5 h-3 w-3 -translate-x-1/2 rounded-full ring-4 ring-bg"
+                  style={`background:${STATUS[phase.status].dot};`}
+                  aria-hidden="true"
+                />
+                <span
+                  class={`inline-flex items-center gap-1.5 rounded-full border border-border bg-bg px-3 py-1 text-sm font-semibold uppercase tracking-wide ${STATUS[phase.status].text}`}
+                >
+                  {STATUS[phase.status].label}
+                </span>
+                <h2 class="mt-3 text-base font-semibold tracking-tight">{phase.title}</h2>
+                {phase.note && (
+                  <p class="mt-1 serif-note text-text-faint">
+                    {phase.note}
+                  </p>
+                )}
+                <ul class="mt-4 space-y-2.5">
+                  {phase.items.map((item) => (
+                    <li class="flex gap-3 text-text-muted">
+                      <span
+                        class="mt-[0.55em] h-1 w-1 flex-none rounded-full"
+                        style={`background:${STATUS[phase.status].dot};`}
+                        aria-hidden="true"
+                      />
+                      <span set:html={item.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em] text-text">$1</code>')} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- WINDOWS, IN DETAIL -->
+    <section class="border-t border-border bg-bg-subtle">
+      <div class="wrap py-20 sm:py-24">
+        <div class="mx-auto max-w-[52ch] text-center">
+          <p class="eyebrow mb-4">The one everyone asks about</p>
+          <h2 class={HEAD}>
+            Windows, the <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+              >honest version.</span
+            >
+          </h2>
+          <p class="mt-4 text-text-muted">
+            We're not on Windows yet, and we're not going to fudge why. It's a deliberate choice, and the reasoning is
+            worth stating plainly.
+          </p>
+        </div>
+
+        <div class="mx-auto mt-12 grid max-w-4xl gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+          {
+            [
+              {
+                icon: "lucide:shield-x",
+                t: "Not WebView2",
+                d: "The easy Windows path is WebView2 - which is Microsoft Edge, i.e. Chromium. Shipping that would break the one promise the whole project is built on. So that door is closed on purpose.",
+              },
+              {
+                icon: "lucide:package",
+                t: "WinCairo, brought along",
+                d: "Windows ships no system WebKit (Safari for Windows died in 2012). So unlike mac and Linux, we can't borrow one - we bring WinCairo WebKit through the same engine store as the pinned tier.",
+              },
+              {
+                icon: "lucide:cpu",
+                t: "ARM64 + x64. Never 32-bit.",
+                d: "Windows is moving to ARM (Snapdragon X, Copilot+ PCs, NVIDIA's 2026 laptops). ARM64 + x64 covers the present and the future; x86 is not on the list.",
+              },
+              {
+                icon: "lucide:wrench",
+                t: "It's the most work, not the least",
+                d: "There's no Win32 backend yet (~5k lines), and we'd own the WinCairo build + its CVE treadmill forever. Windows is the expensive platform - so it goes last, once macOS + Linux are solid.",
+              },
+            ].map((c) => (
+              <div class="group bg-bg p-7 transition-colors duration-200 hover:bg-bg-subtle">
+                <div
+                  class="mb-4 flex h-9 w-9 items-center justify-center rounded-md border border-border-strong text-accent-text transition-colors duration-200 group-hover:border-accent-text"
+                  aria-hidden="true"
+                >
+                  <Icon name={c.icon} class="h-[18px] w-[18px]" />
+                </div>
+                <h3 class="font-semibold">{c.t}</h3>
+                <p class="mt-2 text-text-muted">{c.d}</p>
+              </div>
+            ))
+          }
+        </div>
+        <p class="mx-auto mt-6 max-w-[60ch] text-center text-sm text-text-faint">
+          Need Windows today? Use Electron for that target, and check back here. We'd rather ship two platforms that
+          work than three that sort of do.
+        </p>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="wrap py-20 text-center sm:py-24">
+      <h2 class={`mx-auto max-w-[24ch] ${HEAD}`}>Want to watch it happen?</h2>
+      <p class="mx-auto mt-3 max-w-[44ch] text-text-muted">
+        It's all in the open. Star it, read the docs, or come argue about the parity matrix.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <a href="/docs/introduction" class="btn btn-accent">Read the docs →</a>
+        <a href="https://github.com/ipfizz/bunmaska" target="_blank" rel="noopener" class="btn btn-ghost">GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Base>

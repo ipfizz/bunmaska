@@ -1,0 +1,73 @@
+---
+import "../fonts";
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+}
+
+const DEFAULT_TITLE = "Bunmaska - Electron, minus the Chromium";
+const {
+  title = DEFAULT_TITLE,
+  description = "A drop-in Electron replacement on Bun + WebKit. No bundled Chromium, ~16-23 MB downloads, and native modules that are just .ts files. macOS + Linux, alpha.",
+  image = "/og.svg",
+} = Astro.props;
+
+const fullTitle = title === DEFAULT_TITLE ? title : `${title} - Bunmaska`;
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const ogImage = new URL(image, Astro.site).href;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Bunmaska",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "macOS, Linux",
+  description,
+  url: Astro.site?.href,
+  softwareVersion: "0.1.0-alpha.2",
+  license: "https://opensource.org/licenses/MIT",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonical} />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow" />
+    <meta name="generator" content={Astro.generator} />
+    <meta property="og:site_name" content="Bunmaska" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    {/* No-flash theme bootstrap - runs before paint */}
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t === "dark" || t === "light") {
+            document.documentElement.setAttribute("data-theme", t);
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

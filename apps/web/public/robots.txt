@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bunmaska.org/sitemap-index.xml

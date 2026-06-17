@@ -1,0 +1,40 @@
+name: deploy-web
+
+# Builds apps/web and deploys it to Cloudflare Pages (project "bunmaska",
+# which serves bunmaska.org) on pushes that touch the site. Repo secrets:
+#   CLOUDFLARE_API_TOKEN   — scoped token (Pages Edit + DNS Edit + Zone Read)
+#   CLOUDFLARE_ACCOUNT_ID  — 33b4bb12637807398ca2edac6c77fe8c
+on:
+  push:
+    branches: [main]
+    paths: ['apps/web/**', '.github/workflows/deploy-web.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install (workspace)
+        run: bun install --frozen-lockfile
+
+      - name: Build the site
+        working-directory: apps/web
+        run: bun run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: pages deploy dist --project-name=bunmaska --branch=main

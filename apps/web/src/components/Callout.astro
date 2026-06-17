@@ -1,0 +1,53 @@
+---
+interface Props {
+  type?: "note" | "tip" | "caution" | "danger";
+  title?: string;
+}
+
+const { type = "note", title } = Astro.props;
+
+const styles: Record<string, { border: string; bg: string; label: string; icon: string }> = {
+  note: { border: "var(--border-strong)", bg: "var(--bg-subtle)", label: "Note", icon: "›" },
+  tip: { border: "var(--accent)", bg: "var(--accent-bg)", label: "Tip", icon: "★" },
+  caution: { border: "var(--maska-500)", bg: "var(--accent-bg)", label: "Caution", icon: "▲" },
+  danger: { border: "var(--danger)", bg: "color-mix(in srgb, var(--danger) 9%, transparent)", label: "Heads up", icon: "✦" },
+};
+
+const s = styles[type];
+const heading = title ?? s.label;
+---
+
+<aside
+  class="my-5 rounded-md border px-4 py-3 text-sm"
+  style={`border-color:${s.border};background:${s.bg};`}
+>
+  <p class="mb-1 flex items-center gap-2 font-semibold" style="letter-spacing:-0.01em;">
+    <span aria-hidden="true" style={`color:${s.border};`}>{s.icon}</span>
+    {heading}
+  </p>
+  <div class="callout-body text-text-muted">
+    <slot />
+  </div>
+</aside>
+
+<style>
+  .callout-body :global(p) {
+    margin: 0;
+  }
+  .callout-body :global(p + p) {
+    margin-top: 0.5rem;
+  }
+  .callout-body :global(a) {
+    color: var(--accent-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .callout-body :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 0.05em 0.3em;
+  }
+</style>

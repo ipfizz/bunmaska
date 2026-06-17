@@ -1,0 +1,87 @@
+---
+// Platform support matrix. macOS + Linux ship today (x64 + ARM); Windows is honestly
+// marked "Planned" - it is NOT cross-platform until Windows actually works.
+const apple =
+  '<path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/>';
+const windows =
+  '<path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>';
+const linux =
+  '<path d="M12 2.2c-2.6 0-4.7 2.2-4.7 4.9 0 .9.2 1.5.2 2.4 0 1.6-1.5 2.9-2.3 4.4-.8 1.4-1.3 2.8-.9 4 .2.7.9 1 1.5.7.5-.2.9-.6 1.3-1 .2 1.1.7 2 1.4 2.7.8.7 1.9.9 2.9.9h1.2c1 0 2.1-.2 2.9-.9.7-.7 1.2-1.6 1.4-2.7.4.4.8.8 1.3 1 .6.3 1.3 0 1.5-.7.4-1.2-.1-2.6-.9-4-.8-1.5-2.3-2.8-2.3-4.4 0-.9.2-1.5.2-2.4 0-2.7-2.1-4.9-4.7-4.9zm-1.7 4.1c.5 0 .9.5.9 1.1s-.4 1.1-.9 1.1-.9-.5-.9-1.1.4-1.1.9-1.1zm3.4 0c.5 0 .9.5.9 1.1s-.4 1.1-.9 1.1-.9-.5-.9-1.1.4-1.1.9-1.1zM12 8.7c.7 0 1.4.4 1.4.9 0 .4-.7.6-1.4.6s-1.4-.2-1.4-.6c0-.5.7-.9 1.4-.9z"/>';
+
+const platforms = [
+  {
+    name: "macOS",
+    icon: apple,
+    status: "shipping",
+    arch: "Apple Silicon (ARM64) · Intel (x64)",
+    note: "AppKit + WKWebView via objc_msgSend",
+  },
+  {
+    name: "Linux",
+    icon: linux,
+    status: "shipping",
+    arch: "x64 · ARM64 - incl. Raspberry Pi",
+    note: "GTK 4 + WebKitGTK 6 (where WebKitGTK is available)",
+  },
+  {
+    name: "Windows",
+    icon: windows,
+    status: "planned",
+    arch: "Not yet - on the roadmap",
+    note: "Planned via WinCairo WebKit. We will not ship Chromium.",
+  },
+];
+---
+
+<section class="wrap py-24 sm:py-28">
+  <div class="mx-auto max-w-[48ch] text-center">
+    <h2 class="text-[1.5rem] leading-[1.2] font-semibold tracking-tight">
+      Two platforms that work, <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+        >one we're honest about.</span
+      >
+    </h2>
+    <p class="mt-4 text-text-muted">
+      Bunmaska ships on macOS and Linux today - x64 and ARM. Windows isn't here yet, and we're not going to pretend it is:
+      it's not truly cross-platform until Windows actually works.
+    </p>
+  </div>
+
+  <div class="mx-auto mt-12 grid max-w-4xl gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
+    {
+      platforms.map((p) => {
+        const planned = p.status === "planned";
+        return (
+          <div class:list={["bg-bg p-7", planned && "bg-bg-subtle"]}>
+            <div class="flex items-center justify-between">
+              <svg
+                viewBox="0 0 24 24"
+                class:list={["h-7 w-7", planned ? "text-text-faint" : "text-text"]}
+                fill="currentColor"
+                aria-hidden="true"
+                set:html={p.icon}
+              />
+              <span
+                class:list={[
+                  "rounded-full border px-2.5 py-0.5 text-sm font-medium",
+                  planned
+                    ? "border-border-strong text-text-faint"
+                    : "border-accent/40 text-accent-text",
+                ]}
+                style={planned ? "" : "background:var(--accent-bg);"}
+              >
+                {planned ? "Planned" : "Shipping"}
+              </span>
+            </div>
+            <h3 class="mt-4 font-semibold">{p.name}</h3>
+            <p class="mt-1 text-sm text-text-muted">{p.arch}</p>
+            <p class="mt-2 text-sm text-text-faint">{p.note}</p>
+          </div>
+        );
+      })
+    }
+  </div>
+
+  <p class="mx-auto mt-5 max-w-4xl text-center text-sm text-text-faint">
+    Want Windows? So do we - track it on the <a href="/roadmap" class="text-accent-text underline underline-offset-2">roadmap</a>.
+  </p>
+</section>
