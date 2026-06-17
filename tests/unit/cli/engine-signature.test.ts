@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   generateSigningKeyPair,
+  RELEASE_ENGINE_PUBKEY,
+  resolveEnginePublicKey,
   signArtifact,
   verifyArtifact,
 } from '../../../src/cli/engine-signature';
@@ -32,5 +34,29 @@ describe('Ed25519 engine signatures', () => {
     const { publicKey } = generateSigningKeyPair();
     expect(verifyArtifact(publicKey, bytes, 'not-base64-or-a-sig')).toBe(false);
     expect(verifyArtifact('not a pem', bytes, 'AAAA')).toBe(false);
+  });
+});
+
+describe('resolveEnginePublicKey (baked anchor → config feed → dev env)', () => {
+  test('no release key baked yet, so a self-hosted config feed key wins', () => {
+    expect(RELEASE_ENGINE_PUBKEY).toBe(''); // placeholder until the real keypair exists
+    expect(resolveEnginePublicKey({ feedPublicKey: 'CONFIG-KEY', env: {} })).toBe('CONFIG-KEY');
+  });
+
+  test('falls back to the dev/test env var only when nothing else is set', () => {
+    expect(resolveEnginePublicKey({ env: { BUNMASKA_ENGINE_PUBKEY: 'ENV-KEY' } })).toBe('ENV-KEY');
+  });
+
+  test('config feed key takes precedence over the env fallback', () => {
+    expect(
+      resolveEnginePublicKey({
+        feedPublicKey: 'CONFIG-KEY',
+        env: { BUNMASKA_ENGINE_PUBKEY: 'ENV-KEY' },
+      }),
+    ).toBe('CONFIG-KEY');
+  });
+
+  test('undefined when no key is available anywhere', () => {
+    expect(resolveEnginePublicKey({ env: {} })).toBeUndefined();
   });
 });

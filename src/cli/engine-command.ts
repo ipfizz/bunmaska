@@ -12,6 +12,7 @@ import type { BunmaskaConfig } from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import type { EngineSubcommand } from './parse-args';
 import { defaultRemoteFetch, installFromUrl } from './engine-remote';
+import { resolveEnginePublicKey } from './engine-signature';
 import {
   gc,
   type InstallResult,
@@ -93,12 +94,16 @@ const installedMessage = (result: InstallResult): string =>
 const runInstall = async (source: string, deps: EngineCommandDeps): Promise<number> => {
   // A http(s) source is a published feed artifact: verify its signature + hash.
   if (/^https?:\/\//.test(source)) {
-    const publicKey = deps.env['BUNMASKA_ENGINE_PUBKEY'];
-    if (publicKey === undefined || publicKey.length === 0) {
+    const config = await deps.readConfig('.');
+    const publicKey = resolveEnginePublicKey({
+      feedPublicKey: config.engine?.feed?.publicKey,
+      env: deps.env,
+    });
+    if (publicKey === undefined) {
       deps.err(
-        'bunmaska engine install: a remote install needs the release public key, and none is ' +
-          'shipped yet. Set BUNMASKA_ENGINE_PUBKEY (PEM) to a trusted key, or install from a ' +
-          'local engine directory.',
+        'bunmaska engine install: no signing key to verify this engine. The official release key ' +
+          'is not baked in yet; for a self-hosted feed, set engine.feed.publicKey in bunmaska.config. ' +
+          'Local engine directories install without a feed.',
       );
       return 1;
     }

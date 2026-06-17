@@ -18,8 +18,22 @@ export type BunmaskaUpdatesConfig = {
 };
 
 /**
- * Pinned-WebKit engine configuration — the "tested == shipped" knob. Many engine
- * versions coexist in the shared store; this declares which one THIS app pins.
+ * A self-hosted/enterprise engine feed. The DEFAULT Bunmaska feed and its signing
+ * public key are built in (the public key is a baked trust anchor — never a
+ * secret, never an env var). Set this only to run your own engine mirror.
+ */
+export type BunmaskaEngineFeedConfig = {
+  /** Base URL of the feed serving signed `.tar.zst` engines. */
+  readonly url?: string;
+  /** PEM public key that verifies this feed's engines (self-hosted feeds only). */
+  readonly publicKey?: string;
+};
+
+/**
+ * Pinned-WebKit engine configuration — the "tested == shipped" knob, and the
+ * ONLY engine-related thing a user configures (everything else is internal; see
+ * D041). Many engine versions coexist in the shared store; this declares which
+ * one THIS app pins.
  */
 export type BunmaskaEngineConfig = {
   /**
@@ -31,6 +45,8 @@ export type BunmaskaEngineConfig = {
   readonly webkit?: string;
   /** Copy the pinned engine into the bundle for offline/airgapped installs. */
   readonly embed?: boolean;
+  /** A self-hosted engine feed (advanced). The default feed + key are built in. */
+  readonly feed?: BunmaskaEngineFeedConfig;
 };
 
 /** A project's `bunmaska.config` shape. Every field is optional. */
@@ -141,9 +157,30 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
     const engineRecord = engine as Record<string, unknown>;
     const webkit = assertOptionalString(engineRecord['webkit'], 'engine.webkit', source);
     const embed = assertOptionalBoolean(engineRecord['embed'], 'engine.embed', source);
+
+    const feedRaw = engineRecord['feed'];
+    let feed: BunmaskaEngineFeedConfig | undefined;
+    if (feedRaw !== undefined) {
+      if (feedRaw === null || typeof feedRaw !== 'object') {
+        throw new InvalidArgumentError(`${source}: "engine.feed" must be an object`);
+      }
+      const feedRecord = feedRaw as Record<string, unknown>;
+      const url = assertOptionalString(feedRecord['url'], 'engine.feed.url', source);
+      const publicKey = assertOptionalString(
+        feedRecord['publicKey'],
+        'engine.feed.publicKey',
+        source,
+      );
+      feed = {
+        ...(url !== undefined ? { url } : {}),
+        ...(publicKey !== undefined ? { publicKey } : {}),
+      };
+    }
+
     config.engine = {
       ...(webkit !== undefined ? { webkit } : {}),
       ...(embed !== undefined ? { embed } : {}),
+      ...(feed !== undefined ? { feed } : {}),
     };
   }
 
