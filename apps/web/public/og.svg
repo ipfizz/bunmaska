@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#fcfcfb"/>
+  <rect width="1200" height="630" fill="url(#g)"/>
+  <defs>
+    <radialGradient id="g" cx="0.5" cy="0" r="0.9">
+      <stop offset="0" stop-color="#e0a019" stop-opacity="0.12"/>
+      <stop offset="0.6" stop-color="#e0a019" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(90, 96)">
+    <text x="0" y="44" font-family="Georgia, 'Times New Roman', serif" font-size="30" fill="#99680a" letter-spacing="3">DESKTOP APPS ON BUN + WEBKIT</text>
+    <text x="-4" y="200" font-family="Georgia, 'Times New Roman', serif" font-size="118" font-weight="600" fill="#1a1916" letter-spacing="-3">Bunmaska</text>
+    <text x="0" y="300" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="42" fill="#4a4842">A drop-in Electron replacement.</text>
+    <text x="0" y="360" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="42" fill="#4a4842">No bundled Chromium. <tspan fill="#99680a" font-style="italic" font-family="Georgia, serif">Just WebKit.</tspan></text>
+  </g>
+  <g transform="translate(90, 520)" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="28" fill="#6b675f">
+    <text x="0" y="0">npm i bunmaska</text>
+    <text x="1020" y="0" fill="#6b675f">macOS + Linux</text>
+  </g>
+  <rect x="0" y="618" width="1200" height="12" fill="#e0a019"/>
+</svg>

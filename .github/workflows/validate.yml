@@ -3,8 +3,10 @@ name: validate
 on:
   push:
     branches: [main]
+    paths: ['packages/bunmaska/**', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
   pull_request:
     branches: [main]
+    paths: ['packages/bunmaska/**', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
 
 concurrency:
   group: validate-${{ github.ref }}

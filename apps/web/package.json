@@ -1,0 +1,35 @@
+{
+  "name": "@bunmaska/web",
+  "type": "module",
+  "private": true,
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^6.0.3",
+    "@astrojs/react": "^5.0.7",
+    "@astrojs/sitemap": "^3.7.3",
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource/instrument-serif": "^5.2.8",
+    "@iconify-json/lucide": "^1.2.112",
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "astro": "^6.4.6",
+    "astro-icon": "^1.1.5",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}

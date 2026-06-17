@@ -1,0 +1,63 @@
+---
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+interface Props {
+  headings: Heading[];
+}
+const { headings } = Astro.props;
+const items = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{
+  items.length > 0 && (
+    <nav aria-label="On this page" class="toc text-sm">
+      <p class="eyebrow mb-3">On this page</p>
+      <ul class="space-y-1.5">
+        {items.map((h) => (
+          <li>
+            <a
+              href={`#${h.slug}`}
+              data-toc={h.slug}
+              class:list={[
+                "block text-text-faint transition-colors hover:text-text",
+                h.depth === 3 && "pl-3",
+              ]}
+            >
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  .toc a[data-active="true"] {
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+</style>
+
+<script>
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(".toc a[data-toc]"));
+  if (links.length) {
+    const map = new Map(links.map((l) => [l.dataset.toc, l]));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            links.forEach((l) => l.removeAttribute("data-active"));
+            const link = map.get(e.target.id);
+            if (link) link.setAttribute("data-active", "true");
+          }
+        }
+      },
+      { rootMargin: "0px 0px -75% 0px", threshold: 1 },
+    );
+    document.querySelectorAll("article h2[id], article h3[id]").forEach((h) => observer.observe(h));
+  }
+</script>

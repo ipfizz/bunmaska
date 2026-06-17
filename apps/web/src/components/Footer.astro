@@ -1,0 +1,77 @@
+---
+import { VERSION, GITHUB, NPM } from "../site";
+
+const cols = [
+  {
+    title: "Docs",
+    links: [
+      { href: "/docs/introduction", label: "Introduction" },
+      { href: "/docs/quickstart", label: "Quickstart" },
+      { href: "/docs/native-modules/overview", label: "Native Modules" },
+      { href: "/docs/migrating-from-electron", label: "Migrating" },
+    ],
+  },
+  {
+    title: "Reference",
+    links: [
+      { href: "/docs/api/app", label: "API Reference" },
+      { href: "/docs/migrating/parity", label: "API Parity" },
+      { href: "/docs/platforms", label: "Platform Support" },
+      { href: "/docs/building", label: "Building & Distribution" },
+    ],
+  },
+  {
+    title: "Project",
+    links: [
+      { href: GITHUB, label: "GitHub", external: true },
+      { href: NPM, label: "npm", external: true },
+      { href: "/roadmap", label: "Roadmap" },
+      { href: "/docs/changelog", label: "Changelog" },
+    ],
+  },
+];
+---
+
+<footer class="mt-24 border-t border-border">
+  <div class="wrap grid gap-10 py-14 sm:grid-cols-2 md:grid-cols-4">
+    <div>
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-semibold tracking-tight">Bunmaska</span>
+        <a href="/docs/changelog" class="tag font-mono hover:text-text" style="height:1.3rem;" title="Changelog"
+          >v{VERSION}</a
+        >
+      </div>
+      <p class="mt-3 max-w-[26ch] text-base text-text-muted">
+        No browser to ship.<br /><span class="serif-note">No native build to break.</span>
+      </p>
+    </div>
+
+    {
+      cols.map((col) => (
+        <div>
+          <p class="eyebrow mb-3">{col.title}</p>
+          <ul class="space-y-2">
+            {col.links.map((l) => (
+              <li>
+                <a
+                  href={l.href}
+                  class="text-sm text-text-muted transition-colors hover:text-text"
+                  {...(l.external ? { target: "_blank", rel: "noopener" } : {})}
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </div>
+
+  <div class="border-t border-border">
+    <div class="wrap flex flex-col items-start justify-between gap-2 py-5 text-sm text-text-faint sm:flex-row sm:items-center">
+      <span>© 2026 Bunmaska. Built on Bun + WebKit. No Chromium was shipped in the making of this.</span>
+      <span><span class="font-mono">v{VERSION}</span> · MIT. Go wild.</span>
+    </div>
+  </div>
+</footer>
