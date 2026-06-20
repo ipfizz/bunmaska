@@ -80,10 +80,14 @@ const USER32_SYMBOLS = {
   },
 } as const;
 
-/** kernel32.dll — the running module handle used as `HINSTANCE`. */
+/** kernel32.dll — the running module handle and the DLL-search directory. */
 const KERNEL32_SYMBOLS = {
   // (LPCWSTR moduleName | NULL) -> HMODULE
   GetModuleHandleW: { args: [FFIType.ptr], returns: FFIType.u64 },
+  // (LPCWSTR pathName | NULL) -> BOOL — adds one directory to the DLL search path.
+  // The Windows substitute for $ORIGIN: it lets a bundled engine's WebKit2.dll
+  // resolve its own dependency closure (ICU, libcurl, ...) from the engine dir.
+  SetDllDirectoryW: { args: [FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** Open user32.dll and return its window + message-pump symbol table. Memoised. */
