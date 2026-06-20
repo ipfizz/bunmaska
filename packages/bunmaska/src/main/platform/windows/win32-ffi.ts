@@ -80,7 +80,7 @@ const USER32_SYMBOLS = {
   },
 } as const;
 
-/** kernel32.dll — the running module handle and the DLL-search directory. */
+/** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
 const KERNEL32_SYMBOLS = {
   // (LPCWSTR moduleName | NULL) -> HMODULE
   GetModuleHandleW: { args: [FFIType.ptr], returns: FFIType.u64 },
@@ -88,6 +88,16 @@ const KERNEL32_SYMBOLS = {
   // The Windows substitute for $ORIGIN: it lets a bundled engine's WebKit2.dll
   // resolve its own dependency closure (ICU, libcurl, ...) from the engine dir.
   SetDllDirectoryW: { args: [FFIType.ptr], returns: FFIType.i32 },
+  // (HMODULE, LPCSTR procName) -> FARPROC — used to get the address of the system
+  // DefWindowProcW so a web-host child window can use it as a NATIVE window
+  // procedure (a JSCallback WndProc cannot survive WebKit's re-entrant flood).
+  GetProcAddress: { args: [FFIType.u64, FFIType.cstring], returns: FFIType.u64 },
+} as const;
+
+/** ole32.dll — COM/OLE, which WebKit's Windows port requires initialised per-thread. */
+const OLE32_SYMBOLS = {
+  // (LPVOID reserved) -> HRESULT
+  OleInitialize: { args: [FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** Open user32.dll and return its window + message-pump symbol table. Memoised. */
@@ -97,3 +107,6 @@ export const loadUser32 = winLibraryAccessor('user32', () => dlopen('user32.dll'
 export const loadKernel32 = winLibraryAccessor('kernel32', () =>
   dlopen('kernel32.dll', KERNEL32_SYMBOLS),
 );
+
+/** Open ole32.dll and return its symbol table. Memoised. */
+export const loadOle32 = winLibraryAccessor('ole32', () => dlopen('ole32.dll', OLE32_SYMBOLS));
