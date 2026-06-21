@@ -1,5 +1,6 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
+import { type ResolveDeps, resolveEngineWith } from '../../engine/resolve';
 import { winLibraryAccessor, wstr } from './win32';
 import { loadKernel32 } from './win32-ffi';
 
@@ -14,10 +15,13 @@ import { loadKernel32 } from './win32-ffi';
  * `size_t` is `u64` on x64; the win-only `WKViewCreate` takes a 16-byte `RECT` by
  * value, which the Windows x64 ABI passes by hidden pointer, so it binds as `ptr`.
  *
- * Engine resolution is the bootstrap shape for now: the dir comes from
- * `BUNMASKA_WEBKIT_PATH`, and the dir is put on the DLL search path so
- * `WebKit2.dll`'s dependency closure (ICU, libcurl, ANGLE, ...) resolves beside
- * it. The content-addressed engine-store resolution replaces this later (D041).
+ * Engine resolution reuses the cross-platform {@link resolveEngineWith} (the same
+ * resolver the Linux loaders use): `BUNMASKA_WEBKIT_PATH` (explicit dir) >
+ * `BUNMASKA_WEBKIT_ID` (env id) > the baked `engine.id` next to the executable >
+ * the content-addressed store. Unlike Linux there is NO system-WebKit fallback —
+ * Windows ships none — so any `system` outcome means "no engine" here. The chosen
+ * dir is put on the DLL search path so `WebKit2.dll`'s dependency closure (ICU,
+ * libcurl, ANGLE, ...) resolves beside it.
  */
 
 const WEBKIT2_SYMBOLS = {
@@ -109,22 +113,31 @@ export const WK_INJECT_AT_DOCUMENT_START = 0;
 /** `_WKUserScriptInjectionTime`: inject after the document has parsed. */
 export const WK_INJECT_AT_DOCUMENT_END = 1;
 
-/** The directory of the WinCairo WebKit engine this process loads, or `undefined`. */
-export const resolveWindowsEngineDir = (): string | undefined => {
-  const dir = process.env['BUNMASKA_WEBKIT_PATH'];
-  return dir !== undefined && dir.length > 0 ? dir : undefined;
+/**
+ * The directory of the WinCairo WebKit engine this process loads (the engine's
+ * `lib/` for a store pin, or the verbatim `BUNMASKA_WEBKIT_PATH`), or `undefined`
+ * when nothing is pinned/installed — there is no system WebKit to fall back to on
+ * Windows. Delegates to {@link resolveEngineWith}; `deps` is a test seam.
+ */
+export const resolveWindowsEngineDir = (deps: ResolveDeps = {}): string | undefined => {
+  const resolution = resolveEngineWith(deps);
+  return resolution.mode === 'pinned' ? resolution.libDir : undefined;
 };
 
 /**
  * Open the engine's `WebKit2.dll` and return its symbol table. Memoised;
  * import-safe (throws on non-Windows via the accessor). Puts the engine dir on
  * the DLL search path first so the bundled closure resolves beside `WebKit2.dll`.
+ * A pinned-but-uninstalled engine surfaces the resolver's warning in the error.
  */
 export const loadWebKit2 = winLibraryAccessor('WebKit2', () => {
-  const dir = resolveWindowsEngineDir();
+  const resolution = resolveEngineWith();
+  const dir = resolution.mode === 'pinned' ? resolution.libDir : undefined;
   if (dir === undefined) {
+    const detail = resolution.warnings.length > 0 ? ` (${resolution.warnings.join('; ')})` : '';
     throw new FFIError(
-      'no WinCairo WebKit engine configured (set BUNMASKA_WEBKIT_PATH to an engine directory)',
+      `no WinCairo WebKit engine configured${detail}; ` +
+        'set BUNMASKA_WEBKIT_PATH or pin an installed engine',
     );
   }
   loadKernel32().symbols.SetDllDirectoryW(ptr(wstr(dir)));
