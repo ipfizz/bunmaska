@@ -8,9 +8,15 @@ import {
   resolveAppVersion,
 } from '../../../../src/main/api/app-metadata';
 
-/** Build a reader backed by a fixed path→contents map. */
+/** Normalize host separators to POSIX so the map keys match on any host. */
+const slash = (s: string): string => s.replaceAll('\\', '/');
+
+/** Build a reader backed by a fixed path→contents map (keyed POSIX-style). */
 const readerFrom = (files: Record<string, string>): ManifestReader => {
-  return (path) => (path in files ? files[path] : undefined);
+  return (path) => {
+    const key = slash(path);
+    return key in files ? files[key] : undefined;
+  };
 };
 
 describe('findManifest', () => {
@@ -20,7 +26,7 @@ describe('findManifest', () => {
       '/app/package.json': JSON.stringify({ name: 'outer', version: '1.0.0' }),
     });
     const found = findManifest('/app/src/main', read);
-    expect(found?.dir).toBe('/app/src');
+    expect(slash(found?.dir ?? '')).toBe('/app/src');
     expect(found?.manifest.name).toBe('inner');
   });
 
@@ -29,7 +35,7 @@ describe('findManifest', () => {
       '/app/package.json': JSON.stringify({ name: 'outer', version: '1.0.0' }),
     });
     const found = findManifest('/app/src/deeply/nested', read);
-    expect(found?.dir).toBe('/app');
+    expect(slash(found?.dir ?? '')).toBe('/app');
     expect(found?.manifest.name).toBe('outer');
   });
 
@@ -43,7 +49,7 @@ describe('findManifest', () => {
       '/app/package.json': JSON.stringify({ name: 'outer', version: '1.0.0' }),
     });
     const found = findManifest('/app/src', read);
-    expect(found?.dir).toBe('/app');
+    expect(slash(found?.dir ?? '')).toBe('/app');
     expect(found?.manifest.name).toBe('outer');
   });
 });

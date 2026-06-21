@@ -13,6 +13,9 @@ import {
 const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
 const ROOT = '/store/webkit';
 
+/** Host paths use the OS separator; normalize to '/' so assertions are host-agnostic. */
+const slash = (s: string): string => s.replaceAll('\\', '/');
+
 const resolve = (deps: ResolveDeps) =>
   resolveEngineWith({ enginesRoot: ROOT, exists: () => true, readBakedId: () => null, ...deps });
 
@@ -38,7 +41,7 @@ describe('resolveEngineWith', () => {
   test('baked id with a present marker -> pinned at <root>/<id>/lib', () => {
     const r = resolve({ env: {}, readBakedId: () => ID, exists: () => true });
     expect(r.mode).toBe('pinned');
-    expect(r.libDir).toBe(`${ROOT}/${ID}/lib`);
+    expect(slash(r.libDir ?? '')).toBe(`${ROOT}/${ID}/lib`);
     expect(r.warnings).toEqual([]);
   });
 
@@ -53,7 +56,7 @@ describe('resolveEngineWith', () => {
   test('BUNMASKA_WEBKIT_ID overrides the baked id', () => {
     const other = 'webkitgtk-6.0-2.46.0-bunmaska1-linux-x64';
     const r = resolve({ env: { BUNMASKA_WEBKIT_ID: other }, readBakedId: () => ID });
-    expect(r.libDir).toBe(`${ROOT}/${other}/lib`);
+    expect(slash(r.libDir ?? '')).toBe(`${ROOT}/${other}/lib`);
   });
 
   test('a malformed id -> system fallback with a warning', () => {
@@ -78,8 +81,8 @@ describe('resolveEngineWith', () => {
 describe('bakedIdCandidates', () => {
   test('prefers the install layout usr/share/<slug>/engine.id', () => {
     const c = bakedIdCandidates('/opt/app/usr/bin/my-app', {});
-    expect(c[0]).toBe('/opt/app/usr/share/my-app/engine.id');
-    expect(c[1]).toBe('/opt/app/usr/bin/engine.id');
+    expect(slash(c[0] ?? '')).toBe('/opt/app/usr/share/my-app/engine.id');
+    expect(slash(c[1] ?? '')).toBe('/opt/app/usr/bin/engine.id');
   });
 
   test('an explicit BUNMASKA_ENGINE_ID_FILE wins outright', () => {
@@ -92,10 +95,10 @@ describe('bakedIdCandidates', () => {
 describe('engineLibPath', () => {
   test('pinned -> absolute path into the engine lib dir', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
-    expect(engineLibPath(r, 'libwebkitgtk-6.0.so.4')).toBe(
+    expect(slash(engineLibPath(r, 'libwebkitgtk-6.0.so.4'))).toBe(
       `${ROOT}/${ID}/lib/libwebkitgtk-6.0.so.4`,
     );
-    expect(engineLibPath(r, 'libgtk-4.so.1')).toBe(`${ROOT}/${ID}/lib/libgtk-4.so.1`);
+    expect(slash(engineLibPath(r, 'libgtk-4.so.1'))).toBe(`${ROOT}/${ID}/lib/libgtk-4.so.1`);
   });
 
   test('system -> the bare soname (ld.so default search)', () => {
@@ -108,15 +111,15 @@ describe('engineEnv', () => {
   test('pinned -> sets LD_LIBRARY_PATH, GIO_EXTRA_MODULES, and WEBKIT_EXEC_PATH', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     const env = engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' });
-    expect(env.LD_LIBRARY_PATH).toBe(`${ROOT}/${ID}/lib:/usr/lib`);
-    expect(env.GIO_EXTRA_MODULES).toBe(`${ROOT}/${ID}/lib/gio/modules`);
-    expect(env.WEBKIT_EXEC_PATH).toBe(`${ROOT}/${ID}/libexec`);
+    expect(slash(env.LD_LIBRARY_PATH ?? '')).toBe(`${ROOT}/${ID}/lib:/usr/lib`);
+    expect(slash(env.GIO_EXTRA_MODULES ?? '')).toBe(`${ROOT}/${ID}/lib/gio/modules`);
+    expect(slash(env.WEBKIT_EXEC_PATH ?? '')).toBe(`${ROOT}/${ID}/libexec`);
   });
 
   test('pinned with no prior LD_LIBRARY_PATH -> just the lib dir', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     const env = engineEnv(r, {});
-    expect(env.LD_LIBRARY_PATH).toBe(`${ROOT}/${ID}/lib`);
+    expect(slash(env.LD_LIBRARY_PATH ?? '')).toBe(`${ROOT}/${ID}/lib`);
   });
 
   test('system -> no env changes', () => {
@@ -140,8 +143,8 @@ describe('prepareEngineForLoad', () => {
     const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
     const writes: string[] = [];
     prepareEngineForLoad(pinned, target, (s) => writes.push(s));
-    expect(target['LD_LIBRARY_PATH']).toBe('/store/x/lib:/usr/lib');
-    expect(target['GIO_EXTRA_MODULES']).toBe('/store/x/lib/gio/modules');
+    expect(slash(target['LD_LIBRARY_PATH'] ?? '')).toBe('/store/x/lib:/usr/lib');
+    expect(slash(target['GIO_EXTRA_MODULES'] ?? '')).toBe('/store/x/lib/gio/modules');
     expect(writes).toEqual(['heads up\n']);
 
     // A second call (e.g. the other loader) is a no-op — single shared engine.

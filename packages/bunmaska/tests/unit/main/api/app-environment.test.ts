@@ -5,6 +5,9 @@ import {
   type EnvironmentDeps,
 } from '../../../../src/main/api/app-environment';
 
+/** Normalize host separators to POSIX so path comparisons match on any host. */
+const slash = (s: string): string => s.replaceAll('\\', '/');
+
 const deps = (overrides: Partial<EnvironmentDeps> = {}): EnvironmentDeps => ({
   platform: 'macos',
   home: '/Users/ada',
@@ -15,7 +18,9 @@ const deps = (overrides: Partial<EnvironmentDeps> = {}): EnvironmentDeps => ({
   env: {},
   locale: 'en-US',
   readFile: (path) =>
-    path === '/proj/package.json' ? JSON.stringify({ name: 'demo', version: '4.2.0' }) : undefined,
+    slash(path) === '/proj/package.json'
+      ? JSON.stringify({ name: 'demo', version: '4.2.0' })
+      : undefined,
   exit: () => undefined,
   relaunch: () => undefined,
   ...overrides,
@@ -29,7 +34,7 @@ describe('buildAppEnvironment — manifest & appPath', () => {
     const env = build();
     expect(env.manifest?.name).toBe('demo');
     expect(env.manifest?.version).toBe('4.2.0');
-    expect(env.appPath).toBe('/proj');
+    expect(slash(env.appPath)).toBe('/proj');
   });
 
   test('falls back to cwd as appPath when no manifest is found', () => {
@@ -41,9 +46,9 @@ describe('buildAppEnvironment — manifest & appPath', () => {
   test('uses cwd as the search root when there is no main script', () => {
     const env = build({
       mainScript: '',
-      readFile: (p) => (p === '/proj/package.json' ? '{}' : undefined),
+      readFile: (p) => (slash(p) === '/proj/package.json' ? '{}' : undefined),
     });
-    expect(env.appPath).toBe('/proj');
+    expect(slash(env.appPath)).toBe('/proj');
   });
 });
 

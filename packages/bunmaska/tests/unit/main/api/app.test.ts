@@ -15,6 +15,9 @@ import {
 } from '../../../../src/main/api/single-instance';
 import { Menu, resetApplicationMenuForTesting } from '../../../../src/main/api/menu';
 
+/** Normalize host separators to POSIX so path comparisons match on any host. */
+const slash = (s: string): string => s.replaceAll('\\', '/');
+
 const fakeEnv = (overrides: Partial<EnvironmentDeps> = {}): AppEnvironment =>
   buildAppEnvironment({
     platform: 'macos',
@@ -26,7 +29,7 @@ const fakeEnv = (overrides: Partial<EnvironmentDeps> = {}): AppEnvironment =>
     env: {},
     locale: 'en-US',
     readFile: (path) =>
-      path === '/proj/package.json'
+      slash(path) === '/proj/package.json'
         ? JSON.stringify({ productName: 'Demo App', name: 'demo', version: '4.2.0' })
         : undefined,
     exit: () => undefined,
@@ -257,7 +260,7 @@ describe('App name & version', () => {
 
 describe('App paths', () => {
   test('getAppPath returns the resolved app root', () => {
-    expect(appWith().getAppPath()).toBe('/proj');
+    expect(slash(appWith().getAppPath())).toBe('/proj');
   });
 
   test('getPath(userData) is appData/<name> using the resolved name', () => {

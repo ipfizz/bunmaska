@@ -21,6 +21,9 @@ import {
   withLock,
 } from '../../../src/cli/engine-store';
 
+/** Host paths use the OS separator; normalize to '/' so assertions are host-agnostic. */
+const slash = (s: string): string => s.replaceAll('\\', '/');
+
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'bunmaska-store-'));
@@ -56,25 +59,25 @@ describe('enginesPath (env-driven default root)', () => {
   });
 
   test('falls back to <BUNMASKA_HOME>/webkit', () => {
-    expect(enginesPath({ BUNMASKA_HOME: '/srv/bm' })).toBe('/srv/bm/webkit');
+    expect(slash(enginesPath({ BUNMASKA_HOME: '/srv/bm' }))).toBe('/srv/bm/webkit');
   });
 
   test('defaults under the home dir when unset', () => {
     const path = enginesPath({ HOME: '/home/alice' });
-    expect(path.endsWith('/.bunmaska/webkit')).toBe(true);
+    expect(slash(path).endsWith('/.bunmaska/webkit')).toBe(true);
   });
 });
 
 describe('path helpers', () => {
   test('engineDir / markerPath compose under the root', () => {
-    expect(engineDir('/r', ID)).toBe(`/r/${ID}`);
-    expect(markerPath('/r', ID)).toBe(`/r/${ID}/INSTALLATION_COMPLETE`);
+    expect(slash(engineDir('/r', ID))).toBe(`/r/${ID}`);
+    expect(slash(markerPath('/r', ID))).toBe(`/r/${ID}/INSTALLATION_COMPLETE`);
   });
 
   test('linkPath is a stable hash under .links', () => {
     expect(linkPath('/r', '/opt/App')).toBe(linkPath('/r', '/opt/App'));
     expect(linkPath('/r', '/opt/App')).not.toBe(linkPath('/r', '/opt/Other'));
-    expect(linkPath('/r', '/opt/App').startsWith('/r/.links/')).toBe(true);
+    expect(slash(linkPath('/r', '/opt/App')).startsWith('/r/.links/')).toBe(true);
   });
 });
 

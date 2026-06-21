@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   deriveProjectName,
   initTemplateFiles,
@@ -10,6 +10,9 @@ import {
   type ScaffoldFile,
   scaffoldProject,
 } from '../../../src/cli/init';
+
+// Normalize host path separators so assertions hold on both POSIX and Windows.
+const slash = (s: string): string => s.replaceAll('\\', '/');
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
@@ -86,13 +89,18 @@ describe('scaffoldProject', () => {
       { path: 'nested/b.txt', contents: 'B' },
     ];
     const written = scaffoldProject('/proj', template, deps);
-    expect(written).toEqual([join('/proj', 'a.txt'), join('/proj', 'nested/b.txt')]);
-    expect(files.get(join('/proj', 'a.txt'))).toBe('A');
+    const root = resolve('/proj');
+    expect(written.map(slash)).toEqual([
+      slash(join(root, 'a.txt')),
+      slash(join(root, 'nested/b.txt')),
+    ]);
+    expect(files.get(join(root, 'a.txt'))).toBe('A');
   });
 
   test('refuses to overwrite an existing file and writes nothing', () => {
     const { deps, files } = memoryDeps();
-    files.set(join('/proj', 'a.txt'), 'old');
+    const root = resolve('/proj');
+    files.set(join(root, 'a.txt'), 'old');
     expect(() =>
       scaffoldProject(
         '/proj',
@@ -104,8 +112,8 @@ describe('scaffoldProject', () => {
       ),
     ).toThrow(/refusing to overwrite/);
     // The non-conflicting file must NOT have been written (all-or-nothing).
-    expect(files.has(join('/proj', 'b.txt'))).toBe(false);
-    expect(files.get(join('/proj', 'a.txt'))).toBe('old');
+    expect(files.has(join(root, 'b.txt'))).toBe(false);
+    expect(files.get(join(root, 'a.txt'))).toBe('old');
   });
 });
 
