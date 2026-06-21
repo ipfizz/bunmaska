@@ -18,7 +18,9 @@ ipcMain.handle('ping', (_event, arg: unknown) => `pong:${arg}`);
 
 app.whenReady().then(() => {
   const win = new BrowserWindow({ width: 800, height: 600, show: false });
-  win.webContents.once('dom-ready', () => {
+  // Waiting on did-finish-load (the navigation client) before invoking also
+  // exercises the WKPageNavigationClient wiring.
+  win.webContents.once('did-finish-load', () => {
     win.webContents
       .executeJavaScript("__bunmaska.invoke('ping', 'x')")
       .then((result) => finish(`E2E_OK ${JSON.stringify(result)}`, 0))

@@ -155,6 +155,7 @@ export class WindowsWebContents implements NativeWebContents {
           onMessage: () => this.#handleDomReady(),
         },
       ],
+      onNavigationEvent: (event) => this.#dispatchNavigation(event),
     });
     this.#exec = new WindowsExecResultChannel((wrapped) =>
       this.#webView.evaluateJavaScript(wrapped),

@@ -1,5 +1,6 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
+import type { NativeNavigationEvent } from '../native';
 import { wkRelease, wkString, wkStringToJs, wkUrl, wkUrlToJs } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
 import { loadUser32 } from './win32-ffi';
@@ -25,6 +26,89 @@ import { createNativeChildHost, ensureOleInitialized } from './windows-native-wi
 /** `SetWindowPos` flags for an in-place resize (keep position, z-order, focus). */
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 
+// WKPageNavigationClientV0 (x64): a 16-byte base { int version; padding; const void* }
+// followed by 21 function pointers. We wire five and NULL the rest.
+const NAV_CLIENT_SIZE = 184;
+const NAV_OFF_DID_START = 40; // didStartProvisionalNavigation
+const NAV_OFF_DID_FAIL_PROVISIONAL = 56; // didFailProvisionalNavigation (error)
+const NAV_OFF_DID_COMMIT = 64; // didCommitNavigation
+const NAV_OFF_DID_FINISH = 72; // didFinishNavigation
+const NAV_OFF_DID_FAIL = 80; // didFailNavigation (error)
+
+/** Read a `WKErrorRef` into a code + localized description (for did-fail-load). */
+const readWkError = (errorRef: Pointer | null): { code: number; description: string } => {
+  if (errorRef === null) {
+    return { code: -1, description: '' };
+  }
+  const wk = loadWebKit2().symbols;
+  const code = wk.WKErrorGetErrorCode(errorRef);
+  const descRef = wk.WKErrorCopyLocalizedDescription(errorRef);
+  const description = descRef !== null ? wkStringToJs(descRef) : '';
+  wkRelease(descRef);
+  return { code, description };
+};
+
+/**
+ * Register the page navigation client (the WinCairo peer of the macOS/Linux
+ * navigation delegates) and return the retained trampolines. Each callback fires
+ * during WebKit's message processing — the same controlled context as the
+ * script-message handlers — and is closed only on view teardown.
+ */
+const setupNavigationClient = (
+  page: Pointer,
+  onEvent: (event: NativeNavigationEvent) => void,
+): JSCallback[] => {
+  const callbacks: JSCallback[] = [];
+  const simple = (...events: readonly NativeNavigationEvent[]): number => {
+    const cb = new JSCallback(
+      () => {
+        for (const event of events) {
+          onEvent(event);
+        }
+      },
+      { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.void },
+    );
+    if (cb.ptr === null) {
+      throw new FFIError('failed to allocate a navigation-client trampoline');
+    }
+    callbacks.push(cb);
+    return cb.ptr;
+  };
+  const failure = (): number => {
+    const cb = new JSCallback(
+      (_page: Pointer, _navigation: Pointer, errorRef: Pointer | null) => {
+        const { code, description } = readWkError(errorRef);
+        onEvent({ type: 'did-fail-load', errorCode: code, errorDescription: description });
+        onEvent({ type: 'did-stop-loading' });
+      },
+      {
+        args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+        returns: FFIType.void,
+      },
+    );
+    if (cb.ptr === null) {
+      throw new FFIError('failed to allocate a navigation-failure trampoline');
+    }
+    callbacks.push(cb);
+    return cb.ptr;
+  };
+
+  const client = new Uint8Array(NAV_CLIENT_SIZE);
+  const dv = new DataView(client.buffer);
+  dv.setUint32(0, 0, true); // base.version = 0
+  dv.setBigUint64(NAV_OFF_DID_START, BigInt(simple({ type: 'did-start-loading' })), true);
+  dv.setBigUint64(NAV_OFF_DID_FAIL_PROVISIONAL, BigInt(failure()), true);
+  dv.setBigUint64(NAV_OFF_DID_COMMIT, BigInt(simple({ type: 'did-navigate' })), true);
+  dv.setBigUint64(
+    NAV_OFF_DID_FINISH,
+    BigInt(simple({ type: 'did-finish-load' }, { type: 'did-stop-loading' })),
+    true,
+  );
+  dv.setBigUint64(NAV_OFF_DID_FAIL, BigInt(failure()), true);
+  loadWebKit2().symbols.WKPageSetPageNavigationClient(page, ptr(client));
+  return callbacks;
+};
+
 /** A script-message handler name and the JS callback that receives its bodies. */
 export interface ScriptMessageHandler {
   readonly name: string;
@@ -41,6 +125,8 @@ export interface WebViewOptions {
   readonly userScripts: readonly string[];
   /** Renderer->main message handlers, keyed by their `messageHandlers` name. */
   readonly messageHandlers: readonly ScriptMessageHandler[];
+  /** Navigation lifecycle sink (did-start/commit/finish/fail). Optional. */
+  readonly onNavigationEvent?: (event: NativeNavigationEvent) => void;
 }
 
 /** A live WebKit view + its retained FFI resources. */
@@ -142,6 +228,10 @@ export class WindowsWebView {
     const page = s.WKViewGetPage(view);
     if (page === null) {
       throw new FFIError('WKViewGetPage returned NULL');
+    }
+
+    if (options.onNavigationEvent !== undefined) {
+      callbacks.push(...setupNavigationClient(page, options.onNavigationEvent));
     }
 
     return new WindowsWebView(view, page, hostWindow, context, controller, callbacks);

@@ -62,6 +62,12 @@ const WEBKIT2_SYMBOLS = {
   },
   WKPageSetPageZoomFactor: { args: [FFIType.ptr, FFIType.f64], returns: FFIType.void },
   WKPageSetCustomUserAgent: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
+  // (page, const WKPageNavigationClientBase*) — register navigation lifecycle callbacks.
+  WKPageSetPageNavigationClient: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
+
+  // ── Errors (for did-fail-load) ───────────────────────────────────────────
+  WKErrorGetErrorCode: { args: [FFIType.ptr], returns: FFIType.i32 },
+  WKErrorCopyLocalizedDescription: { args: [FFIType.ptr], returns: FFIType.ptr },
 
   // ── User content: document-start injection + the renderer->main bridge ────
   WKUserContentControllerCreate: { args: [], returns: FFIType.ptr },
