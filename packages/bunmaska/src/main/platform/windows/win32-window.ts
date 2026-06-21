@@ -243,7 +243,15 @@ export class Win32Window {
   }
 
   show(): void {
-    loadUser32().symbols.ShowWindow(this.#hwnd, SW_SHOW);
+    const user32 = loadUser32().symbols;
+    user32.ShowWindow(this.#hwnd, SW_SHOW);
+    // The process's FIRST ShowWindow is overridden by the launcher's
+    // STARTUPINFO.wShowWindow when STARTF_USESHOWWINDOW is set — e.g. a window
+    // spawned as a hidden child process stays hidden. A second call always
+    // honors SW_SHOW, so re-apply if the window did not actually become visible.
+    if (user32.IsWindowVisible(this.#hwnd) === 0) {
+      user32.ShowWindow(this.#hwnd, SW_SHOW);
+    }
   }
 
   hide(): void {

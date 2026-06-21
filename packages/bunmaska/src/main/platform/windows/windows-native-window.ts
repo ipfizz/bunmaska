@@ -359,7 +359,14 @@ export class NativeWin32Window {
   }
 
   show(): void {
-    loadUser32().symbols.ShowWindow(this.#hwnd, SW_SHOW);
+    const user32 = loadUser32().symbols;
+    user32.ShowWindow(this.#hwnd, SW_SHOW);
+    // The process's FIRST ShowWindow can be overridden by the launcher's
+    // STARTUPINFO.wShowWindow (e.g. a hidden child process), leaving the window
+    // hidden; a second call always honors SW_SHOW.
+    if (user32.IsWindowVisible(this.#hwnd) === 0) {
+      user32.ShowWindow(this.#hwnd, SW_SHOW);
+    }
     this.emit('show');
   }
 
