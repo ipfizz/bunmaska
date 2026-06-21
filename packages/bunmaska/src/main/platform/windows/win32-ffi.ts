@@ -244,6 +244,10 @@ const OLE32_SYMBOLS = {
   OleInitialize: { args: [FFIType.ptr], returns: FFIType.i32 },
   // (LPVOID) -> void — free memory the shell allocated for us (e.g. a folder PIDL).
   CoTaskMemFree: { args: [FFIType.u64], returns: FFIType.void },
+  // (HGLOBAL, BOOL fDeleteOnRelease, IStream** ppstm) -> HRESULT — wrap memory in a stream.
+  CreateStreamOnHGlobal: { args: [FFIType.u64, FFIType.i32, FFIType.ptr], returns: FFIType.i32 },
+  // (IStream* pstm, HGLOBAL* phglobal) -> HRESULT — recover the backing memory handle.
+  GetHGlobalFromStream: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** Open user32.dll and return its window + message-pump symbol table. Memoised. */

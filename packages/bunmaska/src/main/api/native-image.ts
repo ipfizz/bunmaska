@@ -1,7 +1,8 @@
 import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
-import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
 import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
+import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
+import { windowsNativeImageBackend } from '../platform/windows/windows-native-image';
 
 /**
  * Image loading, querying, and encoding — a drop-in subset of Electron's
@@ -233,6 +234,9 @@ const getBackend = (): NativeImageBackend => {
   }
   if (currentPlatform() === 'linux') {
     return gdkNativeImageBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsNativeImageBackend;
   }
   throw new UnsupportedPlatformError(`nativeImage is not supported on ${currentPlatform()} yet`);
 };
