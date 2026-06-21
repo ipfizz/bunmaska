@@ -1,16 +1,23 @@
-import { ptr, toArrayBuffer } from 'bun:ffi';
-import { FFIError, UnsupportedPlatformError } from '../../../common/errors';
+import { type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
+import { FFIError } from '../../../common/errors';
 import type { ClipboardBackend } from '../../api/clipboard';
 import { wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
+import {
+  GDIP_OK,
+  IMAGE_LOCK_MODE_READ,
+  loadGdiplus,
+  PIXEL_FORMAT_32BPP_ARGB,
+} from './win32-gdiplus-ffi';
+import { ensureGdiplus, windowsNativeImageBackend } from './windows-native-image';
 
 /**
  * Windows clipboard backend (pure `bun:ffi`), the WinCairo peer of
  * `cocoa-clipboard.ts` / `gtk-clipboard.ts`. Text and HTML round-trip through the
  * flat Win32 clipboard API (`OpenClipboard`/`SetClipboardData`/... on user32 with
- * `GlobalAlloc`-backed transfer buffers on kernel32). Image read/write is not yet
- * implemented (DIB<->PNG conversion is a sizeable follow-up); those methods throw
- * rather than silently no-op, matching the public clipboard's stated contract.
+ * `GlobalAlloc`-backed transfer buffers on kernel32). Images round-trip through the
+ * `CF_DIB` clipboard format, converted to/from PNG with the GDI+ codec the
+ * `nativeImage` backend already uses (a packed-DIB bridge in pure FFI).
  */
 
 /** `CF_UNICODETEXT` — UTF-16LE text, the modern text clipboard format. */
@@ -157,6 +164,98 @@ const decodeUtf16 = (bytes: Uint8Array): string => {
 const decodeUtf8 = (bytes: Uint8Array): string =>
   new TextDecoder().decode(bytes).replace(/\0[\s\S]*$/, '');
 
+/** Size of a `BITMAPINFOHEADER` (the smallest DIB header). */
+const BITMAPINFOHEADER_SIZE = 40;
+/** `biCompression` = `BI_BITFIELDS` — 3 trailing color-mask DWORDs after a v3 header. */
+const BI_BITFIELDS = 3;
+/** `biCompression` = `BI_ALPHABITFIELDS` — 4 trailing color-mask DWORDs. */
+const BI_ALPHABITFIELDS = 6;
+
+/**
+ * Byte offset of the pixel array within a packed DIB (the `CF_DIB` clipboard
+ * payload: header, then optional color masks/palette, then pixels). Mirrors the
+ * Win32 rule: a v3 `BITMAPINFOHEADER` carries `BI_BITFIELDS`/`BI_ALPHABITFIELDS`
+ * masks AFTER it (v4/v5 headers embed them), and palettised depths (≤8bpp) carry
+ * a color table of `biClrUsed` entries (or `2^bitCount` when zero). Pure.
+ */
+export const dibBitsOffset = (header: Uint8Array): number => {
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  const biSize = view.getUint32(0, true);
+  const biBitCount = view.getUint16(14, true);
+  const biCompression = view.getUint32(16, true);
+  const biClrUsed = view.getUint32(32, true);
+  let masks = 0;
+  if (biSize === BITMAPINFOHEADER_SIZE) {
+    if (biCompression === BI_BITFIELDS) {
+      masks = 12;
+    } else if (biCompression === BI_ALPHABITFIELDS) {
+      masks = 16;
+    }
+  }
+  const paletteEntries =
+    biBitCount <= 8 ? (biClrUsed !== 0 ? biClrUsed : 1 << biBitCount) : biClrUsed;
+  return biSize + masks + paletteEntries * 4;
+};
+
+/**
+ * Build a packed 32bpp `BI_RGB` DIB (the `CF_DIB` clipboard format) from
+ * top-down BGRA scanlines. DIBs are stored bottom-up, so rows are flipped; the
+ * source stride may exceed the row width (GDI+ pads scanlines). Pure.
+ */
+export const buildPackedDib = (
+  width: number,
+  height: number,
+  bgraTopDown: Uint8Array,
+  srcStride: number,
+): Uint8Array => {
+  const rowBytes = width * 4; // 32bpp scanlines are inherently DWORD-aligned
+  const dib = new Uint8Array(BITMAPINFOHEADER_SIZE + rowBytes * height);
+  const view = new DataView(dib.buffer);
+  view.setUint32(0, BITMAPINFOHEADER_SIZE, true); // biSize
+  view.setInt32(4, width, true); // biWidth
+  view.setInt32(8, height, true); // biHeight > 0 -> bottom-up
+  view.setUint16(12, 1, true); // biPlanes
+  view.setUint16(14, 32, true); // biBitCount
+  view.setUint32(16, 0, true); // biCompression = BI_RGB
+  view.setUint32(20, rowBytes * height, true); // biSizeImage
+  for (let y = 0; y < height; y += 1) {
+    const src = y * srcStride;
+    const dst = BITMAPINFOHEADER_SIZE + (height - 1 - y) * rowBytes;
+    dib.set(bgraTopDown.subarray(src, src + rowBytes), dst);
+  }
+  return dib;
+};
+
+/** Lock a GDI+ bitmap's pixels as 32bpp BGRA and pack them into a `CF_DIB` payload. */
+const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8Array => {
+  const gdip = loadGdiplus().symbols;
+  const rect = new Uint8Array(16); // GpRect { INT X, Y, Width, Height }
+  const rectView = new DataView(rect.buffer);
+  rectView.setInt32(8, width, true);
+  rectView.setInt32(12, height, true);
+  const data = new Uint8Array(32); // BitmapData { Width, Height, Stride@8, PixelFormat, Scan0@16, Reserved }
+  const dataPtr = ptr(data);
+  if (
+    gdip.GdipBitmapLockBits(
+      handle,
+      ptr(rect),
+      IMAGE_LOCK_MODE_READ,
+      PIXEL_FORMAT_32BPP_ARGB,
+      dataPtr,
+    ) !== GDIP_OK
+  ) {
+    throw new FFIError('clipboard: GdipBitmapLockBits failed');
+  }
+  // Native WROTE these fields — read them back through the pointer, not the array (D020).
+  const stride = Math.abs(read.i32(dataPtr, 8));
+  const scan0 = read.u64(dataPtr, 16);
+  const pixels = new Uint8Array(
+    toArrayBuffer(Number(scan0) as Pointer, 0, stride * height),
+  ).slice();
+  gdip.GdipBitmapUnlockBits(handle, dataPtr);
+  return buildPackedDib(width, height, pixels, stride);
+};
+
 export const windowsClipboardBackend: ClipboardBackend = {
   readText(): string {
     return withClipboard(() => {
@@ -187,11 +286,46 @@ export const windowsClipboardBackend: ClipboardBackend = {
   },
 
   readImage(): Uint8Array {
-    throw new UnsupportedPlatformError('clipboard image read is not yet implemented on Windows');
+    const dib = withClipboard(() => getClipboardBytes(CF_DIB));
+    if (dib === undefined || dib.length < BITMAPINFOHEADER_SIZE) {
+      return new Uint8Array(0);
+    }
+    ensureGdiplus();
+    const gdip = loadGdiplus().symbols;
+    const out = new Uint8Array(8);
+    const outPtr = ptr(out);
+    // GdiplusCreateBitmapFromGdiDib may reference (not copy) the pixels, so `dib`
+    // must stay live until encodePng — it does, being referenced through the call.
+    const status = gdip.GdipCreateBitmapFromGdiDib(
+      ptr(dib),
+      ptr(dib.subarray(dibBitsOffset(dib))),
+      outPtr,
+    );
+    if (status !== GDIP_OK) {
+      return new Uint8Array(0);
+    }
+    const handle = read.u64(outPtr, 0);
+    try {
+      return windowsNativeImageBackend.encodePng(handle);
+    } finally {
+      gdip.GdipDisposeImage(handle);
+    }
   },
 
-  writeImage(): void {
-    throw new UnsupportedPlatformError('clipboard image write is not yet implemented on Windows');
+  writeImage(bytes: Uint8Array): void {
+    const decoded = windowsNativeImageBackend.decode(bytes);
+    if (decoded.empty) {
+      throw new FFIError('clipboard: could not decode the image to write');
+    }
+    try {
+      const dib = bitmapToPackedDib(decoded.handle, decoded.width, decoded.height);
+      withClipboard(() => {
+        loadUser32().symbols.EmptyClipboard();
+        setClipboardBytes(CF_DIB, dib);
+      });
+    } finally {
+      loadGdiplus().symbols.GdipDisposeImage(decoded.handle);
+    }
   },
 
   availableFormats(): string[] {

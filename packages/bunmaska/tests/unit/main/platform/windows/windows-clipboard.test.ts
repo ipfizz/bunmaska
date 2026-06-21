@@ -1,8 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildCfHtml,
+  buildPackedDib,
+  dibBitsOffset,
   extractCfHtmlFragment,
 } from '../../../../../src/main/platform/windows/windows-clipboard';
+
+/** Construct a `BITMAPINFOHEADER` with the fields `dibBitsOffset` reads. */
+const bitmapInfoHeader = (opts: {
+  biSize?: number;
+  biBitCount: number;
+  biCompression?: number;
+  biClrUsed?: number;
+}): Uint8Array => {
+  const header = new Uint8Array(Math.max(opts.biSize ?? 40, 40));
+  const view = new DataView(header.buffer);
+  view.setUint32(0, opts.biSize ?? 40, true);
+  view.setUint16(14, opts.biBitCount, true);
+  view.setUint32(16, opts.biCompression ?? 0, true);
+  view.setUint32(32, opts.biClrUsed ?? 0, true);
+  return header;
+};
 
 /**
  * Pure CF_HTML encode/decode for the Windows clipboard HTML format. The Windows
@@ -80,5 +98,64 @@ describe('extractCfHtmlFragment', () => {
   test('falls back to the markup when the fragment markers are absent', () => {
     const payload = 'Version:0.9\r\nStartHTML:0000000050\r\n<html><body><b>x</b></body></html>';
     expect(extractCfHtmlFragment(payload)).toContain('<b>x</b>');
+  });
+});
+
+describe('dibBitsOffset', () => {
+  test('32bpp BI_RGB pixels start right after the 40-byte header', () => {
+    expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 32 }))).toBe(40);
+    expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 24 }))).toBe(40);
+  });
+
+  test('BI_BITFIELDS adds three trailing color-mask DWORDs after a v3 header', () => {
+    expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 32, biCompression: 3 }))).toBe(40 + 12);
+  });
+
+  test('BI_ALPHABITFIELDS adds four trailing color-mask DWORDs', () => {
+    expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 32, biCompression: 6 }))).toBe(40 + 16);
+  });
+
+  test('a v5 header embeds its masks, so no extra mask bytes are added', () => {
+    expect(dibBitsOffset(bitmapInfoHeader({ biSize: 124, biBitCount: 32, biCompression: 3 }))).toBe(
+      124,
+    );
+  });
+
+  test('8bpp uses a full 256-entry palette when biClrUsed is zero', () => {
+    expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 8 }))).toBe(40 + 256 * 4);
+  });
+
+  test('a palettised depth honours an explicit biClrUsed entry count', () => {
+    expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 8, biClrUsed: 16 }))).toBe(40 + 16 * 4);
+  });
+});
+
+describe('buildPackedDib', () => {
+  test('writes a 40-byte 32bpp BI_RGB bottom-up header', () => {
+    const dib = buildPackedDib(2, 2, new Uint8Array(2 * 2 * 4), 8);
+    const view = new DataView(dib.buffer);
+    expect(view.getUint32(0, true)).toBe(40); // biSize
+    expect(view.getInt32(4, true)).toBe(2); // biWidth
+    expect(view.getInt32(8, true)).toBe(2); // biHeight > 0 -> bottom-up
+    expect(view.getUint16(14, true)).toBe(32); // biBitCount
+    expect(view.getUint32(16, true)).toBe(0); // biCompression = BI_RGB
+    expect(dib.length).toBe(40 + 2 * 2 * 4);
+  });
+
+  test('flips top-down scanlines to the DIB bottom-up order', () => {
+    // 1x2 image: top row = [1,2,3,4], bottom row = [5,6,7,8] (stride == row width).
+    const topDown = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+    const dib = buildPackedDib(1, 2, topDown, 4);
+    // DIB stores bottom-up: the visual bottom row [5..8] comes first.
+    expect([...dib.subarray(40, 44)]).toEqual([5, 6, 7, 8]);
+    expect([...dib.subarray(44, 48)]).toEqual([1, 2, 3, 4]);
+  });
+
+  test('drops scanline padding when the source stride exceeds the row width', () => {
+    // 1px-wide rows (4 bytes) but a padded 8-byte stride; padding must not leak in.
+    const padded = new Uint8Array([10, 11, 12, 13, 99, 99, 99, 99, 20, 21, 22, 23, 99, 99, 99, 99]);
+    const dib = buildPackedDib(1, 2, padded, 8);
+    expect([...dib.subarray(40, 44)]).toEqual([20, 21, 22, 23]); // bottom row first
+    expect([...dib.subarray(44, 48)]).toEqual([10, 11, 12, 13]);
   });
 });

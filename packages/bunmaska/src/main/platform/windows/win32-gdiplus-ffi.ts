@@ -58,10 +58,27 @@ const GDIPLUS_SYMBOLS = {
     ],
     returns: FFIType.i32,
   },
+  // (const BITMAPINFO* gdiBitmapInfo, void* gdiBitmapData, GpBitmap** out) -> Status —
+  // wrap a packed DIB (the CF_DIB clipboard format) as a GDI+ bitmap. Used by the
+  // clipboard backend's image read.
+  GdipCreateBitmapFromGdiDib: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  // (GpBitmap*, const GpRect* rect, UINT flags, PixelFormat, BitmapData* out) -> Status —
+  // expose a bitmap's raw pixels for reading. Used by the clipboard backend's image write.
+  GdipBitmapLockBits: {
+    args: [FFIType.u64, FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  // (GpBitmap*, BitmapData*) -> Status — release a lock taken by GdipBitmapLockBits.
+  GdipBitmapUnlockBits: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** `Ok` GDI+ status. */
 export const GDIP_OK = 0;
+/** `ImageLockModeRead` — lock pixels for reading only. */
+export const IMAGE_LOCK_MODE_READ = 1;
 /** `PixelFormat32bppARGB`. */
 export const PIXEL_FORMAT_32BPP_ARGB = 0x0026200a;
 /** `InterpolationModeHighQualityBicubic` — smooth downscaling. */

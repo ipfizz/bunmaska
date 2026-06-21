@@ -35,7 +35,7 @@ const POINTER_SIZE = 8;
 let gdiplusStarted = false;
 
 /** Initialise GDI+ once for the process (never shut down — it lives until exit). */
-const ensureGdiplus = (): void => {
+export const ensureGdiplus = (): void => {
   if (gdiplusStarted) {
     return;
   }

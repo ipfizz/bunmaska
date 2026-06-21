@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { UnsupportedPlatformError } from '../../../src/common/errors';
 import { currentPlatform } from '../../../src/common/platform';
+import { windowsNativeImageBackend } from '../../../src/main/platform/windows/windows-native-image';
 import { windowsClipboardBackend } from '../../../src/main/platform/windows/windows-clipboard';
+
+/**
+ * A tiny 2x2 PNG (red/green/blue/white) used to exercise the image clipboard
+ * round-trip — small enough to inline, large enough to verify dimensions survive.
+ */
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4z8Dwn4GBgYEBABwYA/9aQp0AAAAASUVORK5CYII=',
+  'base64',
+);
 
 /**
  * Windows clipboard backend against the real system clipboard. Text and HTML are
@@ -40,11 +49,22 @@ if (currentPlatform() === 'windows') {
       expect(windowsClipboardBackend.readText()).toBe('');
     });
 
-    test('image read/write throw rather than silently no-op (documented gap)', () => {
-      expect(() => windowsClipboardBackend.readImage()).toThrow(UnsupportedPlatformError);
-      expect(() => windowsClipboardBackend.writeImage(new Uint8Array([1]))).toThrow(
-        UnsupportedPlatformError,
-      );
+    test('round-trips an image through CF_DIB, preserving dimensions', () => {
+      windowsClipboardBackend.writeImage(new Uint8Array(TINY_PNG));
+      expect(windowsClipboardBackend.availableFormats()).toContain('image/png');
+      // The Windows backend reads synchronously (the union type allows a Promise).
+      const png = windowsClipboardBackend.readImage() as Uint8Array;
+      expect(png.length).toBeGreaterThan(0);
+      // The bytes come back as a re-encoded PNG; decode to confirm it is the 2x2 image.
+      const decoded = windowsNativeImageBackend.decode(png);
+      expect(decoded.empty).toBe(false);
+      expect(decoded.width).toBe(2);
+      expect(decoded.height).toBe(2);
+    });
+
+    test('readImage is empty when only text is present', () => {
+      windowsClipboardBackend.writeText('no image here');
+      expect(windowsClipboardBackend.readImage() as Uint8Array).toHaveLength(0);
     });
   });
 }
