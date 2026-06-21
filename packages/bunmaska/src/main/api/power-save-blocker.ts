@@ -1,6 +1,7 @@
 import { currentPlatform } from '../../common/platform';
 import { linuxPowerSaveBlockerBackend } from '../platform/linux/linux-power-save-blocker';
 import { cocoaPowerSaveBlockerBackend } from '../platform/macos/cocoa-power-save-blocker';
+import { windowsPowerSaveBlockerBackend } from '../platform/windows/windows-power-save-blocker';
 
 /**
  * Block system/display sleep — a drop-in subset of Electron's `powerSaveBlocker`.
@@ -51,6 +52,9 @@ const platformBackend = (): PowerSaveBlockerBackend => {
   }
   if (platform === 'linux') {
     return linuxPowerSaveBlockerBackend;
+  }
+  if (platform === 'windows') {
+    return windowsPowerSaveBlockerBackend;
   }
   return noopBackend;
 };

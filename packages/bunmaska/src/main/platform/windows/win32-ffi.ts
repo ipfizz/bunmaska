@@ -174,6 +174,9 @@ const KERNEL32_SYMBOLS = {
   // (HANDLE process, UINT exitCode) -> BOOL — hard-terminate. Used to exit the
   // app WITHOUT running WebKit's static/DLL-detach teardown, which crashes.
   TerminateProcess: { args: [FFIType.u64, FFIType.u32], returns: FFIType.i32 },
+  // (EXECUTION_STATE esFlags) -> EXECUTION_STATE — block system/display sleep for
+  // the calling thread (powerSaveBlocker). Returns the previous state (0 on error).
+  SetThreadExecutionState: { args: [FFIType.u32], returns: FFIType.u32 },
 
   // ── Movable global memory (clipboard transfer buffers) ───────────────────
   // (UINT uFlags, SIZE_T dwBytes) -> HGLOBAL
