@@ -183,4 +183,33 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       win.destroy();
     }
   });
+
+  test('pollWindows invokes the resize hook with the new client size', () => {
+    const win = new NativeWin32Window({ title: 'Hook', width: 400, height: 300, show: false });
+    let hookCalls = 0;
+    let lastWidth = 0;
+    let lastHeight = 0;
+    win.setResizeHook((width, height) => {
+      hookCalls += 1;
+      lastWidth = width;
+      lastHeight = height;
+    });
+    try {
+      loadUser32().symbols.SetWindowPos(
+        win.hwnd(),
+        0n,
+        0,
+        0,
+        700,
+        560,
+        SWP_NOMOVE_NOZORDER_NOACTIVATE,
+      );
+      pollWindows();
+      expect(hookCalls).toBe(1);
+      expect(lastWidth).toBeGreaterThan(0);
+      expect(lastHeight).toBeGreaterThan(0);
+    } finally {
+      win.destroy();
+    }
+  });
 });

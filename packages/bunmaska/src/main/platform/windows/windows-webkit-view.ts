@@ -22,6 +22,9 @@ import { createNativeChildHost, ensureOleInitialized } from './windows-native-wi
  * and closed only on {@link WindowsWebView.dispose} — never mid-call.
  */
 
+/** `SetWindowPos` flags for an in-place resize (keep position, z-order, focus). */
+const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
+
 /** A script-message handler name and the JS callback that receives its bodies. */
 export interface ScriptMessageHandler {
   readonly name: string;
@@ -226,6 +229,26 @@ export class WindowsWebView {
 
   canGoForward(): boolean {
     return loadWebKit2().symbols.WKPageCanGoForward(this.#page);
+  }
+
+  /** Resize the host child + the WKView to fill `width` x `height` physical px. */
+  resize(width: number, height: number): void {
+    const user32 = loadUser32().symbols;
+    user32.SetWindowPos(this.#hostWindow, 0n, 0, 0, width, height, SWP_NOMOVE_NOZORDER_NOACTIVATE);
+    const viewWindow = loadWebKit2().symbols.WKViewGetWindow(this.#view);
+    if (viewWindow !== 0n) {
+      user32.MoveWindow(viewWindow, 0, 0, width, height, 1);
+    }
+  }
+
+  setZoomFactor(factor: number): void {
+    loadWebKit2().symbols.WKPageSetPageZoomFactor(this.#page, factor);
+  }
+
+  setUserAgent(userAgent: string): void {
+    const uaRef = wkString(userAgent);
+    loadWebKit2().symbols.WKPageSetCustomUserAgent(this.#page, uaRef);
+    wkRelease(uaRef);
   }
 
   /** Release the view, destroy the host child, and close every callback. Idempotent. */

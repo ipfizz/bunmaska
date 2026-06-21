@@ -254,12 +254,17 @@ export class WindowsWebContents implements NativeWebContents {
     // See openDevTools.
   }
 
-  setZoomFactor(_factor: number): void {
-    // WKPageSetPageZoomFactor; wired in the seam-fill phase.
+  setZoomFactor(factor: number): void {
+    this.#webView.setZoomFactor(factor);
   }
 
-  setUserAgent(_userAgent: string): void {
-    // WKPageSetCustomUserAgent; wired in the seam-fill phase.
+  setUserAgent(userAgent: string): void {
+    this.#webView.setUserAgent(userAgent);
+  }
+
+  /** @internal Resize the hosted view to fill the window's new client area. */
+  resize(width: number, height: number): void {
+    this.#webView.resize(width, height);
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {

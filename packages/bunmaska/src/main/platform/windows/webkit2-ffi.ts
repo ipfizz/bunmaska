@@ -60,6 +60,8 @@ const WEBKIT2_SYMBOLS = {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
   },
+  WKPageSetPageZoomFactor: { args: [FFIType.ptr, FFIType.f64], returns: FFIType.void },
+  WKPageSetCustomUserAgent: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
 
   // ── User content: document-start injection + the renderer->main bridge ────
   WKUserContentControllerCreate: { args: [], returns: FFIType.ptr },

@@ -125,6 +125,8 @@ interface NativeWindowHandlers {
   onClosed?: () => void;
   /** Non-preventable lifecycle handlers, keyed by event type. */
   readonly events: Map<WindowEventType, () => void>;
+  /** Internal resize sink (resizes the hosted view) — fired before the `resize` event. */
+  resizeHook?: (width: number, height: number) => void;
   /** Last-observed state for the pump's change detection (see {@link pollWindows}). */
   width: number;
   height: number;
@@ -207,6 +209,7 @@ export const pollWindows = (): void => {
     if (width !== h.width || height !== h.height) {
       h.width = width;
       h.height = height;
+      h.resizeHook?.(width, height); // keep the hosted view filling the client area
       h.events.get('resize')?.();
     }
     const maximized = user32.symbols.IsZoomed(hwnd) !== 0;
@@ -321,6 +324,11 @@ export class NativeWin32Window {
   /** Fire a lifecycle event to its handler (for events not surfaced by polling). */
   emit(type: WindowEventType): void {
     this.#handlers.events.get(type)?.();
+  }
+
+  /** Register the internal sink that keeps the hosted view sized to the client area. */
+  setResizeHook(hook: (width: number, height: number) => void): void {
+    this.#handlers.resizeHook = hook;
   }
 
   setTitle(title: string): void {

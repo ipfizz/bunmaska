@@ -72,6 +72,8 @@ class WindowsWindow implements NativeWindow {
       options.height,
       options.preloadScript,
     );
+    // Keep the hosted view filling the window's client area as it resizes.
+    this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
     // On the committed-close path, tear down the web contents (reject pending
     // execs, release the view) before surfacing `closed` to the api layer.
     this.#native.onClosed(() => {
