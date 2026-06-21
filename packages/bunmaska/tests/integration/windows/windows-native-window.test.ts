@@ -4,8 +4,13 @@ import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import {
   dispatchPostedWindowMessage,
   NativeWin32Window,
+  pollWindows,
 } from '../../../src/main/platform/windows/windows-native-window';
 import { createWindowsDrain } from '../../../src/main/platform/windows/windows-run-loop';
+
+const SW_MAXIMIZE = 3;
+const SW_RESTORE = 9;
+const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 
 /**
  * Windows-only. Drives REAL native-WndProc top-level windows (the kind that can
@@ -108,5 +113,74 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     win.destroy(); // force-close
     win.destroy(); // idempotent
     expect(closed).toBe(1);
+  });
+
+  test('pollWindows fires resize once when the client size changes', () => {
+    const win = new NativeWin32Window({ title: 'Resize', width: 400, height: 300, show: false });
+    let resizes = 0;
+    win.onWindowEvent('resize', () => {
+      resizes += 1;
+    });
+    try {
+      pollWindows();
+      expect(resizes).toBe(0); // no change since construction
+      loadUser32().symbols.SetWindowPos(
+        win.hwnd(),
+        0n,
+        0,
+        0,
+        640,
+        520,
+        SWP_NOMOVE_NOZORDER_NOACTIVATE,
+      );
+      pollWindows();
+      expect(resizes).toBe(1);
+      pollWindows();
+      expect(resizes).toBe(1); // stable: no repeat event
+    } finally {
+      win.destroy();
+    }
+  });
+
+  test('pollWindows fires maximize then unmaximize', () => {
+    const win = new NativeWin32Window({ title: 'Max', width: 400, height: 300, show: false });
+    let maximized = 0;
+    let unmaximized = 0;
+    win.onWindowEvent('maximize', () => {
+      maximized += 1;
+    });
+    win.onWindowEvent('unmaximize', () => {
+      unmaximized += 1;
+    });
+    try {
+      loadUser32().symbols.ShowWindow(win.hwnd(), SW_MAXIMIZE);
+      pollWindows();
+      expect(maximized).toBe(1);
+      loadUser32().symbols.ShowWindow(win.hwnd(), SW_RESTORE);
+      pollWindows();
+      expect(unmaximized).toBe(1);
+    } finally {
+      win.destroy();
+    }
+  });
+
+  test('show() and hide() emit show/hide synchronously', () => {
+    const win = new NativeWin32Window({ title: 'Vis2', width: 320, height: 240, show: false });
+    let shows = 0;
+    let hides = 0;
+    win.onWindowEvent('show', () => {
+      shows += 1;
+    });
+    win.onWindowEvent('hide', () => {
+      hides += 1;
+    });
+    try {
+      win.show();
+      win.hide();
+      expect(shows).toBe(1);
+      expect(hides).toBe(1);
+    } finally {
+      win.destroy();
+    }
   });
 });

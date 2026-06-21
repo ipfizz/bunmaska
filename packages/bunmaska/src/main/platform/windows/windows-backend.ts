@@ -13,6 +13,7 @@ import {
   dispatchPostedWindowMessage,
   ensureOleInitialized,
   NativeWin32Window,
+  pollWindows,
 } from './windows-native-window';
 import { createWindowsDrain } from './windows-run-loop';
 import { WindowsWebContents } from './windows-web-contents';
@@ -53,6 +54,7 @@ class WindowsWindow implements NativeWindow {
   readonly #closedCallbacks: Array<() => void> = [];
   #title: string;
   #fullscreen = false;
+  #readyToShown = false;
 
   constructor(options: NativeWindowOptions) {
     this.#title = options.title;
@@ -76,6 +78,13 @@ class WindowsWindow implements NativeWindow {
       this.#webContents.dispose();
       for (const callback of this.#closedCallbacks) {
         callback();
+      }
+    });
+    // `ready-to-show` fires once, when the page first reaches dom-ready.
+    this.#webContents.onNavigation((event) => {
+      if (event.type === 'dom-ready' && !this.#readyToShown) {
+        this.#readyToShown = true;
+        this.#native.emit('ready-to-show');
       }
     });
     if (options.show) {
@@ -221,9 +230,11 @@ class WindowsWindow implements NativeWindow {
     this.#native.onClose(callback);
   }
 
-  onWindowEvent(_type: WindowEventType, _callback: () => void): void {
-    // focus/blur/resize/maximize/... are surfaced by pump-polling in the
-    // seam-fill phase; the close/closed pair already flows through onClose/onClosed.
+  onWindowEvent(type: WindowEventType, callback: () => void): void {
+    // focus/blur/resize/maximize/minimize/restore are surfaced by the pump poll
+    // (pollWindows); show/hide fire from the window directly; ready-to-show fires
+    // on the first dom-ready. The close/closed pair flows through onClose/onClosed.
+    this.#native.onWindowEvent(type, callback);
   }
 
   popupMenu(_menuHandle: bigint, _x: number, _y: number): void {
@@ -257,7 +268,13 @@ export class WindowsApplication implements NativeApplication {
       callback();
     }
     this.#readyCallbacks.length = 0;
-    this.#pump = new CooperativePump(createWindowsDrain(dispatchPostedWindowMessage));
+    // Each tick: drain the message queue (routing the preventable close), then
+    // poll window state to surface the sent-only lifecycle events.
+    const drainMessages = createWindowsDrain(dispatchPostedWindowMessage);
+    this.#pump = new CooperativePump(() => {
+      drainMessages();
+      pollWindows();
+    });
     this.#pump.start();
   }
 

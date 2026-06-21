@@ -1,6 +1,7 @@
-import { ptr } from 'bun:ffi';
+import { ptr, read } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
 import { cstr } from '../cstr';
+import type { WindowEventType } from '../native';
 import { wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
@@ -122,7 +123,26 @@ interface NativeWindowHandlers {
   onClose?: () => boolean;
   /** Fired once after the window is destroyed. */
   onClosed?: () => void;
+  /** Non-preventable lifecycle handlers, keyed by event type. */
+  readonly events: Map<WindowEventType, () => void>;
+  /** Last-observed state for the pump's change detection (see {@link pollWindows}). */
+  width: number;
+  height: number;
+  focused: boolean;
+  maximized: boolean;
+  minimized: boolean;
 }
+
+/** A fresh handlers record with zeroed state. */
+const newHandlers = (): NativeWindowHandlers => ({
+  closed: false,
+  events: new Map(),
+  width: 0,
+  height: 0,
+  focused: false,
+  maximized: false,
+  minimized: false,
+});
 
 const windowRegistry = new Map<bigint, NativeWindowHandlers>();
 
@@ -162,6 +182,51 @@ export const dispatchPostedWindowMessage = (
   return true;
 };
 
+/**
+ * Poll every live window and fire the changed non-preventable lifecycle events
+ * (resize / maximize / unmaximize / minimize / restore / focus / blur). Called
+ * each pump tick: WebKit's host uses a native WndProc, so these SENT-only state
+ * changes never reach the message queue and must be observed by polling. `show`
+ * and `hide` are fired directly from {@link NativeWin32Window.show}/`hide`.
+ */
+export const pollWindows = (): void => {
+  if (windowRegistry.size === 0) {
+    return;
+  }
+  const user32 = loadUser32();
+  const foreground = user32.symbols.GetForegroundWindow();
+  const rect = new Uint8Array(RECT_SIZE);
+  const rectPtr = ptr(rect);
+  for (const [hwnd, h] of windowRegistry) {
+    if (h.closed) {
+      continue;
+    }
+    user32.symbols.GetClientRect(hwnd, rectPtr);
+    const width = read.i32(rectPtr, 8);
+    const height = read.i32(rectPtr, 12);
+    if (width !== h.width || height !== h.height) {
+      h.width = width;
+      h.height = height;
+      h.events.get('resize')?.();
+    }
+    const maximized = user32.symbols.IsZoomed(hwnd) !== 0;
+    if (maximized !== h.maximized) {
+      h.maximized = maximized;
+      h.events.get(maximized ? 'maximize' : 'unmaximize')?.();
+    }
+    const minimized = user32.symbols.IsIconic(hwnd) !== 0;
+    if (minimized !== h.minimized) {
+      h.minimized = minimized;
+      h.events.get(minimized ? 'minimize' : 'restore')?.();
+    }
+    const focused = foreground === hwnd;
+    if (focused !== h.focused) {
+      h.focused = focused;
+      h.events.get(focused ? 'focus' : 'blur')?.();
+    }
+  }
+};
+
 /** Win32 window-style word for the framed/resizable options. */
 const computeStyle = (frame: boolean | undefined, resizable: boolean | undefined): number => {
   let style = WS_CLIPCHILDREN;
@@ -189,7 +254,7 @@ export interface NativeWin32WindowOptions {
 /** A live top-level native-WndProc window that can host a WebKit view. */
 export class NativeWin32Window {
   readonly #hwnd: bigint;
-  readonly #handlers: NativeWindowHandlers = { closed: false };
+  readonly #handlers: NativeWindowHandlers = newHandlers();
 
   constructor(options: NativeWin32WindowOptions) {
     ensureOleInitialized();
@@ -217,9 +282,22 @@ export class NativeWin32Window {
     }
     this.#hwnd = hwnd;
     windowRegistry.set(hwnd, this.#handlers);
+    this.#captureInitialState();
     if (options.show) {
       this.show();
     }
+  }
+
+  /** Seed the tracked state so the first {@link pollWindows} sees no spurious change. */
+  #captureInitialState(): void {
+    const user32 = loadUser32();
+    const rect = new Uint8Array(RECT_SIZE);
+    const rectPtr = ptr(rect);
+    user32.symbols.GetClientRect(this.#hwnd, rectPtr);
+    this.#handlers.width = read.i32(rectPtr, 8);
+    this.#handlers.height = read.i32(rectPtr, 12);
+    this.#handlers.maximized = user32.symbols.IsZoomed(this.#hwnd) !== 0;
+    this.#handlers.minimized = user32.symbols.IsIconic(this.#hwnd) !== 0;
   }
 
   /** The native window handle. */
@@ -233,6 +311,16 @@ export class NativeWin32Window {
 
   onClosed(callback: () => void): void {
     this.#handlers.onClosed = callback;
+  }
+
+  /** Register a non-preventable lifecycle handler (fired by the pump poll). */
+  onWindowEvent(type: WindowEventType, callback: () => void): void {
+    this.#handlers.events.set(type, callback);
+  }
+
+  /** Fire a lifecycle event to its handler (for events not surfaced by polling). */
+  emit(type: WindowEventType): void {
+    this.#handlers.events.get(type)?.();
   }
 
   setTitle(title: string): void {
@@ -249,10 +337,12 @@ export class NativeWin32Window {
 
   show(): void {
     loadUser32().symbols.ShowWindow(this.#hwnd, SW_SHOW);
+    this.emit('show');
   }
 
   hide(): void {
     loadUser32().symbols.ShowWindow(this.#hwnd, SW_HIDE);
+    this.emit('hide');
   }
 
   isVisible(): boolean {
