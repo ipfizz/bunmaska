@@ -4,20 +4,29 @@
  * The app is cross/native compiled to a single self-contained `.exe` with Bun's
  * `--compile --target=bun-windows-x64`, which embeds the Bun runtime and the
  * app's JS into a Windows PE (this works from a macOS or Linux host too). No
- * WebKit is bundled here: Windows ships no system WebKit, so at launch Bunmaska
- * `dlopen`s a WinCairo `WebKit2.dll` resolved from the engine store (the baked
- * `engine.id` below) or `BUNMASKA_WEBKIT_PATH`. The output is a portable
- * `<Name>/` directory (the `.exe` + the baked `engine.id`) packaged as a `.zip`.
- * The pure parts (layout paths, the compile argv, version normalisation, archive
- * name) are factored out for unit testing; the `.zip` is written with the pure
- * `zip.ts` writer so the build spawns no archiver.
+ * Windows ships no system WebKit, so at launch Bunmaska `dlopen`s a WinCairo
+ * `WebKit2.dll`. With `--embed-engine`, that engine's whole directory is copied
+ * into the bundle's `webkit/` folder so the built `.exe` runs with NO environment
+ * variables (the runtime resolves a `webkit/` next to the executable — see
+ * `webkit2-ffi.ts`); without it, the launch relies on the engine store (the baked
+ * `engine.id`) or `BUNMASKA_WEBKIT_PATH`. The output is a portable `<Name>/`
+ * directory packaged as a `.zip`. The pure parts (layout paths, compile argv,
+ * version normalisation, archive name) are factored out for unit testing; the
+ * `.zip` is written with the pure `zip.ts` writer so the build spawns no archiver.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundleIdSlug } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
+
+/**
+ * The bundle subdirectory an embedded WinCairo engine is copied into. The runtime
+ * looks for `<exeDir>/webkit/WebKit2.dll` (see `webkit2-ffi.ts`'s `bundledEngineDir`,
+ * which carries the matching constant) — keep the two in sync.
+ */
+export const BUNDLED_ENGINE_DIRNAME = 'webkit';
 
 export type WindowsLayout = {
   readonly appDir: string;
@@ -154,6 +163,8 @@ export type BuildWindowsAppOptions = {
   readonly icon?: string;
   /** Engine-id to bake (the per-app pin); `system` is a no-op on Windows (no OS WebKit). */
   readonly engineId?: string;
+  /** Directory of a WinCairo WebKit engine to bundle into the app's `webkit/` folder. */
+  readonly embedEngine?: string;
 };
 
 export type BuildWindowsAppResult = {
@@ -182,6 +193,13 @@ export const buildWindowsApp = async (
     }
   }
 
+  // Validate the engine to embed BEFORE the (slow) compile, so a bad path fails fast.
+  if (opts.embedEngine !== undefined && !existsSync(join(opts.embedEngine, 'WebKit2.dll'))) {
+    throw new Error(
+      `bunmaska build: --embed-engine directory has no WebKit2.dll: ${opts.embedEngine}`,
+    );
+  }
+
   mkdirSync(layout.appDir, { recursive: true });
 
   const meta: WindowsMetadata = {
@@ -196,6 +214,14 @@ export const buildWindowsApp = async (
 
   // Bake the engine-id the app pins, read at launch by the engine resolver.
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
+
+  // Bundle the WinCairo engine so the .exe runs with no env vars: copy its whole
+  // directory closure (WebKit2.dll + ICU/libcurl/ANGLE + the helper processes)
+  // into `<Name>/webkit/`, which the runtime finds next to the executable. The
+  // directory was validated above (fail-fast, before the compile).
+  if (opts.embedEngine !== undefined) {
+    cpSync(opts.embedEngine, join(layout.appDir, BUNDLED_ENGINE_DIRNAME), { recursive: true });
+  }
 
   // .zip the portable dir with the <Name>/ folder as the single top level.
   const zip = join(out, zipFileName(opts.name));

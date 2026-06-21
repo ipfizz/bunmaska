@@ -1,9 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildWindowsApp } from '../../../src/cli/build-windows';
 import { currentPlatform } from '../../../src/common/platform';
+import { bundledEngineDir } from '../../../src/main/platform/windows/webkit2-ffi';
 
 /**
  * Integration test for the Windows distributable builder, guarded to a Windows
@@ -25,7 +34,13 @@ if (currentPlatform() === 'windows') {
       outDir = join(workDir, 'out');
       const entry = join(workDir, 'entry.ts');
       await Bun.write(entry, "process.stdout.write('BUILD_OK\\n');\nprocess.exit(0);\n");
-      result = await buildWindowsApp({ entry, name, out: outDir });
+      // A fake WinCairo engine dir (a stand-in WebKit2.dll + a dependency) so the
+      // embed path is exercised without copying the real ~200 MB engine.
+      const fakeEngine = join(workDir, 'fake-engine');
+      mkdirSync(fakeEngine, { recursive: true });
+      writeFileSync(join(fakeEngine, 'WebKit2.dll'), 'MZ-not-a-real-dll');
+      writeFileSync(join(fakeEngine, 'icudt77.dll'), 'fake-icu');
+      result = await buildWindowsApp({ entry, name, out: outDir, embedEngine: fakeEngine });
     }, 120000);
 
     afterAll(() => {
@@ -66,6 +81,31 @@ if (currentPlatform() === 'windows') {
       const buf = readFileSync(result.zip);
       expect(buf[0]).toBe(0x50); // 'P'
       expect(buf[1]).toBe(0x4b); // 'K'
+    });
+
+    test('--embed-engine copies the whole engine closure into webkit/', () => {
+      expect(existsSync(join(result.appDir, 'webkit', 'WebKit2.dll'))).toBe(true);
+      expect(existsSync(join(result.appDir, 'webkit', 'icudt77.dll'))).toBe(true);
+    });
+
+    test('the runtime resolves the bundled engine next to the exe (no env vars)', () => {
+      // What a launched <Name>.exe would see: a webkit/ sibling with WebKit2.dll.
+      expect(bundledEngineDir(result.exePath, existsSync)).toBe(join(result.appDir, 'webkit'));
+    });
+  });
+
+  describe('buildWindowsApp embed validation', () => {
+    test('--embed-engine rejects a directory with no WebKit2.dll', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bunmaska-bad-engine-'));
+      try {
+        const entry = join(dir, 'app.ts');
+        await Bun.write(entry, 'process.exit(0);\n');
+        await expect(
+          buildWindowsApp({ entry, name: 'X', out: join(dir, 'out'), embedEngine: dir }),
+        ).rejects.toThrow(/no WebKit2\.dll/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 }

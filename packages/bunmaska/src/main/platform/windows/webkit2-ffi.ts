@@ -1,4 +1,6 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { FFIError } from '../../../common/errors';
 import { type ResolveDeps, resolveEngineWith } from '../../engine/resolve';
 import { winLibraryAccessor, wstr } from './win32';
@@ -113,15 +115,36 @@ export const WK_INJECT_AT_DOCUMENT_START = 0;
 /** `_WKUserScriptInjectionTime`: inject after the document has parsed. */
 export const WK_INJECT_AT_DOCUMENT_END = 1;
 
+/** The subdir an embedded engine is bundled into (must match `build-windows.ts`). */
+const BUNDLED_ENGINE_DIRNAME = 'webkit';
+
 /**
- * The directory of the WinCairo WebKit engine this process loads (the engine's
- * `lib/` for a store pin, or the verbatim `BUNMASKA_WEBKIT_PATH`), or `undefined`
- * when nothing is pinned/installed — there is no system WebKit to fall back to on
- * Windows. Delegates to {@link resolveEngineWith}; `deps` is a test seam.
+ * A WinCairo engine bundled next to the executable — `<exeDir>/webkit/` with a
+ * `WebKit2.dll` (what `bunmaska build --embed-engine` produces) — or `undefined`.
+ * This is what lets a packaged `.exe` run with no environment variables. Pure;
+ * `exists` is a test seam.
+ */
+export const bundledEngineDir = (
+  execPath: string,
+  exists: (path: string) => boolean,
+): string | undefined => {
+  const dir = join(dirname(execPath), BUNDLED_ENGINE_DIRNAME);
+  return exists(join(dir, 'WebKit2.dll')) ? dir : undefined;
+};
+
+/**
+ * The directory of the WinCairo WebKit engine this process loads, or `undefined`
+ * when none is available (there is no system WebKit to fall back to on Windows).
+ * Precedence: an explicit/store pin via {@link resolveEngineWith} (the engine's
+ * `lib/`, or the verbatim `BUNMASKA_WEBKIT_PATH`), then a {@link bundledEngineDir}
+ * shipped next to the executable. `deps` is a test seam.
  */
 export const resolveWindowsEngineDir = (deps: ResolveDeps = {}): string | undefined => {
   const resolution = resolveEngineWith(deps);
-  return resolution.mode === 'pinned' ? resolution.libDir : undefined;
+  if (resolution.mode === 'pinned') {
+    return resolution.libDir;
+  }
+  return bundledEngineDir(process.execPath, existsSync);
 };
 
 /**
@@ -131,13 +154,14 @@ export const resolveWindowsEngineDir = (deps: ResolveDeps = {}): string | undefi
  * A pinned-but-uninstalled engine surfaces the resolver's warning in the error.
  */
 export const loadWebKit2 = winLibraryAccessor('WebKit2', () => {
-  const resolution = resolveEngineWith();
-  const dir = resolution.mode === 'pinned' ? resolution.libDir : undefined;
+  // Use the full resolution (store/explicit pin AND an engine bundled next to the
+  // executable) — NOT resolveEngineWith alone, which misses the bundled fallback.
+  const dir = resolveWindowsEngineDir();
   if (dir === undefined) {
-    const detail = resolution.warnings.length > 0 ? ` (${resolution.warnings.join('; ')})` : '';
+    const detail = resolveEngineWith().warnings.join('; ');
     throw new FFIError(
-      `no WinCairo WebKit engine configured${detail}; ` +
-        'set BUNMASKA_WEBKIT_PATH or pin an installed engine',
+      `no WinCairo WebKit engine configured${detail.length > 0 ? ` (${detail})` : ''}; bundle one ` +
+        'with `bunmaska build --embed-engine`, set BUNMASKA_WEBKIT_PATH, or pin an installed engine',
     );
   }
   loadKernel32().symbols.SetDllDirectoryW(ptr(wstr(dir)));

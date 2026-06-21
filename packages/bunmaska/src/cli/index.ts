@@ -87,6 +87,10 @@ build options:
                      <name>-<channel>-<os>-<arch>.tar.zst and an update.json the
                      runtime autoUpdater reads. The artifact arch is the host's.
   --channel <name>   Release channel for --update (default: stable).
+  --embed-engine <dir>  Windows only: bundle a WinCairo WebKit engine directory
+                     into the app's webkit/ folder so the built .exe runs with no
+                     environment variables (otherwise launch needs the engine
+                     store or BUNMASKA_WEBKIT_PATH).
 
 'bunmaska build' produces a macOS .app, a Linux AppDir + .tar.gz + .deb, or a
 Windows portable dir + .zip. --target cross-builds (e.g. a macOS host can build
@@ -222,6 +226,9 @@ const runBuild = async (
       engineId,
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
+      ...(command.options.embedEngine !== undefined
+        ? { embedEngine: command.options.embedEngine }
+        : {}),
     });
     out(result.appDir);
     out(result.exePath);

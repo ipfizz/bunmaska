@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { ResolveDeps } from '../../../../../src/main/engine/resolve';
-import { resolveWindowsEngineDir } from '../../../../../src/main/platform/windows/webkit2-ffi';
+import {
+  bundledEngineDir,
+  resolveWindowsEngineDir,
+} from '../../../../../src/main/platform/windows/webkit2-ffi';
 
 /**
  * `resolveWindowsEngineDir` decides which WinCairo WebKit directory THIS Windows
@@ -56,5 +59,24 @@ describe('resolveWindowsEngineDir', () => {
 
   test('a malformed pin -> undefined', () => {
     expect(dir({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } })).toBeUndefined();
+  });
+});
+
+describe('bundledEngineDir', () => {
+  const exe = join('C:\\Program Files\\My App', 'My App.exe');
+  const webkit = join('C:\\Program Files\\My App', 'webkit');
+
+  test('resolves <exeDir>/webkit when WebKit2.dll is bundled there', () => {
+    expect(bundledEngineDir(exe, () => true)).toBe(webkit);
+  });
+
+  test('is undefined when nothing is bundled next to the exe', () => {
+    expect(bundledEngineDir(exe, () => false)).toBeUndefined();
+  });
+
+  test('checks specifically for webkit/WebKit2.dll', () => {
+    const marker = join(webkit, 'WebKit2.dll');
+    expect(bundledEngineDir(exe, (p) => p === marker)).toBe(webkit);
+    expect(bundledEngineDir(exe, (p) => p === join(webkit, 'other.dll'))).toBeUndefined();
   });
 });

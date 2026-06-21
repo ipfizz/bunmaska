@@ -29,6 +29,8 @@ export type BuildOptions = {
   readonly channel?: string;
   /** Also emit the auto-update feed: a `.tar.zst` of the bundle + `update.json`. */
   readonly update?: boolean;
+  /** Windows: directory of a WinCairo WebKit engine to bundle so the `.exe` self-contains it. */
+  readonly embedEngine?: string;
 };
 
 /** Subcommands of `bunmaska engine`, for managing the pinned-WebKit store. */
@@ -52,13 +54,17 @@ export type Command =
   | { readonly kind: 'error'; readonly message: string };
 
 /** `bunmaska build` flags that take a string value, keyed by argv token. */
-const BUILD_STRING_FLAGS = new Map<string, 'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel'>([
+const BUILD_STRING_FLAGS = new Map<
+  string,
+  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine'
+>([
   ['--name', 'name'],
   ['--id', 'id'],
   ['--out', 'out'],
   ['--icon', 'icon'],
   ['--sign', 'sign'],
   ['--channel', 'channel'],
+  ['--embed-engine', 'embedEngine'],
 ]);
 
 /** `bunmaska build` boolean flags that take no value, by argv token. */
