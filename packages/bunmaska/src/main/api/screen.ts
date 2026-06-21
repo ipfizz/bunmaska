@@ -3,6 +3,7 @@ import { currentPlatform } from '../../common/platform';
 import { gdkScreenBackend } from '../platform/linux/gdk-screen';
 import { cocoaScreenBackend } from '../platform/macos/cocoa-screen';
 import type { Rect } from '../platform/native';
+import { windowsScreenBackend } from '../platform/windows/windows-screen';
 
 /**
  * Display enumeration and geometry — the drop-in equivalent of Electron's
@@ -100,6 +101,9 @@ const getBackend = (): ScreenBackend => {
   }
   if (currentPlatform() === 'linux') {
     return gdkScreenBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsScreenBackend;
   }
   throw new UnsupportedPlatformError(`screen is not supported on ${currentPlatform()} yet`);
 };

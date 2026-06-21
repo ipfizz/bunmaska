@@ -143,6 +143,18 @@ const USER32_SYMBOLS = {
   },
   // (HWND, int id) -> BOOL — release a hot key claimed with RegisterHotKey.
   UnregisterHotKey: { args: [FFIType.u64, FFIType.i32], returns: FFIType.i32 },
+
+  // ── Displays + cursor (used by the screen backend) ───────────────────────
+  // (HDC, LPCRECT clip, MONITORENUMPROC, LPARAM) -> BOOL — enumerate monitors;
+  // the callback (a JSCallback function pointer) fires once per monitor.
+  EnumDisplayMonitors: {
+    args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.i64],
+    returns: FFIType.i32,
+  },
+  // (HMONITOR, LPMONITORINFO) -> BOOL — bounds, work area, and primary flag.
+  GetMonitorInfoW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  // (LPPOINT) -> BOOL — the cursor position in screen coordinates.
+  GetCursorPos: { args: [FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
