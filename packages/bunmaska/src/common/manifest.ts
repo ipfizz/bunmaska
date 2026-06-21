@@ -17,8 +17,8 @@ export type Channel = string;
 /** The default release channel when a config or build omits one. */
 export const DEFAULT_CHANNEL: Channel = 'stable';
 
-/** The OS tag used in artifact names. Windows is not a build target yet. */
-export type ArtifactOs = 'macos' | 'linux';
+/** The OS tag used in artifact names. */
+export type ArtifactOs = 'macos' | 'linux' | 'windows';
 
 /** Everything needed to name a build's artifacts deterministically. */
 export type ArtifactSpec = {
@@ -83,8 +83,8 @@ export const parseUpdateManifest = (json: string): UpdateManifest => {
     return value;
   };
   const os = str('os');
-  if (os !== 'macos' && os !== 'linux') {
-    throw new Error(`update manifest: "os" must be macos or linux (got ${os})`);
+  if (os !== 'macos' && os !== 'linux' && os !== 'windows') {
+    throw new Error(`update manifest: "os" must be macos, linux or windows (got ${os})`);
   }
   const arch = str('arch');
   if (arch !== 'x64' && arch !== 'arm64') {

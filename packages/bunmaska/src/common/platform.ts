@@ -24,7 +24,7 @@ const RAW_TO_ARCH = new Map<string, Arch>([
   ['arm64', 'arm64'],
 ]);
 
-const SUPPORTED: ReadonlySet<Platform> = new Set<Platform>(['macos', 'linux']);
+const SUPPORTED: ReadonlySet<Platform> = new Set<Platform>(['macos', 'linux', 'windows']);
 
 /**
  * Map a Node-style platform tag (`'darwin'`, `'linux'`, `'win32'`) to Bunmaska's
@@ -40,7 +40,8 @@ export const mapPlatform = (raw: string): Platform => {
 
 /**
  * Whether Bunmaska currently ships a working backend for this platform.
- * macOS and Linux are supported; Windows is deferred (see `.admin/WINDOWS.md`).
+ * macOS (AppKit + WKWebView), Linux (GTK + WebKitGTK), and Windows (Win32 +
+ * WinCairo WebKit from the engine store) are all supported.
  */
 export const isSupported = (platform: Platform): boolean => SUPPORTED.has(platform);
 

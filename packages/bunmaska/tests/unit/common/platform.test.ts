@@ -38,8 +38,8 @@ describe('isSupported', () => {
     expect(isSupported('linux')).toBe(true);
   });
 
-  test('windows is not supported', () => {
-    expect(isSupported('windows')).toBe(false);
+  test('windows is supported', () => {
+    expect(isSupported('windows')).toBe(true);
   });
 });
 

@@ -116,8 +116,18 @@ describe('parseUpdateManifest / serializeUpdateManifest', () => {
     expect(() => parseUpdateManifest(JSON.stringify(rest))).toThrow(/"version"/);
   });
 
+  test('accepts windows as an os', () => {
+    const win = {
+      ...sample,
+      os: 'windows',
+      arch: 'x64',
+      artifact: 'my-app-stable-windows-x64.zip',
+    } as const;
+    expect(parseUpdateManifest(serializeUpdateManifest(win))).toEqual(win);
+  });
+
   test('rejects an unknown os/arch', () => {
-    expect(() => parseUpdateManifest(JSON.stringify({ ...sample, os: 'windows' }))).toThrow(/"os"/);
+    expect(() => parseUpdateManifest(JSON.stringify({ ...sample, os: 'freebsd' }))).toThrow(/"os"/);
     expect(() => parseUpdateManifest(JSON.stringify({ ...sample, arch: 'riscv' }))).toThrow(
       /"arch"/,
     );
