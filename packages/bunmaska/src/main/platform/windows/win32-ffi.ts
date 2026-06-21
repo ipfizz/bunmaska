@@ -170,6 +170,37 @@ const USER32_SYMBOLS = {
   DestroyIcon: { args: [FFIType.u64], returns: FFIType.i32 },
   // (HWND, LPCWSTR text, LPCWSTR caption, UINT type) -> int — a modal message box.
   MessageBoxW: { args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
+
+  // ── Menus (used by the menu backend) ─────────────────────────────────────
+  // () -> HMENU — a new, empty popup (context) menu.
+  CreatePopupMenu: { args: [], returns: FFIType.u64 },
+  // (HMENU, UINT flags, UINT_PTR idOrSubmenu, LPCWSTR text) -> BOOL — append an item.
+  AppendMenuW: {
+    args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  // (HMENU) -> BOOL — destroy a menu and its submenus.
+  DestroyMenu: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HMENU) -> int — number of items (for tests).
+  GetMenuItemCount: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HMENU, UINT flags, int x, int y, int reserved, HWND, LPRECT) -> BOOL/cmd —
+  // show a context menu modally; with TPM_RETURNCMD it returns the chosen command id.
+  TrackPopupMenu: {
+    args: [
+      FFIType.u64,
+      FFIType.u32,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.u64,
+      FFIType.ptr,
+    ],
+    returns: FFIType.i32,
+  },
+  // () -> BOOL — end the active menu (used re-entrantly from an item's click).
+  EndMenu: { args: [], returns: FFIType.i32 },
+  // (HWND, LPPOINT) -> BOOL — convert client coordinates to screen coordinates.
+  ClientToScreen: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */

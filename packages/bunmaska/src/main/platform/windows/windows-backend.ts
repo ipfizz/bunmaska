@@ -1,4 +1,4 @@
-import { ptr } from 'bun:ffi';
+import { ptr, read } from 'bun:ffi';
 import { CooperativePump } from '../../run-loop';
 import type {
   NativeApplication,
@@ -10,6 +10,7 @@ import type {
 } from '../native';
 import { loadUser32 } from './win32-ffi';
 import { windowsGlobalShortcutBackend } from './windows-global-shortcut';
+import { windowsMenuRealizer } from './windows-menu';
 import {
   dispatchPostedWindowMessage,
   ensureOleInitialized,
@@ -53,6 +54,11 @@ const WS_VISIBLE = 0x10000000;
 const STYLE_RESIZABLE = 0x00050000n; // WS_THICKFRAME | WS_MAXIMIZEBOX
 const SM_CXSCREEN = 0;
 const SM_CYSCREEN = 1;
+
+// TrackPopupMenu flags: return the chosen command id, anchor top-left, honor the
+// right mouse button.
+const TPM_RETURNCMD = 0x0100;
+const TPM_RIGHTBUTTON = 0x0002;
 
 /**
  * Windows {@link NativeWindow}: a native top-level window hosting a WinCairo
@@ -294,12 +300,36 @@ class WindowsWindow implements NativeWindow {
     this.#native.onWindowEvent(type, callback);
   }
 
-  popupMenu(_menuHandle: bigint, _x: number, _y: number): void {
-    // Context menus arrive with the menu module (TrackPopupMenu).
+  popupMenu(menuHandle: bigint, x: number, y: number): void {
+    const user32 = loadUser32().symbols;
+    const hwnd = this.#hwnd();
+    // Convert the content-relative point to screen coordinates (in/out POINT).
+    const point = new Uint8Array(8);
+    const dv = new DataView(point.buffer);
+    dv.setInt32(0, x, true);
+    dv.setInt32(4, y, true);
+    const pointPtr = ptr(point);
+    user32.ClientToScreen(hwnd, pointPtr);
+    // Modal (a nested menu-tracking loop, like macOS); returns the chosen command
+    // id, or 0 when dismissed. The realized HMENU is ours to destroy afterward.
+    const command = user32.TrackPopupMenu(
+      menuHandle,
+      TPM_RETURNCMD | TPM_RIGHTBUTTON,
+      read.i32(pointPtr, 0),
+      read.i32(pointPtr, 4),
+      0,
+      hwnd,
+      null,
+    );
+    if (command !== 0) {
+      windowsMenuRealizer.dispatchMenuCommand(command);
+    }
+    user32.DestroyMenu(menuHandle);
   }
 
   closePopupMenu(): void {
-    // See popupMenu.
+    // Ends the active menu — meaningful re-entrantly (e.g. from an item's click).
+    loadUser32().symbols.EndMenu();
   }
 }
 

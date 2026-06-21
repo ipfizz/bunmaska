@@ -1,9 +1,10 @@
-import { InvalidArgumentError, BunmaskaError, UnsupportedPlatformError } from '../../common/errors';
+import { BunmaskaError, InvalidArgumentError, UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
-import type { BrowserWindow } from './browser-window';
 import { linuxMenuRealizer } from '../platform/linux/gtk-menu';
 import type { NativeMenuItemSpec } from '../platform/macos/cocoa-menu';
 import * as cocoaMenu from '../platform/macos/cocoa-menu';
+import { windowsMenuRealizer } from '../platform/windows/windows-menu';
+import type { BrowserWindow } from './browser-window';
 
 /**
  * Application and context menus — the drop-in equivalent of Electron's `Menu` /
@@ -309,6 +310,9 @@ const getRealizer = (): MenuRealizer => {
   }
   if (currentPlatform() === 'linux') {
     return linuxMenuRealizer;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsMenuRealizer;
   }
   throw new UnsupportedPlatformError(`Menu is not supported on ${currentPlatform()} yet`);
 };
