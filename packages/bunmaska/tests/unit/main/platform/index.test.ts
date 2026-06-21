@@ -42,8 +42,15 @@ describe('createNativeApplication dispatcher', () => {
     expect(typeof app.createWindow).toBe('function');
   });
 
-  it('throws UnsupportedPlatformError for unsupported platforms', () => {
+  it("routes 'win32' to the Windows backend without dlopen", () => {
     setPlatform('win32');
+    const app = createNativeApplication();
+    expect(app).toBeDefined();
+    expect(typeof app.createWindow).toBe('function');
+  });
+
+  it('throws UnsupportedPlatformError for an unrecognised platform', () => {
+    setPlatform('freebsd');
     expect(() => createNativeApplication()).toThrow(UnsupportedPlatformError);
   });
 });

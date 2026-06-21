@@ -1,6 +1,6 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import { wkRelease, wkString, wkStringToJs, wkUrl } from './webkit-string';
+import { wkRelease, wkString, wkStringToJs, wkUrl, wkUrlToJs } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
 import { loadUser32 } from './win32-ffi';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
@@ -176,6 +176,56 @@ export class WindowsWebView {
     const codeRef = wkString(code);
     loadWebKit2().symbols.WKPageEvaluateJavaScriptInMainFrame(this.#page, codeRef, null, null);
     wkRelease(codeRef);
+  }
+
+  /** The current page URL, or `''` before the first navigation. */
+  getURL(): string {
+    const urlRef = loadWebKit2().symbols.WKPageCopyActiveURL(this.#page);
+    if (urlRef === null) {
+      return '';
+    }
+    const url = wkUrlToJs(urlRef);
+    wkRelease(urlRef);
+    return url;
+  }
+
+  /** The current page title, or `''` if none. */
+  getTitle(): string {
+    const titleRef = loadWebKit2().symbols.WKPageCopyTitle(this.#page);
+    if (titleRef === null) {
+      return '';
+    }
+    const title = wkStringToJs(titleRef);
+    wkRelease(titleRef);
+    return title;
+  }
+
+  reload(): void {
+    loadWebKit2().symbols.WKPageReload(this.#page);
+  }
+
+  reloadIgnoringCache(): void {
+    loadWebKit2().symbols.WKPageReloadFromOrigin(this.#page);
+  }
+
+  stop(): void {
+    loadWebKit2().symbols.WKPageStopLoading(this.#page);
+  }
+
+  goBack(): void {
+    loadWebKit2().symbols.WKPageGoBack(this.#page);
+  }
+
+  goForward(): void {
+    loadWebKit2().symbols.WKPageGoForward(this.#page);
+  }
+
+  canGoBack(): boolean {
+    return loadWebKit2().symbols.WKPageCanGoBack(this.#page);
+  }
+
+  canGoForward(): boolean {
+    return loadWebKit2().symbols.WKPageCanGoForward(this.#page);
   }
 
   /** Release the view, destroy the host child, and close every callback. Idempotent. */

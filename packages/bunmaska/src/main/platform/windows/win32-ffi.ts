@@ -100,6 +100,12 @@ const USER32_SYMBOLS = {
   IsIconic: { args: [FFIType.u64], returns: FFIType.i32 },
   // (HWND) -> BOOL — is the window maximised?
   IsZoomed: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HWND, LPRECT) -> BOOL — the window's bounds in screen coordinates.
+  GetWindowRect: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  // (HWND) -> BOOL — bring the window to the foreground and focus it.
+  SetForegroundWindow: { args: [FFIType.u64], returns: FFIType.i32 },
+  // () -> HWND — the window the user is currently working with.
+  GetForegroundWindow: { args: [], returns: FFIType.u64 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
