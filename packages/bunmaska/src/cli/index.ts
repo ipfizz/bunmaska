@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * The `bunmaska` command-line interface: `run`, `build`, `--help`, `--version`.
  *
@@ -7,6 +8,11 @@
  * `process.stdout`/`process.stderr` because Biome bans `console.*`.
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { DEFAULT_CHANNEL } from '../common/manifest';
+import { currentArch, currentPlatform } from '../common/platform';
+import { BUNMASKA_VERSION } from '../common/version';
 import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
 import {
   type BuildDmg,
@@ -15,12 +21,11 @@ import {
   type ConvertIcon,
   type SignApp,
 } from './build-macos';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { buildWindowsApp } from './build-windows';
 import { loadConfig } from './config';
+import { resolveDevEntry, runDev } from './dev';
 import { runDoctor, runEngine } from './engine-command';
 import { enginesPath } from './engine-store';
-import { resolveDevEntry, runDev } from './dev';
 import { runInit } from './init';
 import {
   type BuildOptions,
@@ -31,9 +36,6 @@ import {
 } from './parse-args';
 import { runApp } from './run';
 import { emitUpdateArtifact } from './update-artifact';
-import { DEFAULT_CHANNEL } from '../common/manifest';
-import { currentArch, currentPlatform } from '../common/platform';
-import { BUNMASKA_VERSION } from '../common/version';
 
 const out = (text: string): void => {
   process.stdout.write(`${text}\n`);
@@ -66,12 +68,13 @@ engine subcommands:
   verify <id>           Structurally verify an installed engine
 
 build options:
-  --target <os>      Build target: macos | linux (default: host platform)
+  --target <os>      Build target: macos | linux | windows (default: host platform)
   --name <Name>      Display/bundle name (default: derived from <entry>)
   --id <bundle.id>   Bundle identifier (default: com.bunmaska.<name-slug>)
   --out <dir>        Output directory (default: current directory)
   --icon <path>      App icon. macOS accepts a .icns (copied as-is) or a .png
-                     (converted to .icns via sips/iconutil); linux takes a .png.
+                     (converted to .icns via sips/iconutil); linux takes a .png;
+                     windows takes a .ico (embedded into the .exe).
   --sign <identity>  Code-sign the macOS .app. Use '-' for an ad-hoc signature
                      (no certificate), or a 'Developer ID Application: Name
                      (TEAMID)' identity that is present in your keychain.
@@ -85,9 +88,9 @@ build options:
                      runtime autoUpdater reads. The artifact arch is the host's.
   --channel <name>   Release channel for --update (default: stable).
 
-'bunmaska build' produces a macOS .app or a Linux AppDir + .tar.gz + .deb.
-A macOS host can cross-build Linux with --target linux.
---sign and --notarize are macOS-only (codesign/notarytool are macOS tools).`;
+'bunmaska build' produces a macOS .app, a Linux AppDir + .tar.gz + .deb, or a
+Windows portable dir + .zip. --target cross-builds (e.g. a macOS host can build
+Linux or Windows). --sign and --notarize are macOS-only (codesign/notarytool).`;
 
 /** Derive a default app name from the entry path's base file name. */
 const deriveName = (entry: string): string => {
@@ -143,6 +146,25 @@ const maybeEmitUpdate = async (
   out(result.manifestPath);
 };
 
+/**
+ * Resolve the per-app engine-id to bake (and whether it's embedded) from the
+ * project's `engine.webkit` pin, warning when a bare upstream version cannot yet
+ * resolve to a full id. Shared by the Linux and Windows build branches.
+ */
+const resolveProjectEngine = async (): Promise<{ engineId: string; embed: boolean }> => {
+  const { config } = await loadConfig(process.cwd());
+  const webkitPin = config.engine?.webkit;
+  const engineId = resolveBuildEngineId(webkitPin);
+  if (webkitPin !== undefined && engineId === 'system' && webkitPin !== 'system') {
+    err(
+      `bunmaska build: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
+        'resolving it to a full engine-id needs the engine catalog (a follow-up). ' +
+        'Baking the system WebKit for now.',
+    );
+  }
+  return { engineId, embed: config.engine?.embed === true };
+};
+
 const runBuild = async (
   command: Extract<Command, { kind: 'build' }>,
   deps: DispatchDeps,
@@ -175,21 +197,12 @@ const runBuild = async (
 
   const name = command.options.name ?? deriveName(command.entry);
   if (target === 'linux') {
-    const { config } = await loadConfig(process.cwd());
-    const webkitPin = config.engine?.webkit;
-    const engineId = resolveBuildEngineId(webkitPin);
-    if (webkitPin !== undefined && engineId === 'system' && webkitPin !== 'system') {
-      err(
-        `bunmaska build: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
-          'resolving it to a full engine-id needs the engine catalog (a follow-up). ' +
-          'Baking the system WebKit for now.',
-      );
-    }
+    const { engineId, embed } = await resolveProjectEngine();
     const result = await buildLinuxApp({
       entry: command.entry,
       name,
       engineId,
-      ...(config.engine?.embed === true ? { embedEngine: true } : {}),
+      ...(embed ? { embedEngine: true } : {}),
       ...(command.options.id !== undefined ? { id: command.options.id } : {}),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
@@ -198,6 +211,22 @@ const runBuild = async (
     out(result.tarball);
     out(result.deb);
     await maybeEmitUpdate(result.appDir, name, 'linux', command.options);
+    return 0;
+  }
+
+  if (target === 'windows') {
+    const { engineId } = await resolveProjectEngine();
+    const result = await buildWindowsApp({
+      entry: command.entry,
+      name,
+      engineId,
+      ...(command.options.out !== undefined ? { out: command.options.out } : {}),
+      ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
+    });
+    out(result.appDir);
+    out(result.exePath);
+    out(result.zip);
+    await maybeEmitUpdate(result.appDir, name, 'windows', command.options);
     return 0;
   }
 

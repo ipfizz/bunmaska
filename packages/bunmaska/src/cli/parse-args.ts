@@ -10,7 +10,7 @@
 import { currentPlatform } from '../common/platform';
 
 /** Build targets `bunmaska build` can produce. */
-export type BuildTarget = 'macos' | 'linux';
+export type BuildTarget = 'macos' | 'linux' | 'windows';
 
 /** Options accepted by `bunmaska build`. All optional; the bundler fills defaults. */
 export type BuildOptions = {
@@ -68,7 +68,7 @@ const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>([
   '--update',
 ]);
 
-const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux']);
+const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux', 'windows']);
 
 const isBuildTarget = (value: string): value is BuildTarget =>
   BUILD_TARGETS.has(value as BuildTarget);
@@ -125,7 +125,7 @@ const parseBuild = (rest: readonly string[]): Command => {
         if (!isBuildTarget(value)) {
           return {
             kind: 'error',
-            message: `bunmaska build: --target must be macos or linux (got ${value})`,
+            message: `bunmaska build: --target must be macos, linux or windows (got ${value})`,
           };
         }
         options.target = value;
@@ -258,13 +258,9 @@ export const parseArgs = (argv: readonly string[]): Command => {
 
 /**
  * Resolve the effective build target: an explicit `--target` when given,
- * otherwise the host platform (macOS hosts build macOS, Linux hosts build Linux;
- * a macOS host can still cross-build Linux via `--target linux`).
+ * otherwise the host platform (each host builds its own OS by default). The
+ * platform tags and build-target tags coincide, so the host maps straight
+ * through; explicit `--target` still allows cross-builds (e.g. macOS → linux).
  */
-export const resolveTarget = (target: BuildTarget | undefined): BuildTarget => {
-  if (target !== undefined) {
-    return target;
-  }
-  const host = currentPlatform();
-  return host === 'macos' ? 'macos' : 'linux';
-};
+export const resolveTarget = (target: BuildTarget | undefined): BuildTarget =>
+  target ?? currentPlatform();

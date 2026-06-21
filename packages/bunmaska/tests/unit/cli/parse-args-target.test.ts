@@ -27,8 +27,16 @@ describe('parseArgs --target', () => {
     }
   });
 
-  test('build rejects an invalid --target value', () => {
+  test('build accepts an explicit --target windows', () => {
     const cmd = parseArgs(['build', 'app.ts', '--target', 'windows']);
+    expect(cmd.kind).toBe('build');
+    if (cmd.kind === 'build') {
+      expect(cmd.options.target).toBe('windows');
+    }
+  });
+
+  test('build rejects an invalid --target value', () => {
+    const cmd = parseArgs(['build', 'app.ts', '--target', 'freebsd']);
     expect(cmd.kind).toBe('error');
     if (cmd.kind === 'error') {
       expect(cmd.message).toMatch(/--target/);
@@ -67,12 +75,12 @@ describe('parseArgs --target', () => {
 
 describe('resolveTarget', () => {
   test('defaults an unset target to the host platform', () => {
-    const expected = currentPlatform() === 'macos' ? 'macos' : 'linux';
-    expect(resolveTarget(undefined)).toBe(expected);
+    expect(resolveTarget(undefined)).toBe(currentPlatform());
   });
 
   test('passes through an explicit target', () => {
     expect(resolveTarget('linux')).toBe('linux');
     expect(resolveTarget('macos')).toBe('macos');
+    expect(resolveTarget('windows')).toBe('windows');
   });
 });
