@@ -162,6 +162,9 @@ const KERNEL32_SYMBOLS = {
   GlobalSize: { args: [FFIType.u64], returns: FFIType.u64 },
   // (HGLOBAL) -> HGLOBAL — free a block we still own (NULL on success).
   GlobalFree: { args: [FFIType.u64], returns: FFIType.u64 },
+  // (HLOCAL) -> HLOCAL — free a block the system allocated for us (e.g. a DPAPI
+  // CryptProtectData output blob), NULL on success.
+  LocalFree: { args: [FFIType.u64], returns: FFIType.u64 },
 } as const;
 
 /** ole32.dll — COM/OLE, which WebKit's Windows port requires initialised per-thread. */

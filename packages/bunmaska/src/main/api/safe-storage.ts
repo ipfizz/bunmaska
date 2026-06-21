@@ -1,8 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { InvalidArgumentError, BunmaskaError } from '../../common/errors';
+import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxLibsecretBackend } from '../platform/linux/libsecret-keyring';
 import { macosKeychainBackend } from '../platform/macos/cocoa-safe-storage';
+import { windowsDpapiBackend } from '../platform/windows/windows-safe-storage';
 
 /**
  * Encryption of strings tied to an OS-protected key — the drop-in equivalent of
@@ -104,6 +105,9 @@ const getBackend = (): KeyringBackend => {
   }
   if (platform === 'linux') {
     return linuxLibsecretBackend;
+  }
+  if (platform === 'windows') {
+    return windowsDpapiBackend;
   }
   return unavailableBackend;
 };
