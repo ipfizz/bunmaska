@@ -127,6 +127,8 @@ interface NativeWindowHandlers {
   readonly events: Map<WindowEventType, () => void>;
   /** Internal resize sink (resizes the hosted view) — fired before the `resize` event. */
   resizeHook?: (width: number, height: number) => void;
+  /** Whether the committed close destroys the window (false = hide; see commitClose). */
+  destroyOnClose: boolean;
   /** Last-observed state for the pump's change detection (see {@link pollWindows}). */
   width: number;
   height: number;
@@ -136,7 +138,7 @@ interface NativeWindowHandlers {
 }
 
 /** A fresh handlers record with zeroed state. */
-const newHandlers = (): NativeWindowHandlers => ({
+const newHandlers = (destroyOnClose: boolean): NativeWindowHandlers => ({
   closed: false,
   events: new Map(),
   width: 0,
@@ -144,18 +146,28 @@ const newHandlers = (): NativeWindowHandlers => ({
   focused: false,
   maximized: false,
   minimized: false,
+  destroyOnClose,
 });
 
 const windowRegistry = new Map<bigint, NativeWindowHandlers>();
 
-/** Run the committed-close path once: destroy the window and fire `onClosed`. */
+/** Run the committed-close path once: tear down the view, then destroy the window. */
 const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
   if (handlers.closed) {
     return;
   }
   handlers.closed = true;
-  loadUser32().symbols.DestroyWindow(hwnd);
+  // Quiesce the hosted view first (the onClosed handler clears WebKit's clients
+  // and detaches the view), THEN finish the window.
   handlers.onClosed?.();
+  if (handlers.destroyOnClose) {
+    loadUser32().symbols.DestroyWindow(hwnd);
+  } else {
+    // A WebKit-hosting window: synchronously destroying it crashes WebKit's
+    // multi-process teardown through bun:ffi, so hide it and let the OS reclaim
+    // the view + its WebProcess at process exit (see `.admin/WINDOWS.md`).
+    loadUser32().symbols.ShowWindow(hwnd, SW_HIDE);
+  }
   windowRegistry.delete(hwnd);
 };
 
@@ -252,14 +264,17 @@ export interface NativeWin32WindowOptions {
   readonly show: boolean;
   readonly resizable?: boolean;
   readonly frame?: boolean;
+  /** Hide instead of destroy on close (for WebKit-hosting windows). Default true. */
+  readonly destroyOnClose?: boolean;
 }
 
 /** A live top-level native-WndProc window that can host a WebKit view. */
 export class NativeWin32Window {
   readonly #hwnd: bigint;
-  readonly #handlers: NativeWindowHandlers = newHandlers();
+  readonly #handlers: NativeWindowHandlers = newHandlers(true);
 
   constructor(options: NativeWin32WindowOptions) {
+    this.#handlers.destroyOnClose = options.destroyOnClose ?? true;
     ensureOleInitialized();
     const hInstance = ensureNativeWindowClass();
     const className = classNameBuffer;

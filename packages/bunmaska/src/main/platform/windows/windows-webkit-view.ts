@@ -26,6 +26,17 @@ import { createNativeChildHost, ensureOleInitialized } from './windows-native-wi
 /** `SetWindowPos` flags for an in-place resize (keep position, z-order, focus). */
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 
+/**
+ * Trampolines kept alive for the process lifetime. WebKit's multi-process engine
+ * tears down asynchronously and may still call a view's script-message/navigation
+ * callbacks after `dispose`, so they are retained here rather than closed (a small,
+ * bounded per-window retention — closing them mid-teardown is a use-after-free).
+ */
+const retainedTrampolines: JSCallback[] = [];
+const retainTrampolines = (callbacks: readonly JSCallback[]): void => {
+  retainedTrampolines.push(...callbacks);
+};
+
 // WKPageNavigationClientV0 (x64): a 16-byte base { int version; padding; const void* }
 // followed by 21 function pointers. We wire five and NULL the rest.
 const NAV_CLIENT_SIZE = 184;
@@ -348,13 +359,23 @@ export class WindowsWebView {
     }
     this.#disposed = true;
     const wk = loadWebKit2();
+    // The owning window is hidden, not destroyed (see `commitClose`), so the view
+    // persists until process exit. Silence it: stop loading and clear its clients
+    // so a closed webContents emits nothing further, and drop our context/
+    // controller refs. The live WKView itself is NOT released — doing so through
+    // raw FFI re-enters a bun:ffi JSCallback during WebKit's multi-process
+    // teardown and crashes — so it and its WebProcess are reclaimed by the OS at
+    // exit. A clean async teardown is a documented follow-up (`.admin/WINDOWS.md`).
+    // Clear WebKit's clients FIRST — before any other WebKit or window operation.
+    // Once the window is hidden/torn down, WebKit synchronously processes those
+    // messages and would call our nav/message trampolines in a context that
+    // crashes bun:ffi; with the clients cleared it has nothing to call. (Doing any
+    // other WebKit call first — e.g. stop-loading — re-fires a nav callback before
+    // the clear and crashes.)
+    wk.symbols.WKPageSetPageNavigationClient(this.#page, null);
     wk.symbols.WKUserContentControllerRemoveAllUserMessageHandlers(this.#retainedController);
-    wkRelease(this.#view);
     wkRelease(this.#retainedController);
     wkRelease(this.#retainedContext);
-    loadUser32().symbols.DestroyWindow(this.#hostWindow);
-    for (const callback of this.#callbacks) {
-      callback.close();
-    }
+    retainTrampolines(this.#callbacks);
   }
 }

@@ -63,6 +63,8 @@ class WindowsWindow implements NativeWindow {
       width: options.width,
       height: options.height,
       show: false,
+      // Hosts a WebKit view: hide on close rather than destroy (see commitClose).
+      destroyOnClose: false,
       ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
       ...(options.frame !== undefined ? { frame: options.frame } : {}),
     });
