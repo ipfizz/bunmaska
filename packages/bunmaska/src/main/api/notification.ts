@@ -3,6 +3,7 @@ import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxNotificationBackend } from '../platform/linux/gtk-notification';
 import { macosNotificationBackend } from '../platform/macos/cocoa-notification';
+import { windowsNotificationBackend } from '../platform/windows/windows-notification';
 
 /**
  * Native desktop notifications — the drop-in equivalent of Electron's
@@ -69,6 +70,9 @@ const getBackend = (): NotificationBackend => {
   }
   if (currentPlatform() === 'linux') {
     return linuxBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsNotificationBackend;
   }
   throw new UnsupportedPlatformError(`Notification is not supported on ${currentPlatform()} yet`);
 };
