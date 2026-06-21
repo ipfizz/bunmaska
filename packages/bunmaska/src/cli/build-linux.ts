@@ -11,7 +11,7 @@
  */
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundleIdSlug } from './build-macos';
@@ -26,8 +26,13 @@ export type LinuxLayout = {
   readonly engineIdPath: string;
 };
 
-/** Compute every on-disk path of an `<out>/<Name>` AppDir-style tree. Pure. */
+/**
+ * Compute every on-disk path of an `<out>/<Name>` AppDir-style tree. Pure. Joins
+ * with POSIX separators — an AppDir is an inherently Linux (POSIX) layout — so the
+ * structure is identical whether computed on Linux or a cross-building host.
+ */
 export const linuxLayout = (out: string, name: string): LinuxLayout => {
+  const { join } = posix;
   const slug = bundleIdSlug(name);
   const appDir = join(out, name);
   return {

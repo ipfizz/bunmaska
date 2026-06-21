@@ -18,7 +18,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
 
 /** Minimum macOS the bundle declares it supports. */
@@ -99,8 +99,13 @@ export type AppBundleLayout = {
   readonly iconPath: string;
 };
 
-/** Compute every on-disk path of an `<out>/<Name>.app` bundle. Pure. */
+/**
+ * Compute every on-disk path of an `<out>/<Name>.app` bundle. Pure. Joins with
+ * POSIX separators — a `.app` is an inherently macOS (POSIX) layout — so the
+ * structure is identical whether computed on macOS or a cross-building host.
+ */
 export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
+  const { join } = posix;
   const appDir = join(out, `${name}.app`);
   const contentsDir = join(appDir, 'Contents');
   const macosDir = join(contentsDir, 'MacOS');

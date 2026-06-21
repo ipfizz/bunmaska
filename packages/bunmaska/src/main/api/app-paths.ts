@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { InvalidArgumentError } from '../../common/errors';
 import type { Platform } from '../../common/platform';
 
@@ -11,6 +11,11 @@ import type { Platform } from '../../common/platform';
  * absolute path using each platform's conventions. The `app` layer wires the
  * real `os`/`process` values; tests pass synthetic ones to exercise both
  * platforms from a single host.
+ *
+ * Each resolver joins with its TARGET platform's separator (`path.posix` for
+ * macOS/Linux, `path.win32` for Windows) rather than the host's `path.join`, so a
+ * macOS path resolves with `/` even when this runs on a Windows CI host (and vice
+ * versa) — making the conventions host-independent and the output deterministic.
  */
 
 /** Every directory name Bunmaska resolves for `app.getPath` / `app.setPath`. */
@@ -74,9 +79,10 @@ const envDir = (env: PathEnvironment['env'], variable: string, fallback: string)
 
 /** `$VAR` if set and non-empty, else `home/fallback`. Linux XDG user-dir lookup. */
 const xdgDir = (env: PathEnvironment['env'], variable: string, home: string, fallback: string) =>
-  envDir(env, variable, join(home, fallback));
+  envDir(env, variable, posix.join(home, fallback));
 
 const resolveMacOS = (name: AppPathName, e: PathEnvironment): string => {
+  const { join } = posix;
   const appSupport = join(e.home, 'Library', 'Application Support');
   const userData = join(appSupport, e.appName);
   switch (name) {
@@ -113,6 +119,7 @@ const resolveMacOS = (name: AppPathName, e: PathEnvironment): string => {
 };
 
 const resolveLinux = (name: AppPathName, e: PathEnvironment): string => {
+  const { join } = posix;
   const appData = xdgDir(e.env, 'XDG_CONFIG_HOME', e.home, '.config');
   const userData = join(appData, e.appName);
   switch (name) {
@@ -149,6 +156,7 @@ const resolveLinux = (name: AppPathName, e: PathEnvironment): string => {
 };
 
 const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
+  const { join } = win32;
   // %APPDATA% is the roaming per-user application-data root; userData hangs off it.
   const appData = envDir(e.env, 'APPDATA', join(e.home, 'AppData', 'Roaming'));
   const userData = join(appData, e.appName);
