@@ -133,6 +133,16 @@ const USER32_SYMBOLS = {
   IsClipboardFormatAvailable: { args: [FFIType.u32], returns: FFIType.i32 },
   // (LPCWSTR) -> UINT — register/look up a named format (e.g. "HTML Format").
   RegisterClipboardFormatW: { args: [FFIType.ptr], returns: FFIType.u32 },
+
+  // ── Global hot keys (used by the globalShortcut backend) ─────────────────
+  // (HWND, int id, UINT fsModifiers, UINT vk) -> BOOL — claim a system-wide hot
+  // key; HWND NULL posts WM_HOTKEY to the calling thread's queue (the pump sees it).
+  RegisterHotKey: {
+    args: [FFIType.u64, FFIType.i32, FFIType.u32, FFIType.u32],
+    returns: FFIType.i32,
+  },
+  // (HWND, int id) -> BOOL — release a hot key claimed with RegisterHotKey.
+  UnregisterHotKey: { args: [FFIType.u64, FFIType.i32], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */

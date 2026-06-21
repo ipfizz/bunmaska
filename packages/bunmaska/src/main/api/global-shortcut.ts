@@ -2,6 +2,7 @@ import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxGlobalShortcutBackend } from '../platform/linux/x11-global-shortcut';
 import { macosGlobalShortcutBackend } from '../platform/macos/carbon-global-shortcut';
+import { windowsGlobalShortcutBackend } from '../platform/windows/windows-global-shortcut';
 import { parseAccelerator } from './accelerator';
 
 /**
@@ -56,6 +57,9 @@ const getBackend = (): GlobalShortcutBackend => {
   }
   if (currentPlatform() === 'linux') {
     return linuxBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsGlobalShortcutBackend;
   }
   throw new UnsupportedPlatformError(`globalShortcut is not supported on ${currentPlatform()} yet`);
 };

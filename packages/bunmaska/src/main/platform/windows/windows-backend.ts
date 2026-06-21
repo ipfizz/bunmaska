@@ -9,6 +9,7 @@ import type {
   WindowEventType,
 } from '../native';
 import { loadUser32 } from './win32-ffi';
+import { windowsGlobalShortcutBackend } from './windows-global-shortcut';
 import {
   dispatchPostedWindowMessage,
   ensureOleInitialized,
@@ -324,9 +325,14 @@ export class WindowsApplication implements NativeApplication {
       callback();
     }
     this.#readyCallbacks.length = 0;
-    // Each tick: drain the message queue (routing the preventable close), then
-    // poll window state to surface the sent-only lifecycle events.
-    const drainMessages = createWindowsDrain(dispatchPostedWindowMessage);
+    // Each tick: drain the message queue (routing the preventable close and the
+    // global-shortcut WM_HOTKEY), then poll window state to surface the sent-only
+    // lifecycle events.
+    const drainMessages = createWindowsDrain(
+      (hwnd, message, wParam) =>
+        dispatchPostedWindowMessage(hwnd, message, wParam) ||
+        windowsGlobalShortcutBackend.dispatchHotkeyMessage(message, wParam),
+    );
     this.#pump = new CooperativePump(() => {
       drainMessages();
       pollWindows();
