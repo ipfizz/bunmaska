@@ -101,6 +101,11 @@ const decode = (source: string | Uint8Array): DecodedImage => {
     }
     return toDecoded(read.u64(out.pointer, 0));
   }
+  if (source.length === 0) {
+    // An empty buffer is an empty image — `ptr()` rejects zero-length views, so
+    // short-circuit rather than fault (Electron's createFromBuffer([]) is empty).
+    return toDecoded(0n);
+  }
   const stream = loadShlwapi().symbols.SHCreateMemStream(ptr(source), source.length);
   if (stream === 0n) {
     return toDecoded(0n);
