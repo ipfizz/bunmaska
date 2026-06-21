@@ -120,6 +120,9 @@ const KERNEL32_SYMBOLS = {
   // DefWindowProcW so a web-host child window can use it as a NATIVE window
   // procedure (a JSCallback WndProc cannot survive WebKit's re-entrant flood).
   GetProcAddress: { args: [FFIType.u64, FFIType.cstring], returns: FFIType.u64 },
+  // (HANDLE process, UINT exitCode) -> BOOL — hard-terminate. Used to exit the
+  // app WITHOUT running WebKit's static/DLL-detach teardown, which crashes.
+  TerminateProcess: { args: [FFIType.u64, FFIType.u32], returns: FFIType.i32 },
 } as const;
 
 /** ole32.dll — COM/OLE, which WebKit's Windows port requires initialised per-thread. */

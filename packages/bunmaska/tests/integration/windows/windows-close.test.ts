@@ -22,4 +22,17 @@ describe.skipIf(!hasEngine)('Windows window close', () => {
     await proc.exited;
     expect(stdout).toContain('CLOSE_OK');
   }, 30000);
+
+  test('app quit with a live engine exits cleanly (no teardown crash)', async () => {
+    const fixture = `${import.meta.dir}/fixtures/app-quit-probe.ts`;
+    const proc = Bun.spawn([process.execPath, 'run', fixture], {
+      env: { ...process.env },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const stdout = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    expect(stdout).toContain('QUITTING');
+    expect(exitCode).toBe(0); // a WebKit teardown crash would be a non-zero code
+  }, 30000);
 });

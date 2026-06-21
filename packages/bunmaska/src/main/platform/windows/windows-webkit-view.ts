@@ -3,7 +3,7 @@ import { FFIError } from '../../../common/errors';
 import type { NativeNavigationEvent } from '../native';
 import { wkRelease, wkString, wkStringToJs, wkUrl, wkUrlToJs } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
-import { loadUser32 } from './win32-ffi';
+import { loadKernel32, loadUser32 } from './win32-ffi';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
 /**
@@ -35,6 +35,27 @@ const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 const retainedTrampolines: JSCallback[] = [];
 const retainTrampolines = (callbacks: readonly JSCallback[]): void => {
   retainedTrampolines.push(...callbacks);
+};
+
+/** `(HANDLE)-1` — the pseudo-handle for the current process. */
+const CURRENT_PROCESS = 0xffffffffffffffffn;
+let cleanExitInstalled = false;
+
+/**
+ * Install a one-shot `exit` handler that HARD-terminates the process. WinCairo
+ * WebKit crashes in its static / DLL-detach teardown when a process with a live
+ * engine exits normally; terminating from the `exit` handler — after the app's
+ * quit events have already run — bypasses that teardown for a clean exit code.
+ * Installed lazily on first view creation (i.e. only once the engine is loaded).
+ */
+const installCleanExit = (): void => {
+  if (cleanExitInstalled) {
+    return;
+  }
+  cleanExitInstalled = true;
+  process.on('exit', (code) => {
+    loadKernel32().symbols.TerminateProcess(CURRENT_PROCESS, code >>> 0);
+  });
 };
 
 // WKPageNavigationClientV0 (x64): a 16-byte base { int version; padding; const void* }
@@ -169,6 +190,7 @@ export class WindowsWebView {
   /** Build a wired WebKit view hosted in a native child of `options.hwnd`. */
   static create(options: WebViewOptions): WindowsWebView {
     ensureOleInitialized();
+    installCleanExit();
     const wk = loadWebKit2();
     const s = wk.symbols;
 
