@@ -7,8 +7,8 @@
  * construction (before the first navigation). Existing views keep their current
  * UA — change a live one with `webContents.setUserAgent(ua)`. `getUserAgent()`
  * returns the override, or `''` when none is set (the platform WebKit default is
- * then used). `clearStorageData()` clears the default data store (macOS; Linux
- * is a follow-up).
+ * then used). `clearStorageData()` clears the default data store (macOS and
+ * Windows; Linux is a follow-up).
  *
  * Kept free of a `BrowserWindow` import (so it can be read at window
  * construction without a cycle). Cookies / cache / proxy / partitions are a
@@ -18,6 +18,7 @@
 import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import * as macosWebsiteData from '../platform/macos/cocoa-website-data';
+import { windowsSessionBackend } from '../platform/windows/windows-session';
 
 /** The native data-store operations the session delegates to. */
 export type SessionBackend = {
@@ -48,6 +49,9 @@ const getBackend = (): SessionBackend => {
   if (currentPlatform() === 'linux') {
     return linuxBackend;
   }
+  if (currentPlatform() === 'windows') {
+    return windowsSessionBackend;
+  }
   throw new UnsupportedPlatformError(`session is not supported on ${currentPlatform()} yet`);
 };
 
@@ -71,7 +75,7 @@ export class Session {
 
   /**
    * Clear all of the session's website data (cache, cookies, local/session
-   * storage, IndexedDB, …). macOS only for now; rejects on Linux.
+   * storage, IndexedDB, …). Wired on macOS and Windows; rejects on Linux.
    */
   clearStorageData(): Promise<void> {
     return getBackend().clearStorageData();

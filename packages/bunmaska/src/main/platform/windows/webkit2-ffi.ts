@@ -105,6 +105,22 @@ const WEBKIT2_SYMBOLS = {
   WKURLCreateWithUTF8CString: { args: [FFIType.cstring], returns: FFIType.ptr },
   WKURLCopyString: { args: [FFIType.ptr], returns: FFIType.ptr },
 
+  // ── Website data (used by the session backend) ───────────────────────────
+  // () -> WKWebsiteDataStoreRef — the process-wide default store.
+  WKWebsiteDataStoreGetDefaultDataStore: { args: [], returns: FFIType.ptr },
+  // (WKWebsiteDataStoreRef) -> WKHTTPCookieStoreRef
+  WKWebsiteDataStoreGetHTTPCookieStore: { args: [FFIType.ptr], returns: FFIType.ptr },
+  // (WKHTTPCookieStoreRef, void* context, callback(void* context)) -> void — async.
+  WKHTTPCookieStoreDeleteAllCookies: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+    returns: FFIType.void,
+  },
+  // (WKWebsiteDataStoreRef, void* context, callback(void* context)) -> void — async.
+  WKWebsiteDataStoreRemoveAllFetchCaches: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+    returns: FFIType.void,
+  },
+
   // ── Reference counting ───────────────────────────────────────────────────
   WKRetain: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKRelease: { args: [FFIType.ptr], returns: FFIType.void },
