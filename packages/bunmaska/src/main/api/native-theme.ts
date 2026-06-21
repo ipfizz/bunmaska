@@ -1,15 +1,16 @@
 import { EventEmitter } from 'node:events';
 import { currentPlatform } from '../../common/platform';
 import {
+  observeAppearanceChange as linuxObserveAppearance,
+  shouldUseDarkColors as linuxShouldUseDarkColors,
+} from '../platform/linux/gtk-native-theme';
+import {
   observeAppearanceChange as macosObserveAppearance,
   prefersReducedTransparency as macosPrefersReducedTransparency,
   setAppearance as macosSetAppearance,
   shouldUseDarkColors as macosShouldUseDarkColors,
 } from '../platform/macos/cocoa-native-theme';
-import {
-  observeAppearanceChange as linuxObserveAppearance,
-  shouldUseDarkColors as linuxShouldUseDarkColors,
-} from '../platform/linux/gtk-native-theme';
+import { windowsShouldUseDarkColors } from '../platform/windows/windows-native-theme';
 
 /**
  * System appearance — a drop-in equivalent of Electron's `nativeTheme`.
@@ -18,9 +19,11 @@ import {
  * honors the `themeSource` override ('light'/'dark'), falling back to the OS
  * appearance for 'system'. Setting `themeSource` applies an app-wide appearance
  * (so web views re-theme) and emits `updated`. `shouldUseDarkColors` reads the
- * real OS appearance on both platforms (macOS `AppleInterfaceStyle`, Linux
- * `GtkSettings`). {@link NativeThemeImpl.startObserving} (wired once at startup)
- * makes `updated` also fire when the OS appearance changes underneath the app.
+ * real OS appearance on every platform (macOS `AppleInterfaceStyle`, Linux
+ * `GtkSettings`, Windows `Themes\Personalize\AppsUseLightTheme`).
+ * {@link NativeThemeImpl.startObserving} (wired once at startup) makes `updated`
+ * also fire when the OS appearance changes underneath the app (macOS/Linux; a
+ * Windows appearance watcher is a follow-up).
  */
 
 export type ThemeSource = 'system' | 'light' | 'dark';
@@ -32,6 +35,9 @@ const osShouldUseDark = (): boolean => {
   }
   if (platform === 'linux') {
     return linuxShouldUseDarkColors();
+  }
+  if (platform === 'windows') {
+    return windowsShouldUseDarkColors();
   }
   return false;
 };
