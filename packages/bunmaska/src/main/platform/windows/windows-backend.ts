@@ -10,7 +10,7 @@ import type {
 } from '../native';
 import { loadUser32 } from './win32-ffi';
 import { windowsGlobalShortcutBackend } from './windows-global-shortcut';
-import { windowsMenuRealizer } from './windows-menu';
+import { type AppMenuWindow, windowsMenuRealizer } from './windows-menu';
 import {
   dispatchPostedWindowMessage,
   ensureOleInitialized,
@@ -69,6 +69,7 @@ const TPM_RIGHTBUTTON = 0x0002;
 class WindowsWindow implements NativeWindow {
   readonly #native: NativeWin32Window;
   readonly #webContents: WindowsWebContents;
+  readonly #appMenuTarget: AppMenuWindow;
   readonly #closedCallbacks: Array<() => void> = [];
   #title: string;
   #fullscreen = false;
@@ -96,9 +97,15 @@ class WindowsWindow implements NativeWindow {
     );
     // Keep the hosted view filling the window's client area as it resizes.
     this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
+    // Mirror the application menu bar onto this window, and route its WM_COMMAND
+    // (dispatched by the frame proc) to the realizer's stored onClick handlers.
+    this.#appMenuTarget = { setMenuBar: (bar) => this.#native.setMenuBar(bar) };
+    this.#native.onMenuCommand((commandId) => windowsMenuRealizer.dispatchMenuCommand(commandId));
+    windowsMenuRealizer.registerAppMenuWindow(this.#appMenuTarget);
     // On the committed-close path, tear down the web contents (reject pending
     // execs, release the view) before surfacing `closed` to the api layer.
     this.#native.onClosed(() => {
+      windowsMenuRealizer.unregisterAppMenuWindow(this.#appMenuTarget);
       this.#webContents.dispose();
       for (const callback of this.#closedCallbacks) {
         callback();

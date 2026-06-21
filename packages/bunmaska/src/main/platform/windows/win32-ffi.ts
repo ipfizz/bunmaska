@@ -183,6 +183,10 @@ const USER32_SYMBOLS = {
   DestroyMenu: { args: [FFIType.u64], returns: FFIType.i32 },
   // (HMENU) -> int — number of items (for tests).
   GetMenuItemCount: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HWND) -> HMENU — the window's current menu bar (0 if none).
+  GetMenu: { args: [FFIType.u64], returns: FFIType.u64 },
+  // (HMENU, int pos) -> UINT — the command id at a position (-1 for a popup/submenu).
+  GetMenuItemID: { args: [FFIType.u64, FFIType.i32], returns: FFIType.u32 },
   // (HMENU, UINT flags, int x, int y, int reserved, HWND, LPRECT) -> BOOL/cmd —
   // show a context menu modally; with TPM_RETURNCMD it returns the chosen command id.
   TrackPopupMenu: {
@@ -201,6 +205,13 @@ const USER32_SYMBOLS = {
   EndMenu: { args: [], returns: FFIType.i32 },
   // (HWND, LPPOINT) -> BOOL — convert client coordinates to screen coordinates.
   ClientToScreen: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  // () -> HMENU — a new, empty menu BAR (the container SetMenu attaches to a window;
+  // distinct from CreatePopupMenu, which makes a vertical submenu/context menu).
+  CreateMenu: { args: [], returns: FFIType.u64 },
+  // (HWND, HMENU) -> BOOL — attach (or detach with NULL) a menu bar to a window.
+  SetMenu: { args: [FFIType.u64, FFIType.u64], returns: FFIType.i32 },
+  // (HWND) -> BOOL — repaint the menu bar after its contents change.
+  DrawMenuBar: { args: [FFIType.u64], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */

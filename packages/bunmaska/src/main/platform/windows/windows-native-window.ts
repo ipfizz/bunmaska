@@ -1,4 +1,4 @@
-import { ptr, read } from 'bun:ffi';
+import { FFIType, JSCallback, ptr, read } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
 import { cstr } from '../cstr';
 import type { WindowEventType } from '../native';
@@ -6,21 +6,32 @@ import { wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
 /**
- * The native-WndProc top-level window for the Windows backend — the WinCairo peer
- * of `NSWindow`/`GtkWindow`. The window WebKit is hosted in MUST use a native
- * window procedure: WebKit floods its host (and the host's ancestors) with
- * re-entrant messages during a load, which a `bun:ffi` `JSCallback` WndProc
- * cannot survive. So the window class uses the system `DefWindowProcW` directly,
- * and lifecycle events are routed from the cooperative message PUMP instead of a
- * WndProc — `dispatchPostedWindowMessage` inspects each posted message and turns
- * `WM_SYSCOMMAND`/`SC_CLOSE` into the preventable `onClose`. (Sent-only events
- * such as resize are polled; added in the seam-fill phase.)
+ * The top-level + web-host windows for the Windows backend — the WinCairo peer of
+ * `NSWindow`/`GtkWindow`.
+ *
+ * The window that DIRECTLY hosts the WebKit view MUST use a native window
+ * procedure: WebKit floods its immediate host with re-entrant messages during a
+ * load, which a `bun:ffi` `JSCallback` WndProc cannot survive. So the WebKit view
+ * lives in a native-`DefWindowProcW` CHILD ({@link createNativeChildHost}).
+ *
+ * The TOP-LEVEL frame, by contrast, uses a JSCallback "frame" WndProc — proven
+ * safe because the flood stops at the immediate child host and does not propagate
+ * up to the parent (see `menu-frame-spike.ts`). The frame proc is what lets a
+ * native menu BAR work: menu clicks arrive as `WM_COMMAND` SENT straight to the
+ * window proc (never posted to the queue), so they are unreachable from the pump —
+ * the frame proc dispatches them to the per-window `menuCommand` handler. Other
+ * lifecycle is still routed from the cooperative PUMP: `dispatchPostedWindowMessage`
+ * turns the posted `WM_SYSCOMMAND`/`SC_CLOSE` into the preventable `onClose`, and
+ * sent-only state (resize/focus/…) is polled by {@link pollWindows}.
  */
 
 const NATIVE_WINDOW_CLASS_NAME = 'BunmaskaNativeWindow';
+const FRAME_WINDOW_CLASS_NAME = 'BunmaskaFrameWindow';
 const WNDCLASSEXW_SIZE = 80;
 const RECT_SIZE = 16;
 const IDC_ARROW = 32512;
+/** `WM_COMMAND` — a menu selection (or control/accelerator) notification. */
+const WM_COMMAND = 0x0111;
 
 const CW_USEDEFAULT = -0x80000000;
 const WS_OVERLAPPEDWINDOW = 0x00cf0000;
@@ -84,6 +95,63 @@ const ensureNativeWindowClass = (): bigint => {
   return hInstance;
 };
 
+// Frame-class shared state: the registered class + its retained JSCallback proc.
+let frameClassRegistered = false;
+let frameWndProc: JSCallback | undefined;
+let frameClassNameBuffer: Uint8Array | undefined;
+
+/**
+ * Register the top-level FRAME window class once, wiring a shared JSCallback
+ * WndProc. The proc dispatches a menu `WM_COMMAND` (a SENT message the pump can't
+ * see) to the owning window's `menuCommand` handler and forwards everything else
+ * to `DefWindowProcW`. Safe despite hosting WebKit (in a native child) — see the
+ * module header. Returns the `HINSTANCE`.
+ */
+const ensureFrameWindowClass = (): bigint => {
+  const kernel32 = loadKernel32();
+  const hInstance = kernel32.symbols.GetModuleHandleW(null);
+  if (frameClassRegistered) {
+    return hInstance;
+  }
+  const user32 = loadUser32();
+  frameWndProc = new JSCallback(
+    (hwnd: bigint, message: number, wParam: bigint, lParam: bigint): bigint => {
+      // A menu selection: HIWORD(wParam)=0 and lParam=0 (controls/accelerators differ).
+      if (message === WM_COMMAND && lParam === 0n && wParam >> 16n === 0n) {
+        const handlers = windowRegistry.get(hwnd);
+        if (handlers?.menuCommand !== undefined) {
+          try {
+            handlers.menuCommand(Number(wParam & 0xffffn));
+          } catch {
+            // A throwing JS handler must never propagate into the native WndProc.
+          }
+          return 0n;
+        }
+      }
+      return user32.symbols.DefWindowProcW(hwnd, message, wParam, lParam);
+    },
+    { args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64], returns: FFIType.i64 },
+  );
+  const frameWndProcPtr = frameWndProc.ptr;
+  if (frameWndProcPtr === null) {
+    throw new FFIError('frame window: failed to allocate the WndProc trampoline');
+  }
+  frameClassNameBuffer = wstr(FRAME_WINDOW_CLASS_NAME);
+  const hCursor = user32.symbols.LoadCursorW(0n, BigInt(IDC_ARROW));
+  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
+  const dv = new DataView(wc.buffer);
+  dv.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
+  dv.setBigUint64(8, BigInt(frameWndProcPtr), true); // lpfnWndProc = JSCallback frame proc
+  dv.setBigUint64(24, hInstance, true); // hInstance
+  dv.setBigUint64(40, hCursor, true); // hCursor
+  dv.setBigUint64(64, BigInt(ptr(frameClassNameBuffer)), true); // lpszClassName
+  if (user32.symbols.RegisterClassExW(ptr(wc)) === 0) {
+    throw new FFIError('RegisterClassExW failed for the Bunmaska frame class');
+  }
+  frameClassRegistered = true;
+  return hInstance;
+};
+
 /** Create the native child window that hosts a WebKit view inside `parentHwnd`. */
 export const createNativeChildHost = (
   parentHwnd: bigint,
@@ -127,6 +195,10 @@ interface NativeWindowHandlers {
   readonly events: Map<WindowEventType, () => void>;
   /** Internal resize sink (resizes the hosted view) — fired before the `resize` event. */
   resizeHook?: (width: number, height: number) => void;
+  /** Menu-bar command sink: fired by the frame proc with the chosen `WM_COMMAND` id. */
+  menuCommand?: (commandId: number) => void;
+  /** The current menu-bar HMENU (owned by this window; destroyed when replaced/closed). */
+  menuBar?: bigint;
   /** Whether the committed close destroys the window (false = hide; see commitClose). */
   destroyOnClose: boolean;
   /** Last-observed state for the pump's change detection (see {@link pollWindows}). */
@@ -157,6 +229,13 @@ const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
     return;
   }
   handlers.closed = true;
+  // Detach + free any menu bar this window owns before tearing the window down.
+  if (handlers.menuBar !== undefined && handlers.menuBar !== 0n) {
+    const user32 = loadUser32().symbols;
+    user32.SetMenu(hwnd, 0n);
+    user32.DestroyMenu(handlers.menuBar);
+    delete handlers.menuBar;
+  }
   // Quiesce the hosted view first (the onClosed handler clears WebKit's clients
   // and detaches the view), THEN finish the window.
   handlers.onClosed?.();
@@ -276,10 +355,12 @@ export class NativeWin32Window {
   constructor(options: NativeWin32WindowOptions) {
     this.#handlers.destroyOnClose = options.destroyOnClose ?? true;
     ensureOleInitialized();
-    const hInstance = ensureNativeWindowClass();
-    const className = classNameBuffer;
+    // The TOP-LEVEL frame uses the JSCallback frame class (so a menu bar's
+    // WM_COMMAND is dispatchable); the WebKit view lives in a native child.
+    const hInstance = ensureFrameWindowClass();
+    const className = frameClassNameBuffer;
     if (className === undefined) {
-      throw new FFIError('native window class buffer was not initialised');
+      throw new FFIError('frame window class buffer was not initialised');
     }
     const hwnd = loadUser32().symbols.CreateWindowExW(
       0,
@@ -344,6 +425,32 @@ export class NativeWin32Window {
   /** Register the internal sink that keeps the hosted view sized to the client area. */
   setResizeHook(hook: (width: number, height: number) => void): void {
     this.#handlers.resizeHook = hook;
+  }
+
+  /** Register the handler the frame proc fires for a menu-bar `WM_COMMAND`. */
+  onMenuCommand(handler: (commandId: number) => void): void {
+    this.#handlers.menuCommand = handler;
+  }
+
+  /**
+   * Attach `menuBar` (an HMENU) as this window's menu bar, or remove it with
+   * `null`. Takes ownership: the previous bar is destroyed, and so is this one when
+   * the window closes. Adding/removing a bar changes the client area, which the
+   * pump's resize poll then propagates to the hosted view.
+   */
+  setMenuBar(menuBar: bigint | null): void {
+    const user32 = loadUser32().symbols;
+    const previous = this.#handlers.menuBar;
+    user32.SetMenu(this.#hwnd, menuBar ?? 0n);
+    user32.DrawMenuBar(this.#hwnd);
+    if (previous !== undefined && previous !== 0n && previous !== menuBar) {
+      user32.DestroyMenu(previous);
+    }
+    if (menuBar === null) {
+      delete this.#handlers.menuBar;
+    } else {
+      this.#handlers.menuBar = menuBar;
+    }
   }
 
   setTitle(title: string): void {
