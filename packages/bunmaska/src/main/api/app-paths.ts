@@ -66,11 +66,15 @@ const KNOWN_NAMES: ReadonlySet<string> = new Set<AppPathName>([
   'crashDumps',
 ]);
 
-/** `$VAR` if set and non-empty, else `home/fallback`. Linux XDG user-dir lookup. */
-const xdgDir = (env: PathEnvironment['env'], variable: string, home: string, fallback: string) => {
+/** The env var `variable` if set and non-empty, else the `fallback` path. */
+const envDir = (env: PathEnvironment['env'], variable: string, fallback: string): string => {
   const value = env[variable];
-  return value !== undefined && value.length > 0 ? value : join(home, fallback);
+  return value !== undefined && value.length > 0 ? value : fallback;
 };
+
+/** `$VAR` if set and non-empty, else `home/fallback`. Linux XDG user-dir lookup. */
+const xdgDir = (env: PathEnvironment['env'], variable: string, home: string, fallback: string) =>
+  envDir(env, variable, join(home, fallback));
 
 const resolveMacOS = (name: AppPathName, e: PathEnvironment): string => {
   const appSupport = join(e.home, 'Library', 'Application Support');
@@ -144,6 +148,43 @@ const resolveLinux = (name: AppPathName, e: PathEnvironment): string => {
   }
 };
 
+const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
+  // %APPDATA% is the roaming per-user application-data root; userData hangs off it.
+  const appData = envDir(e.env, 'APPDATA', join(e.home, 'AppData', 'Roaming'));
+  const userData = join(appData, e.appName);
+  switch (name) {
+    case 'home':
+      return e.home;
+    case 'appData':
+      return appData;
+    case 'userData':
+    case 'sessionData':
+      return userData;
+    case 'temp':
+      return e.temp;
+    case 'exe':
+      return e.execPath;
+    case 'module':
+      return e.appPath;
+    case 'desktop':
+      return join(e.home, 'Desktop');
+    case 'documents':
+      return join(e.home, 'Documents');
+    case 'downloads':
+      return join(e.home, 'Downloads');
+    case 'music':
+      return join(e.home, 'Music');
+    case 'pictures':
+      return join(e.home, 'Pictures');
+    case 'videos':
+      return join(e.home, 'Videos');
+    case 'logs':
+      return join(userData, 'logs');
+    case 'crashDumps':
+      return join(userData, 'Crashpad');
+  }
+};
+
 /**
  * Resolve a special-directory `name` to an absolute path for the given
  * environment. Throws {@link InvalidArgumentError} on an unrecognized name
@@ -153,7 +194,12 @@ export const resolveAppPath = (name: AppPathName, environment: PathEnvironment):
   if (!KNOWN_NAMES.has(name)) {
     throw new InvalidArgumentError(`Failed to get '${name}' path: unknown path name`);
   }
-  return environment.platform === 'macos'
-    ? resolveMacOS(name, environment)
-    : resolveLinux(name, environment);
+  switch (environment.platform) {
+    case 'macos':
+      return resolveMacOS(name, environment);
+    case 'windows':
+      return resolveWindows(name, environment);
+    default:
+      return resolveLinux(name, environment);
+  }
 };
