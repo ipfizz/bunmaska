@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events';
 import { currentPlatform } from '../../common/platform';
+import { observePowerEvents as linuxObservePowerEvents } from '../platform/linux/linux-power-monitor';
 import {
   observePowerEvents as macosObservePowerEvents,
   type PowerEventHandlers,
 } from '../platform/macos/cocoa-power';
-import { observePowerEvents as linuxObservePowerEvents } from '../platform/linux/linux-power-monitor';
+import { observePowerEvents as windowsObservePowerEvents } from '../platform/windows/windows-power-monitor';
 
 /**
  * System power + screen-lock events — a drop-in subset of Electron's
@@ -27,6 +28,8 @@ const observePower = (handlers: PowerEventHandlers): void => {
     macosObservePowerEvents(handlers);
   } else if (platform === 'linux') {
     linuxObservePowerEvents(handlers);
+  } else if (platform === 'windows') {
+    windowsObservePowerEvents(handlers);
   }
 };
 
