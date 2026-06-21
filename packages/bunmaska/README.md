@@ -56,7 +56,7 @@ If you are already running this in production, we admire your courage and declin
 We are not going to sell you a fantasy.
 
 - **Single process.** No Chromium sandbox. No per-window crash isolation. A nasty WebKit or JavaScriptCore crash takes the whole app with it. This is the architectural price of the lightness.
-- **No Windows support yet.** Windows ships no system WebKit, so doing it our way means bringing our own - WinCairo WebKit, not WebView2 (that's Chromium with extra steps). It's deferred, not abandoned, and it lands behind macOS + Linux. We are aware this is a hill. We are comfortable dying on it.
+- **Windows is in the build (not done).** Windows ships no system WebKit, so we bring our own - WinCairo WebKit (the real port, not WebView2/Chromium). A from-scratch Win32 backend with native windows, the WebKit view + IPC, and ~10 modules now runs on a windows-latest CI runner. It is *not* shippable end-to-end yet: it needs a hosted WinCairo engine to install, and a handful of methods still throw a clear "not yet." But it's real - and it's WebKit all the way down.
 - **~70-80% weighted API parity** for the things most real apps actually use. The long tail (`BrowserView`, sync IPC, Web Serial/WebHID/WebUSB from the renderer, deeply Chromium-internal surfaces) is either out of scope by design or will throw a clear error so you know immediately what is missing.
 
 ## Platforms
@@ -65,7 +65,7 @@ We are not going to sell you a fantasy.
 |---------|------------------------------------------------------------------------|
 | macOS   | Actively developed - AppKit + WKWebView via `objc_msgSend` and hand-built ObjC blocks |
 | Linux   | Actively developed - GTK 4 + WebKitGTK 6 via `dlopen`                  |
-| Windows | Deferred - will bring WinCairo WebKit, never WebView2/Chromium         |
+| Windows | In development - WinCairo WebKit via a from-scratch Win32 backend; never WebView2/Chromium |
 
 ## Install
 

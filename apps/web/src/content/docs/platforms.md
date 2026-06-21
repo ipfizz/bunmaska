@@ -4,7 +4,7 @@ description: Exactly which operating systems and CPU architectures Bunmaska runs
 order: 4
 ---
 
-Bunmaska is a **macOS + Linux** framework. It is not cross-platform until Windows works, and we'd rather tell you that on the first page than have you find out three weeks into a port.
+Bunmaska ships on **macOS and Linux** today. A **Windows** backend (WinCairo WebKit) is in active development - it's real in the code and runs on CI, but not yet shippable end-to-end (it needs a hosted WinCairo engine). The honest matrix, on the first page rather than three weeks into a port:
 
 ## The support matrix
 
@@ -12,7 +12,7 @@ Bunmaska is a **macOS + Linux** framework. It is not cross-platform until Window
 | --- | --- | --- | --- |
 | **macOS** | ✅ Shipping | Apple Silicon (ARM64) + Intel (x64) | AppKit + `WKWebView` |
 | **Linux** | ✅ Shipping | x64 + ARM64 (incl. Raspberry Pi) | GTK 4 + WebKitGTK 6 |
-| **Windows** | ⏳ Planned | - | WinCairo WebKit (see [roadmap](/roadmap)) |
+| **Windows** | 🚧 In development | x64 + ARM64 | WinCairo WebKit (from the store) |
 
 ## macOS
 
@@ -28,9 +28,12 @@ Bunmaska is a **macOS + Linux** framework. It is not cross-platform until Window
 
 ## Windows
 
-Not supported yet - and deliberately so. The easy route (WebView2) is Chromium, which is exactly what Bunmaska exists to avoid. The real route is **WinCairo**, WebKit's Windows port; when it's reliably embeddable, Bunmaska's architecture ports to it cleanly. Full reasoning on the [roadmap](/roadmap).
+**In active development.** A from-scratch Win32 backend is built on pure `bun:ffi` - native windows + a cooperative message pump, the **WinCairo WebKit** view (WebKit's real Windows port, *not* WebView2/Chromium), the renderer↔main IPC bridge, and ~10 modules (clipboard, tray, `safeStorage` via DPAPI, screen, shell, global shortcuts, power, native theme). It validates on a `windows-latest` CI runner.
 
-If your project needs Windows today, Bunmaska isn't the tool for that target yet.
+- **Architectures:** `x64` and `ARM64`. 32-bit (x86) is not supported, on purpose.
+- **Engine:** Windows ships no system WebKit, so an app loads **WinCairo `WebKit2.dll` from the engine store** - the same pinned-engine mechanism as the other platforms, with the engine directory put on the DLL search path so its dependency closure resolves beside it.
+- **The catch:** we don't host prebuilt WinCairo engines yet, so a Windows app needs one provided locally (`BUNMASKA_WEBKIT_PATH` or a local store install). Hosting those builds is the last step before Windows ships end-to-end - the same step Linux's pinned tier is waiting on.
+- **Known gaps:** `printToPDF` / `capturePage`, DevTools, clipboard images, and the tray context menu aren't wired yet - they throw a clear error rather than silently no-op. Full picture on the [roadmap](/roadmap).
 
 ## Requirements (all platforms)
 

@@ -51,12 +51,12 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
     ],
   },
   {
-    status: "future",
+    status: "in-progress",
     title: "Windows",
-    note: "deliberately last - and on our terms.",
+    note: "now in the build - and on our terms.",
     items: [
-      "A from-scratch Win32 backend (~5k LOC - the real work, and it's the same regardless of engine).",
-      "WinCairo WebKit, brought via the same engine store. Never WebView2 - that's Chromium.",
+      "A from-scratch Win32 backend - windows, IPC, and ~10 modules - running on a windows-latest CI runner.",
+      "WinCairo WebKit, loaded from the same engine store. Never WebView2 - that's Chromium.",
       "ARM64 + x64 only. Never 32-bit.",
     ],
   },
@@ -156,8 +156,8 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
             >
           </h2>
           <p class="mt-4 text-text-muted">
-            We're not on Windows yet, and we're not going to fudge why. It's a deliberate choice, and the reasoning is
-            worth stating plainly.
+            Windows used to be the "someday" platform. It's now in the build - a from-scratch Win32 backend with
+            WinCairo WebKit. Here's the honest state, gaps and all.
           </p>
         </div>
 
@@ -167,12 +167,12 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
               {
                 icon: "lucide:shield-x",
                 t: "Not WebView2",
-                d: "The easy Windows path is WebView2 - which is Microsoft Edge, i.e. Chromium. Shipping that would break the one promise the whole project is built on. So that door is closed on purpose.",
+                d: "The easy Windows path is WebView2 - Microsoft Edge, i.e. Chromium. We didn't take it. Windows renders on WinCairo WebKit, the real WebKit port, loaded from the same engine store as every other platform.",
               },
               {
-                icon: "lucide:package",
-                t: "WinCairo, brought along",
-                d: "Windows ships no system WebKit (Safari for Windows died in 2012). So unlike mac and Linux, we can't borrow one - we bring WinCairo WebKit through the same engine store as the pinned tier.",
+                icon: "lucide:wrench",
+                t: "A real Win32 backend",
+                d: "Built from scratch on bun:ffi - window + message pump, the WinCairo WebKit view and IPC bridge, and ~10 modules (clipboard, tray, safeStorage via DPAPI, screen, shell, global shortcuts, power, theme). It runs on a windows-latest CI runner.",
               },
               {
                 icon: "lucide:cpu",
@@ -180,9 +180,9 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
                 d: "Windows is moving to ARM (Snapdragon X, Copilot+ PCs, NVIDIA's 2026 laptops). ARM64 + x64 covers the present and the future; x86 is not on the list.",
               },
               {
-                icon: "lucide:wrench",
-                t: "It's the most work, not the least",
-                d: "There's no Win32 backend yet (~5k lines), and we'd own the WinCairo build + its CVE treadmill forever. Windows is the expensive platform - so it goes last, once macOS + Linux are solid.",
+                icon: "lucide:package",
+                t: "Still the expensive platform",
+                d: "Windows has no system WebKit, so we ship and maintain the WinCairo engine ourselves - CVE treadmill and all. That's why the last piece is hosting the WinCairo builds, so a Windows app can fetch its engine.",
               },
             ].map((c) => (
               <div class="group bg-bg p-7 transition-colors duration-200 hover:bg-bg-subtle">
@@ -198,9 +198,10 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
             ))
           }
         </div>
-        <p class="mx-auto mt-6 max-w-[60ch] text-center text-sm text-text-faint">
-          Need Windows today? Use Electron for that target, and check back here. We'd rather ship two platforms that
-          work than three that sort of do.
+        <p class="mx-auto mt-6 max-w-[64ch] text-center text-sm text-text-faint">
+          Honest status: the backend is built and runs on a Windows CI runner, but a Windows app still needs a WinCairo
+          engine in the store - and we don't host those builds yet. So Windows is real in the code; shipping it
+          end-to-end waits on the hosted engine, the same step Linux is waiting on.
         </p>
       </div>
     </section>
