@@ -137,7 +137,11 @@ describe('clipboard API with an injected backend (async readText contract)', () 
   });
 });
 
-if (currentPlatform() !== 'macos' && currentPlatform() !== 'linux') {
+if (
+  currentPlatform() !== 'macos' &&
+  currentPlatform() !== 'linux' &&
+  currentPlatform() !== 'windows'
+) {
   describe('clipboard on platforms without a backend', () => {
     test('readText rejects with UnsupportedPlatformError', async () => {
       await expect(clipboard.readText()).rejects.toBeInstanceOf(UnsupportedPlatformError);

@@ -117,6 +117,22 @@ const USER32_SYMBOLS = {
   },
   // (int nIndex) -> int — a system metric (e.g. primary screen width/height).
   GetSystemMetrics: { args: [FFIType.i32], returns: FFIType.i32 },
+
+  // ── Clipboard (used by the clipboard backend) ────────────────────────────
+  // (HWND) -> BOOL — open the clipboard for the current task.
+  OpenClipboard: { args: [FFIType.u64], returns: FFIType.i32 },
+  // () -> BOOL — close it (release ownership of the open).
+  CloseClipboard: { args: [], returns: FFIType.i32 },
+  // () -> BOOL — empty + take ownership (the caller must hold it open).
+  EmptyClipboard: { args: [], returns: FFIType.i32 },
+  // (UINT format) -> HANDLE — the clipboard still OWNS the returned handle.
+  GetClipboardData: { args: [FFIType.u32], returns: FFIType.u64 },
+  // (UINT format, HANDLE) -> HANDLE — the clipboard TAKES ownership of the handle.
+  SetClipboardData: { args: [FFIType.u32, FFIType.u64], returns: FFIType.u64 },
+  // (UINT format) -> BOOL
+  IsClipboardFormatAvailable: { args: [FFIType.u32], returns: FFIType.i32 },
+  // (LPCWSTR) -> UINT — register/look up a named format (e.g. "HTML Format").
+  RegisterClipboardFormatW: { args: [FFIType.ptr], returns: FFIType.u32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
@@ -134,6 +150,18 @@ const KERNEL32_SYMBOLS = {
   // (HANDLE process, UINT exitCode) -> BOOL — hard-terminate. Used to exit the
   // app WITHOUT running WebKit's static/DLL-detach teardown, which crashes.
   TerminateProcess: { args: [FFIType.u64, FFIType.u32], returns: FFIType.i32 },
+
+  // ── Movable global memory (clipboard transfer buffers) ───────────────────
+  // (UINT uFlags, SIZE_T dwBytes) -> HGLOBAL
+  GlobalAlloc: { args: [FFIType.u32, FFIType.u64], returns: FFIType.u64 },
+  // (HGLOBAL) -> LPVOID — lock a movable block and get its real address.
+  GlobalLock: { args: [FFIType.u64], returns: FFIType.ptr },
+  // (HGLOBAL) -> BOOL
+  GlobalUnlock: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HGLOBAL) -> SIZE_T — the block's byte size.
+  GlobalSize: { args: [FFIType.u64], returns: FFIType.u64 },
+  // (HGLOBAL) -> HGLOBAL — free a block we still own (NULL on success).
+  GlobalFree: { args: [FFIType.u64], returns: FFIType.u64 },
 } as const;
 
 /** ole32.dll — COM/OLE, which WebKit's Windows port requires initialised per-thread. */

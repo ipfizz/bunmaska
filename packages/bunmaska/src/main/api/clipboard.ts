@@ -2,6 +2,7 @@ import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxClipboardBackend } from '../platform/linux/gtk-clipboard';
 import * as macosClipboard from '../platform/macos/cocoa-clipboard';
+import { windowsClipboardBackend } from '../platform/windows/windows-clipboard';
 import { type NativeImage, nativeImage } from './native-image';
 
 /**
@@ -81,6 +82,9 @@ const getBackend = (): ClipboardBackend => {
   }
   if (currentPlatform() === 'linux') {
     return linuxClipboardBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsClipboardBackend;
   }
   throw new UnsupportedPlatformError(`clipboard is not supported on ${currentPlatform()} yet`);
 };
