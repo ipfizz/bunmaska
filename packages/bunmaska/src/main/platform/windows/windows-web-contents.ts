@@ -235,15 +235,25 @@ export class WindowsWebContents implements NativeWebContents {
     return this.#exec.executeJavaScript(code);
   }
 
+  // Engine-blocked on WinCairo: the UI-process WK2 C API on this build exports no
+  // PDF sink (`WKPageDrawPagesToPDF` is Cocoa-only; only Begin/Compute/EndPrinting
+  // are present, which paginate but yield no PDF data). Revisit if upstream adds one.
   printToPDF(): Promise<Uint8Array> {
     return Promise.reject(
-      new UnsupportedPlatformError('webContents.printToPDF is not yet supported on Windows'),
+      new UnsupportedPlatformError(
+        'webContents.printToPDF is unavailable on Windows: the WinCairo WebKit C API exposes no PDF export',
+      ),
     );
   }
 
+  // Engine-blocked on WinCairo: the only snapshot entry points are `WKBundlePage*`
+  // (they run in the web content process, unreachable from the UI process over FFI);
+  // there is no UI-process `WKPageCreateSnapshot`/`WKViewCreateSnapshot` to call.
   capturePage(): Promise<Uint8Array> {
     return Promise.reject(
-      new UnsupportedPlatformError('webContents.capturePage is not yet supported on Windows'),
+      new UnsupportedPlatformError(
+        'webContents.capturePage is unavailable on Windows: the WinCairo WebKit C API exposes no UI-process snapshot',
+      ),
     );
   }
 
