@@ -78,6 +78,28 @@ const USER32_SYMBOLS = {
     args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64],
     returns: FFIType.i64,
   },
+  // (HWND, UINT msg, WPARAM, LPARAM) -> BOOL — posts to the queue (the pump sees it)
+  PostMessageW: {
+    args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64],
+    returns: FFIType.i32,
+  },
+  // (HWND, HWND insertAfter, int x, int y, int cx, int cy, UINT flags) -> BOOL
+  SetWindowPos: {
+    args: [
+      FFIType.u64,
+      FFIType.u64,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.u32,
+    ],
+    returns: FFIType.i32,
+  },
+  // (HWND) -> BOOL — is the window minimised?
+  IsIconic: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HWND) -> BOOL — is the window maximised?
+  IsZoomed: { args: [FFIType.u64], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */

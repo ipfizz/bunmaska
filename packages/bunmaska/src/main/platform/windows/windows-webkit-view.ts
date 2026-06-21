@@ -1,143 +1,26 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import { cstr } from '../cstr';
 import { wkRelease, wkString, wkStringToJs, wkUrl } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
-import { wstr } from './win32';
-import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
+import { loadUser32 } from './win32-ffi';
+import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
 /**
  * A `WKView` hosted in a Win32 HWND, wired for document-start script injection
  * and the renderer->main script-message bridge — the WinCairo peer of
  * `linux/webkit-ipc.ts` (WebKitUserContentManager) and the macOS WKWebView setup.
  *
- * Two hard-won WinCairo requirements are baked in here (verified on a real engine):
- *
- *  1. COM must be initialised on the thread before any WebKit use (`OleInitialize`),
- *     exactly as WinCairo's MiniBrowser does; without it the WebProcess IPC crashes.
- *  2. The WKView is parented into a dedicated NATIVE-WndProc child window, not the
- *     caller's window. WebKit floods its host window with messages during a load,
- *     and a `bun:ffi` `JSCallback` WndProc cannot survive that re-entrant flood — a
- *     native `DefWindowProc` host can. The owning `Win32Window` keeps its JSCallback
- *     WndProc for low-frequency lifecycle events; the web view lives one level down.
+ * The view is parented into a dedicated NATIVE-WndProc child window
+ * ({@link createNativeChildHost}); WebKit floods its host with re-entrant messages
+ * during a load, which a `bun:ffi` `JSCallback` WndProc cannot survive (see
+ * `windows-native-window.ts`). COM is initialised on the thread first
+ * ({@link ensureOleInitialized}), exactly as WinCairo's MiniBrowser does.
  *
  * Note on worlds: the public WebKit2 C API exposes no named content world, so the
  * injected scripts and the `window.webkit.messageHandlers.<name>` bridge run in
  * the PAGE world. Each script-message JSCallback is retained for the view's life
  * and closed only on {@link WindowsWebView.dispose} — never mid-call.
  */
-
-const WEB_HOST_CLASS_NAME = 'BunmaskaWebHost';
-const WNDCLASSEXW_SIZE = 80;
-const WS_CHILD = 0x40000000;
-const WS_VISIBLE = 0x10000000;
-const WS_CLIPCHILDREN = 0x02000000;
-const WS_OVERLAPPEDWINDOW = 0x00cf0000;
-const CW_USEDEFAULT = -0x80000000;
-
-let oleInitialized = false;
-let webHostRegistered = false;
-// Pinned for the process lifetime: the registered class references the name buffer.
-let webHostClassName: Uint8Array | undefined;
-
-/** Initialise COM on this thread once (WinCairo WebKit requires it). */
-const ensureOleInitialized = (): void => {
-  if (oleInitialized) {
-    return;
-  }
-  loadOle32().symbols.OleInitialize(null);
-  oleInitialized = true;
-};
-
-/** Register the native-WndProc web-host child class once; return the `HINSTANCE`. */
-const ensureWebHostClass = (): bigint => {
-  const kernel32 = loadKernel32();
-  const hInstance = kernel32.symbols.GetModuleHandleW(null);
-  if (webHostRegistered) {
-    return hInstance;
-  }
-  // Use the system DefWindowProcW directly as the class's window procedure.
-  const user32Module = kernel32.symbols.GetModuleHandleW(ptr(wstr('user32.dll')));
-  const defWindowProc = kernel32.symbols.GetProcAddress(user32Module, cstr('DefWindowProcW'));
-  if (defWindowProc === 0n) {
-    throw new FFIError('GetProcAddress(DefWindowProcW) failed');
-  }
-  webHostClassName = wstr(WEB_HOST_CLASS_NAME);
-  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
-  const dv = new DataView(wc.buffer);
-  dv.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
-  dv.setBigUint64(8, defWindowProc, true); // lpfnWndProc = native DefWindowProcW
-  dv.setBigUint64(24, hInstance, true); // hInstance
-  dv.setBigUint64(64, BigInt(ptr(webHostClassName)), true); // lpszClassName
-  if (loadUser32().symbols.RegisterClassExW(ptr(wc)) === 0) {
-    throw new FFIError('RegisterClassExW failed for the Bunmaska web-host class');
-  }
-  webHostRegistered = true;
-  return hInstance;
-};
-
-/** Create the native child window that hosts the WKView inside `parentHwnd`. */
-const createWebHostChild = (parentHwnd: bigint, width: number, height: number): bigint => {
-  const hInstance = ensureWebHostClass();
-  const className = webHostClassName;
-  if (className === undefined) {
-    throw new FFIError('web-host class buffer was not initialised');
-  }
-  const hwnd = loadUser32().symbols.CreateWindowExW(
-    0,
-    ptr(className),
-    ptr(wstr('')),
-    (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN) >>> 0,
-    0,
-    0,
-    width,
-    height,
-    parentHwnd,
-    0n,
-    hInstance,
-    null,
-  );
-  if (hwnd === 0n) {
-    throw new FFIError('CreateWindowExW returned NULL for the web-host child');
-  }
-  return hwnd;
-};
-
-/**
- * Create a NATIVE-WndProc top-level window suitable for hosting a WKView.
- *
- * The window that hosts WebKit must use a native window procedure: WebKit floods
- * its host (and that host's ancestors) with re-entrant messages during a load,
- * which a `bun:ffi` `JSCallback` WndProc cannot survive. This is the foundation a
- * full Windows `NativeWindow` is built on — lifecycle events are routed without a
- * JSCallback WndProc (see `.admin/WINDOWS.md`). Returns the HWND; the caller
- * destroys it with `DestroyWindow`.
- */
-export const createNativeHostWindow = (title: string, width: number, height: number): bigint => {
-  const hInstance = ensureWebHostClass();
-  const className = webHostClassName;
-  if (className === undefined) {
-    throw new FFIError('web-host class buffer was not initialised');
-  }
-  const hwnd = loadUser32().symbols.CreateWindowExW(
-    0,
-    ptr(className),
-    ptr(wstr(title)),
-    (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN) >>> 0,
-    CW_USEDEFAULT,
-    0,
-    width,
-    height,
-    0n,
-    0n,
-    hInstance,
-    null,
-  );
-  if (hwnd === 0n) {
-    throw new FFIError('CreateWindowExW returned NULL for the native host window');
-  }
-  return hwnd;
-};
 
 /** A script-message handler name and the JS callback that receives its bodies. */
 export interface ScriptMessageHandler {
@@ -147,7 +30,7 @@ export interface ScriptMessageHandler {
 
 /** Options for {@link WindowsWebView.create}. */
 export interface WebViewOptions {
-  /** Parent window handle (the owning `Win32Window`) to host the view inside. */
+  /** Parent window handle (the owning native window) to host the view inside. */
   readonly hwnd: bigint;
   readonly width: number;
   readonly height: number;
@@ -242,7 +125,7 @@ export class WindowsWebView {
       s.WKPreferencesSetJavaScriptEnabled(preferences, 1);
     }
 
-    const hostWindow = createWebHostChild(options.hwnd, options.width, options.height);
+    const hostWindow = createNativeChildHost(options.hwnd, options.width, options.height);
 
     // RECT{left,top,right,bottom}: fill the host child. Win64 passes the 16-byte
     // struct by hidden pointer, so we hand WKViewCreate the RECT buffer.

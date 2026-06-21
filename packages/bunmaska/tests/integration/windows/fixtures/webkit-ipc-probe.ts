@@ -8,16 +8,19 @@
  * engine-pinned-load test uses the same spawned-subprocess pattern. Requires
  * BUNMASKA_WEBKIT_PATH to point at a WinCairo engine directory.
  */
+import { NativeWin32Window } from '../../../../src/main/platform/windows/windows-native-window';
 import { createWindowsDrain } from '../../../../src/main/platform/windows/windows-run-loop';
-import {
-  createNativeHostWindow,
-  WindowsWebView,
-} from '../../../../src/main/platform/windows/windows-webkit-view';
+import { WindowsWebView } from '../../../../src/main/platform/windows/windows-webkit-view';
 
-const host = createNativeHostWindow('Bunmaska IPC Probe', 800, 600);
+const win = new NativeWin32Window({
+  title: 'Bunmaska IPC Probe',
+  width: 800,
+  height: 600,
+  show: true,
+});
 let received: string | undefined;
 const view = WindowsWebView.create({
-  hwnd: host,
+  hwnd: win.hwnd(),
   width: 800,
   height: 600,
   userScripts: [

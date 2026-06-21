@@ -1,4 +1,4 @@
-import { ptr } from 'bun:ffi';
+import { ptr, read } from 'bun:ffi';
 import { loadUser32 } from './win32-ffi';
 
 /**
@@ -27,20 +27,41 @@ const MSG_SIZE = 48;
 const DRAIN_BUDGET = 256;
 
 /**
+ * Inspect a posted message before it is dispatched. Returns `true` when the
+ * message was fully handled (the drain then SKIPS the default dispatch). This is
+ * how the Windows backend routes window lifecycle (e.g. the preventable close)
+ * without a JSCallback WndProc — see `windows-native-window.ts`.
+ */
+export type MessageInspector = (hwnd: bigint, message: number, wParam: bigint) => boolean;
+
+/**
  * Build the non-blocking Windows drain. The `MSG` buffer is allocated once and
  * reused across ticks; `PeekMessage(hwnd=NULL)` services every window on the
- * calling (Bun main) thread.
+ * calling (Bun main) thread. An optional {@link MessageInspector} gets first look
+ * at each message (for backend lifecycle routing) and can swallow it.
  */
-export const createWindowsDrain = (): (() => void) => {
+export const createWindowsDrain = (inspect?: MessageInspector): (() => void) => {
   const user32 = loadUser32();
   const msg = new Uint8Array(MSG_SIZE);
   const msgPtr = ptr(msg);
   return () => {
     let budget = DRAIN_BUDGET;
     while (budget > 0 && user32.symbols.PeekMessageW(msgPtr, 0n, 0, 0, PM_REMOVE) !== 0) {
+      budget -= 1;
+      if (inspect !== undefined) {
+        // Read the MSG fields from the POINTER, not the backing Uint8Array: bun's
+        // `ptr()` hands FFI a buffer that the JS array does not reflect for native
+        // writes, so PeekMessage's output is only visible via `read.*` on msgPtr.
+        // MSG layout (x64): hwnd@0 (u64), message@8 (u32), wParam@16 (u64).
+        const hwnd = read.u64(msgPtr, 0);
+        const message = read.u32(msgPtr, 8);
+        const wParam = read.u64(msgPtr, 16);
+        if (inspect(hwnd, message, wParam)) {
+          continue; // handled by the backend — skip default dispatch
+        }
+      }
       user32.symbols.TranslateMessage(msgPtr);
       user32.symbols.DispatchMessageW(msgPtr);
-      budget -= 1;
     }
   };
 };
