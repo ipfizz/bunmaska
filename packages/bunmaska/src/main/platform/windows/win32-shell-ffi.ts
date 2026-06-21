@@ -16,6 +16,10 @@ const SHELL32_SYMBOLS = {
   },
   // (DWORD dwMessage, PNOTIFYICONDATAW) -> BOOL — add/modify/delete a tray icon.
   Shell_NotifyIconW: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.i32 },
+  // (LPBROWSEINFOW) -> PIDLIST_ABSOLUTE — the legacy folder picker (no COM vtables).
+  SHBrowseForFolderW: { args: [FFIType.ptr], returns: FFIType.u64 },
+  // (PCIDLIST_ABSOLUTE pidl, LPWSTR path) -> BOOL — resolve a PIDL to a filesystem path.
+  SHGetPathFromIDListW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** `SW_SHOWNORMAL` — show the launched window in its normal state. */

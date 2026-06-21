@@ -1,7 +1,8 @@
 import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
-import * as cocoaDialog from '../platform/macos/cocoa-dialog';
 import { linuxDialogBackend } from '../platform/linux/gtk-dialog';
+import * as cocoaDialog from '../platform/macos/cocoa-dialog';
+import { windowsDialogBackend } from '../platform/windows/windows-dialog';
 
 /**
  * Native system dialogs — the drop-in equivalent of Electron's `dialog`.
@@ -110,6 +111,9 @@ const getBackend = (): DialogBackend => {
   }
   if (currentPlatform() === 'linux') {
     return linuxDialogBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsDialogBackend;
   }
   throw new UnsupportedPlatformError(`dialog is not supported on ${currentPlatform()} yet`);
 };

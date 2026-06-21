@@ -168,6 +168,8 @@ const USER32_SYMBOLS = {
   LoadIconW: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u64 },
   // (HICON) -> BOOL — free an icon loaded for the tray.
   DestroyIcon: { args: [FFIType.u64], returns: FFIType.i32 },
+  // (HWND, LPCWSTR text, LPCWSTR caption, UINT type) -> int — a modal message box.
+  MessageBoxW: { args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
@@ -209,6 +211,8 @@ const KERNEL32_SYMBOLS = {
 const OLE32_SYMBOLS = {
   // (LPVOID reserved) -> HRESULT
   OleInitialize: { args: [FFIType.ptr], returns: FFIType.i32 },
+  // (LPVOID) -> void — free memory the shell allocated for us (e.g. a folder PIDL).
+  CoTaskMemFree: { args: [FFIType.u64], returns: FFIType.void },
 } as const;
 
 /** Open user32.dll and return its window + message-pump symbol table. Memoised. */
