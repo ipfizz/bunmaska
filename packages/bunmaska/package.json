@@ -77,6 +77,7 @@
     "test": "bun test --timeout 30000",
     "test:watch": "bun test --watch",
     "validate": "bun run format:check && bun run lint && bun run type-check && bun run test",
+    "validate:windows": "bun run format:check && bun run lint && bun run type-check && bun test tests/unit/main/platform/windows tests/integration/windows --timeout 60000",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "bun run validate"
   },

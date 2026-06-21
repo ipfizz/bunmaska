@@ -1,0 +1,6 @@
+# Normalise line endings to LF in the working tree on every platform. The repo's
+# Biome config enforces `lineEnding: lf`, so a Windows checkout (where Git would
+# otherwise apply core.autocrlf and produce CRLF) must keep LF — both for the
+# Windows CI `biome format` check and to silence the "LF will be replaced by CRLF"
+# warnings. Binary files are auto-detected by `text=auto` and left untouched.
+* text=auto eol=lf

@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -53,3 +53,14 @@ jobs:
       - name: Validate (macOS)
         if: runner.os == 'macOS'
         run: bun run validate
+
+      # Windows runs a SCOPED validation: format + lint + type-check (all
+      # platform-agnostic) plus the Windows backend tests, which pass on a real
+      # windows-latest runner (engine-gated WebKit tests skip without
+      # BUNMASKA_WEBKIT_PATH). The full cross-platform suite is not yet
+      # POSIX/Windows path-portable; running it on Windows is a separate
+      # test-hardening follow-up (see .admin/WINDOWS.md).
+      - name: Validate (Windows — backend tests + lint + type-check)
+        if: runner.os == 'Windows'
+        working-directory: packages/bunmaska
+        run: bun run validate:windows
