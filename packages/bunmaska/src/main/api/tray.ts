@@ -3,6 +3,7 @@ import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxTrayBackend } from '../platform/linux/sni-tray';
 import { macosTrayBackend } from '../platform/macos/cocoa-tray';
+import { windowsTrayBackend } from '../platform/windows/windows-tray';
 import type { Menu } from './menu';
 
 /**
@@ -69,6 +70,9 @@ const getBackend = (): TrayBackend => {
   }
   if (currentPlatform() === 'linux') {
     return linuxBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsTrayBackend;
   }
   throw new UnsupportedPlatformError(`Tray is not supported on ${currentPlatform()} yet`);
 };

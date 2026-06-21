@@ -157,6 +157,17 @@ const USER32_SYMBOLS = {
   GetCursorPos: { args: [FFIType.ptr], returns: FFIType.i32 },
   // (UINT uType) -> BOOL — play a system sound (shell.beep). 0xFFFFFFFF = a simple beep.
   MessageBeep: { args: [FFIType.u32], returns: FFIType.i32 },
+
+  // ── Icons (used by the tray backend) ─────────────────────────────────────
+  // (HINSTANCE, LPCWSTR name, UINT type, int cx, int cy, UINT fuLoad) -> HANDLE
+  LoadImageW: {
+    args: [FFIType.u64, FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.i32, FFIType.u32],
+    returns: FFIType.u64,
+  },
+  // (HINSTANCE, LPCWSTR name) -> HICON — load a standard/system icon (int resource).
+  LoadIconW: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u64 },
+  // (HICON) -> BOOL — free an icon loaded for the tray.
+  DestroyIcon: { args: [FFIType.u64], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */

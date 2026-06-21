@@ -14,6 +14,8 @@ const SHELL32_SYMBOLS = {
     args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.i32],
     returns: FFIType.u64,
   },
+  // (DWORD dwMessage, PNOTIFYICONDATAW) -> BOOL — add/modify/delete a tray icon.
+  Shell_NotifyIconW: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** `SW_SHOWNORMAL` — show the launched window in its normal state. */
