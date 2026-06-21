@@ -2,6 +2,7 @@ import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import * as gtkShell from '../platform/linux/gtk-shell';
 import * as cocoaShell from '../platform/macos/cocoa-shell';
+import { windowsShellBackend } from '../platform/windows/windows-shell';
 
 /**
  * Desktop integration — the drop-in equivalent of Electron's `shell`.
@@ -43,6 +44,9 @@ const getBackend = (): ShellBackend => {
   }
   if (currentPlatform() === 'linux') {
     return linuxBackend;
+  }
+  if (currentPlatform() === 'windows') {
+    return windowsShellBackend;
   }
   throw new UnsupportedPlatformError(`shell is not supported on ${currentPlatform()} yet`);
 };

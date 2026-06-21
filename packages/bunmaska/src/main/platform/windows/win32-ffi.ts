@@ -155,6 +155,8 @@ const USER32_SYMBOLS = {
   GetMonitorInfoW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   // (LPPOINT) -> BOOL — the cursor position in screen coordinates.
   GetCursorPos: { args: [FFIType.ptr], returns: FFIType.i32 },
+  // (UINT uType) -> BOOL — play a system sound (shell.beep). 0xFFFFFFFF = a simple beep.
+  MessageBeep: { args: [FFIType.u32], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
