@@ -106,6 +106,17 @@ const USER32_SYMBOLS = {
   SetForegroundWindow: { args: [FFIType.u64], returns: FFIType.i32 },
   // () -> HWND — the window the user is currently working with.
   GetForegroundWindow: { args: [], returns: FFIType.u64 },
+  // (HWND, int nIndex) -> LONG_PTR — read a window style word (GWL_STYLE/EXSTYLE).
+  GetWindowLongPtrW: { args: [FFIType.u64, FFIType.i32], returns: FFIType.i64 },
+  // (HWND, int nIndex, LONG_PTR) -> LONG_PTR — write a window style word.
+  SetWindowLongPtrW: { args: [FFIType.u64, FFIType.i32, FFIType.i64], returns: FFIType.i64 },
+  // (HWND, COLORREF, BYTE alpha, DWORD flags) -> BOOL — per-window opacity.
+  SetLayeredWindowAttributes: {
+    args: [FFIType.u64, FFIType.u32, FFIType.u8, FFIType.u32],
+    returns: FFIType.i32,
+  },
+  // (int nIndex) -> int — a system metric (e.g. primary screen width/height).
+  GetSystemMetrics: { args: [FFIType.i32], returns: FFIType.i32 },
 } as const;
 
 /** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */

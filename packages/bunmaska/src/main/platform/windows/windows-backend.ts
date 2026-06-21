@@ -38,9 +38,20 @@ const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
 const SWP_NOZORDER = 0x0004;
 const SWP_NOACTIVATE = 0x0010;
+const SWP_FRAMECHANGED = 0x0020;
 /** `hWndInsertAfter` sentinels for {@link NativeWindow.setAlwaysOnTop}. */
 const HWND_TOPMOST = 0xffffffffffffffffn; // (HWND)-1
 const HWND_NOTOPMOST = 0xfffffffffffffffen; // (HWND)-2
+
+const GWL_STYLE = -16;
+const GWL_EXSTYLE = -20;
+const WS_EX_LAYERED = 0x00080000n;
+const LWA_ALPHA = 0x02;
+const WS_POPUP = 0x80000000;
+const WS_VISIBLE = 0x10000000;
+const STYLE_RESIZABLE = 0x00050000n; // WS_THICKFRAME | WS_MAXIMIZEBOX
+const SM_CXSCREEN = 0;
+const SM_CYSCREEN = 1;
 
 /**
  * Windows {@link NativeWindow}: a native top-level window hosting a WinCairo
@@ -55,6 +66,8 @@ class WindowsWindow implements NativeWindow {
   #title: string;
   #fullscreen = false;
   #readyToShown = false;
+  #savedStyle = 0n;
+  #savedBounds: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
   constructor(options: NativeWindowOptions) {
     this.#title = options.title;
@@ -136,20 +149,45 @@ class WindowsWindow implements NativeWindow {
     return { x: left, y: top, width: right - left, height: bottom - top };
   }
 
-  setResizable(_resizable: boolean): void {
-    // Toggling WS_THICKFRAME via SetWindowLongPtr; wired in the seam-fill phase.
+  setResizable(resizable: boolean): void {
+    const user32 = loadUser32().symbols;
+    const hwnd = this.#hwnd();
+    const style = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
+    const next = resizable ? style | STYLE_RESIZABLE : style & ~STYLE_RESIZABLE;
+    user32.SetWindowLongPtrW(hwnd, GWL_STYLE, next);
+    user32.SetWindowPos(
+      hwnd,
+      0n,
+      0,
+      0,
+      0,
+      0,
+      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+    );
   }
 
-  setOpacity(_opacity: number): void {
-    // WS_EX_LAYERED + SetLayeredWindowAttributes; wired in the seam-fill phase.
+  setOpacity(opacity: number): void {
+    const user32 = loadUser32().symbols;
+    const hwnd = this.#hwnd();
+    const exStyle = user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    user32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+    const alpha = Math.max(0, Math.min(255, Math.round(opacity * 255)));
+    user32.SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
   }
 
   setMinimumSize(_width: number, _height: number): void {
-    // Enforced via WM_GETMINMAXINFO from the pump; wired in the seam-fill phase.
+    // A true minimum requires WM_GETMINMAXINFO, which a native-WndProc window
+    // cannot intercept from the pump; left for a poll-based follow-up.
   }
 
   center(): void {
-    // Needs screen metrics; wired in the seam-fill phase.
+    const user32 = loadUser32().symbols;
+    const screenWidth = user32.GetSystemMetrics(SM_CXSCREEN);
+    const screenHeight = user32.GetSystemMetrics(SM_CYSCREEN);
+    const bounds = this.getBounds();
+    const x = Math.max(0, Math.floor((screenWidth - bounds.width) / 2));
+    const y = Math.max(0, Math.floor((screenHeight - bounds.height) / 2));
+    user32.SetWindowPos(this.#hwnd(), 0n, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
   }
 
   show(): void {
@@ -197,9 +235,23 @@ class WindowsWindow implements NativeWindow {
   }
 
   setFullScreen(flag: boolean): void {
-    // Best-effort until the seam-fill phase swaps the style for true fullscreen.
-    this.#fullscreen = flag;
-    loadUser32().symbols.ShowWindow(this.#hwnd(), flag ? SW_MAXIMIZE : SW_RESTORE);
+    const user32 = loadUser32().symbols;
+    const hwnd = this.#hwnd();
+    if (flag && !this.#fullscreen) {
+      // Save the framed style + bounds, then go borderless over the primary screen.
+      this.#fullscreen = true;
+      this.#savedStyle = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
+      this.#savedBounds = this.getBounds();
+      user32.SetWindowLongPtrW(hwnd, GWL_STYLE, BigInt((WS_POPUP | WS_VISIBLE | 0x02000000) >>> 0));
+      const width = user32.GetSystemMetrics(SM_CXSCREEN);
+      const height = user32.GetSystemMetrics(SM_CYSCREEN);
+      user32.SetWindowPos(hwnd, 0n, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED);
+    } else if (!flag && this.#fullscreen) {
+      this.#fullscreen = false;
+      user32.SetWindowLongPtrW(hwnd, GWL_STYLE, this.#savedStyle);
+      const b = this.#savedBounds;
+      user32.SetWindowPos(hwnd, 0n, b.x, b.y, b.width, b.height, SWP_NOZORDER | SWP_FRAMECHANGED);
+    }
   }
 
   isFullScreen(): boolean {

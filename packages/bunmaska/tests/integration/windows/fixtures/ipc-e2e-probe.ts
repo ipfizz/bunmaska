@@ -21,6 +21,12 @@ app.whenReady().then(() => {
   // Waiting on did-finish-load (the navigation client) before invoking also
   // exercises the WKPageNavigationClient wiring.
   win.webContents.once('did-finish-load', () => {
+    // Exercise the window-management long tail (must not crash).
+    win.setResizable(false);
+    win.center();
+    win.setOpacity(0.95);
+    win.setFullScreen(true);
+    win.setFullScreen(false);
     win.webContents
       .executeJavaScript("__bunmaska.invoke('ping', 'x')")
       .then((result) => finish(`E2E_OK ${JSON.stringify(result)}`, 0))
