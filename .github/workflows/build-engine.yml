@@ -13,10 +13,6 @@ jobs:
   build:
     name: relocate WebKitGTK (ubuntu)
     runs-on: ubuntu-latest
-    # The engine tooling lives in the framework package; run all steps from there.
-    defaults:
-      run:
-        working-directory: packages/bunmaska
     steps:
       - uses: actions/checkout@v4
 

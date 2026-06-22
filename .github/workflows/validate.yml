@@ -3,10 +3,10 @@ name: validate
 on:
   push:
     branches: [main]
-    paths: ['packages/bunmaska/**', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
+    paths: ['src/**', 'tests/**', 'tools/**', 'examples/**', 'biome.json', 'bunfig.toml', 'tsconfig.json', 'tsconfig.base.json', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
   pull_request:
     branches: [main]
-    paths: ['packages/bunmaska/**', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
+    paths: ['src/**', 'tests/**', 'tools/**', 'examples/**', 'biome.json', 'bunfig.toml', 'tsconfig.json', 'tsconfig.base.json', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
 
 concurrency:
   group: validate-${{ github.ref }}
@@ -62,5 +62,4 @@ jobs:
       # test-hardening follow-up (see .admin/WINDOWS.md).
       - name: Validate (Windows — backend tests + lint + type-check)
         if: runner.os == 'Windows'
-        working-directory: packages/bunmaska
         run: bun run validate:windows

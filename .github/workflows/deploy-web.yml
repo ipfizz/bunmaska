@@ -1,13 +1,13 @@
 name: deploy-web
 
-# Builds apps/web and deploys it to Cloudflare Pages (project "bunmaska",
+# Builds website/ and deploys it to Cloudflare Pages (project "bunmaska",
 # which serves bunmaska.org) on pushes that touch the site. Repo secrets:
 #   CLOUDFLARE_API_TOKEN   — scoped token (Pages Edit + DNS Edit + Zone Read)
 #   CLOUDFLARE_ACCOUNT_ID  — 33b4bb12637807398ca2edac6c77fe8c
 on:
   push:
     branches: [main]
-    paths: ['apps/web/**', '.github/workflows/deploy-web.yml']
+    paths: ['website/**', '.github/workflows/deploy-web.yml']
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,9 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
     steps:
       - uses: actions/checkout@v4
 
@@ -23,17 +26,15 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - name: Install (workspace)
+      - name: Install
         run: bun install --frozen-lockfile
 
       - name: Build the site
-        working-directory: apps/web
         run: bun run build
 
-      # Run wrangler via bunx (the wrangler-action's npm install breaks in a Bun
-      # workspace). wrangler reads the token + account id from the env below.
+      # Run wrangler via bunx (the wrangler-action's npm install is flaky on Bun).
+      # wrangler reads the token + account id from the env below.
       - name: Deploy to Cloudflare Pages
-        working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
