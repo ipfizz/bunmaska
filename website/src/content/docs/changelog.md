@@ -4,13 +4,30 @@ description: Bunmaska is pre-release, so this is one honest snapshot rather than
 order: 2
 ---
 
-The current version is **`0.1.0-alpha.2`**. It is **not yet published to npm** - this page is a hardcoded snapshot of the alpha. Once the framework ships publicly, every release will get a proper dated entry here (semver, highlights, breaking changes, fixes).
+The current version is **`0.1.0-alpha.4`**, live on npm - `npm i bunmaska`. Newest first; still a curated snapshot rather than a per-commit log.
 
-## Unreleased - the Windows backend
+## `0.1.0-alpha.4`
 
-Bunmaska became cross-platform on three OSes: a full **Windows** backend landed on `main`.
+macOS packaged apps now actually work. Building a real app surfaced four bugs that each broke a double-clickable `.app`; all four are fixed, so `bunmaska build` produces a window that opens and responds to clicks and keys.
+
+**Fixes**
+
+- **Windows now appear.** A bundled app is brought to the foreground when its first window is shown, not only once at startup before any window exists.
+- **Apps respond to input.** The macOS run loop now dispatches AppKit mouse and keyboard events (`nextEventMatchingMask:` / `sendEvent:`) each tick - the window used to render but ignore clicks.
+- **Built apps no longer crash on launch.** `bunmaska build` copies your runtime assets (the page, the preload, CSS, images) beside the executable, and the scaffold resolves them by the executable's path when compiled - a compiled binary can't read files from `import.meta.dir`.
+- **Signed apps no longer trap.** Code-signing grants the JIT entitlements Bun needs (`allow-jit`, `allow-unsigned-executable-memory`, `disable-library-validation`); without them a hardened-runtime app died on its first FFI call.
+
+**Known limit**
+
+- The macOS run loop is a cooperative ~60 Hz poll - complete and correct, but not yet event-driven (so up to ~16 ms input latency). An event-driven `CFRunLoop` integration is the next focused change.
+
+## `0.1.0-alpha.3`
+
+The first npm release - and Bunmaska became cross-platform on three OSes with a full **Windows** backend landed on `main`.
 
 **Highlights**
+
+- **Published to npm** - `npm i bunmaska`.
 
 - **Win32 + WinCairo WebKit runtime** in pure `bun:ffi` - native windows + a cooperative message pump, the WinCairo WebKit view, renderer↔main IPC with context isolation, an **application menu bar**, and the secondary modules: clipboard (text/HTML/**images**), dialogs, menus, tray, notifications, `safeStorage` (DPAPI), screen, shell, global shortcuts, power monitor/blocker, native theme, and `session.clearStorageData`. Green on a `windows-latest` CI runner next to macOS and Linux.
 - **From-source WinCairo engine** - we compile WebKit's WinCairo port from source (a clang-cl build), relocate it into the engine store, and proved a real `BrowserWindow` loads + runs JS from the store with no system WebKit (`STORE_ENGINE_OK`). A reproducible build script + CI workflow ship with it.
