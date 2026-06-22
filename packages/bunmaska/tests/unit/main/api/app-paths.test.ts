@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { join } from 'node:path';
+import { win32 } from 'node:path';
 import { InvalidArgumentError } from '../../../../src/common/errors';
 import { type PathEnvironment, resolveAppPath } from '../../../../src/main/api/app-paths';
 
@@ -140,30 +140,30 @@ describe('resolveAppPath — Windows conventions', () => {
 
   test('appData falls back to ~/AppData/Roaming when %APPDATA% is unset', () => {
     expect(resolveAppPath('appData', winEnv({ env: {} }))).toBe(
-      join('C:\\Users\\ada', 'AppData', 'Roaming'),
+      win32.join('C:\\Users\\ada', 'AppData', 'Roaming'),
     );
   });
 
   test('userData and sessionData are %APPDATA%/<appName>', () => {
-    const expected = join('C:\\Users\\ada\\AppData\\Roaming', 'MyApp');
+    const expected = win32.join('C:\\Users\\ada\\AppData\\Roaming', 'MyApp');
     expect(resolveAppPath('userData', winEnv())).toBe(expected);
     expect(resolveAppPath('sessionData', winEnv())).toBe(expected);
   });
 
   test('logs is userData/logs and crashDumps is userData/Crashpad', () => {
     expect(resolveAppPath('logs', winEnv())).toBe(
-      join('C:\\Users\\ada\\AppData\\Roaming', 'MyApp', 'logs'),
+      win32.join('C:\\Users\\ada\\AppData\\Roaming', 'MyApp', 'logs'),
     );
     expect(resolveAppPath('crashDumps', winEnv())).toBe(
-      join('C:\\Users\\ada\\AppData\\Roaming', 'MyApp', 'Crashpad'),
+      win32.join('C:\\Users\\ada\\AppData\\Roaming', 'MyApp', 'Crashpad'),
     );
   });
 
   test('user folders are under the home dir (no XDG)', () => {
-    expect(resolveAppPath('desktop', winEnv())).toBe(join('C:\\Users\\ada', 'Desktop'));
-    expect(resolveAppPath('documents', winEnv())).toBe(join('C:\\Users\\ada', 'Documents'));
-    expect(resolveAppPath('downloads', winEnv())).toBe(join('C:\\Users\\ada', 'Downloads'));
-    expect(resolveAppPath('videos', winEnv())).toBe(join('C:\\Users\\ada', 'Videos'));
+    expect(resolveAppPath('desktop', winEnv())).toBe(win32.join('C:\\Users\\ada', 'Desktop'));
+    expect(resolveAppPath('documents', winEnv())).toBe(win32.join('C:\\Users\\ada', 'Documents'));
+    expect(resolveAppPath('downloads', winEnv())).toBe(win32.join('C:\\Users\\ada', 'Downloads'));
+    expect(resolveAppPath('videos', winEnv())).toBe(win32.join('C:\\Users\\ada', 'Videos'));
   });
 
   test('exe and module pass through', () => {
