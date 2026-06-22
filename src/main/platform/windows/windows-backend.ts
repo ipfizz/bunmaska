@@ -89,10 +89,16 @@ class WindowsWindow implements NativeWindow {
       ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
       ...(options.frame !== undefined ? { frame: options.frame } : {}),
     });
+    // Size the web view to the CLIENT area, not the window size: `options.width`/
+    // `height` are the outer window size (Electron semantics, incl. the title bar +
+    // borders), so the hosted view must fit the smaller client rect or its right/
+    // bottom edge is clipped by the frame. The resize poll only fires on a delta, so
+    // the initial size has to be the client size up front.
+    const client = this.#native.getClientSize();
     this.#webContents = new WindowsWebContents(
       this.#native.hwnd(),
-      options.width,
-      options.height,
+      client.width,
+      client.height,
       options.preloadScript,
     );
     // Keep the hosted view filling the window's client area as it resizes.
