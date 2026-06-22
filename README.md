@@ -3,7 +3,7 @@
 > The bread and butter of desktop apps: Electron's familiar APIs on Bun and your operating system's own WebKit. No bundled Chromium — because shipping 150 MB of browser with every app is one of those ideas that made sense in 2013 and has been quietly ruining laptop fans ever since.
 
 <p>
-  <a href="https://www.npmjs.com/package/bunmaska"><img src="https://img.shields.io/npm/v/bunmaska/alpha?label=npm%20%40alpha" alt="npm @alpha"></a>
+  <a href="https://www.npmjs.com/package/bunmaska"><img src="https://img.shields.io/npm/v/bunmaska" alt="npm"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(alpha)-555" alt="platforms">
   <img src="https://img.shields.io/badge/Bun-%E2%89%A5%201.3-f9f1e1" alt="Bun >= 1.3">
@@ -30,7 +30,7 @@ The smaller, faster apps are a side effect of all that, not the pitch. But since
 ## Install
 
 ```sh
-npm i bunmaska@alpha     # or: bun add bunmaska@alpha
+npm i bunmaska     # or: bun add bunmaska
 ```
 
 You need [Bun](https://bun.sh) ≥ 1.3 (yes, that is the entire point). It is genuinely alpha, so pin your version and keep your expectations friendly. Want to hack on it directly instead?
