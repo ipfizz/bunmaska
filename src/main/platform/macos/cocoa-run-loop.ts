@@ -6,11 +6,11 @@ import { bigIntOut, LIBOBJC_PATH, macOSLibraryAccessor, ptrIn } from './objc';
  * macOS native run-loop drain.
  *
  * Provides the non-blocking "drain once" function the {@link CooperativePump}
- * calls each tick. It runs `CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true)`
- * repeatedly until the loop reports it has nothing left to handle, then
- * returns — the AppKit loop is serviced without ever blocking Bun's thread
- * (D020). Each drain is wrapped in an autorelease pool so per-event temporary
- * objects are released promptly.
+ * calls each tick: it dispatches pending AppKit input events (via the
+ * `pumpEvents` callback), then runs `CFRunLoopRunInMode(kCFRunLoopDefaultMode,
+ * 0, true)` until the loop has nothing left to handle. The AppKit loop is
+ * serviced without ever blocking Bun's thread. Each drain is wrapped in an
+ * autorelease pool so per-tick temporary objects are released promptly.
  */
 
 const CORE_FOUNDATION_PATH = '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation';
@@ -48,7 +48,7 @@ const getAutoreleasePool = macOSLibraryAccessor('libobjc autorelease pool', () =
  * any non-macOS host (via the lazy accessors). The returned function is cheap
  * to call repeatedly and never blocks.
  */
-export const createMacOSDrain = (): (() => void) => {
+export const createMacOSDrain = (pumpEvents?: () => void): (() => void) => {
   const cf = getCoreFoundation();
   const pool = getAutoreleasePool();
   const mode = bigIntOut(
@@ -62,6 +62,7 @@ export const createMacOSDrain = (): (() => void) => {
   return () => {
     const poolToken = pool.symbols.objc_autoreleasePoolPush();
     try {
+      pumpEvents?.();
       for (let i = 0; i < DRAIN_BUDGET; i += 1) {
         const result = cf.symbols.CFRunLoopRunInMode(ptrIn(mode), 0, 1);
         if (result !== CF_RUN_LOOP_RUN_HANDLED_SOURCE) {

@@ -50,11 +50,18 @@ export default defineConfig({
 `;
 
 const mainTs = (vars: TemplateVars): string =>
-  `import { join } from 'node:path';
+  `import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { app, BrowserWindow, ipcMain } from 'bunmaska';
 
 // A demo handler the preload exposes to the page as window.api.ping().
 ipcMain.handle('ping', () => 'pong');
+
+// Under \`bunmaska dev\` the assets sit next to this file; a built app ships them
+// beside the executable.
+const assetDir = existsSync(join(import.meta.dir, 'index.html'))
+  ? import.meta.dir
+  : dirname(process.execPath);
 
 const createWindow = (): void => {
   const win = new BrowserWindow({
@@ -62,10 +69,10 @@ const createWindow = (): void => {
     height: 680,
     title: ${JSON.stringify(vars.name)},
     webPreferences: {
-      preload: join(import.meta.dir, 'preload.js'),
+      preload: join(assetDir, 'preload.js'),
     },
   });
-  win.loadFile(join(import.meta.dir, 'index.html'));
+  win.loadFile(join(assetDir, 'index.html'));
 };
 
 app.whenReady().then(createWindow);

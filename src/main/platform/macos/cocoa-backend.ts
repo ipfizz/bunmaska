@@ -71,6 +71,13 @@ const log = createLogger('macos-backend');
 
 const NS_BACKING_STORE_BUFFERED = 2n;
 const NS_ACTIVATION_POLICY_REGULAR = 0n;
+
+/** `NSEventMaskAny` (NSUIntegerMax): dequeue every kind of AppKit event. */
+const NS_EVENT_MASK_ANY: Handle = 0xffffffffffffffffn;
+/** `dequeue:YES` for `nextEventMatchingMask:`. */
+const DEQUEUE_YES: Handle = 1n;
+/** Upper bound on events dispatched per pump tick, so a flood can't starve Bun. */
+const APP_EVENT_BUDGET = 256;
 /** `NSWindowStyleMaskFullScreen` (1 << 14). */
 const NS_FULLSCREEN_STYLE_MASK = 16384n;
 /** `NSWindowStyleMaskResizable` (1 << 3). */
@@ -585,7 +592,11 @@ class MacOSWindow implements NativeWindow {
   }
 
   show(): void {
-    msgSendPtr(this.#window, cocoa().selectors.get('makeKeyAndOrderFront:'), 0n);
+    const rt = cocoa();
+    msgSendPtr(this.#window, rt.selectors.get('makeKeyAndOrderFront:'), 0n);
+    // Activate the app so the shown window comes to the foreground.
+    const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
+    msgSendU8(app, rt.selectors.get('activateIgnoringOtherApps:'), 1);
     // AppKit has no `windowDidShow:` notification, so `show` is emitted here. A
     // becomeKey notification also fires `focus` via the delegate.
     this.emitEvent('show');
@@ -717,6 +728,11 @@ class MacOSApplication implements NativeApplication {
   #onActivate: ((hasVisibleWindows: boolean) => void) | undefined;
   #onOpenUrl: ((url: string) => void) | undefined;
   #onOpenFile: ((path: string) => void) | undefined;
+  // Handles the cooperative pump uses to dispatch AppKit input events each tick.
+  #nextEventSel: Handle = 0n;
+  #sendEventSel: Handle = 0n;
+  #distantPast: Handle = 0n;
+  #eventPumpMode: Handle = 0n;
 
   start(): void {
     if (this.#started) {
@@ -738,7 +754,14 @@ class MacOSApplication implements NativeApplication {
     rt.msgSend(this.#app, rt.selectors.get('finishLaunching'));
     msgSendU8(this.#app, rt.selectors.get('activateIgnoringOtherApps:'), 1);
 
-    this.#pump = new CooperativePump(createMacOSDrain());
+    // `nextEventMatchingMask:` runs every pump tick; cache its arguments. The
+    // mode string is autoreleased, so retain it for the app's lifetime.
+    this.#nextEventSel = rt.selectors.get('nextEventMatchingMask:untilDate:inMode:dequeue:');
+    this.#sendEventSel = rt.selectors.get('sendEvent:');
+    this.#distantPast = rt.msgSend(rt.classes.get('NSDate'), rt.selectors.get('distantPast'));
+    this.#eventPumpMode = rt.msgSend(nsString('kCFRunLoopDefaultMode'), rt.selectors.get('retain'));
+
+    this.#pump = new CooperativePump(createMacOSDrain(() => this.#pumpAppEvents()));
     this.#pump.start();
     this.#started = true;
     log.info('application started');
@@ -747,6 +770,31 @@ class MacOSApplication implements NativeApplication {
     this.#readyCallbacks = [];
     for (const callback of callbacks) {
       callback();
+    }
+  }
+
+  /**
+   * Deliver pending AppKit input events to their windows — the standard
+   * `nextEventMatchingMask:` / `sendEvent:` loop, run non-blockingly
+   * (`untilDate:` distantPast) so it drains the queue and returns each tick.
+   */
+  #pumpAppEvents(): void {
+    if (this.#app === 0n) {
+      return;
+    }
+    for (let i = 0; i < APP_EVENT_BUDGET; i += 1) {
+      const event = msgSendPtr4(
+        this.#app,
+        this.#nextEventSel,
+        NS_EVENT_MASK_ANY,
+        this.#distantPast,
+        this.#eventPumpMode,
+        DEQUEUE_YES,
+      );
+      if (event === 0n) {
+        break;
+      }
+      msgSendPtr(this.#app, this.#sendEventSel, event);
     }
   }
 

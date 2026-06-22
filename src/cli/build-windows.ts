@@ -18,6 +18,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
+import { copyAppAssets } from './app-assets';
 import { bundleIdSlug } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
 
@@ -211,6 +212,9 @@ export const buildWindowsApp = async (
     ...(opts.icon !== undefined ? { icon: opts.icon } : {}),
   };
   await compileWindowsBinary(opts.entry, layout.exePath, meta);
+
+  // Ship the entry's runtime assets (the page, the preload) beside the binary.
+  copyAppAssets(opts.entry, layout.appDir);
 
   // Bake the engine-id the app pins, read at launch by the engine resolver.
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
