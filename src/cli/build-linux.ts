@@ -14,6 +14,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'n
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { BUNMASKA_VERSION } from '../common/version';
+import { copyAppAssets } from './app-assets';
 import { bundleIdSlug } from './build-macos';
 
 export type LinuxLayout = {
@@ -223,6 +224,9 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 
   await compileLinuxBinary(opts.entry, layout.binPath);
   chmodSync(layout.binPath, 0o755);
+
+  // Ship the entry's runtime assets (the page, the preload) beside the binary.
+  copyAppAssets(opts.entry, dirname(layout.binPath));
 
   writeFileSync(
     layout.desktopPath,

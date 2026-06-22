@@ -20,6 +20,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
+import { copyAppAssets } from './app-assets';
 
 /** Minimum macOS the bundle declares it supports. */
 const MINIMUM_SYSTEM_VERSION = '11.0';
@@ -124,19 +125,46 @@ export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
 };
 
 /**
+ * Entitlements a Bun-compiled app needs under the Hardened Runtime: JIT and
+ * unsigned executable memory for JavaScriptCore and bun:ffi, and library
+ * validation disabled so the app can dlopen the system WebKit/AppKit at launch.
+ * Without these a hardened-runtime app traps (SIGTRAP) on its first FFI call.
+ */
+export const codesignEntitlements = (): string =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
+`;
+
+/**
  * Build the `codesign` argv that signs an `.app` bundle in place. Pure.
  *
  * Uses `--force --deep` so an existing signature is replaced and nested code is
- * signed, and `--options runtime` to opt the bundle into the macOS Hardened
- * Runtime (required for notarization). `identity` is passed verbatim after
- * `--sign`: a real `Developer ID Application: …` identity (which must be present
- * in the keychain) or `-` for an ad-hoc signature that needs no certificate.
+ * signed, `--options runtime` to opt into the macOS Hardened Runtime (required
+ * for notarization), and `--entitlements` to grant the JIT/FFI exceptions Bun
+ * needs. `identity` is passed verbatim after `--sign`: a real `Developer ID
+ * Application: …` identity, or `-` for an ad-hoc signature.
  */
-export const buildCodesignArgs = (identity: string, appPath: string): string[] => [
+export const buildCodesignArgs = (
+  identity: string,
+  appPath: string,
+  entitlementsPath: string,
+): string[] => [
   '--force',
   '--deep',
   '--options',
   'runtime',
+  '--entitlements',
+  entitlementsPath,
   '--sign',
   identity,
   appPath,
@@ -324,24 +352,35 @@ export type BuildDmg = (opts: BuildDmgOptions) => Promise<void>;
  * with the tool's stderr on a non-zero exit from either step.
  */
 export const codesignApp = async (identity: string, appPath: string): Promise<void> => {
-  const sign = Bun.spawn(['codesign', ...buildCodesignArgs(identity, appPath)], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const signExit = await sign.exited;
-  if (signExit !== 0) {
-    const stderr = await new Response(sign.stderr).text();
-    throw new Error(`codesign failed (exit ${signExit}):\n${stderr}`);
-  }
+  const entitlementsDir = mkdtempSync(join(tmpdir(), 'bunmaska-entitlements-'));
+  const entitlementsPath = join(entitlementsDir, 'app.entitlements');
+  writeFileSync(entitlementsPath, codesignEntitlements());
 
-  const verify = Bun.spawn(['codesign', ...buildCodesignVerifyArgs(appPath)], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const verifyExit = await verify.exited;
-  if (verifyExit !== 0) {
-    const stderr = await new Response(verify.stderr).text();
-    throw new Error(`codesign --verify failed (exit ${verifyExit}):\n${stderr}`);
+  try {
+    const sign = Bun.spawn(
+      ['codesign', ...buildCodesignArgs(identity, appPath, entitlementsPath)],
+      {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    );
+    const signExit = await sign.exited;
+    if (signExit !== 0) {
+      const stderr = await new Response(sign.stderr).text();
+      throw new Error(`codesign failed (exit ${signExit}):\n${stderr}`);
+    }
+
+    const verify = Bun.spawn(['codesign', ...buildCodesignVerifyArgs(appPath)], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const verifyExit = await verify.exited;
+    if (verifyExit !== 0) {
+      const stderr = await new Response(verify.stderr).text();
+      throw new Error(`codesign --verify failed (exit ${verifyExit}):\n${stderr}`);
+    }
+  } finally {
+    rmSync(entitlementsDir, { recursive: true, force: true });
   }
 };
 
@@ -396,6 +435,9 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   // Compile straight into the bundle's executable slot.
   await compileBinary(opts.entry, layout.executablePath);
   chmodSync(layout.executablePath, 0o755);
+
+  // Ship the entry's runtime assets (the page, the preload) beside the binary.
+  copyAppAssets(opts.entry, layout.macosDir);
 
   let iconFile: string | undefined;
   if (opts.icon !== undefined) {
