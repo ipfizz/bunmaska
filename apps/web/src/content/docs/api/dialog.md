@@ -1,10 +1,10 @@
 ---
 title: "dialog"
-description: "Native open/save/message/error dialogs for the Bunmaska main process, backed by Cocoa NSAlert/NSOpenPanel on macOS and GtkAlertDialog/GtkFileDialog on Linux."
+description: "Native open/save/message/error dialogs for the Bunmaska main process, backed by Cocoa NSAlert/NSOpenPanel on macOS, GtkAlertDialog/GtkFileDialog on Linux, and MessageBoxW/GetOpenFileNameW on Windows."
 order: 9
 ---
 
-The `dialog` module displays native system dialogs for opening and saving files and showing message and error boxes. It is a main-process module, backed by `NSAlert`/`NSOpenPanel`/`NSSavePanel` on macOS and `GtkAlertDialog`/`GtkFileDialog` on Linux.
+The `dialog` module displays native system dialogs for opening and saving files and showing message and error boxes. It is a main-process module, backed by `NSAlert`/`NSOpenPanel`/`NSSavePanel` on macOS, `GtkAlertDialog`/`GtkFileDialog` on Linux, and `MessageBoxW` + `GetOpenFileNameW`/`GetSaveFileNameW` + `SHBrowseForFolderW` on Windows.
 
 Process: Main
 
@@ -81,7 +81,7 @@ if (!canceled) {
 * `options` Object
   * `message` string - Content of the message box.
   * `detail` string (optional) - Extra information shown below the message.
-  * `buttons` string[] (optional) - Button labels. Defaults to `['OK']`. The first entry is the default button.
+  * `buttons` string[] (optional) - Button labels. Defaults to `['OK']`. The first entry is the default button. _Windows caveat:_ custom labels are approximated to the nearest native `MessageBoxW` button set (OK, OK/Cancel, or Yes/No/Cancel) rather than rendered verbatim.
   * `type` string (optional) - One of `none`, `info`, `error`, `question`, `warning`. Styles the `NSAlert` icon on macOS. _Linux_ has no severity concept on `GtkAlertDialog`, so `type` is a no-op there.
 
 Returns `Promise<Object>`:

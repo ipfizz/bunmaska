@@ -6,7 +6,7 @@ order: 7
 
 Process: Main
 
-The `Menu` module lets you build application menu bars and context (popup) menus. The menu tree is held as plain JS objects and realized into native widgets on demand - a native `NSMenu` on macOS and GTK menus on Linux. There is no Windows backend (Bunmaska is macOS + Linux only).
+The `Menu` module lets you build application menu bars and context (popup) menus. The menu tree is held as plain JS objects and realized into native widgets on demand - a native `NSMenu` on macOS, GTK menus on Linux, and Win32 `HMENU` on Windows. Both context menus and the application menu bar work on all three; role items render as plain labels on Linux/Windows (their native keyboard shortcuts still fire), and accelerator text in labels is a follow-up there.
 
 Bunmaska exposes both `Menu` and a companion `MenuItem` class. You typically build menus declaratively with `Menu.buildFromTemplate(...)`, but you can also construct items by hand and `append`/`insert` them.
 
@@ -234,4 +234,4 @@ Menu.setApplicationMenu(menu);
 - **`click` callback arguments** - handlers receive nothing; there is no `(menuItem, browserWindow, event)` signature, no `KeyboardEvent` modifier flags.
 - **Dynamic `MenuItem` mutation** - items are read-only after construction. There are no settable `enabled` / `checked` / `visible` / `label` properties, no `MenuItem.sublabel`, `icon`, `toolTip`, `acceleratorWorksWhenHidden`, `registerAccelerator`, `sharingItem`, or `commandId`.
 - **Deferred roles** - `appMenu`, `viewMenu`, `fileMenu`, `recentDocuments`, `shareMenu`, `services`, `startSpeaking`/`stopSpeaking`, `toggleDevTools`, `reload`/`forceReload`, `resetZoom`/`zoomIn`/`zoomOut`, and the window-control roles (`front`, `window`, `help`) are not available. Only the role list above is supported.
-- **Windows** - there is no Windows backend at all; `&`-mnemonic accelerator generation is a Windows/Linux Chromium feature Bunmaska does not implement.
+- **Windows accelerator text** - the menu bar and context menus work on Windows (Win32 `HMENU`), but accelerator/`&`-mnemonic text is not rendered into the labels yet; the shortcuts themselves still fire natively.

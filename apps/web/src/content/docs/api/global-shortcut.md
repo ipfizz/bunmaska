@@ -1,6 +1,6 @@
 ---
 title: "globalShortcut"
-description: "Register OS-level keyboard shortcuts that fire even when your app does not have focus - macOS (Carbon) and Linux X11."
+description: "Register OS-level keyboard shortcuts that fire even when your app does not have focus - macOS (Carbon), Linux X11, and Windows (Win32 RegisterHotKey)."
 order: 15
 ---
 
@@ -8,7 +8,7 @@ Detect keyboard events when the application does not have keyboard focus.
 
 Process: Main
 
-The `globalShortcut` module registers and unregisters system-wide keyboard shortcuts with the operating system, so a key combination can trigger your app even when it is not focused. Bunmaska's implementation parses and validates accelerators in pure TypeScript, tracks which ones are live, and delegates the actual OS grab to a per-platform backend: Carbon on macOS, Xlib `XGrabKey` on Linux. There is no FFI tax for the bookkeeping - only the grab itself touches native code.
+The `globalShortcut` module registers and unregisters system-wide keyboard shortcuts with the operating system, so a key combination can trigger your app even when it is not focused. Bunmaska's implementation parses and validates accelerators in pure TypeScript, tracks which ones are live, and delegates the actual OS grab to a per-platform backend: Carbon on macOS, Xlib `XGrabKey` on Linux, and Win32 `RegisterHotKey` (with `WM_HOTKEY` routed through the cooperative message pump) on Windows. There is no FFI tax for the bookkeeping - only the grab itself touches native code.
 
 ```ts
 import { app, globalShortcut } from 'bunmaska';
@@ -131,5 +131,4 @@ This module exposes no properties - only the methods above on the `globalShortcu
 - **`globalShortcut.isSuspended()`** - the companion getter for the above. Also absent.
 - **`registerAll` boolean result** - present, but its signature returns `void` rather than a batch boolean; check individual results with `isRegistered`.
 - **Wayland global shortcuts** - Linux support is X11-only and best-effort. Under Wayland the backend reports unsupported and `register` returns `false`; the `org.freedesktop.portal.GlobalShortcuts` path is deferred.
-- **Windows** - out of scope entirely. Bunmaska targets macOS and Linux only, so there is no Win32 backend.
 - **macOS media-key accelerators** (`Media Play/Pause`, `Media Next Track`, etc.) - the accelerator parser recognizes a named-key set, but the documented Electron media keys and their accessibility-authorization caveat are not specially handled here; treat media-key support as unverified rather than guaranteed.

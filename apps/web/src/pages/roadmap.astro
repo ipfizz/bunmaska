@@ -20,9 +20,9 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
   {
     status: "shipping",
     title: "The framework + the engine store",
-    note: "macOS + Linux. Alpha, and we'll admit it.",
+    note: "macOS, Linux, and Windows. Alpha, and we'll admit it.",
     items: [
-      "An Electron-shaped API on Bun + WebKit - ~70-80% parity, macOS and Linux.",
+      "An Electron-shaped API on Bun + WebKit - ~70-80% parity, on macOS, Linux, and Windows.",
       "Buildless native modules: a .ts file that dlopens the OS. No node-gyp. No rebuild. Ever.",
       "The CLI - init / dev / build - producing real .app and .deb distributables, plus a pure-Bun auto-updater.",
       'The pinned-WebKit engine store: side-by-side, content-addressed, signature-verified installs - the "tested == shipped" tier.',
@@ -51,13 +51,14 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
     ],
   },
   {
-    status: "in-progress",
+    status: "shipping",
     title: "Windows",
-    note: "now in the build - and on our terms.",
+    note: "x64 ships - on our terms, never Chromium.",
     items: [
-      "A from-scratch Win32 backend - windows, IPC, and ~10 modules - running on a windows-latest CI runner.",
-      "WinCairo WebKit, loaded from the same engine store. Never WebView2 - that's Chromium.",
-      "ARM64 + x64 only. Never 32-bit.",
+      "A from-scratch Win32 backend on pure bun:ffi - native windows, a cooperative pump, IPC with context isolation, an application menu bar, and the full secondary-module set (clipboard incl. images, dialogs, tray, notifications, safeStorage via DPAPI, screen, shell, global shortcuts, power, native theme, session). Green on a windows-latest CI runner alongside macOS and Linux.",
+      "WinCairo WebKit, compiled from WebKit source by us (a clang-cl build, proven end-to-end), bundled or loaded from the engine store. Never WebView2 - that's Chromium.",
+      "x64 today; ARM64 is on the roadmap (upstream WinCairo is x64-only). Never 32-bit.",
+      "A few APIs are engine-blocked on WinCairo - custom protocol://, printToPDF, capturePage - and we document each rather than fake it.",
     ],
   },
 ];
@@ -86,7 +87,7 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
         </p>
         <div class="mt-8 flex flex-wrap items-center justify-center gap-2">
           <span class="tag">v0.1.0-alpha.2</span>
-          <span class="tag">macOS + Linux</span>
+          <span class="tag">macOS · Linux · Windows</span>
           <span class="tag">MIT</span>
         </div>
       </div>
@@ -96,9 +97,10 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
     <section class="border-y border-border bg-bg-subtle">
       <div class="wrap py-8">
         <p class="mx-auto max-w-[68ch] text-center text-text-muted">
-          <span class="font-medium text-text">Where we are today:</span> the framework works on macOS and Linux, the
-          pinned-engine store and CLI are in place, and a self-contained, relocatable WebKit can be built and loaded
-          from the store. The next milestone is hosting those engines and going public on npm.
+          <span class="font-medium text-text">Where we are today:</span> the framework works on macOS, Linux, and
+          Windows (x64), the pinned-engine store and CLI are in place, and a self-contained, relocatable WebKit -
+          including a from-source WinCairo build for Windows - can be built and loaded from the store. The next
+          milestone is hosting those engines and going public on npm.
         </p>
       </div>
     </section>

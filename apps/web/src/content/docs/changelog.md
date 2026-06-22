@@ -6,7 +6,22 @@ order: 2
 
 The current version is **`0.1.0-alpha.2`**. It is **not yet published to npm** - this page is a hardcoded snapshot of the alpha. Once the framework ships publicly, every release will get a proper dated entry here (semver, highlights, breaking changes, fixes).
 
-## `0.1.0-alpha.2` - current
+## Unreleased - the Windows backend
+
+Bunmaska became cross-platform on three OSes: a full **Windows** backend landed on `main`.
+
+**Highlights**
+
+- **Win32 + WinCairo WebKit runtime** in pure `bun:ffi` - native windows + a cooperative message pump, the WinCairo WebKit view, renderer↔main IPC with context isolation, an **application menu bar**, and the secondary modules: clipboard (text/HTML/**images**), dialogs, menus, tray, notifications, `safeStorage` (DPAPI), screen, shell, global shortcuts, power monitor/blocker, native theme, and `session.clearStorageData`. Green on a `windows-latest` CI runner next to macOS and Linux.
+- **From-source WinCairo engine** - we compile WebKit's WinCairo port from source (a clang-cl build), relocate it into the engine store, and proved a real `BrowserWindow` loads + runs JS from the store with no system WebKit (`STORE_ENGINE_OK`). A reproducible build script + CI workflow ship with it.
+- **Honest per-platform parity matrix** published - every API cell marked full / partial / engine-blocked across macOS, Linux, and Windows.
+
+**Caveats (documented, not hidden)**
+
+- **Engine-blocked on WinCairo:** custom `protocol://` schemes, `printToPDF`, and `capturePage` - the WinCairo WebKit2 C API exposes no entry point for them.
+- **x64 only** (upstream WinCairo is x64-only; ARM64 is on the roadmap). A **hosted prebuilt engine** is still pending - for now you build + embed the engine (proven) rather than fetch it.
+
+## `0.1.0-alpha.2`
 
 The pinned-WebKit engine store - the opt-in path to "tested == shipped." Most apps still use the system WebKit by default; this adds the machinery to ship the exact build you tested. See [Pinned WebKit Engine](/docs/concepts/engine).
 
@@ -23,7 +38,7 @@ The pinned-WebKit engine store - the opt-in path to "tested == shipped." Most ap
 **Still in progress**
 
 - A **self-contained, relocatable WebKit** that builds and loads from the store - its full dependency closure travels with it (`$ORIGIN`). Next: serving the prebuilt engines from a signed feed + the final render pass.
-- macOS pinned engine (designed, feasible); Windows via WinCairo (deferred); engine delivery to end users (embed / auto-fetch).
+- macOS pinned engine (designed, feasible); engine delivery to end users (embed / auto-fetch). _(Windows via WinCairo has since landed - see Unreleased above.)_
 
 ## `0.1.0-alpha.0`
 

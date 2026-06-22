@@ -1,10 +1,10 @@
 ---
 title: "nativeImage"
-description: "Load, query, encode, resize, and crop tray/dock/window icons from PNG or JPEG, backed by Cocoa on macOS and GdkPixbuf on Linux."
+description: "Load, query, encode, resize, and crop tray/dock/window icons from PNG or JPEG, backed by Cocoa on macOS, GdkPixbuf on Linux, and GDI+ on Windows."
 order: 13
 ---
 
-The `nativeImage` module loads, queries, and encodes system images - the icons you hand to a `Tray`, a window, or a `Menu`. It is a deliberate subset of Electron's module: decoding and pixel work happen behind a per-platform native backend (Cocoa `NSBitmapImageRep` on macOS, GdkPixbuf on Linux), while the `NativeImage` class itself is plain TypeScript.
+The `nativeImage` module loads, queries, and encodes system images - the icons you hand to a `Tray`, a window, or a `Menu`. It is a deliberate subset of Electron's module: decoding and pixel work happen behind a per-platform native backend (Cocoa `NSBitmapImageRep` on macOS, GdkPixbuf on Linux, GDI+ on Windows), while the `NativeImage` class itself is plain TypeScript.
 
 A bad path or undecodable bytes never throw - they yield an _empty_ image (`isEmpty()` is `true`, size `0×0`), matching Electron's "empty and transparent image" behavior.
 
@@ -146,7 +146,7 @@ const jpeg = nativeImage.createFromPath('./photo.png').toJPEG(80);
 writeFileSync('./photo.jpg', jpeg);
 ```
 
-> Platform note: `quality` is honored on _macOS_ (via `NSImageCompressionFactor`). On _Linux_, GdkPixbuf is currently saved with default quality and the `quality` argument is ignored. The default value differs from Electron's API too: Electron requires `quality`; Bunmaska defaults it to `92`.
+> Platform note: `quality` is honored on _macOS_ (via `NSImageCompressionFactor`). On _Linux_ (GdkPixbuf) and _Windows_ (GDI+), the image is saved with the encoder's default quality and the `quality` argument is ignored. The default value differs from Electron's API too: Electron requires `quality`; Bunmaska defaults it to `92`.
 
 ### `image.toDataURL()`
 
@@ -244,4 +244,4 @@ Comparing against Electron's `nativeImage`, the following are not implemented. M
 - `scaleFactor` options on `getSize`, `getAspectRatio`, `toPNG`, `toBitmap`, `toDataURL` - omitted along with multi-rep support.
 - `colorSpace` option on bitmap output - no bitmap output exists to color-manage.
 - The `isMacTemplateImage` property - covered instead by `setTemplateImage()` / `isTemplateImage()`.
-- Windows `ICO` loading - Bunmaska targets macOS and Linux only; there is no Windows backend.
+- Windows `ICO` loading - Windows is supported via GDI+ (path/PNG/JPEG decode, `toPNG`/`toJPEG`, resize, crop), but `.ico` files are not special-cased; pass PNG or JPEG.

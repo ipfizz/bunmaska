@@ -35,6 +35,6 @@ Zero runtime dependencies. Zero compiled native code. No postinstall build scrip
 
 ## And the honest part
 
-It's alpha, it's macOS + Linux only, and it covers ~70-80% of Electron's surface. We're not going to pretend otherwise - that's a whole [page of trade-offs](/docs/migrating/parity), published on purpose. If you need Windows today, or `BrowserView`, or the last 20% of the API, Bunmaska isn't there yet.
+It's alpha, it runs on macOS, Linux, and Windows x64 (a few APIs differ per platform), and it covers ~70-80% of Electron's surface. We're not going to pretend otherwise - that's a whole [page of trade-offs](/docs/migrating/parity), published on purpose. If you need Windows ARM64, `BrowserView`, or the last 20% of the API, Bunmaska isn't there yet.
 
 If you want a desktop app that's small, fast, and doesn't ship a browser it didn't need to - that's the entire point.

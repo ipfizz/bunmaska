@@ -7,9 +7,10 @@ order: 3
 ## Requirements
 
 - **[Bun](https://bun.sh) ≥ 1.3.** Bunmaska runs on Bun, not Node. This is not negotiable; it's the foundation.
-- **macOS or Linux.** Windows is deferred until WebKit on Windows is a thing humans can actually use. We will not ship Chromium to get there.
+- **macOS, Linux, or Windows.** Each drives the OS's own WebKit - never Chromium.
   - macOS uses AppKit + `WKWebView` via `objc_msgSend`.
   - Linux uses GTK 4 + WebKitGTK 6 via `dlopen` (so `libgtk-4` / `libwebkitgtk-6.0` need to be present - they are on most modern desktops).
+  - Windows (x64) uses Win32 + a WinCairo `WebKit2.dll` we build from source and bundle (there's no system WebKit on Windows). ARM64 is on the roadmap.
 
 ## Install
 

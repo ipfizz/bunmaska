@@ -1,10 +1,10 @@
 ---
 title: "Notification"
-description: "Create native OS desktop notifications from the main process on macOS and Linux."
+description: "Create native OS desktop notifications from the main process on macOS, Linux, and Windows."
 order: 12
 ---
 
-Create native OS desktop notifications. `Notification` extends Node's `EventEmitter`, so the full listener API (`on`/`once`/`addListener`/…) matches Electron's contract. It is a main-process module backed by Cocoa's `NSUserNotification` on macOS and libnotify on Linux. Like Electron, instantiating a notification does not show it - you call `show()` for that.
+Create native OS desktop notifications. `Notification` extends Node's `EventEmitter`, so the full listener API (`on`/`once`/`addListener`/…) matches Electron's contract. It is a main-process module backed by Cocoa's `NSUserNotification` on macOS, libnotify on Linux, and a `Shell_NotifyIcon` balloon toast on Windows. Like Electron, instantiating a notification does not show it - you call `show()` for that.
 
 Process: Main
 
@@ -122,8 +122,7 @@ Returns whether the host platform can actually deliver notifications. This is th
 
 - _Linux_ - `true` once libnotify is loaded and `notify_init` succeeded.
 - _macOS_ - `false` when run un-bundled, because the default notification center is `nil` without an app bundle. Reliable macOS delivery needs packaging (a follow-up).
-
-On any other platform, the underlying backend lookup throws `UnsupportedPlatformError` (Bunmaska targets macOS and Linux only - no Windows).
+- _Windows_ - `true`; notifications are delivered as a `Shell_NotifyIcon` balloon toast.
 
 ```ts
 import { Notification } from 'bunmaska';
@@ -143,4 +142,4 @@ Bunmaska implements a deliberately small, honest subset. The following Electron 
 - **Constructor options** - only `title`, `body`, `subtitle`, and `silent` are supported. `icon`, `hasReply`, `replyPlaceholder`, `sound`, `urgency`, `timeoutType`, `actions`, `closeButtonText`, `id`, `groupId`, `groupTitle`, and `toastXml` are not implemented.
 - **Properties** - correspondingly, there are no `icon`, `hasReply`, `replyPlaceholder`, `sound`, `urgency`, `timeoutType`, `actions`, `closeButtonText`, `id`, `groupId`, or `groupTitle` properties.
 - **Static methods** - `Notification.getHistory()`, `Notification.remove()`, `Notification.removeAll()`, and `Notification.removeGroup()` (all macOS in Electron) are not implemented. `Notification.handleActivation()` is Windows-only in Electron and out of scope here.
-- **Windows** - not a target platform at all.
+- **Windows rich toasts** - Windows delivers a basic `Shell_NotifyIcon` balloon toast (`isSupported()` is `true`). Rich Action Center toasts (buttons, images, inline replies) and a registered AppUserModelID are a follow-up, so the same interaction-event and constructor-option gaps above apply on Windows too.

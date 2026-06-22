@@ -4,7 +4,7 @@ description: "Create and control top-level application windows in the Bunmaska m
 order: 2
 ---
 
-Create and control top-level application windows. `BrowserWindow` is Bunmaska's drop-in equivalent of Electron's class of the same name: it extends Node's `EventEmitter`, owns a `WebContents` for all page-related operations, and is backed by `NSWindow` on macOS and a GTK4 `GtkWindow` on Linux (no Windows).
+Create and control top-level application windows. `BrowserWindow` is Bunmaska's drop-in equivalent of Electron's class of the same name: it extends Node's `EventEmitter`, owns a `WebContents` for all page-related operations, and is backed by `NSWindow` on macOS, a GTK4 `GtkWindow` on Linux, and a Win32 `HWND` on Windows.
 
 Like Electron, you cannot use this module until the `app` `ready` event has fired.
 
@@ -154,7 +154,7 @@ if (!win.isResizable()) { /* ... */ }
 
 `setMinimumSize(width: number, height: number): void`
 
-Constrains the window's minimum content size.
+Constrains the window's minimum content size. _No-op on Windows_: enforcing a minimum size needs `WM_GETMINMAXINFO`, which the pump-routed native window proc can't intercept, so the value is tracked (and returned by `getMinimumSize`) but not enforced there.
 
 ```ts
 win.setMinimumSize(400, 300);

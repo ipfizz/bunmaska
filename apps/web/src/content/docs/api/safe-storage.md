@@ -1,10 +1,10 @@
 ---
 title: "safeStorage"
-description: "Encrypt and decrypt strings for on-disk storage using an OS-keyring-protected key (macOS Keychain / Linux libsecret)."
+description: "Encrypt and decrypt strings for on-disk storage using an OS-protected key (macOS Keychain / Linux libsecret / Windows DPAPI)."
 order: 21
 ---
 
-`safeStorage` encrypts and decrypts strings using a 32-byte key kept in the OS keyring (macOS Keychain, Linux libsecret) and never written to disk. Strings are sealed with AES-256-GCM, so the blob is authenticated - tampering with the ciphertext makes `decryptString` throw rather than return garbage.
+`safeStorage` encrypts and decrypts strings using a 32-byte key kept in the OS keyring (macOS Keychain, Linux libsecret) and never written to disk. On Windows, sealing is delegated to DPAPI (`CryptProtectData` / `CryptUnprotectData`) under the current user's credentials. Strings are sealed with AES-256-GCM, so the blob is authenticated - tampering with the ciphertext makes `decryptString` throw rather than return garbage.
 
 Process: Main
 
@@ -14,7 +14,7 @@ One deliberate divergence from Electron: there is **no `basic_text` fallback**. 
 
 ### `safeStorage.isEncryptionAvailable()`
 
-Returns `boolean` - whether a keyring-backed key is available, so `encryptString` / `decryptString` can run. Never throws. On macOS this is true when the Keychain is reachable; on Linux when libsecret is present. On any other platform (and any host with no keyring) it returns `false`. The result is probed once and memoised for the process.
+Returns `boolean` - whether a keyring-backed key is available, so `encryptString` / `decryptString` can run. Never throws. On macOS this is true when the Keychain is reachable; on Linux when libsecret is present; on Windows it returns `true` via DPAPI. On any host with no keyring (and no DPAPI) it returns `false`. The result is probed once and memoised for the process.
 
 ```ts
 import { safeStorage } from 'bunmaska';
@@ -61,4 +61,3 @@ The synchronous core (`isEncryptionAvailable` / `encryptString` / `decryptString
 - **`encryptStringAsync` / `decryptStringAsync` / `isAsyncEncryptionAvailable`** - the entire async API with pluggable key providers, key rotation (`shouldReEncrypt`), and temporary-unavailability handling is not implemented. Bunmaska does the one keyring round-trip lazily on first use and caches the key, so encrypt/decrypt after that are pure in-memory AES.
 - **`getSelectedStorageBackend()`** (Electron's _Linux_ method) - there is no backend-name reporting; Bunmaska uses libsecret on Linux and exposes no selector for kwallet variants.
 - **`setUsePlainTextEncryption()`** - intentionally omitted. It exists in Electron to opt into the `basic_text` plaintext-key fallback, which Bunmaska does not have by design.
-- **Windows** - out of scope entirely; Bunmaska targets macOS and Linux only, so there is no DPAPI backend.

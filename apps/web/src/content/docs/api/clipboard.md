@@ -4,7 +4,7 @@ description: "Honest Bunmaska API reference for the clipboard module: async read
 order: 10
 ---
 
-Perform copy and paste operations on the system clipboard. In Bunmaska the `clipboard` module is a process-wide singleton (not tied to any window) available in both the main and renderer processes, backed by Cocoa (`NSPasteboard`) on macOS and GTK 4 / GDK on Linux.
+Perform copy and paste operations on the system clipboard. In Bunmaska the `clipboard` module is a process-wide singleton (not tied to any window) available in both the main and renderer processes, backed by Cocoa (`NSPasteboard`) on macOS, GTK 4 / GDK on Linux, and the Win32 clipboard (`CF_*` formats with GDI+) on Windows.
 
 One deliberate difference from Electron: all **read** methods are asynchronous and return a `Promise`. GDK 4's clipboard read is async-only, so Bunmaska adopts the same async contract on macOS for a uniform cross-platform API. Writes (and `clear`) stay synchronous everywhere. On platforms without a backend, methods throw `UnsupportedPlatformError` rather than silently doing nothing.
 

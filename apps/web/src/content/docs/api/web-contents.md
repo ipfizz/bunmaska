@@ -1,6 +1,6 @@
 ---
 title: "webContents"
-description: "Render and control the web page inside a BrowserWindow - Bunmaska's drop-in WebContents on system WebKit (macOS + Linux)."
+description: "Render and control the web page inside a BrowserWindow - Bunmaska's drop-in WebContents on system WebKit (macOS, Linux, and Windows)."
 order: 3
 ---
 
@@ -145,7 +145,7 @@ await win.webContents.removeInsertedCSS(key);
 
 ### `contents.printToPDF()`
 
-Returns `Promise<Buffer>` - renders the current page to a PDF and resolves to its bytes. _macOS only._ On Linux it rejects with an `UnsupportedPlatformError` (WebKitGTK has no page-to-PDF-bytes API). Takes no options object (no page size, margins, etc. yet).
+Returns `Promise<Buffer>` - renders the current page to a PDF and resolves to its bytes. _macOS only._ On Linux it rejects with an `UnsupportedPlatformError` (WebKitGTK has no page-to-PDF-bytes API). On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no PDF sink (confirmed by parsing the DLL exports), so it rejects there too. Takes no options object (no page size, margins, etc. yet).
 
 ```ts
 import { writeFile } from 'node:fs/promises';
@@ -156,7 +156,7 @@ await writeFile('out.pdf', pdf);
 
 ### `contents.capturePage()`
 
-Returns `Promise<NativeImage>` - captures the page to a [`NativeImage`](native-image.md). _macOS only._ Rejects on Linux. No `rect` / `opts` arguments.
+Returns `Promise<NativeImage>` - captures the page to a [`NativeImage`](native-image.md). _macOS only._ Rejects on Linux. On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no UI-process snapshot entry point (confirmed by parsing the DLL exports), so it rejects there too. No `rect` / `opts` arguments.
 
 ```ts
 const image = await win.webContents.capturePage(); // macOS only
@@ -209,7 +209,7 @@ Returns `string` - the User-Agent override set via `setUserAgent`, or `''` if no
 
 * `handler` Function - receives `{ url }` and returns `{ action: 'allow' | 'deny' }`.
 
-Sets the handler consulted when the page requests a new window (`window.open` / `target=_blank`). Honest caveat: the native popup is **always blocked** in v1 - child-window creation isn't supported. Returning `{ action: 'allow' }` logs a warning and still blocks the window, so the practical pattern is to open the URL externally and return `deny`. The handler's return shape is `{ action }` only - no `overrideBrowserWindowOptions`, and there is no `did-create-window` event.
+Sets the handler consulted when the page requests a new window (`window.open` / `target=_blank`). Honest caveat: the native popup is **always blocked** on every platform - child-window creation isn't supported, so `{ action: 'allow' }` is unimplemented everywhere. Returning `{ action: 'allow' }` logs a warning and still blocks the window, so the practical pattern is to open the URL externally and return `deny`. The handler's return shape is `{ action }` only - no `overrideBrowserWindowOptions`, and there is no `did-create-window` event.
 
 ```ts
 import { shell } from 'bunmaska';
@@ -222,7 +222,7 @@ win.webContents.setWindowOpenHandler(({ url }) => {
 
 ### `contents.openDevTools()`
 
-Opens the developer tools (web inspector) for this view. Best-effort: on macOS it relies on a private inspector SPI and logs a warning if unavailable; on Linux it uses the WebKitGTK inspector. No `options` argument (no docking mode).
+Opens the developer tools (web inspector) for this view. Best-effort: on macOS it relies on a private inspector SPI and logs a warning if unavailable; on Linux it uses the WebKitGTK inspector. On Windows it is **stubbed** (no-op) - the WinCairo inspector is not wired. No `options` argument (no docking mode).
 
 ```ts
 win.webContents.openDevTools();
@@ -230,7 +230,7 @@ win.webContents.openDevTools();
 
 ### `contents.closeDevTools()`
 
-Closes the developer tools. Best-effort.
+Closes the developer tools. Best-effort. Stubbed (no-op) on Windows, like `openDevTools`.
 
 ### `contents.toggleDevTools()`
 
@@ -364,9 +364,9 @@ Electron's `webContents` is huge; Bunmaska implements the navigation + scripting
 - **Process / lifecycle events** - `render-process-gone`, `unresponsive` / `responsive`, `crashed`, `destroyed`, `will-prevent-unload`. There's no separate renderer process to go gone.
 - **DevTools protocol** - no `debugger` (CDP), no `inspectElement`, no `setDevToolsWebContents`. DevTools is open/close/toggle only.
 - **Input & focus** - no `sendInputEvent`, `before-input-event` / `input-event`, `focus()` / `isFocused()`, `beginFrameSubscription`, `startDrag`.
-- **Printing & content** - `print()` (only `printToPDF`, macOS-only), `savePage`, `getPrintersAsync`, `findInPage` / `stopFindInPage`.
+- **Printing & content** - `print()` (only `printToPDF`, macOS-only; engine-blocked on Windows), `savePage`, `getPrintersAsync`, `findInPage` / `stopFindInPage`.
 - **Editing & clipboard commands** - `undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`/`replace`, `cut`-style menu wiring, `replaceMisspelling`.
 - **Media / audio** - `isAudioMuted` / `setAudioMuted`, `setBackgroundThrottling`, `getOSProcessId`, `getProcessId`.
 - **`setWindowOpenHandler` with `allow`** - child-window creation is unsupported, so `{ action: 'allow' }` is logged and ignored; there is no `did-create-window`, and the handler return type omits `overrideBrowserWindowOptions`.
-- **`capturePage` / `printToPDF` on Linux** - present in the API but reject with `UnsupportedPlatformError`; both are _macOS only_ for now.
+- **`capturePage` / `printToPDF` off macOS** - present in the API but reject elsewhere: `UnsupportedPlatformError` on Linux, and **engine-blocked on Windows** (the WinCairo WebKit2 C API exposes neither a PDF sink nor a UI-process snapshot). Both are _macOS only_ for now.
 - **Session / zoom plumbing** - no `session` property, no `setVisualZoomLevelLimits`, no `zoomLevel` persistence across reloads (zoom is stored in-memory and reapplied per `setZoomFactor`).

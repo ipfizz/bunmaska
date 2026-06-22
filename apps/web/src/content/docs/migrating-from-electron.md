@@ -26,7 +26,7 @@ Reaching for a known-but-unimplemented module (say `electron.netLog`) fails loud
 
 ## What ports cleanly
 
-Windows, web contents, IPC, context isolation, menus, dialogs, clipboard (incl. images), tray, protocol handlers, power monitoring, `safeStorage`, `nativeImage`, `nativeTheme`, `globalShortcut`, notifications, screen info - on both macOS and Linux. See the [parity matrix](/docs/migrating/parity) for method-level detail.
+Windows, web contents, IPC, context isolation, menus, dialogs, clipboard (incl. images), tray, protocol handlers, power monitoring, `safeStorage`, `nativeImage`, `nativeTheme`, `globalShortcut`, notifications, screen info - across macOS, Linux, and Windows. A handful of cells differ per platform (e.g. custom protocols and `printToPDF`/`capturePage` are engine-blocked on Windows); see the [parity matrix](/docs/migrating/parity) for method-level detail.
 
 ## What needs real work
 

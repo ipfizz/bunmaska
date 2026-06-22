@@ -8,7 +8,7 @@ Process: Main
 
 The `powerSaveBlocker` module blocks the system (and optionally the display) from entering low-power sleep - for downloads, audio, or video playback. In Bunmaska it is a start/stop registry: `start()` asks the platform backend for a native blocker, files it under a fresh incrementing id, and hands you that id; `stop()` releases the native handle and forgets the id.
 
-Backends are real: macOS holds an IOKit `IOPMAssertion` (synchronous, no run loop needed), and Linux holds an `org.freedesktop.ScreenSaver` inhibition cookie over D-Bus. The module-level API surface matches Electron's exactly - there are no events or properties on this module, so what you see below is the whole thing.
+Backends are real: macOS holds an IOKit `IOPMAssertion` (synchronous, no run loop needed), Linux holds an `org.freedesktop.ScreenSaver` inhibition cookie over D-Bus, and Windows calls `SetThreadExecutionState` (both `prevent-app-suspension` and `prevent-display-sleep` map to real flags). The module-level API surface matches Electron's exactly - there are no events or properties on this module, so what you see below is the whole thing.
 
 ```ts
 import { powerSaveBlocker } from 'bunmaska';
@@ -99,4 +99,4 @@ A few honest caveats on behavior rather than missing members:
 
 - **Linux is gated and coarse.** The Linux backend only runs when `BUNMASKA_ENABLE_LINUX_POWER_BLOCKER` is set and a session bus is present; otherwise `start()` returns a valid id but does nothing. Both blocker types collapse to the same `org.freedesktop.ScreenSaver` idle inhibition, so `prevent-app-suspension` and `prevent-display-sleep` are not yet distinguished on Linux, and lid-close/explicit sleep are not blocked (the logind fd path is a future upgrade).
 - **No-mechanism platforms are no-ops.** On any platform without a wired backend (or headless CI), the registry still hands out ids and tracks them, but no native assertion is taken. This matches Electron's "always returns an integer" contract, just without the real-world effect.
-- **Windows is out of scope.** Bunmaska targets macOS and Linux only, so there is no Windows power-management backend.
+- **Windows is fully supported.** The Windows backend uses `SetThreadExecutionState`, with both `prevent-app-suspension` and `prevent-display-sleep` mapped to real execution-state flags.

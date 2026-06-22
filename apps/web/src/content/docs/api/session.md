@@ -1,6 +1,6 @@
 ---
 title: "session"
-description: "The main-process session module in Bunmaska: a default session with a process-wide User-Agent override and (macOS) website-data clearing."
+description: "The main-process session module in Bunmaska: a default session with a process-wide User-Agent override and storage-data clearing (macOS, Windows; not yet wired on Linux)."
 order: 22
 ---
 
@@ -73,19 +73,24 @@ app.whenReady().then(() => {
 
 ### `ses.clearStorageData()`
 
-`clearStorageData(): Promise<void>` _macOS_
+`clearStorageData(): Promise<void>` _macOS, Windows_
 
-Clears all of the default data store's website data - cache, cookies, local and session storage, IndexedDB, and the rest - and resolves when the clear completes.
+Clears the default data store's website data and resolves when the clear completes.
 
-This is the all-or-nothing form. Bunmaska does not yet accept Electron's `options` argument (`origin` / `storages`), so you cannot scope the clear to a specific origin or storage type; it wipes everything.
+This is the all-or-nothing form. Bunmaska does not yet accept Electron's `options` argument (`origin` / `storages`), so you cannot scope the clear to a specific origin or storage type.
 
-Platform: wired on **macOS** only. On **Linux** it currently rejects with an `UnsupportedPlatformError` (`WebKitWebsiteDataManager` clearing is a follow-up).
+Platform notes on exactly _what_ gets cleared:
+
+- **macOS** - clears **all** website data: cache, cookies, local and session storage, IndexedDB, and the rest.
+- **Windows** - clears cookies and the fetch/HTTP caches. Clearing local storage and IndexedDB is a follow-up, so it is **not** the full wipe macOS performs yet.
+- **Linux** - not yet wired: `clearStorageData` currently rejects with an `UnsupportedPlatformError` (`WebKitWebsiteDataManager` clearing is a follow-up).
 
 ```ts
 import { session } from 'bunmaska';
 
 async function signOut() {
-  // macOS: clears cache, cookies, localStorage, IndexedDB, etc.
+  // macOS: clears everything. Windows: clears cookies + fetch caches.
+  // Linux: rejects (not yet wired).
   await session.defaultSession.clearStorageData();
 }
 ```
@@ -95,9 +100,9 @@ async function signOut() {
 The default session is deliberately minimal right now. Compared to Electron's `session` module, the following are **not** implemented:
 
 - **`session.fromPartition()` / `session.fromPath()`** - no partitioned or path-based sessions; there is only `defaultSession`. The `cache` option and `persist:` semantics don't exist.
-- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options are ignored/absent; only the full wipe exists. And it's macOS-only - Linux rejects.
+- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options are ignored/absent; only the unscoped clear exists. It works on macOS (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up); Linux rejects.
 - **Cookies (`ses.cookies`)** - no `Cookies` object for getting/setting/removing individual cookies.
-- **Cache (`ses.getCacheSize()`, `ses.clearCache()`)** - no granular cache inspection or HTTP-cache-only clear (use `clearStorageData()` to nuke everything on macOS).
+- **Cache (`ses.getCacheSize()`, `ses.clearCache()`)** - no granular cache inspection or HTTP-cache-only clear (use `clearStorageData()`, which clears everything on macOS and cookies + fetch caches on Windows).
 - **Proxy (`ses.setProxy()`, `ses.resolveProxy()`, `ses.forceReloadProxyConfig()`)** - no proxy configuration.
 - **Network interception (`ses.webRequest`, `ses.protocol`, `ses.fetch()`)** - no request interception, custom protocols, or main-process fetch.
 - **Permissions (`ses.setPermissionRequestHandler()`, `ses.setPermissionCheckHandler()`, `ses.setDisplayMediaRequestHandler()`)** - no permission plumbing.
@@ -109,4 +114,4 @@ The default session is deliberately minimal right now. Compared to Electron's `s
 - **`acceptLanguages` argument to `setUserAgent`** - only the User-Agent string is honored.
 - **Events** - the `Session` class emits no events at all yet (no `will-download`, no device events, etc.).
 
-If your app only needs a custom User-Agent and a "clear everything" button (on macOS), the current surface covers it. Anything cookie-, proxy-, permission-, or interception-shaped is still on the roadmap.
+If your app only needs a custom User-Agent and a storage-clearing button (a full wipe on macOS, cookies + fetch caches on Windows; not yet on Linux), the current surface covers it. Anything cookie-, proxy-, permission-, or interception-shaped is still on the roadmap.

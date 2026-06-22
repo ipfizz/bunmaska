@@ -1,12 +1,12 @@
 ---
 title: "protocol"
-description: "Register custom URL schemes (e.g. app://) and serve bytes for them from the main process, on macOS and Linux."
+description: "Register custom URL schemes (e.g. app://) and serve bytes for them from the main process. Serving works on macOS and Linux; engine-blocked on Windows."
 order: 17
 ---
 
 Register a custom URL scheme and serve its requests from the main process. A handler bound to a scheme like `app` is invoked for every request to that scheme and returns the bytes plus MIME type to serve, so bundled assets can come from `app://host/index.html` without standing up a real HTTP server.
 
-In Bunmaska the public surface is a single module-level registry (there is no per-`session` `protocol` object yet). Custom schemes must be registered **before** the window/web view that serves them is created - the native backends read the registered schemes at web-view creation and cannot add a scheme to a view that already exists. Wiring is in place on both macOS (`WKURLSchemeHandler` via `setURLSchemeHandler:forURLScheme:`) and Linux (WebKitGTK's `webkit_web_context_register_uri_scheme`).
+In Bunmaska the public surface is a single module-level registry (there is no per-`session` `protocol` object yet). The registry API itself - `handle`, `unhandle`, `isProtocolHandled`, `getRegisteredSchemes`, `dispatch`, etc. - exists on every platform, including Windows. What differs is **serving**: registered schemes are actually served to web views only on macOS (`WKURLSchemeHandler` via `setURLSchemeHandler:forURLScheme:`) and Linux (WebKitGTK's `webkit_web_context_register_uri_scheme`). On Windows serving is **engine-blocked** - the WinCairo WebKit2 C API exposes no custom-scheme-handler entry point, so a registered scheme such as `app://` will not serve there. Custom schemes must be registered **before** the window/web view that serves them is created - the native backends read the registered schemes at web-view creation and cannot add a scheme to a view that already exists.
 
 > A note on the handler shape: unlike Electron's `protocol.handle`, which returns a web `Response`/`Promise<Response>`, Bunmaska's handler is **synchronous** and returns a small `{ data, mimeType }` object (or `undefined` to decline). Plan accordingly - see [Not in Bunmaska (yet)](#not-in-bunmaska-yet).
 
@@ -69,7 +69,7 @@ protocol.isProtocolHandled('other');  // false
 
 * Returns `string[]`
 
-Every currently registered scheme, normalized. The native backends iterate this list at web-view creation to wire each scheme onto the platform web view (`setURLSchemeHandler:forURLScheme:` on macOS, `webkit_web_context_register_uri_scheme` on Linux). Useful in app code mainly to introspect what is registered.
+Every currently registered scheme, normalized. The native backends iterate this list at web-view creation to wire each scheme onto the platform web view (`setURLSchemeHandler:forURLScheme:` on macOS, `webkit_web_context_register_uri_scheme` on Linux; nothing to wire on Windows, where serving is engine-blocked). Useful in app code mainly to introspect what is registered.
 
 ```ts
 import { protocol } from 'bunmaska';

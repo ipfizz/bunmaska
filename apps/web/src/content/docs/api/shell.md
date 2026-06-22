@@ -1,10 +1,10 @@
 ---
 title: "shell"
-description: "Open files and URLs in their default applications, reveal items in the file manager, and play the system beep - on macOS and Linux."
+description: "Open files and URLs in their default applications, reveal items in the file manager, and play the system beep - on macOS, Linux, and Windows."
 order: 16
 ---
 
-The `shell` module handles desktop integration: open URLs and files in their default applications, reveal a file in the OS file manager, and play the system beep. It works on both macOS and Linux, and is exposed in both the main and renderer processes.
+The `shell` module handles desktop integration: open URLs and files in their default applications, reveal a file in the OS file manager, and play the system beep. It works on macOS, Linux, and Windows (where `openExternal`/`openPath`/`showItemInFolder`/`beep` go through `ShellExecuteW` and `MessageBeep`), and is exposed in both the main and renderer processes.
 
 ```ts
 import { shell } from 'bunmaska';
@@ -20,7 +20,7 @@ A note on shapes: `openExternal` and `openPath` return Promises (matching Electr
 
 Returns `Promise<boolean>` - resolves to whether the URL was successfully handed off to the OS.
 
-Opens an external URL in the desktop's default manner - `https:` in the default browser, `mailto:` in the default mail client, and so on. On macOS this goes through `NSWorkspace`; on Linux through the GTK/GIO launcher.
+Opens an external URL in the desktop's default manner - `https:` in the default browser, `mailto:` in the default mail client, and so on. On macOS this goes through `NSWorkspace`; on Linux through the GTK/GIO launcher; on Windows through `ShellExecuteW`.
 
 Note the return type difference from Electron: Electron's `openExternal` resolves to `void` and rejects on failure, whereas Bunmaska resolves to a `boolean` success flag and does not reject. Bunmaska also does not accept the second `options` argument (`activate`, `workingDirectory`, `logUsage`) - those Electron options were either macOS/Windows-specific or no-ops here.
 
@@ -50,7 +50,7 @@ if (error) {
 
 ### `shell.showItemInFolder(path)`
 
-Reveals a file or folder in the OS file manager, selecting it if possible (Finder on macOS, the default file manager on Linux). Synchronous, returns `void`.
+Reveals a file or folder in the OS file manager, selecting it if possible (Finder on macOS, the default file manager on Linux, Explorer on Windows). Synchronous, returns `void`.
 
 ```ts
 import { shell } from 'bunmaska';
@@ -74,6 +74,6 @@ Bunmaska implements four of Electron's `shell` methods. The following Electron m
 
 - **`shell.trashItem(path)`** - moving a file to the OS trash/recycle bin is not implemented on either platform. There is no fallback; if you need it today you must shell out yourself.
 - **`shell.openExternal` options** - the `options` argument (`activate` _macOS_, `workingDirectory` _Windows_, `logUsage` _Windows_) is not accepted. Bunmaska's `openExternal` takes only `url`.
-- **`shell.writeShortcutLink(...)` / `shell.readShortcutLink(...)`** - Windows-only shortcut (`.lnk`) APIs. Bunmaska targets macOS and Linux only, so these are intentionally out of scope rather than merely "not yet."
+- **`shell.writeShortcutLink(...)` / `shell.readShortcutLink(...)`** - Windows-only shortcut (`.lnk`) APIs. Even though Bunmaska now ships on Windows, these are not implemented; they remain genuinely out of scope rather than merely "not yet."
 
 One behavioral difference worth repeating: `shell.openExternal` resolves to a `boolean` success flag and never rejects, whereas Electron resolves to `void` and rejects on failure.

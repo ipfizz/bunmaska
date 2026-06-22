@@ -166,4 +166,4 @@ The router covers the everyday `on`/`once`/`handle` flow, but several Electron m
 * **`EventEmitter` surface** - because `ipcMain` is not an `EventEmitter`, methods like `eventNames()`, `listenerCount()`, `setMaxListeners()`, and `prependListener()` are unavailable.
 * **Full-fidelity error propagation** - `handle` errors are flattened to the `message` string only; stack traces and custom error properties are lost across the boundary (the same limitation Electron documents, noted here for parity).
 
-Everything in the [Methods](#methods) section above is genuinely wired and exercised without FFI, so the core renderer-to-main messaging story works on both macOS and Linux.
+Everything in the [Methods](#methods) section above is genuinely wired and exercised without FFI. The router is platform-neutral and the renderer-to-main transport (the WebKit script-message channel) works on all three platforms - macOS, Linux, and Windows.

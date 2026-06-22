@@ -8,7 +8,7 @@ Retrieve information about connected displays and their geometry. `screen` is th
 
 Process: Main
 
-Unlike Electron, Bunmaska's `screen` is **not** an `EventEmitter` and emits no events - it is a plain object with methods. Display geometry comes from CoreGraphics scalar getters on macOS and GTK4's `GdkMonitor` model on Linux. There is no Windows support (Bunmaska is macOS + Linux only).
+Unlike Electron, Bunmaska's `screen` is **not** an `EventEmitter` and emits no events - it is a plain object with methods. Display geometry comes from CoreGraphics scalar getters on macOS, GTK4's `GdkMonitor` model on Linux, and `EnumDisplayMonitors` + `GetMonitorInfoW` + `GetDpiForMonitor` on Windows (displays, bounds, work area, and scale factor).
 
 ```ts
 import { app, BrowserWindow, screen } from 'bunmaska';
@@ -100,8 +100,8 @@ A connected display. Mirrors a subset of Electron's `Display`:
 * `size` `Size` - `{ width, height }` derived from `bounds`.
 * `workAreaSize` `Size` - `{ width, height }` derived from `workArea` (so currently identical to `size`).
 * `scaleFactor` number - device-pixel ratio (≥ 1).
-* `rotation` number - degrees clockwise. _macOS_ only reports real values (`CGDisplayRotation`); on Linux this is always `0`.
-* `internal` boolean - true for a built-in panel. _macOS_ only (`CGDisplayIsBuiltin`); on Linux this is always `false`.
+* `rotation` number - degrees clockwise. _macOS_ only reports real values (`CGDisplayRotation`); on Linux and Windows this is always `0`.
+* `internal` boolean - true for a built-in panel. _macOS_ only (`CGDisplayIsBuiltin`); on Linux and Windows this is always `false`.
 
 ### `Point`
 
@@ -131,7 +131,7 @@ Exported but test-only: injects a fake `ScreenBackend` so the pure geometry logi
 Compared to Electron's `screen`, these are missing:
 
 * **Events** - `display-added`, `display-removed`, and `display-metrics-changed` are not implemented. Bunmaska's `screen` is a plain object, not an `EventEmitter`, so there is no hot-plug or metrics-change notification. Re-call `getAllDisplays()` if you need fresh data.
-* **DIP/physical conversion methods** - `screenToDipPoint`, `dipToScreenPoint`, `screenToDipRect`, and `dipToScreenRect` are absent. (Most are Windows-only or Windows/Linux-only in Electron anyway, and Bunmaska has no Windows; on macOS Electron doesn't expose them either.)
+* **DIP/physical conversion methods** - `screenToDipPoint`, `dipToScreenPoint`, `screenToDipRect`, and `dipToScreenRect` are absent. (These are Windows-only or Windows/Linux-only in Electron; Bunmaska does not implement them on any backend, including Windows.)
 * **Working `getCursorScreenPoint()`** - present but stubbed to `{0,0}` on both platforms (see above).
 * **Real `workArea`** - reported but always equal to `bounds`; the OS-chrome inset is not subtracted yet.
 * **Accurate macOS multi-monitor origins** - secondary-display `bounds.x`/`bounds.y` are `(0,0)` on macOS pending bun:ffi struct-return support. Linux origins are exact.

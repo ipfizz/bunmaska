@@ -4,7 +4,7 @@ description: The head-to-head - same shape, a tenth of the weight - with the row
 order: 1
 ---
 
-The short version: on maturity, ecosystem, and Windows, Electron wins - it's a decade-old incumbent running half your desktop. On size, supply-chain footprint, and native-module DX, Bunmaska wins by a structural margin Electron can't close without un-bundling Chromium.
+The short version: on maturity, ecosystem, and depth-of-Windows, Electron wins - it's a decade-old incumbent running half your desktop. On size, supply-chain footprint, and native-module DX, Bunmaska wins by a structural margin Electron can't close without un-bundling Chromium. Bunmaska now runs on all three desktop OSes (Windows is x64-first, with a few engine-blocked APIs), so "no Windows" is no longer the simple dividing line it used to be.
 
 ## The table
 
@@ -18,13 +18,13 @@ The short version: on maturity, ecosystem, and Windows, Electron wins - it's a d
 | Native modules | node-gyp / N-API / electron-rebuild | **a `.ts` file that `dlopen`s the OS** |
 | Compile step | yes | **none** |
 | Runtime deps | several | **zero** |
-| Platforms | Win / macOS / Linux | **macOS + Linux** |
+| Platforms | Win / macOS / Linux | **Win (x64) / macOS / Linux** |
 | API | the original | **drop-in, ~70-80% parity** |
 | Maturity | 10+ years, runs everything | **alpha** |
 
 ## Where Electron still wins (yes, really)
 
-- **Windows.** Bunmaska doesn't have it. If you need Windows today, this is a dealbreaker, full stop.
+- **Windows depth.** Bunmaska now runs on Windows (x64), but Electron is still ahead there: Windows-on-ARM64, no engine-blocked APIs (Bunmaska can't serve custom `protocol://` or do `printToPDF`/`capturePage` on WinCairo), and a runtime you don't have to build/bundle yourself. If you need Windows ARM64 or those specific APIs today, Electron wins.
 - **The multi-process sandbox.** Electron isolates each renderer and survives a renderer crash. Bunmaska is one process - a WebKit/JSC crash takes the whole app with it. That's a real defense-in-depth trade, not a rounding error.
 - **Ecosystem & maturity.** electron-builder, Forge, a decade of Stack Overflow answers, thousands of compatible native modules, and actual production track record. Bunmaska has none of that yet.
 - **The long tail of the API.** That last ~20-30% - `BrowserView`, sync IPC, the Chromium-internal surface - is where you'll hit walls.
@@ -37,4 +37,4 @@ The short version: on maturity, ecosystem, and Windows, Electron wins - it's a d
 
 ## So which should you use?
 
-If you need Windows, the full API surface, or battle-tested stability **today** - use Electron, and check back on Bunmaska later. If you're shipping a focused macOS/Linux app and you care that it's small, fast, and doesn't drag a browser engine and a compiler toolchain along for the ride - that's exactly what Bunmaska is for.
+If you need Windows ARM64, the full API surface, or battle-tested stability **today** - use Electron, and check back on Bunmaska later. If you're shipping a focused app for macOS, Linux, or Windows x64 and you care that it's small, fast, and doesn't drag a browser engine and a compiler toolchain along for the ride - that's exactly what Bunmaska is for.

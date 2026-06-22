@@ -4,7 +4,7 @@ description: Exactly which operating systems and CPU architectures Bunmaska runs
 order: 4
 ---
 
-Bunmaska ships on **macOS and Linux** today. A **Windows** backend (WinCairo WebKit) is in active development - it's real in the code and runs on CI, but not yet shippable end-to-end (it needs a hosted WinCairo engine). The honest matrix, on the first page rather than three weeks into a port:
+Bunmaska ships on **macOS, Linux, and now Windows** - each driving the operating system's own WebKit in pure `bun:ffi`. macOS and Linux use the WebKit that's already on the machine; Windows has none, so it loads a **WinCairo WebKit we build from source and bundle**. Support isn't identical across the three, and we publish exactly where it differs (see the [parity matrix](/docs/migrating/parity)). The honest summary:
 
 ## The support matrix
 
@@ -12,7 +12,7 @@ Bunmaska ships on **macOS and Linux** today. A **Windows** backend (WinCairo Web
 | --- | --- | --- | --- |
 | **macOS** | ✅ Shipping | Apple Silicon (ARM64) + Intel (x64) | AppKit + `WKWebView` |
 | **Linux** | ✅ Shipping | x64 + ARM64 (incl. Raspberry Pi) | GTK 4 + WebKitGTK 6 |
-| **Windows** | 🚧 In development | x64 + ARM64 | WinCairo WebKit (from the store) |
+| **Windows** | ✅ Shipping (x64) | x64 today · ARM64 on the roadmap | WinCairo WebKit (built from source, bundled) |
 
 ## macOS
 
@@ -28,12 +28,12 @@ Bunmaska ships on **macOS and Linux** today. A **Windows** backend (WinCairo Web
 
 ## Windows
 
-**In active development.** A from-scratch Win32 backend is built on pure `bun:ffi` - native windows + a cooperative message pump, the **WinCairo WebKit** view (WebKit's real Windows port, *not* WebView2/Chromium), the renderer↔main IPC bridge, and ~10 modules (clipboard, tray, `safeStorage` via DPAPI, screen, shell, global shortcuts, power, native theme). It validates on a `windows-latest` CI runner.
+A from-scratch Win32 backend on pure `bun:ffi` - native windows + a cooperative message pump, the **WinCairo WebKit** view (WebKit's real Windows port, *not* WebView2/Chromium), the renderer↔main IPC bridge with context isolation, an application menu bar, and the secondary modules: clipboard (text/HTML/**images**), dialogs, menus, tray, notifications, `safeStorage` via DPAPI, screen, shell, global shortcuts, power monitor/blocker, native theme, and `session.clearStorageData`. It validates on a `windows-latest` CI runner alongside macOS and Linux.
 
-- **Architectures:** `x64` and `ARM64`. 32-bit (x86) is not supported, on purpose.
-- **Engine:** Windows ships no system WebKit, so an app loads **WinCairo `WebKit2.dll` from the engine store** - the same pinned-engine mechanism as the other platforms, with the engine directory put on the DLL search path so its dependency closure resolves beside it.
-- **The catch:** we don't host prebuilt WinCairo engines yet, so a Windows app needs one provided locally (`BUNMASKA_WEBKIT_PATH` or a local store install). Hosting those builds is the last step before Windows ships end-to-end - the same step Linux's pinned tier is waiting on.
-- **Known gaps:** `printToPDF` / `capturePage`, DevTools, clipboard images, and the tray context menu aren't wired yet - they throw a clear error rather than silently no-op. Full picture on the [roadmap](/roadmap).
+- **Architectures:** `x64` today. Upstream WinCairo is x64-only, so **ARM64 is on the roadmap**, not shipping. 32-bit (x86) is not supported, on purpose.
+- **Engine:** Windows ships no system WebKit, so an app loads a **WinCairo `WebKit2.dll`** - built from WebKit source by us (a clang-cl from-source build, proven end-to-end) and bundled with the app, or resolved from the engine store. The engine directory is placed on the DLL search path so its dependency closure (ICU, libcurl, ANGLE, …) resolves beside it.
+- **The distribution piece:** you can ship a Windows app **today** by building the engine and embedding it (`bunmaska build --embed-engine`, or point `BUNMASKA_WEBKIT_PATH` at a build). What's still coming is a **hosted prebuilt engine** so you don't have to build it yourself - the publish step that makes it turnkey.
+- **Engine-blocked gaps:** `printToPDF`, `capturePage`, and custom `protocol://` schemes can't be served on Windows - the WinCairo WebKit2 C API simply doesn't expose those entry points (confirmed against the DLL's exports). They throw a clear error rather than silently no-op. DevTools, the tray context menu, and a fully isolated content world are follow-ups. Full picture on the [parity matrix](/docs/migrating/parity).
 
 ## Requirements (all platforms)
 

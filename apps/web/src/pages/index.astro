@@ -53,10 +53,10 @@ const stats = [
 
 const features = [
   { icon: "lucide:zap", t: "Pure bun:ffi", d: "Zero compiled native code. Zero runtime deps. The whole framework is TypeScript calling the OS." },
-  { icon: "lucide:globe", t: "WebKit, not Chromium", d: "Renders on WebKit - WKWebView on macOS, WebKitGTK on Linux. No browser engine bundled into your app." },
+  { icon: "lucide:globe", t: "WebKit, not Chromium", d: "Renders on WebKit - WKWebView on macOS, WebKitGTK on Linux, WinCairo on Windows. No Chromium bundled into your app." },
   { icon: "lucide:blocks", t: "Electron-shaped API", d: "app, BrowserWindow, ipcMain, Menu, Tray, dialog… the names you already know. Drop-in shim included." },
-  { icon: "lucide:terminal", t: "A real CLI", d: "bunmaska init / dev / run / build. Scaffold, hot-reload, and package to .dmg or .deb." },
-  { icon: "lucide:monitor", t: "macOS + Linux, Windows next", d: "macOS and Linux ship today. A Windows backend - WinCairo WebKit, never Chromium - is in the build and running on CI." },
+  { icon: "lucide:terminal", t: "A real CLI", d: "bunmaska init / dev / run / build. Scaffold, hot-reload, and package to .dmg, .deb, or .exe." },
+  { icon: "lucide:monitor", t: "Three platforms", d: "macOS, Linux, and Windows all ship - each driving the OS's own WebKit, never Chromium. Windows is x64-first via a WinCairo build we compile ourselves." },
   { icon: "lucide:gauge", t: "Fast cold start", d: "No Chromium to boot, no V8 snapshot to thaw. Bun + JavaScriptCore, up before your splash screen would've loaded." },
 ];
 
@@ -68,12 +68,12 @@ const compare = [
   ["Compile step", "Yes, and it'll fail somewhere", "None"],
   ["Runtime deps", "Several", "Zero"],
   ["Runtime", "Node + V8", "Bun + JavaScriptCore"],
-  ["Platforms", "Win / macOS / Linux", "macOS + Linux (Windows in dev)"],
+  ["Platforms", "Win / macOS / Linux", "Win (x64) / macOS / Linux"],
   ["Familiar API", "The original", "Drop-in, ~70-80% parity"],
 ];
 
 const faqs = [
-  ["Windows?", "macOS and Linux ship today. Windows is now in the build - a WinCairo WebKit backend (never Chromium), running on CI. It still needs a hosted engine before it ships end-to-end, but it's no longer 'someday.' Windows folks: getting close."],
+  ["Windows?", "Yes - Windows ships now (x64), driven by a from-source WinCairo WebKit build (never Chromium), green on CI alongside macOS and Linux. A few APIs are engine-blocked there (custom protocols, printToPDF, capturePage); ARM64 and a hosted prebuilt engine are still on the roadmap. The parity matrix is honest about every cell."],
   ["Production-ready?", "It says alpha for a reason. Use it for the thing you were going to rewrite anyway."],
   ["Why no Chromium?", "Because it's already on your computer, and shipping a second one is how we got here."],
   ["What's the catch?", "~70-80% of Electron's surface, and we publish the parity matrix so you can check before you commit."],
