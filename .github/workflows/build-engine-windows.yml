@@ -1,19 +1,29 @@
 name: build-engine-windows
 
-# Builds OUR OWN WinCairo WebKit engine FROM SOURCE on a provisioned Windows
-# runner, relocates it into the Bunmaska engine-store layout, and proves it loads
-# from the store — the Windows peer of `build-engine.yml` (which relocates apt's
-# WebKitGTK on Linux). Windows has no system WebKit and we will never ship
-# Playwright's build, so the engine is our own from-source binary. This is heavy
-# (a full WebKit compile is ~hours and GBs), so it runs on demand / on the engine
-# branch only — never on every push.
+# Builds OUR OWN WinCairo WebKit engine FROM SOURCE on a Windows runner, relocates
+# it into the Bunmaska engine-store layout, and proves it loads from the store —
+# the Windows peer of `build-engine.yml` (which relocates apt's WebKitGTK on Linux).
+# Windows has no system WebKit and we never ship Playwright's build, so the engine
+# is our own from-source binary.
+#
+# This recipe mirrors the one proven locally end-to-end (a real BrowserWindow loaded
+# the from-source engine from the store: STORE_ENGINE_OK). Notes baked in from that:
+#   * WinCairo dropped MSVC — it builds with clang-cl, so we install LLVM 20.
+#   * WebKit's code-gen needs gperf on PATH.
+#   * A short WEBKIT_OUTPUTDIR avoids Windows' 250-char object-path limit in vcpkg.
+#   * patch-webkit-wincairo.py routes ~300 serializer inputs through a response file
+#     (otherwise the inline command line overflows cmd.exe's ~8191-char limit).
+#   * `ninja -k 0` finishes past a broken dev-tooling target (compile_commands.json)
+#     that no product DLL depends on; success = WebKit2.dll exists.
+#
+# Heavy (~hours, GBs): runs on demand / on the engine branch only.
 on:
   workflow_dispatch:
     inputs:
       webkit_tag:
-        description: 'WebKit git tag to build (e.g. webkitgtk-2.46.0)'
+        description: 'WebKit git tag to build (e.g. wpewebkit-2.46.0)'
         required: true
-        default: 'webkitgtk-2.46.0'
+        default: 'wpewebkit-2.46.0'
   push:
     branches: [feat/windows-engine]
 
@@ -21,63 +31,88 @@ jobs:
   build:
     name: build WinCairo from source (windows)
     runs-on: windows-latest
-    # A full WebKit compile is long; cap well under GitHub's 6h ceiling so a hang
-    # fails rather than burning the whole budget.
     timeout-minutes: 350
     env:
-      WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'webkitgtk-2.46.0' }}
+      WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'wpewebkit-2.46.0' }}
+      # Short build-output root (WebKit honours WEBKIT_OUTPUTDIR): vcpkg's ICU build
+      # generates pathologically deep try-compile object paths that blow past
+      # Windows' 250-char limit when nested under the workspace.
+      WEBKIT_OUTPUTDIR: C:\wkb
+      LLVM_DIR: C:\llvm20\clang+llvm-20.1.8-x86_64-pc-windows-msvc
     steps:
       - name: Checkout bunmaska
         uses: actions/checkout@v4
         with:
           path: bunmaska
 
-      # Shallow-clone WebKit at the pinned tag — the full history is enormous and a
-      # build only needs the tree at that revision.
+      # Clone WebKit to a SHORT path (C:\WebKit) at the pinned tag; shallow (history
+      # is enormous, the build only needs the tree at that revision).
       - name: Checkout WebKit at the pinned tag
-        run: |
-          git clone --depth 1 --branch "$env:WEBKIT_TAG" https://github.com/WebKit/WebKit.git WebKit
+        run: git clone --depth 1 --branch "$env:WEBKIT_TAG" https://github.com/WebKit/WebKit.git C:\WebKit
         shell: pwsh
 
-      # CMake + Visual Studio are preinstalled on windows-latest; WebKit also needs
-      # Ninja, Perl, and Ruby for its build scripts.
-      - name: Install build tools (ninja, perl, ruby)
+      - name: Apply Bunmaska's WinCairo build patch (serializers response file)
+        run: python bunmaska/packages/bunmaska/tools/engine/patch-webkit-wincairo.py C:\WebKit
+        shell: pwsh
+
+      # cmake + VS are preinstalled; add ninja, perl, ruby, gperf.
+      - name: Install build tools (ninja, perl, ruby, gperf)
         run: |
           choco install -y ninja strawberryperl ruby
+          curl.exe -L -A "Mozilla/5.0" -o "$env:TEMP\gperf.zip" `
+            "https://master.dl.sourceforge.net/project/ezwinports/gperf-3.1-w32-bin.zip?viasf=1"
+          Expand-Archive "$env:TEMP\gperf.zip" -DestinationPath C:\gperf -Force
         shell: pwsh
 
-      # WebKit's build drives MSVC; put the x64 toolchain on PATH.
+      # WinCairo builds with clang-cl: install LLVM 20 (the find_library for
+      # clang_rt.builtins resolves relative to the clang-cl compiler).
+      - name: Install LLVM 20 (clang-cl)
+        run: |
+          curl.exe -L -o "$env:TEMP\llvm.tar.xz" `
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/clang%2Bllvm-20.1.8-x86_64-pc-windows-msvc.tar.xz"
+          New-Item -ItemType Directory -Force -Path C:\llvm20 | Out-Null
+          tar.exe -xf "$env:TEMP\llvm.tar.xz" -C C:\llvm20
+        shell: pwsh
+
       - name: Set up MSVC (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # build-webkit --wincairo generates the CMake project, auto-fetches the
-      # WinCairoRequirements dependency bundle (ICU, libcurl, ANGLE, …), and builds
-      # WebKit2.dll + the helper processes into WebKitBuild/Release/bin64.
-      - name: Build WebKit (WinCairo, Release)
-        working-directory: WebKit
+      # build-webkit configures (auto-building the vcpkg deps) and compiles; it stops
+      # on the broken dev-tooling target, so a follow-up `ninja -k 0` finishes the
+      # product DLLs. clang-cl is the compiler (CC/CXX); gperf + clang on PATH.
+      - name: Build WebKit (WinCairo, Release, clang-cl)
+        working-directory: C:\WebKit
+        env:
+          CC: ${{ env.LLVM_DIR }}\bin\clang-cl.exe
+          CXX: ${{ env.LLVM_DIR }}\bin\clang-cl.exe
         run: |
+          $env:Path = "$env:LLVM_DIR\bin;C:\gperf\bin;$env:Path"
           perl Tools/Scripts/build-webkit --wincairo --release
+          if (-not (Test-Path "$env:WEBKIT_OUTPUTDIR\Release\bin\WebKit2.dll")) {
+            Write-Host "finishing past the dev-tooling target with ninja -k 0 ..."
+            ninja -C "$env:WEBKIT_OUTPUTDIR\Release" -k 0
+          }
+          if (-not (Test-Path "$env:WEBKIT_OUTPUTDIR\Release\bin\WebKit2.dll")) {
+            Write-Error "WebKit2.dll was not produced"; exit 1
+          }
         shell: pwsh
 
       - name: Compute the engine id from the tag
         id: id
         run: |
-          $ver = "$env:WEBKIT_TAG" -replace '^webkitgtk-', ''
-          $engineId = "webkit-2-$ver-bunmaska1-windows-x64"
-          "engine_id=$engineId" >> $env:GITHUB_OUTPUT
-          Write-Host "Engine id: $engineId"
+          $ver = "$env:WEBKIT_TAG" -replace '^(wpe|webkit)webkit-?|^webkitgtk-', ''
+          "engine_id=webkit-2-$ver-bunmaska1-windows-x64" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      # Relocate the build output into the store layout (the same script used and
-      # proven locally), then mark it installed.
+      # Relocate the from-source closure (Release/bin) into the store, mark installed.
       - name: Relocate into the engine store
         run: |
           $store = "$env:RUNNER_TEMP\store"
-          $bin = "$env:GITHUB_WORKSPACE\WebKit\WebKitBuild\Release\bin64"
           & bunmaska/packages/bunmaska/tools/engine/build-wincairo-windows.ps1 `
-            -Source $bin -OutDir $store -EngineId "${{ steps.id.outputs.engine_id }}"
+            -Source "$env:WEBKIT_OUTPUTDIR\Release\bin" -OutDir $store `
+            -EngineId "${{ steps.id.outputs.engine_id }}"
           New-Item -ItemType File -Force `
             -Path "$store\${{ steps.id.outputs.engine_id }}\INSTALLATION_COMPLETE" | Out-Null
         shell: pwsh
@@ -100,10 +135,7 @@ jobs:
         run: |
           $out = bun run tools/engine/windows-engine-load-probe.ts 2>&1 | Out-String
           Write-Host $out
-          if ($out -notmatch 'STORE_ENGINE_OK') {
-            Write-Error "engine did not load from the store"
-            exit 1
-          }
+          if ($out -notmatch 'STORE_ENGINE_OK') { Write-Error "engine did not load from the store"; exit 1 }
         shell: pwsh
 
       - name: Upload the engine artifact
