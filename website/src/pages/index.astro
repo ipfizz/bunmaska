@@ -77,7 +77,6 @@ const faqs = [
   ["Production-ready?", "It says alpha for a reason. Use it for the thing you were going to rewrite anyway."],
   ["Why no Chromium?", "Because it's already on your computer, and shipping a second one is how we got here."],
   ["What's the catch?", "~70-80% of Electron's surface, and we publish the parity matrix so you can check before you commit."],
-  ["What's the bigger picture?", "Bunmaska is the foundation. We're also building Chai on top of it - an app store and launcher for genuinely small native apps. That's a separate thing for later; the framework comes first."],
 ];
 
 // Type discipline: body 16px, small 14px (`text-sm`), one heading tier, one hero display.
@@ -116,6 +115,46 @@ const DISPLAY = "font-serif leading-[1.04] text-balance text-[clamp(2.5rem,5.5vw
 
         <p class="mt-6 text-base text-text-muted">
           <span class="text-[1.1em] italic" style="font-family:var(--font-serif);">Alpha - and we'll admit it.</span> macOS + Linux, Windows in the build.
+        </p>
+      </div>
+    </section>
+
+    <!-- 1.5 VS ELECTRON - the short version, up top where it matters -->
+    <section class="border-t border-border">
+      <div class="wrap py-24 sm:py-28">
+        <div class="mx-auto max-w-[42ch] text-center">
+          <p class="eyebrow mb-4">Bunmaska vs Electron</p>
+          <h2 class={HEAD}>
+            Same shape. <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
+              >A tenth of the weight.</span
+            >
+          </h2>
+        </div>
+
+        <div class="mx-auto mt-12 max-w-3xl overflow-hidden rounded-lg border border-border">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-bg-subtle text-left">
+                <th class="px-4 py-3 font-medium text-text-faint"></th>
+                <th class="px-4 py-3 font-semibold">Electron</th>
+                <th class="px-4 py-3 font-semibold text-accent-text">Bunmaska</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                compare.map(([label, e, b]) => (
+                  <tr class="border-t border-border align-top transition-colors duration-150 hover:bg-bg-subtle">
+                    <td class="px-4 py-3 text-text-muted">{label}</td>
+                    <td class="px-4 py-3 text-text-muted">{e}</td>
+                    <td class="px-4 py-3 font-medium text-text">{b}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="mx-auto mt-4 max-w-3xl text-center text-sm text-text-faint">
+          We left a few rows where Electron still wins. We're allergic to lying in tables too.
         </p>
       </div>
     </section>
@@ -325,43 +364,6 @@ const DISPLAY = "font-serif leading-[1.04] text-balance text-[clamp(2.5rem,5.5vw
         Most days you live in <code class="font-mono text-[0.85em]">init</code> →
         <code class="font-mono text-[0.85em]">dev</code> → <code class="font-mono text-[0.85em]">build</code>. The rest
         is there the day you need it. Full reference in <a href="/docs/cli" class="underline decoration-border underline-offset-2 hover:decoration-accent">the CLI docs</a>.
-      </p>
-    </section>
-
-    <!-- 7. VS ELECTRON -->
-    <section class="wrap py-24 sm:py-28">
-      <div class="mx-auto max-w-[42ch] text-center">
-        <h2 class={HEAD}>
-          Same shape. <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
-            >A tenth of the weight.</span
-          >
-        </h2>
-      </div>
-
-      <div class="mx-auto mt-12 max-w-3xl overflow-hidden rounded-lg border border-border">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-bg-subtle text-left">
-              <th class="px-4 py-3 font-medium text-text-faint"></th>
-              <th class="px-4 py-3 font-semibold">Electron</th>
-              <th class="px-4 py-3 font-semibold text-accent-text">Bunmaska</th>
-            </tr>
-          </thead>
-          <tbody>
-            {
-              compare.map(([label, e, b]) => (
-                <tr class="border-t border-border align-top transition-colors duration-150 hover:bg-bg-subtle">
-                  <td class="px-4 py-3 text-text-muted">{label}</td>
-                  <td class="px-4 py-3 text-text-muted">{e}</td>
-                  <td class="px-4 py-3 font-medium text-text">{b}</td>
-                </tr>
-              ))
-            }
-          </tbody>
-        </table>
-      </div>
-      <p class="mx-auto mt-4 max-w-3xl text-sm text-text-faint">
-        We left a few rows where Electron still wins. We're allergic to lying in tables too.
       </p>
     </section>
 
