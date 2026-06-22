@@ -1,6 +1,6 @@
 {
   "name": "bunmaska",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "A drop-in replacement for Electron, built on Bun and system WebKit.",
   "keywords": [
     "electron",
@@ -9,6 +9,9 @@
     "webkit",
     "wkwebview",
     "webkitgtk",
+    "wincairo",
+    "windows",
+    "win32",
     "desktop",
     "gui",
     "ffi",
@@ -17,7 +20,7 @@
   ],
   "license": "MIT",
   "author": "Indrajeet O.",
-  "homepage": "https://github.com/ipfizz/bunmaska",
+  "homepage": "https://bunmaska.org",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ipfizz/bunmaska.git"
@@ -63,7 +66,8 @@
   },
   "os": [
     "darwin",
-    "linux"
+    "linux",
+    "win32"
   ],
   "publishConfig": {
     "access": "public"
