@@ -52,7 +52,7 @@ jobs:
         shell: pwsh
 
       - name: Apply Bunmaska's WinCairo build patch (serializers response file)
-        run: python bunmaska/packages/bunmaska/tools/engine/patch-webkit-wincairo.py C:\WebKit
+        run: python bunmaska/tools/engine/patch-webkit-wincairo.py C:\WebKit
         shell: pwsh
 
       # cmake + VS are preinstalled; add ninja, perl, ruby, gperf.
@@ -110,7 +110,7 @@ jobs:
       - name: Relocate into the engine store
         run: |
           $store = "$env:RUNNER_TEMP\store"
-          & bunmaska/packages/bunmaska/tools/engine/build-wincairo-windows.ps1 `
+          & bunmaska/tools/engine/build-wincairo-windows.ps1 `
             -Source "$env:WEBKIT_OUTPUTDIR\Release\bin" -OutDir $store `
             -EngineId "${{ steps.id.outputs.engine_id }}"
           New-Item -ItemType File -Force `
@@ -128,7 +128,7 @@ jobs:
       # Prove the relocated engine works resolved purely from the store (no
       # BUNMASKA_WEBKIT_PATH): a real BrowserWindow + executeJavaScript.
       - name: Prove it loads from the store
-        working-directory: bunmaska/packages/bunmaska
+        working-directory: bunmaska
         env:
           BUNMASKA_ENGINES_PATH: ${{ runner.temp }}\store
           BUNMASKA_WEBKIT_ID: ${{ steps.id.outputs.engine_id }}

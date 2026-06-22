@@ -64,7 +64,7 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
 ];
 ---
 
-<Base title="Roadmap" description="What Bunmaska is building, where it is today, and the honest plan - including Windows (WinCairo on ARM64 + x64, never WebView2).">
+<Base title="Roadmap" description="What Bunmaska is building, where it is today, and the honest plan - including Windows (WinCairo WebKit, x64 today and ARM64 next, never WebView2).">
   <Nav />
 
   <main>
@@ -178,8 +178,8 @@ const phases: { status: Status; title: string; note?: string; items: string[] }[
               },
               {
                 icon: "lucide:cpu",
-                t: "ARM64 + x64. Never 32-bit.",
-                d: "Windows is moving to ARM (Snapdragon X, Copilot+ PCs, NVIDIA's 2026 laptops). ARM64 + x64 covers the present and the future; x86 is not on the list.",
+                t: "x64 today, ARM64 next. Never 32-bit.",
+                d: "x64 ships now; ARM64 is on the roadmap (upstream WinCairo is x64-only for the moment). Windows is moving to ARM - Snapdragon X, Copilot+ PCs, NVIDIA's 2026 laptops - so ARM64 is a when, not an if. x86 isn't on the list at all.",
               },
               {
                 icon: "lucide:package",

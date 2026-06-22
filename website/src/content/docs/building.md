@@ -61,7 +61,7 @@ Build on the target architecture: an `x64` box produces `x64`, an **ARM64** box 
 
 ## Windows
 
-Not available yet - see [Platform Support](/docs/platforms) and the [roadmap](/roadmap). When WinCairo support lands, `bunmaska build` will gain Windows targets.
+`bunmaska build --target windows` compiles a self-contained `.exe` and packages it as a `.zip` (x64). Because Windows ships no system WebKit, the app needs a **WinCairo `WebKit2.dll`** - today you build that from WebKit source and embed it (`--embed-engine`, or point `BUNMASKA_WEBKIT_PATH` at a build). A hosted prebuilt engine - so you don't have to build it yourself - is the next step. See [Platform Support](/docs/platforms) and the [roadmap](/roadmap).
 
 ## Auto-updates
 
