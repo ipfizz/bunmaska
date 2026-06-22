@@ -1,6 +1,7 @@
 ---
 import "../fonts";
 import "../styles/global.css";
+import { VERSION } from "../site";
 
 interface Props {
   title?: string;
@@ -24,10 +25,10 @@ const jsonLd = {
   "@type": "SoftwareApplication",
   name: "Bunmaska",
   applicationCategory: "DeveloperApplication",
-  operatingSystem: "macOS, Linux",
+  operatingSystem: "macOS, Linux, Windows",
   description,
   url: Astro.site?.href,
-  softwareVersion: "0.1.0-alpha.2",
+  softwareVersion: VERSION,
   license: "https://opensource.org/licenses/MIT",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
 };
