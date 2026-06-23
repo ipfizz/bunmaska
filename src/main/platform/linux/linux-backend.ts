@@ -18,6 +18,7 @@ import type {
   Rect,
   WindowEventType,
 } from '../native';
+import { WINDOW_CONTROLS_SCRIPT } from '../window-controls';
 import { ExecResultChannel } from './eval-js';
 import { loadGtkFFI } from './gtk-ffi';
 import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
@@ -71,7 +72,10 @@ class LinuxWebContents implements NativeWebContents {
       preloadSource: generatePreloadBootstrap(),
       isolatedSetupSource: generateIsolatedChannelSetup(channelId),
       isolatedHostSource: generateIsolatedHostSource(channelId),
-      pageWorldSource: generatePageWorldStub(channelId),
+      // Page world: the cross-world stub + the custom-title-bar controls/drag script
+      // (`window.__bunmaska.window` + `--app-region`). The native window-op handler
+      // that fulfils them on GTK is a follow-up; the API surface is injected now.
+      pageWorldSource: `${generatePageWorldStub(channelId)}\n${WINDOW_CONTROLS_SCRIPT}`,
       ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {
         for (const callback of this.#rendererEnvelopeCallbacks) {

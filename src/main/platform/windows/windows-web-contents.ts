@@ -10,6 +10,7 @@ import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type { NativeNavigationEvent, NativeWebContents } from '../native';
+import { WINDOW_CONTROLS_SCRIPT, WINDOW_HANDLER_NAME } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
 
 /**
@@ -32,46 +33,9 @@ import { WindowsWebView } from './windows-webkit-view';
 const HANDLER_NAME = 'bunmaska';
 /** Page-world handler name `executeJavaScript` posts its result to. */
 const EXEC_HANDLER_NAME = 'bunmaskaExec';
-/** Page-world handler name the built-in title-bar script posts window ops to. */
-const WINDOW_HANDLER_NAME = 'bunmaskaWindow';
 
 /** Reject a pending `executeJavaScript` after this long (ms). */
 const EXEC_TIMEOUT_MS = 30_000;
-
-/**
- * Built-in page-world script for custom (frameless) title bars — Bunmaska's answer
- * to Electron's `-webkit-app-region`, which WinCairo WebKit does not parse. It:
- *   - exposes `window.__bunmaska.window` controls (minimize/maximize/close/…), and
- *   - auto-starts a native window drag on a left-button mousedown over a region
- *     whose CSS custom property `--app-region` resolves to `drag`. Custom properties
- *     inherit, so set `--app-region: drag` on the bar and `--app-region: no-drag`
- *     on its buttons — exactly the cascade Electron's app-region gives you.
- * Each action posts `{ op }` to the `bunmaskaWindow` handler, routed to the window.
- */
-const WINDOW_CONTROLS_SCRIPT = `(function(){
-  var post = function(op){
-    try { window.webkit.messageHandlers.${WINDOW_HANDLER_NAME}.postMessage(JSON.stringify({ op: op })); } catch (e) {}
-  };
-  var b = (window.__bunmaska = window.__bunmaska || {});
-  b.window = {
-    minimize: function(){ post('minimize'); },
-    maximize: function(){ post('maximize'); },
-    unmaximize: function(){ post('unmaximize'); },
-    toggleMaximize: function(){ post('toggleMaximize'); },
-    close: function(){ post('close'); },
-    startDrag: function(){ post('drag'); }
-  };
-  document.addEventListener('mousedown', function(e){
-    if (e.button !== 0) return;
-    var n = e.target;
-    var el = n && n.nodeType === 1 ? n : (n && n.parentElement);
-    if (!el) return;
-    if (getComputedStyle(el).getPropertyValue('--app-region').trim() === 'drag') {
-      e.preventDefault();
-      post('drag');
-    }
-  }, true);
-})();`;
 
 const log = createLogger('windows-web-contents');
 

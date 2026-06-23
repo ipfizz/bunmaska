@@ -20,6 +20,7 @@ import type {
 } from '../native';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { WINDOW_CONTROLS_SCRIPT } from '../window-controls';
 import { makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
@@ -946,6 +947,9 @@ class MacOSApplication implements NativeApplication {
     // Page world: the cross-world stub that materialises contextBridge surfaces,
     // and the dom-ready notifier.
     addUserScript(generatePageWorldStub(channelId), pageWorld());
+    // Custom (frameless) title bars: exposes `window.__bunmaska.window` + mirrors
+    // `--app-region` onto `-webkit-app-region`, which WKWebView drags natively.
+    addUserScript(WINDOW_CONTROLS_SCRIPT, pageWorld());
     addUserScript(generateDomReadyScript(), pageWorld());
 
     const webview = msgSendInitWithFrameConfig(
