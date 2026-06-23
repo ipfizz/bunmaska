@@ -45,6 +45,11 @@ const WS_MAXIMIZEBOX = 0x00010000;
 const SW_HIDE = 0;
 const SW_SHOW = 5;
 
+/** `WM_NCLBUTTONDOWN` + `HTCAPTION`: tell the system to start moving the window
+ *  (used to drag a frameless window from a custom `-webkit-app-region`-style bar). */
+const WM_NCLBUTTONDOWN = 0x00a1;
+const HTCAPTION = 2;
+
 const WM_SYSCOMMAND = 0x0112;
 /** `wParam` low bits for the title-bar Close command. */
 const SC_CLOSE = 0xf060;
@@ -430,6 +435,19 @@ export class NativeWin32Window {
   /** Register the handler the frame proc fires for a menu-bar `WM_COMMAND`. */
   onMenuCommand(handler: (commandId: number) => void): void {
     this.#handlers.menuCommand = handler;
+  }
+
+  /**
+   * Begin an interactive window move — the equivalent of dragging the title bar,
+   * for frameless windows with a custom (`-webkit-app-region: drag`-style) bar.
+   * Releases mouse capture (the web view's child window holds it after mousedown)
+   * and hands off to the system's move loop, so dragging feels native (edge snap,
+   * Aero shake, etc.). Called from the renderer over the window-op message channel.
+   */
+  startWindowDrag(): void {
+    const user32 = loadUser32().symbols;
+    user32.ReleaseCapture();
+    user32.SendMessageW(this.#hwnd, WM_NCLBUTTONDOWN, BigInt(HTCAPTION), 0n);
   }
 
   /**

@@ -83,6 +83,9 @@ const USER32_SYMBOLS = {
     args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64],
     returns: FFIType.i32,
   },
+  // () -> BOOL — release mouse capture, so a custom-titlebar drag can hand off to
+  // the system move loop via WM_NCLBUTTONDOWN/HTCAPTION.
+  ReleaseCapture: { args: [], returns: FFIType.i32 },
   // (HWND, HWND insertAfter, int x, int y, int cx, int cy, UINT flags) -> BOOL
   SetWindowPos: {
     args: [

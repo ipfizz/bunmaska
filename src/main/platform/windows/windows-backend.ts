@@ -108,6 +108,9 @@ class WindowsWindow implements NativeWindow {
     this.#appMenuTarget = { setMenuBar: (bar) => this.#native.setMenuBar(bar) };
     this.#native.onMenuCommand((commandId) => windowsMenuRealizer.dispatchMenuCommand(commandId));
     windowsMenuRealizer.registerAppMenuWindow(this.#appMenuTarget);
+    // Custom (frameless) title bars: route the built-in title-bar script's window
+    // ops (drag / minimize / maximize / close) to the native window.
+    this.#webContents.onWindowOp((op) => this.#handleWindowOp(op));
     // On the committed-close path, tear down the web contents (reject pending
     // execs, release the view) before surfacing `closed` to the api layer.
     this.#native.onClosed(() => {
@@ -288,6 +291,34 @@ class WindowsWindow implements NativeWindow {
       0,
       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
     );
+  }
+
+  /** Apply a window op requested by the renderer's custom title bar. */
+  #handleWindowOp(op: string): void {
+    switch (op) {
+      case 'drag':
+        this.#native.startWindowDrag();
+        break;
+      case 'minimize':
+        this.minimize();
+        break;
+      case 'maximize':
+        this.maximize();
+        break;
+      case 'unmaximize':
+        this.unmaximize();
+        break;
+      case 'toggleMaximize':
+        if (this.isMaximized()) {
+          this.unmaximize();
+        } else {
+          this.maximize();
+        }
+        break;
+      case 'close':
+        this.close();
+        break;
+    }
   }
 
   close(): void {
