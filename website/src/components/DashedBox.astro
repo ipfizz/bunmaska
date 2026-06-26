@@ -1,0 +1,51 @@
+---
+interface Props {
+  columns?: number;
+  class?: string;
+}
+
+const {
+  columns = 12,
+  class: className = "",
+} = Astro.props;
+---
+
+<div
+  class={`relative overflow-hidden border border-gray-500/10 ${className}`}
+>
+  {
+    Array.from({ length: columns - 1 }).map((_, i) => (
+      <span
+        class="absolute top-0 bottom-0 w-px"
+        style={`
+          left: ${((i + 1) / columns) * 100}%;
+
+          background: linear-gradient(
+            to bottom,
+            transparent,
+            rgba(255,255,255,0.35),
+            transparent
+          );
+
+          mask: repeating-linear-gradient(
+            to bottom,
+            black 0px,
+            black 6px,
+            transparent 6px,
+            transparent 12px
+          );
+
+          -webkit-mask: repeating-linear-gradient(
+            to bottom,
+            black 0px,
+            black 6px,
+            transparent 6px,
+            transparent 12px
+          );
+        `}
+      />
+    ))
+  }
+
+  <slot />
+</div>

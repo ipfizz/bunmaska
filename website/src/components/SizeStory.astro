@@ -1,0 +1,67 @@
+---
+const stats = [
+  { num: "~16-23 MB", label: "download" },
+  { num: "~60 MB", label: "installed" },
+  { num: "0", label: "runtime deps" },
+  { num: "0", label: "compiled native code" },
+];
+
+const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+---
+
+<section class="wrap border py-10">
+  <div class="mx-auto max-w-[42ch] text-center">
+    <p class="eyebrow mb-4">The whole thing</p>
+    <h2 class={HEAD}>
+      ~16 MB. Yes, <span
+        class="text-[1.1em] italic font-normal text-accent-text"
+        style="font-family:var(--font-serif);">all of it.</span
+      >
+    </h2>
+    <p class="mt-4 text-text-muted">
+      Electron asks for 150 MB+ before it's done anything. Bunmaska is the
+      download you won't notice and the app you can't hear running.
+    </p>
+  </div>
+  <!-- The size story, at a glance -->
+  <div class="mt-12 space-y-5">
+    <div>
+      <div class="mb-2 flex items-baseline justify-between">
+        <span class="text-sm text-text-muted">A minimal Electron app</span>
+        <span class="font-mono text-sm text-text-faint">150 MB+</span>
+      </div>
+      <div class="h-2.5 w-full overflow-hidden rounded-full bg-bg-muted">
+        <div class="h-full w-full rounded-full bg-border-strong"></div>
+      </div>
+    </div>
+    <div>
+      <div class="mb-2 flex items-baseline justify-between">
+        <span class="text-sm font-medium text-text"
+          >The same app, on Bunmaska</span
+        >
+        <span class="font-mono text-sm text-accent-text">~16-23 MB</span>
+      </div>
+      <div class="h-2.5 w-full overflow-hidden rounded-full bg-bg-muted">
+        <div class="h-full rounded-full bg-accent" style="width:13%;"></div>
+      </div>
+    </div>
+    <p class="text-center text-sm text-text-faint">
+      Same app. One bundles a whole browser; the other just doesn't.
+    </p>
+  </div>
+
+  <div
+    class="mt-12 grid grid-cols-2 gap-px overflow-hidden border border-border bg-border md:grid-cols-4"
+  >
+    {
+      stats.map((s) => (
+        <div class="bg-bg px-5 py-9 text-center">
+          <div class="whitespace-nowrap text-[1.5rem] font-semibold tracking-tight">
+            {s.num}
+          </div>
+          <div class="mt-1.5 text-sm text-text-muted">{s.label}</div>
+        </div>
+      ))
+    }
+  </div>
+</section>

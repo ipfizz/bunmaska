@@ -1,0 +1,52 @@
+---
+import CodeBlock from "./CodeBlock.astro";
+
+const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+
+const cliCommands = `# scaffold · develop · ship
+bunmaska init my-app     # starter: main + preload + renderer + config
+bunmaska dev             # run with hot reload
+bunmaska build           # standalone .app / .deb
+bunmaska build --update  # + auto-update feed (update.json + .tar.zst)
+
+# engine management
+bunmaska engine list     # installed engines, side by side
+bunmaska engine which    # engine this project resolves to
+bunmaska engine install  # local dir or signed feed URL
+
+# sanity check
+bunmaska doctor          # runtime, store, and resolved engine`;
+---
+
+<section class="border border-border">
+  <div class="wrap py-12 sm:py-14">
+    <div class="mx-auto text-center">
+      <p class="eyebrow mb-4">One command</p>
+      <h2 class="text-4xl font-semibold">
+        The whole loop is
+        <span
+          style="font-family:var(--font-serif)"
+          class="font-mono tracking-wider text-accent-text">bunmaska</span
+        >.
+      </h2>
+      <p class="mt-4 text-sm text-text-faint">
+        Scaffold, develop, package, and manage engines — one CLI, pure Bun, no
+        Xcode project and no electron-builder. It never ships inside your app.
+      </p>
+    </div>
+
+    <div class="mx-auto mt-10 max-w-2xl">
+      <CodeBlock code={cliCommands} lang="sh" title="Terminal" />
+    </div>
+
+    <p class="mx-auto mt-4 max-w-2xl text-center text-xs text-text-faint">
+      Most days you live in <code>init</code> → <code>dev</code> → <code
+        >build</code
+      >. The rest is there the day you need it. Full reference in <a
+        href="/docs/cli"
+        class="text-accent-text underline decoration-border underline-offset-2 hover:decoration-accent-text"
+        >the CLI docs</a
+      >.
+    </p>
+  </div>
+</section>

@@ -1,0 +1,142 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<section class="border-border">
+  <div class="bento">
+    <!-- Bundle Size — stat card -->
+    <div class="cell col-span-6 md:col-span-3">
+      <p class="eyebrow">Bundle size</p>
+      <p class="stat mt-2">~16MB</p>
+      <p class="body mt-auto">
+        No Chromium. No giant runtime. Ship only what your app needs.
+      </p>
+    </div>
+
+    <!-- Runtime — feature card -->
+    <div class="cell col-span-6 md:col-span-3">
+      <span class="icon-wrap">
+        <Icon name="lucide:zap" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">Bun + JavaScriptCore</h3>
+      <p class="body">Fast startup. Modern runtime. Native WebKit rendering.</p>
+    </div>
+
+    <!-- No Native Builds -->
+    <div class="cell col-span-6 md:col-span-2">
+      <span class="icon-wrap">
+        <Icon name="lucide:puzzle" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">No native builds</h3>
+      <p class="body">
+        No node-gyp. No rebuild scripts. No compiler adventures.
+      </p>
+    </div>
+
+    <!-- Native WebKit -->
+    <div class="cell col-span-6 md:col-span-2">
+      <span class="icon-wrap">
+        <Icon name="lucide:monitor" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">Native WebKit</h3>
+      <p class="body">Uses the OS rendering engine — no bundled browser.</p>
+    </div>
+
+    <!-- Zero Deps -->
+    <div class="cell col-span-6 md:col-span-2">
+      <span class="icon-wrap">
+        <Icon name="lucide:package-open" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">Zero runtime deps</h3>
+      <p class="body">Fewer moving parts. Smaller attack surface.</p>
+    </div>
+
+    <!-- Big Feature — text card -->
+    <div class="cell col-span-6 space-y-1.5 md:col-span-4">
+      <p class="eyebrow">Familiar developer experience</p>
+      <h3 class="heading-lg">
+        Electron-style APIs.<br />
+        Native implementation.
+      </h3>
+      <p class="body mt-auto">
+        Keep the mental model. Drop the Chromium dependency. Build desktop apps
+        with less overhead and fewer surprises.
+      </p>
+    </div>
+
+    <!-- Platforms — stat card -->
+    <div class="cell col-span-6 md:col-span-2 justify-center">
+      <p class="stat accent">3</p>
+      <p class="mt-1 text-sm font-semibold text-text">Platforms</p>
+      <p class="mt-1 text-xs tracking-wide text-text-faint">
+        Windows · macOS · Linux
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    background-color: var(--surface);
+  }
+
+  .cell {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 180px;
+  }
+
+  .icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    background-color: var(--accent-bg);
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+  }
+
+  .stat {
+    font-size: var(--text-5xl);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: auto;
+  }
+
+  .stat.accent {
+    color: var(--accent-text);
+  }
+
+  .heading-lg {
+    font-size: var(--text-xl);
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  .heading {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+
+  .body {
+    font-size: var(--text-sm);
+    color: var(--text-faint);
+    line-height: 1.6;
+  }
+</style>
