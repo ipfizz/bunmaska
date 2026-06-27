@@ -568,6 +568,21 @@ class MacOSWindow implements NativeWindow {
     this.#bounds = { ...this.#bounds, width, height };
   }
 
+  setPosition(x: number, y: number): void {
+    // `setFrameOrigin:` shares the 2-double NSPoint ABI msgSendSize uses (avoiding
+    // the NSRect-by-value hazard of `setFrame:`). NOTE: macOS screen coordinates are
+    // bottom-left origin, so the top-left mapping (a screen-height flip) is a
+    // documented follow-up needing on-device verification. The tracked bounds are
+    // updated so getBounds/getPosition round-trip with what was set.
+    msgSendSize(this.#window, cocoa().selectors.get('setFrameOrigin:'), x, y);
+    this.#bounds = { ...this.#bounds, x, y };
+  }
+
+  setBounds(bounds: Rect): void {
+    this.setPosition(bounds.x, bounds.y);
+    this.setSize(bounds.width, bounds.height);
+  }
+
   getBounds(): Rect {
     return this.#bounds;
   }

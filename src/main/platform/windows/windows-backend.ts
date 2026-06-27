@@ -161,6 +161,30 @@ class WindowsWindow implements NativeWindow {
     );
   }
 
+  setPosition(x: number, y: number): void {
+    loadUser32().symbols.SetWindowPos(
+      this.#hwnd(),
+      0n,
+      x,
+      y,
+      0,
+      0,
+      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+    );
+  }
+
+  setBounds(bounds: Rect): void {
+    loadUser32().symbols.SetWindowPos(
+      this.#hwnd(),
+      0n,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      SWP_NOZORDER | SWP_NOACTIVATE,
+    );
+  }
+
   getBounds(): Rect {
     const rect = new Uint8Array(RECT_SIZE);
     loadUser32().symbols.GetWindowRect(this.#hwnd(), ptr(rect));
