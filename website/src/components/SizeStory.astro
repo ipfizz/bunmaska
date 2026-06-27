@@ -1,30 +1,32 @@
 ---
+import { HEAD } from "../styles/constants";
+
 const stats = [
   { num: "~16-23 MB", label: "download" },
   { num: "~60 MB", label: "installed" },
   { num: "0", label: "runtime deps" },
   { num: "0", label: "compiled native code" },
 ];
-
-const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
 ---
 
-<section class="wrap border py-10">
-  <div class="mx-auto max-w-[42ch] text-center">
+<section class="section-border pt-10">
+  <div class="text-center">
     <p class="eyebrow mb-4">The whole thing</p>
     <h2 class={HEAD}>
-      ~16 MB. Yes, <span
-        class="text-[1.1em] italic font-normal text-accent-text"
-        style="font-family:var(--font-serif);">all of it.</span
+      ~16 MB. Yes, 
+      <span
+        class="italic text-accent-text"
+        style="font-family:var(--font-serif);"
       >
+        all of it.
+      </span>
     </h2>
     <p class="mt-4 text-text-muted">
       Electron asks for 150 MB+ before it's done anything. Bunmaska is the
       download you won't notice and the app you can't hear running.
     </p>
   </div>
-  <!-- The size story, at a glance -->
-  <div class="mt-12 space-y-5">
+  <div class="mt-12 space-y-5 px-32">
     <div>
       <div class="mb-2 flex items-baseline justify-between">
         <span class="text-sm text-text-muted">A minimal Electron app</span>

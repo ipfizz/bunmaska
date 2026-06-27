@@ -1,7 +1,6 @@
 ---
-import CodeBlock from "../components/CodeBlock.astro";
-
-const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+import { HEAD } from "../styles/constants";
+import CodeBlock from "./ui/CodeBlock.astro";
 
 const nativeModule = `// notify.ts - a native module. No build step. No bindings.gyp. Just Bun.
 import { dlopen, FFIType } from "bun:ffi";
@@ -13,14 +12,14 @@ const { symbols: libc } = dlopen("libc.so.6", {
 export const pid = () => libc.getpid();`;
 ---
 
-<section class="border border-border">
-  <div class="wrap grid items-center gap-12 py-12 sm:py-14 lg:grid-cols-2">
+<section class="section-border">
+  <div class="grid items-center gap-12 py-12 sm:py-14 lg:grid-cols-2 px-28">
     <div>
-      <p class="eyebrow mb-4 text-xs">The part worth paying attention to</p>
+      <p class="eyebrow mb-4">The part worth paying attention to</p>
       <h2 class={HEAD}>
         A native module is just a
         <span
-          class="text-[1.05em] italic font-normal text-accent-text"
+          class="italic text-accent-text"
           style="font-family:var(--font-serif);">.ts file</span
         >
       </h2>

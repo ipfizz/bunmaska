@@ -1,7 +1,7 @@
 ---
-import CodeBlock from "./CodeBlock.astro";
+import { HEAD } from "../styles/constants";
+import CodeBlock from "./ui/CodeBlock.astro";
 
-const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
 
 const pinExample = `import { defineConfig } from "bunmaska/config";
 
@@ -11,15 +11,17 @@ export default defineConfig({
 });`;
 ---
 
-<section class="border border-border">
-  <div class="wrap py-12 sm:py-14">
+<section class="section-border">
+  <div class="py-12 sm:py-14">
     <div class="mx-auto max-w-[48ch] text-center">
       <h2 class={HEAD}>
         Pin the WebKit you
         <span
-          class="text-[1.05em] italic font-normal text-accent-text"
-          style="font-family:var(--font-serif);">actually tested.</span
+          class="italic text-accent-text"
+          style="font-family:var(--font-serif);"
         >
+          actually tested.
+        </span>
       </h2>
       <p class="mt-4 text-sm text-text-faint">
         By default, apps render on the system's WebKit — that's what keeps them

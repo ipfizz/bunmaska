@@ -4,9 +4,8 @@ import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
 import { Icon } from "astro-icon/components";
 import { VERSION } from "../site";
+import { HEAD, DISPLAY } from "../styles/constants";
 
-const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
-const DISPLAY = "font-serif leading-[1.04] text-balance text-[clamp(2.5rem,5.5vw,3.5rem)]";
 
 type Status = "shipping" | "in-progress" | "planned" | "future";
 

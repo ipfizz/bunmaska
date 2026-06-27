@@ -1,4 +1,6 @@
 ---
+import { HEAD } from "../styles/constants";
+
 const faqs = [
   [
     "Windows?",
@@ -19,19 +21,19 @@ const faqs = [
 ];
 ---
 
-<section class="relative overflow-hidden py-12 border border-border">
+<section class="relative overflow-hidden py-12 section-border">
   <div
     class="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,191,73,0.05),transparent_60%)]"
   >
   </div>
 
   <div class="relative wrap">
-    <!-- heading -->
     <div class="mx-auto max-w-3xl text-center">
-      <h2 class="text-2xl font-bold leading-tight sm:text-3xl">
+      <p class="eyebrow mb-4">Trade-offs</p>
+      <h2 class={HEAD}>
         It's alpha.
         <span
-          class="italic font-normal text-accent-text"
+          class="italic text-accent-text"
           style="font-family:var(--font-serif)"
         >
           We're not going to pretend

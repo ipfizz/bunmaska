@@ -1,7 +1,6 @@
 ---
-import CodeBlock from "./CodeBlock.astro";
-
-const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+import { HEAD } from "../styles/constants";
+import CodeBlock from "./ui/CodeBlock.astro";
 
 const cliCommands = `# scaffold · develop · ship
 bunmaska init my-app     # starter: main + preload + renderer + config
@@ -18,16 +17,18 @@ bunmaska engine install  # local dir or signed feed URL
 bunmaska doctor          # runtime, store, and resolved engine`;
 ---
 
-<section class="border border-border">
+<section class="section-border">
   <div class="wrap py-12 sm:py-14">
     <div class="mx-auto text-center">
       <p class="eyebrow mb-4">One command</p>
-      <h2 class="text-4xl font-semibold">
+      <h2 class={HEAD}>
         The whole loop is
         <span
-          style="font-family:var(--font-serif)"
-          class="font-mono tracking-wider text-accent-text">bunmaska</span
-        >.
+          class="italic text-accent-text"
+          style="font-family:var(--font-serif);"
+        >
+          bunmaska.
+        </span>
       </h2>
       <p class="mt-4 text-sm text-text-faint">
         Scaffold, develop, package, and manage engines — one CLI, pure Bun, no

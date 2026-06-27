@@ -2,9 +2,9 @@
 import DashedBox from "../components/DashedBox.astro";
 import codeblock from "../assets/code_block.png";
 import { Image } from "astro:assets";
-import InstallTabs from "./InstallTabs";
-
-const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
+import InstallTabs from "./ui/InstallTabs.tsx";
+import { HEAD } from "../styles/constants.ts";
+import AnimatedBadge from "./ui/AnimatedBadge.astro";
 ---
 
 <section class="relative overflow-hidden">
@@ -14,13 +14,7 @@ const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
     >
     </div>
     <div class="flex flex-col h-full items-center justify-center space-y-4">
-      <div
-        class="border px-4 py-1 rounded-full bg-yellow-700/10 backdrop-blur-lg"
-      >
-        <p class="text-accent-text text-xs font-semibold">
-          Speed of Bun + Flexibility of WebKit
-        </p>
-      </div>
+      <AnimatedBadge text="Speed of Bun + Flexibility of Webkit" />
       <div class="text-center">
         <p style="font-family:var(--font-serif);" class="text-4xl font-bold">
           Build an app before you finish your <span class="text-accent-text"
@@ -32,12 +26,13 @@ const HEAD = "text-[1.5rem] leading-[1.2] font-semibold tracking-tight";
         <Image src={codeblock} alt="Hero" class="w-150 h-auto" />
       </div>
       <h2 class={HEAD}>
-        From zero to a window in about <span
-          class="text-[1.1em] italic font-normal text-accent-text"
+        From zero to a window in about 
+        <span
+          class="italic text-accent-text"
           style="font-family:var(--font-serif);"
         >
-          ~ 90 seconds.</span
-        >
+          ~ 90 seconds.
+        </span>
       </h2>
       <div class="flex justify-center relative w-full">
         <InstallTabs client:visible />

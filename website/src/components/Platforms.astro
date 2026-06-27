@@ -1,4 +1,6 @@
 ---
+import { HEAD } from "../styles/constants";
+
 // Platform support matrix. macOS + Linux ship today (x64 + ARM); Windows is honestly
 // marked "Planned" - it is NOT cross-platform until Windows actually works.
 const apple =
@@ -33,13 +35,17 @@ const platforms = [
 ];
 ---
 
-<section class="wrap border border-border py-12 sm:py-14">
-  <div class="mx-auto  text-center">
-    <h2 class="text-[1.5rem] leading-[1.2] font-semibold tracking-tight">
-      Three platforms, <span
-        class="text-[1.1em] italic font-normal text-accent-text"
-        style="font-family:var(--font-serif);">no Chromium on any of them.</span
+<section class="section-border p-12 sm:p-14">
+  <div class="mx-auto text-center">
+    <h2 class={HEAD}>
+      Three platforms,
+      <span
+        class="italic text-accent-text mx-1"
+        style="font-family:var(--font-serif);"
       >
+        no chromium
+      </span>
+      on any of them.
     </h2>
     <p class="mt-4 text-xs text-text-muted">
       Bunmaska ships on macOS, Linux, and now Windows - each driving the
@@ -53,9 +59,8 @@ const platforms = [
       >.
     </p>
   </div>
-
   <div
-    class="mx-auto mt-12 grid  gap-px overflow-hidden border border-border bg-border sm:grid-cols-3"
+    class="mx-auto mt-12 grid gap-px overflow-hidden border bg-border sm:grid-cols-3"
   >
     {
       platforms.map((p) => {

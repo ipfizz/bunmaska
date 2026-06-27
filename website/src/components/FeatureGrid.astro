@@ -1,19 +1,17 @@
 ---
 import { Icon } from "astro-icon/components";
+import BundleSizeCounter from "./ui/BundleSizeCounter";
 ---
 
-<section class="border-border">
+<section class="section-border">
   <div class="bento">
-    <!-- Bundle Size — stat card -->
     <div class="cell col-span-6 md:col-span-3">
       <p class="eyebrow">Bundle size</p>
-      <p class="stat mt-2">~16MB</p>
+      <BundleSizeCounter client:visible />
       <p class="body mt-auto">
         No Chromium. No giant runtime. Ship only what your app needs.
       </p>
     </div>
-
-    <!-- Runtime — feature card -->
     <div class="cell col-span-6 md:col-span-3">
       <span class="icon-wrap">
         <Icon name="lucide:zap" size={24} class="text-accent-text" />
@@ -21,8 +19,6 @@ import { Icon } from "astro-icon/components";
       <h3 class="heading">Bun + JavaScriptCore</h3>
       <p class="body">Fast startup. Modern runtime. Native WebKit rendering.</p>
     </div>
-
-    <!-- No Native Builds -->
     <div class="cell col-span-6 md:col-span-2">
       <span class="icon-wrap">
         <Icon name="lucide:puzzle" size={24} class="text-accent-text" />
@@ -32,8 +28,6 @@ import { Icon } from "astro-icon/components";
         No node-gyp. No rebuild scripts. No compiler adventures.
       </p>
     </div>
-
-    <!-- Native WebKit -->
     <div class="cell col-span-6 md:col-span-2">
       <span class="icon-wrap">
         <Icon name="lucide:monitor" size={24} class="text-accent-text" />
@@ -41,8 +35,6 @@ import { Icon } from "astro-icon/components";
       <h3 class="heading">Native WebKit</h3>
       <p class="body">Uses the OS rendering engine — no bundled browser.</p>
     </div>
-
-    <!-- Zero Deps -->
     <div class="cell col-span-6 md:col-span-2">
       <span class="icon-wrap">
         <Icon name="lucide:package-open" size={24} class="text-accent-text" />
@@ -50,8 +42,6 @@ import { Icon } from "astro-icon/components";
       <h3 class="heading">Zero runtime deps</h3>
       <p class="body">Fewer moving parts. Smaller attack surface.</p>
     </div>
-
-    <!-- Big Feature — text card -->
     <div class="cell col-span-6 space-y-1.5 md:col-span-4">
       <p class="eyebrow">Familiar developer experience</p>
       <h3 class="heading-lg">
@@ -63,8 +53,6 @@ import { Icon } from "astro-icon/components";
         with less overhead and fewer surprises.
       </p>
     </div>
-
-    <!-- Platforms — stat card -->
     <div class="cell col-span-6 md:col-span-2 justify-center">
       <p class="stat accent">3</p>
       <p class="mt-1 text-sm font-semibold text-text">Platforms</p>
@@ -79,8 +67,6 @@ import { Icon } from "astro-icon/components";
   .bento {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    border-top: 1px solid var(--border);
-    border-left: 1px solid var(--border);
     background-color: var(--surface);
   }
 
@@ -104,11 +90,38 @@ import { Icon } from "astro-icon/components";
     background-color: var(--accent-bg);
     margin-bottom: 1rem;
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .icon-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      115deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.18) 50%,
+      transparent 65%
+    );
+    transform: translateX(-180%);
+    animation: shine 4s ease-in-out infinite;
+  }
+
+  @keyframes shine {
+    0%,
+    75% {
+      transform: translateX(-180%);
+    }
+
+    100% {
+      transform: translateX(180%);
+    }
   }
 
   .stat {
     font-size: var(--text-5xl);
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1;
     letter-spacing: -0.02em;
     color: var(--text);

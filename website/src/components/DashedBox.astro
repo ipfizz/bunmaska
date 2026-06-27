@@ -10,8 +10,8 @@ const {
 } = Astro.props;
 ---
 
-<div
-  class={`relative overflow-hidden border border-gray-500/10 ${className}`}
+<section
+  class={`relative overflow-hidden section-border ${className}`}
 >
   {
     Array.from({ length: columns - 1 }).map((_, i) => (
@@ -48,4 +48,4 @@ const {
   }
 
   <slot />
-</div>
+</section>

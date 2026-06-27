@@ -11,6 +11,8 @@ import PinWebkits from "../components/PinWebkits.astro";
 import QuickStartWalkthrough from "../components/QuickStartWalkthrough.astro";
 import CLICommands from "../components/CLICommands.astro";
 import TradeOffs from "../components/TradeOffs.astro";
+import { DISPLAY } from "../styles/constants";
+import FinalCTA from "../components/FinalCTA.astro";
 
 const features = [
   {
@@ -66,13 +68,11 @@ const compare = [
 ];
 
 // Type discipline: body 16px, small 14px (`text-sm`), one heading tier, one hero display.
-const DISPLAY =
-  "font-serif leading-[1.04] text-balance text-[clamp(2.5rem,5.5vw,3.5rem)]";
 ---
 
 <Base>
   <Nav />
-  <main class="px-48">
+  <main class="max-w-6xl mx-auto">
     <Hero />
     <FeatureGrid />
     <SizeStory />
@@ -82,35 +82,7 @@ const DISPLAY =
     <QuickStartWalkthrough />
     <CLICommands />
     <TradeOffs />
+    <FinalCTA />
   </main>
-  <section class="relative overflow-hidden">
-    <div
-      class="pointer-events-none absolute inset-0 -z-10"
-      style="background: radial-gradient(55% 60% at 50% 100%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%);"
-    >
-    </div>
-    <div class="wrap py-12 text-center sm:py-14">
-      <h2
-        class={`mx-auto max-w-[18ch] ${DISPLAY}`}
-        style="letter-spacing:-0.01em;"
-      >
-        Same APIs. <span class="italic text-accent-text"
-          >Hold the&nbsp;Chromium.</span
-        >
-      </h2>
-      <p class="mx-auto mt-6 max-w-[42ch] text-text-muted">
-        Try it in a weekend. Hate it by Monday, or don't.
-      </p>
-      <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
-        <a href="/docs/quickstart" class="btn btn-accent">Get started →</a>
-        <a
-          href="https://github.com/ipfizz/bunmaska"
-          target="_blank"
-          rel="noopener"
-          class="btn btn-ghost">GitHub</a
-        >
-      </div>
-    </div>
-  </section>
 </Base>
 <Footer />
