@@ -87,7 +87,7 @@
   --bg-muted: #efeeea;
   --surface: #ffffff;
   --border: #e7e5e0;
-  --section-border: #35230756;
+  --accent-border: #aeaeae1c;
   --border-strong: #d6d3cc;
   --text: #1a1916;
   --text-muted: #4a4842;
@@ -114,6 +114,7 @@
   --text-muted: #bcb7ac;
   --text-faint: #8f8a80;
   --accent: #f4c66a;
+  --accent-border: #35230756;
   --accent-text: #f4c66a;
   --accent-bg: #221c0e;
   --success: #5fbe86;
@@ -608,5 +609,5 @@
 }
 
 .section-border {
-  border: 1px solid var(--section-border);
+  border: 1px solid var(--accent-border);
 }

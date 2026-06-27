@@ -33,9 +33,9 @@ const { text } = Astro.props;
       90deg,
       transparent 35%,
       transparent 42%,
-      rgba(255, 210, 90, 0.2) 46%,
-      rgba(255, 240, 180, 0.95) 50%,
-      rgba(255, 210, 90, 0.25) 54%,
+      color-mix(in srgb, var(--accent-text) 20%, transparent) 46%,
+      color-mix(in srgb, var(--accent-text) 80%, transparent) 50%,
+      color-mix(in srgb, var(--accent-text) 25%, transparent) 54%,
       transparent 58%,
       transparent 100%
     );
@@ -51,11 +51,12 @@ const { text } = Astro.props;
     justify-content: center;
     padding: 0.45rem 1rem;
     border-radius: inherit;
-    background: rgba(18, 18, 18, 0.95);
+    background: color-mix(in srgb, var(--bg) 85%, var(--accent) 15%);
     backdrop-filter: blur(12px);
     color: var(--accent-text);
     font-size: 0.75rem;
     font-weight: 600;
+    border: 1px solid var(--accent-bg);
   }
 
   @keyframes spin {
