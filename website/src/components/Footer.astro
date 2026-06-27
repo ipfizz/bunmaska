@@ -33,16 +33,21 @@ const cols = [
 ---
 
 <footer class="border-t border-border">
-  <div class="wrap grid gap-10 py-14 sm:grid-cols-2 md:grid-cols-4">
+  <div class="max-w-6xl mx-auto grid gap-10 py-14 sm:grid-cols-2 md:grid-cols-4">
     <div>
       <div class="flex items-baseline gap-2">
         <span class="text-base font-semibold tracking-tight">Bunmaska</span>
-        <a href="/docs/changelog" class="tag font-mono hover:text-text" style="height:1.3rem;" title="Changelog"
-          >v{VERSION}</a
+        <a
+          href="/docs/changelog"
+          class="tag font-mono hover:text-text"
+          style="height:1.3rem;"
+          title="Changelog">v{VERSION}</a
         >
       </div>
       <p class="mt-3 max-w-[26ch] text-base text-text-muted">
-        No browser to ship.<br /><span class="serif-note">No native build to break.</span>
+        <span class="serif-note"
+          >No browser to ship.<br />No native build to break.</span
+        >
       </p>
     </div>
 
@@ -69,8 +74,13 @@ const cols = [
   </div>
 
   <div class="border-t border-border">
-    <div class="wrap flex flex-col items-start justify-between gap-2 py-5 text-sm text-text-faint sm:flex-row sm:items-center">
-      <span>© 2026 Bunmaska. Built on Bun + WebKit. No Chromium was shipped in the making of this.</span>
+    <div
+      class="wrap flex flex-col items-start justify-between gap-2 py-5 text-sm text-text-faint sm:flex-row sm:items-center"
+    >
+      <span
+        >© 2026 Bunmaska. Built on Bun + WebKit. No Chromium was shipped in the
+        making of this.</span
+      >
       <span><span class="font-mono">v{VERSION}</span> · MIT. Go wild.</span>
     </div>
   </div>
