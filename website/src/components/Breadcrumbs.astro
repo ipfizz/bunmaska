@@ -1,0 +1,108 @@
+---
+import { Icon } from "astro-icon/components";
+import { breadcrumbItems } from "../nav";
+
+interface Props {
+  slug: string;
+}
+
+const { slug } = Astro.props;
+const items = breadcrumbItems(slug);
+---
+
+<nav aria-label="Breadcrumb" class="-ml-5 text-sm text-text-muted">
+  <ol class="flex flex-wrap items-center gap-2">
+    {
+      items.map((item, index) => {
+        const isLast = index === items.length - 1;
+
+        return (
+          <li class="flex items-center gap-2">
+            {index > 0 && (
+              <span aria-hidden="true" class="text-text-faint inline-flex items-center">
+                <Icon
+                  name="mdi:chevron-right"
+                  class="w-3.5 h-3.5"
+                />
+              </span>
+            )}
+            {isLast ? (
+              <span aria-current="page" class="inline-flex items-center gap-2 font-medium text-text">
+                {item.label}
+              </span>
+            ) : (
+              <a class="inline-flex items-center gap-2 text-text-muted transition-colors hover:text-text" href={item.href}>
+                {item.label}
+              </a>
+            )}
+          </li>
+        );
+      })
+    }
+  </ol>
+</nav>
+
+<style>
+  nav[aria-label="Breadcrumb"] a {
+    text-decoration: none;
+  }
+</style>
+
+<style>
+  nav[aria-label="Breadcrumb"] {
+    --crumb-accent: var(--accent);
+  }
+
+  nav[aria-label="Breadcrumb"] ol {
+    align-items: center;
+  }
+
+  nav[aria-label="Breadcrumb"] li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  nav[aria-label="Breadcrumb"] a {
+    position: relative;
+    padding: 0.125rem 0.25rem;
+    transition: color 160ms ease;
+  }
+
+  nav[aria-label="Breadcrumb"] a::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -0.3rem;
+    transform: translateX(-50%) scaleX(0);
+    transform-origin: center;
+    width: 60%;
+    height: 2px;
+    background: var(--crumb-accent);
+    border-radius: 2px;
+    transition: transform 220ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease;
+    opacity: 0;
+  }
+
+  nav[aria-label="Breadcrumb"] a:hover::after,
+  nav[aria-label="Breadcrumb"] a:focus-visible::after {
+    transform: translateX(-50%) scaleX(1);
+    opacity: 1;
+  }
+
+  nav[aria-label="Breadcrumb"] a:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-bg) 80%, transparent);
+    border-radius: 6px;
+  }
+
+  /* Chevron micro-motion */
+  nav[aria-label="Breadcrumb"] li:hover span > svg,
+  nav[aria-label="Breadcrumb"] li:focus-within span > svg {
+    transform: translateX(3px);
+    transition: transform 160ms ease, color 160ms ease;
+    color: var(--accent-text);
+  }
+</style>
+</style>

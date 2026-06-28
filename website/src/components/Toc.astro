@@ -15,7 +15,7 @@ const items = headings.filter((h) => h.depth === 2 || h.depth === 3);
   items.length > 0 && (
     <nav aria-label="On this page" class="toc text-sm">
       <p class="eyebrow mb-3">On this page</p>
-      <ul class="space-y-1.5">
+      <ul class="space-y-1.5 ml-3">
         {items.map((h) => (
           <li>
             <a

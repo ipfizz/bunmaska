@@ -1,4 +1,6 @@
 ---
+import { HEAD } from "../styles/constants";
+
 // Platform support matrix. macOS + Linux ship today (x64 + ARM); Windows is honestly
 // marked "Planned" - it is NOT cross-platform until Windows actually works.
 const apple =
@@ -33,22 +35,33 @@ const platforms = [
 ];
 ---
 
-<section class="wrap py-24 sm:py-28">
-  <div class="mx-auto max-w-[48ch] text-center">
-    <h2 class="text-[1.5rem] leading-[1.2] font-semibold tracking-tight">
-      Three platforms, <span class="text-[1.1em] italic font-normal text-accent-text" style="font-family:var(--font-serif);"
-        >no Chromium on any of them.</span
+<section class="section-border p-12 sm:p-14">
+  <div class="mx-auto text-center">
+    <h2 class={HEAD}>
+      Three platforms,
+      <span
+        class="italic text-accent-text mx-1"
+        style="font-family:var(--font-serif);"
       >
+        no chromium
+      </span>
+      on any of them.
     </h2>
-    <p class="mt-4 text-text-muted">
-      Bunmaska ships on macOS, Linux, and now Windows - each driving the operating system's own WebKit, in pure
-      <code>bun:ffi</code>. macOS and Linux cover x64 and ARM; Windows lands x64 first via a WinCairo build we compile
-      ourselves. A few APIs differ per platform, and we publish exactly which on the
-      <a href="/docs/migrating/parity" class="text-accent-text underline underline-offset-2">parity page</a>.
+    <p class="mt-4 text-xs text-text-muted">
+      Bunmaska ships on macOS, Linux, and now Windows - each driving the
+      operating system's own WebKit, in pure
+      <code>bun:ffi</code>. macOS and Linux cover x64 and ARM; Windows lands x64
+      first via a WinCairo build we compile ourselves. A few APIs differ per
+      platform, and we publish exactly which on the
+      <a
+        href="/docs/migrating/parity"
+        class="text-accent-text underline underline-offset-2">parity page</a
+      >.
     </p>
   </div>
-
-  <div class="mx-auto mt-12 grid max-w-4xl gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
+  <div
+    class="mx-auto mt-12 grid gap-px overflow-hidden border bg-border sm:grid-cols-3"
+  >
     {
       platforms.map((p) => {
         const planned = p.status === "planned";
@@ -57,7 +70,10 @@ const platforms = [
             <div class="flex items-center justify-between">
               <svg
                 viewBox="0 0 24 24"
-                class:list={["h-7 w-7", planned ? "text-text-faint" : "text-text"]}
+                class:list={[
+                  "h-7 w-7",
+                  planned ? "text-text-faint" : "text-text",
+                ]}
                 fill="currentColor"
                 aria-hidden="true"
                 set:html={p.icon}
@@ -84,6 +100,9 @@ const platforms = [
   </div>
 
   <p class="mx-auto mt-5 max-w-4xl text-center text-sm text-text-faint">
-    Windows ARM64 and the last few per-platform gaps are tracked on the <a href="/roadmap" class="text-accent-text underline underline-offset-2">roadmap</a>.
+    Windows ARM64 and the last few per-platform gaps are tracked on the <a
+      href="/roadmap"
+      class="text-accent-text underline underline-offset-2">roadmap</a
+    >.
   </p>
 </section>

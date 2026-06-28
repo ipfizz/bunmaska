@@ -1,0 +1,45 @@
+---
+import { HEAD } from "../styles/constants";
+import CodeBlock from "./ui/CodeBlock.astro";
+
+const nativeModule = `// notify.ts - a native module. No build step. No bindings.gyp. Just Bun.
+import { dlopen, FFIType } from "bun:ffi";
+
+const { symbols: libc } = dlopen("libc.so.6", {
+  getpid: { args: [], returns: FFIType.i32 },
+});
+
+export const pid = () => libc.getpid();`;
+---
+
+<section class="section-border">
+  <div class="grid items-center gap-12 py-12 sm:py-14 lg:grid-cols-2 px-28">
+    <div>
+      <p class="eyebrow mb-4">The part worth paying attention to</p>
+      <h2 class={HEAD}>
+        A native module is just a
+        <span
+          class="italic text-accent-text"
+          style="font-family:var(--font-serif);">.ts file</span
+        >
+      </h2>
+      <p class="mt-5 max-w-[48ch] text-sm text-text-faint">
+        It <code>dlopen</code>s the OS and gets on with its life. No
+        <code>node-gyp</code>. No <code>N-API</code>. No
+        <code>electron-rebuild</code>. No 40-minute compile that fails on the
+        one machine that matters.
+      </p>
+      <p class="mt-5 max-w-[48ch] serif-note text-text-muted">
+        Nothing to rebuild, because there was never anything to build.
+      </p>
+    </div>
+
+    <div>
+      <CodeBlock code={nativeModule} lang="ts" title="notify.ts" />
+      <p class="mt-3 text-xs text-text-faint">
+        The Electron equivalent starts with <code>npm install node-gyp</code>
+        and a compiler. This doesn't.
+      </p>
+    </div>
+  </div>
+</section>

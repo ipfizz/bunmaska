@@ -1,19 +1,26 @@
 ---
-import ThemeToggle from "./ThemeToggle.tsx";
+import ThemeToggle from "./ui/ThemeToggle.tsx";
 import { VERSION, GITHUB } from "../site";
+import { Icon } from "astro-icon/components";
 
-const links = [
+const LINKS = [
   { href: "/docs/introduction", label: "Docs" },
   { href: "/roadmap", label: "Roadmap" },
   { href: "/docs/native-modules/overview", label: "Native Modules" },
-  { href: GITHUB, label: "GitHub", external: true },
 ];
 ---
 
-<header id="site-nav" class="sticky top-0 z-50 border-b border-transparent backdrop-blur transition-colors">
+<header
+  id="site-nav"
+  class="sticky top-0 z-50 border-b border-transparent backdrop-blur transition-colors"
+>
   <div class="wrap flex h-16 items-center justify-between">
     <div class="flex items-baseline gap-2">
-      <a href="/" class="text-base font-semibold tracking-tight" aria-label="Bunmaska home">Bunmaska</a>
+      <a
+        href="/"
+        class="text-base font-semibold tracking-tight uppercase"
+        aria-label="Bunmaska home">Bunmaska</a
+      >
       <a
         href="/docs/changelog"
         class="tag font-mono transition-colors hover:text-text"
@@ -24,18 +31,27 @@ const links = [
       </a>
     </div>
 
-    <nav class="flex items-center gap-1 sm:gap-2">
+    <nav class="flex items-center gap-2 sm:gap-2">
       {
-        links.map((l) => (
+        LINKS.map((l) => (
           <a
             href={l.href}
             class="rounded-sm px-3 py-2 text-sm text-text-muted transition-colors hover:text-text"
-            {...(l.external ? { target: "_blank", rel: "noopener" } : {})}
           >
             {l.label}
           </a>
         ))
       }
+      <span
+        class="ml-1 border border-[var(--border)] rounded-[var(--radius-sm)] p-2"
+      >
+        <a href={GITHUB} target="_blank" rel="noopener">
+          <Icon
+            name="mdi:github"
+            class="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5"
+          />
+        </a>
+      </span>
       <span class="ml-1">
         <ThemeToggle client:load />
       </span>

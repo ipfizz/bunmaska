@@ -3,6 +3,7 @@ import Base from "./Base.astro";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
 import Sidebar from "../components/Sidebar.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
 import Toc from "../components/Toc.astro";
 import PrevNext from "../components/PrevNext.astro";
 import { prevNext } from "../nav";
@@ -25,16 +26,17 @@ const { prev, next } = prevNext(slug);
 
 <Base title={title} description={description}>
   <Nav />
-  <div class="mx-auto w-full max-w-[80rem] px-6 md:px-8">
-    <div class="grid grid-cols-1 gap-x-12 gap-y-8 py-10 lg:grid-cols-[14rem_minmax(0,1fr)_13rem]">
-      <aside class="hidden lg:block">
-        <div class="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2">
-          <Sidebar current={slug} />
-        </div>
+  <div class="mx-auto w-full py-6 max-w-6xl lg:h-[calc(100dvh-4rem)] lg:overflow-hidden">
+    <div
+      class="grid grid-cols-1 gap-x-2 gap-y-4 lg:h-full lg:min-h-0 lg:grid-cols-[14rem_minmax(0,1fr)_13rem] lg:overflow-hidden"
+    >
+      <aside class="hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain pr-2">
+        <Sidebar current={slug} />
       </aside>
 
-      <div class="min-w-0">
+      <div class="min-w-0 lg:h-full border-l border-r px-4 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
         <article class="prose">
+          <Breadcrumbs slug={slug} />
           <h1>{title}</h1>
           {description && <p class="lead">{description}</p>}
           <slot />
@@ -42,10 +44,8 @@ const { prev, next } = prevNext(slug);
         <PrevNext prev={prev} next={next} />
       </div>
 
-      <aside class="hidden lg:block">
-        <div class="sticky top-24">
-          <Toc headings={headings} />
-        </div>
+      <aside class="hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+        <Toc headings={headings} />
       </aside>
     </div>
   </div>
@@ -64,16 +64,18 @@ const { prev, next } = prevNext(slug);
 <script>
   // The copy buttons themselves are injected at build time (rehype-copy-button),
   // so the icon ships in the SSR'd HTML. This only wires the click behaviour.
-  document.querySelectorAll<HTMLButtonElement>(".copy-btn--prose").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const pre = btn.closest("pre");
-      const code = pre?.querySelector("code");
-      const text = (code ?? pre)?.textContent ?? "";
-      try {
-        await navigator.clipboard.writeText(text);
-        btn.classList.add("copied");
-        setTimeout(() => btn.classList.remove("copied"), 1400);
-      } catch {}
+  document
+    .querySelectorAll<HTMLButtonElement>(".copy-btn--prose")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const pre = btn.closest("pre");
+        const code = pre?.querySelector("code");
+        const text = (code ?? pre)?.textContent ?? "";
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.classList.add("copied");
+          setTimeout(() => btn.classList.remove("copied"), 1400);
+        } catch {}
+      });
     });
-  });
 </script>

@@ -8,6 +8,11 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+export interface BreadcrumbItem {
+  label: string;
+  href: string;
+}
+
 export const sidebar: NavGroup[] = [
   {
     title: "Get Started",
@@ -95,6 +100,26 @@ export const sidebar: NavGroup[] = [
 ];
 
 export const flat: NavItem[] = sidebar.flatMap((g) => g.items);
+
+export function findNavGroup(slug: string): NavGroup | null {
+  return sidebar.find((group) => group.items.some((item) => item.slug === slug)) ?? null;
+}
+
+export function findNavItem(slug: string): NavItem | null {
+  return flat.find((item) => item.slug === slug) ?? null;
+}
+
+export function breadcrumbItems(slug: string): BreadcrumbItem[] {
+  const group = findNavGroup(slug);
+  const current = findNavItem(slug);
+
+  if (!group || !current) return [];
+
+  return [
+    { label: group.title, href: `/docs/${group.items[0].slug}` },
+    { label: current.label, href: `/docs/${current.slug}` },
+  ];
+}
 
 export function prevNext(slug: string): { prev: NavItem | null; next: NavItem | null } {
   const i = flat.findIndex((x) => x.slug === slug);
