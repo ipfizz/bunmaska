@@ -235,6 +235,22 @@ export class BrowserWindow extends EventEmitter {
     return this.#native.getBounds();
   }
 
+  /** Move the window's top-left corner to `(x, y)`. */
+  setPosition(x: number, y: number): void {
+    this.#native.setPosition(x, y);
+  }
+
+  /** The window's `[x, y]` screen position in pixels. */
+  getPosition(): [number, number] {
+    const bounds = this.#native.getBounds();
+    return [bounds.x, bounds.y];
+  }
+
+  /** Resize and reposition the window in one call (`{ x, y, width, height }`). */
+  setBounds(bounds: Rect): void {
+    this.#native.setBounds(bounds);
+  }
+
   /** The window's `[width, height]` in pixels. */
   getSize(): [number, number] {
     const bounds = this.#native.getBounds();

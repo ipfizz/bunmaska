@@ -106,6 +106,12 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     setSize: (w, h) => {
       bounds = { ...bounds, width: w, height: h };
     },
+    setPosition: (x, y) => {
+      bounds = { ...bounds, x, y };
+    },
+    setBounds: (b) => {
+      bounds = { ...b };
+    },
     getBounds: () => bounds,
     setResizable: (r) => {
       appliedResizable = r;
@@ -425,6 +431,21 @@ describe('BrowserWindow lifecycle', () => {
     const win = new BrowserWindow();
     win.setSize(300, 200);
     expect(win.getBounds()).toEqual({ x: 0, y: 0, width: 300, height: 200 });
+  });
+
+  test('setPosition moves the window and getPosition reads it back', () => {
+    const win = new BrowserWindow();
+    win.setPosition(120, 80);
+    expect(win.getPosition()).toEqual([120, 80]);
+    expect(win.getBounds()).toMatchObject({ x: 120, y: 80 });
+  });
+
+  test('setBounds sets position and size together', () => {
+    const win = new BrowserWindow();
+    win.setBounds({ x: 50, y: 60, width: 800, height: 600 });
+    expect(win.getBounds()).toEqual({ x: 50, y: 60, width: 800, height: 600 });
+    expect(win.getPosition()).toEqual([50, 60]);
+    expect(win.getSize()).toEqual([800, 600]);
   });
 
   test('close emits closed, removes from registry, and marks destroyed', () => {

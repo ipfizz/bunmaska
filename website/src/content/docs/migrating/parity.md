@@ -15,7 +15,7 @@ Support is not uniform across platforms, and we won't pretend it is. The table b
 | Module | macOS | Linux | Windows | Notes |
 | --- | :---: | :---: | :---: | --- |
 | `app` | ✅ | ✅ | ✅ | Lifecycle, paths, single-instance, locale. Dock/badge/about-panel are macOS-only and no-op elsewhere (as in Electron). |
-| `BrowserWindow` | ✅ | ✅ | ◐ | Windows: `setMinimumSize` is a no-op (needs `WM_GETMINMAXINFO`); everything else wired. |
+| `BrowserWindow` | ✅ | ◐ | ◐ | `setPosition`/`setBounds` move + size the window on Windows; macOS placement is best-effort (bottom-left origin) and Linux leaves placement to the compositor (GTK4), so `setPosition` is size-only there. Windows `setMinimumSize` is a no-op (needs `WM_GETMINMAXINFO`). |
 | `webContents` (core) | ✅ | ✅ | ✅ | load/navigation/`executeJavaScript`/zoom/`insertCSS`/IPC `send` everywhere. `setWindowOpenHandler({action:'allow'})` is unimplemented on all three (`window.open` is blocked by default). |
 | `webContents.printToPDF` | ✅ | ✕ | ⚙️ | macOS via `createPDFWithConfiguration`. Linux: not yet wired. Windows: engine-blocked (no PDF sink in the WinCairo C API). |
 | `webContents.capturePage` | ✅ | ✕ | ⚙️ | macOS via snapshot. Linux: planned (`webkit_web_view_get_snapshot`). Windows: engine-blocked (no UI-process snapshot). |

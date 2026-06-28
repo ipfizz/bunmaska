@@ -20,6 +20,7 @@ import type {
 } from '../native';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { windowControlsScript } from '../window-controls';
 import { makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
@@ -567,6 +568,21 @@ class MacOSWindow implements NativeWindow {
     this.#bounds = { ...this.#bounds, width, height };
   }
 
+  setPosition(x: number, y: number): void {
+    // `setFrameOrigin:` shares the 2-double NSPoint ABI msgSendSize uses (avoiding
+    // the NSRect-by-value hazard of `setFrame:`). NOTE: macOS screen coordinates are
+    // bottom-left origin, so the top-left mapping (a screen-height flip) is a
+    // documented follow-up needing on-device verification. The tracked bounds are
+    // updated so getBounds/getPosition round-trip with what was set.
+    msgSendSize(this.#window, cocoa().selectors.get('setFrameOrigin:'), x, y);
+    this.#bounds = { ...this.#bounds, x, y };
+  }
+
+  setBounds(bounds: Rect): void {
+    this.setPosition(bounds.x, bounds.y);
+    this.setSize(bounds.width, bounds.height);
+  }
+
   getBounds(): Rect {
     return this.#bounds;
   }
@@ -946,6 +962,11 @@ class MacOSApplication implements NativeApplication {
     // Page world: the cross-world stub that materialises contextBridge surfaces,
     // and the dom-ready notifier.
     addUserScript(generatePageWorldStub(channelId), pageWorld());
+    // Custom (frameless) title bars: the page-world script only mirrors `--app-region`
+    // onto `-webkit-app-region`, which WKWebView drags natively. The window-op controls
+    // (`window.__bunmaska.window`) belong on the isolated-world bridge (a follow-up),
+    // never the page world — a `__bunmaska` handle there would defeat context isolation.
+    addUserScript(windowControlsScript(), pageWorld());
     addUserScript(generateDomReadyScript(), pageWorld());
 
     const webview = msgSendInitWithFrameConfig(

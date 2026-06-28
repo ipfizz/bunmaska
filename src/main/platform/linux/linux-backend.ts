@@ -18,6 +18,7 @@ import type {
   Rect,
   WindowEventType,
 } from '../native';
+import { windowControlsScript } from '../window-controls';
 import { ExecResultChannel } from './eval-js';
 import { loadGtkFFI } from './gtk-ffi';
 import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
@@ -71,7 +72,11 @@ class LinuxWebContents implements NativeWebContents {
       preloadSource: generatePreloadBootstrap(),
       isolatedSetupSource: generateIsolatedChannelSetup(channelId),
       isolatedHostSource: generateIsolatedHostSource(channelId),
-      pageWorldSource: generatePageWorldStub(channelId),
+      // Page world: the cross-world stub + the custom-title-bar script. The page world
+      // stays free of any `__bunmaska` handle (context isolation), so it only mirrors
+      // `--app-region`; the window-op controls + native GTK handler are a follow-up on
+      // the isolated-world bridge.
+      pageWorldSource: `${generatePageWorldStub(channelId)}\n${windowControlsScript()}`,
       ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {
         for (const callback of this.#rendererEnvelopeCallbacks) {
@@ -517,6 +522,16 @@ class LinuxWindow implements NativeWindow {
   setSize(width: number, height: number): void {
     const gtk = loadGtkFFI();
     gtk.symbols.gtk_window_set_default_size(this.#window, width, height);
+  }
+
+  setPosition(_x: number, _y: number): void {
+    // GTK4 removed programmatic positioning; the compositor places the window
+    // (Wayland forbids clients moving themselves). No-op by design, like center().
+  }
+
+  setBounds(bounds: Rect): void {
+    // Only the size is honourable on GTK4; position is compositor-controlled.
+    this.setSize(bounds.width, bounds.height);
   }
 
   setResizable(resizable: boolean): void {

@@ -150,6 +150,10 @@ export interface NativeWindow {
   getTitle(): string;
   setSize(width: number, height: number): void;
   getBounds(): Rect;
+  /** Move the window's top-left corner to `(x, y)` (best-effort on macOS/Wayland). */
+  setPosition(x: number, y: number): void;
+  /** Set the window's position AND size in one call (best-effort on macOS/Wayland). */
+  setBounds(bounds: Rect): void;
   /** Enable or disable user resizing of the window. */
   setResizable(resizable: boolean): void;
   /** Set the window's opacity in `[0, 1]` (`1` = fully opaque). */
