@@ -10,7 +10,7 @@ import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type { NativeNavigationEvent, NativeWebContents } from '../native';
-import { WINDOW_CONTROLS_SCRIPT, WINDOW_HANDLER_NAME } from '../window-controls';
+import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
 
 /**
@@ -132,7 +132,9 @@ export class WindowsWebContents implements NativeWebContents {
       generateIsolatedHostSource(channelId),
       ...(preloadScript !== undefined ? [preloadScript] : []),
       generatePageWorldStub(channelId),
-      WINDOW_CONTROLS_SCRIPT,
+      // Windows has no separate isolated world, so the page world IS the bridge
+      // world: it's correct (and necessary) to expose the window-op controls here.
+      windowControlsScript({ nativeOpChannel: true }),
       generateDomReadyScript(),
     ];
     this.#webView = WindowsWebView.create({
