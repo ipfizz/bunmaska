@@ -26,7 +26,7 @@ const stats = [
       download you won't notice and the app you can't hear running.
     </p>
   </div>
-  <div class="mt-12 space-y-5 px-32">
+  <div class="mt-12 space-y-5 px-4 sm:px-12 lg:px-32">
     <div>
       <div class="mb-2 flex items-baseline justify-between">
         <span class="text-sm text-text-muted">A minimal Electron app</span>
@@ -66,4 +66,10 @@ const stats = [
       ))
     }
   </div>
+
+  <p class="mx-auto mt-5 max-w-2xl text-center text-xs text-text-faint">
+    That's macOS and Linux, which render on the system's own WebKit - nothing to
+    bundle. Windows has no system WebKit, so it ships a from-source WinCairo engine
+    (heavier, and shared across apps via the engine store).
+  </p>
 </section>

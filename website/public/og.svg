@@ -15,7 +15,7 @@
   </g>
   <g transform="translate(90, 520)" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="28" fill="#6b675f">
     <text x="0" y="0">npm i bunmaska</text>
-    <text x="1020" y="0" fill="#6b675f">macOS + Linux</text>
+    <text x="1020" y="0" text-anchor="end" fill="#6b675f">macOS · Linux · Windows</text>
   </g>
   <rect x="0" y="618" width="1200" height="12" fill="#e0a019"/>
 </svg>

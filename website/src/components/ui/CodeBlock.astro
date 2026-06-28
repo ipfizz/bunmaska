@@ -1,9 +1,10 @@
 ---
 import { Code } from "astro:components";
+import type { BundledLanguage } from "shiki";
 
 interface Props {
   code: string;
-  lang?: string;
+  lang?: BundledLanguage;
   title?: string;
 }
 
@@ -18,7 +19,7 @@ const { code, lang = "ts", title } = Astro.props;
     </span>
     <button type="button" class="copy-btn" data-code={code} aria-label="Copy code"></button>
   </div>
-  <Code code={code} lang={lang as any} themes={{ light: "github-light", dark: "github-dark" }} />
+  <Code code={code} lang={lang} themes={{ light: "github-light", dark: "github-dark" }} />
 </div>
 
 <script>

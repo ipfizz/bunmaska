@@ -29,7 +29,10 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label="Toggle color theme"
+      aria-label={
+        mounted ? `Switch to ${theme === "dark" ? "light" : "dark"} theme` : "Toggle color theme"
+      }
+      aria-pressed={mounted ? theme === "dark" : undefined}
       title="Toggle theme"
       style={{
         display: "inline-flex",

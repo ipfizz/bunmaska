@@ -12,61 +12,6 @@ import QuickStartWalkthrough from "../components/QuickStartWalkthrough.astro";
 import CLICommands from "../components/CLICommands.astro";
 import TradeOffs from "../components/TradeOffs.astro";
 import FinalCTA from "../components/FinalCTA.astro";
-
-const features = [
-  {
-    icon: "lucide:zap",
-    t: "Pure bun:ffi",
-    d: "Zero compiled native code. Zero runtime deps. The whole framework is TypeScript calling the OS.",
-  },
-  {
-    icon: "lucide:globe",
-    t: "WebKit, not Chromium",
-    d: "Renders on WebKit - WKWebView on macOS, WebKitGTK on Linux, WinCairo on Windows. No Chromium bundled into your app.",
-  },
-  {
-    icon: "lucide:blocks",
-    t: "Electron-shaped API",
-    d: "app, BrowserWindow, ipcMain, Menu, Tray, dialog… the names you already know. Drop-in shim included.",
-  },
-  {
-    icon: "lucide:terminal",
-    t: "A real CLI",
-    d: "bunmaska init / dev / run / build. Scaffold, hot-reload, and package to .dmg, .deb, or .exe.",
-  },
-  {
-    icon: "lucide:monitor",
-    t: "Three platforms",
-    d: "macOS, Linux, and Windows all ship - each driving the OS's own WebKit, never Chromium. Windows is x64-first via a WinCairo build we compile ourselves.",
-  },
-  {
-    icon: "lucide:gauge",
-    t: "Fast cold start",
-    d: "No Chromium to boot, no V8 snapshot to thaw. Bun + JavaScriptCore, up before your splash screen would've loaded.",
-  },
-];
-
-const compare = [
-  ["Download size", "150 MB+", "~16-23 MB"],
-  ["Installed size", "~220 MB", "~60 MB"],
-  [
-    "Rendering engine",
-    "Bundled Chromium (every app, again)",
-    "OS-native WebKit (not bundled)",
-  ],
-  [
-    "Native modules",
-    "node-gyp / N-API / electron-rebuild",
-    "a .ts file that dlopens the OS",
-  ],
-  ["Compile step", "Yes, and it'll fail somewhere", "None"],
-  ["Runtime deps", "Several", "Zero"],
-  ["Runtime", "Node + V8", "Bun + JavaScriptCore"],
-  ["Platforms", "Win / macOS / Linux", "Win (x64) / macOS / Linux"],
-  ["Familiar API", "The original", "Drop-in, ~70-80% parity"],
-];
-
-// Type discipline: body 16px, small 14px (`text-sm`), one heading tier, one hero display.
 ---
 
 <Base>
@@ -83,5 +28,5 @@ const compare = [
     <TradeOffs />
     <FinalCTA />
   </main>
+  <Footer />
 </Base>
-<Footer />

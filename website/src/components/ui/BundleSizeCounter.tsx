@@ -27,6 +27,13 @@ export default function BundleCounter({
 
         observer.disconnect();
 
+        // Respect reduced-motion: jump straight to the final value, no animation.
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          setProgress(1);
+          setValue(to);
+          return;
+        }
+
         const start = performance.now();
 
         const animate = (now: number) => {
