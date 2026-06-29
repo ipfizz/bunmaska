@@ -21,7 +21,7 @@ if (currentPlatform() === 'macos') {
     test('returns a drain function that runs many times without crashing', () => {
       const drain = createMacOSDrain();
       for (let i = 0; i < 50; i += 1) {
-        drain();
+        drain(0);
       }
       expect(typeof drain).toBe('function');
     });
@@ -49,7 +49,7 @@ if (currentPlatform() === 'macos') {
 
       const drain = createMacOSDrain();
       for (let i = 0; i < 60; i += 1) {
-        drain();
+        drain(0);
       }
 
       expect(msgSendReturnsU8(window, rt.selectors.get('isVisible'))).toBe(1);

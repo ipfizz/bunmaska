@@ -76,3 +76,90 @@ export class CooperativePump {
     }
   }
 }
+
+/** Yields to Bun's event loop once, then runs `tick`. Injected in tests. */
+export type TickScheduler = (tick: () => void) => void;
+
+export type AdaptiveBlockingPumpOptions = {
+  /** Drain timeout (ms) after a tick that handled events; kept small for a responsive UI. Default 8. */
+  readonly minTimeoutMs?: number;
+  /** Drain timeout (ms) an idle run backs off to; larger sleeps deeper for less CPU. Default 125. */
+  readonly maxTimeoutMs?: number;
+  /** Schedules the next tick after yielding to Bun's loop. Defaults to `setTimeout(tick, 0)`. */
+  readonly schedule?: TickScheduler;
+};
+
+const DEFAULT_MIN_TIMEOUT_MS = 8;
+const DEFAULT_MAX_TIMEOUT_MS = 125;
+
+const defaultScheduler: TickScheduler = (tick) => {
+  setTimeout(tick, 0);
+};
+
+/**
+ * Adaptive blocking run-loop pump.
+ *
+ * Drives a native drain that sleeps until a UI event or a timeout (see the
+ * platform `createDrain`). Each tick the drain blocks for the current timeout
+ * and reports whether it handled events; the pump then resets the timeout to
+ * its minimum (input is flowing — stay responsive) or doubles it toward the
+ * maximum (idle — sleep deeper for near-zero CPU). Between ticks it yields to
+ * Bun's loop so JS timers, microtasks and IO run. A UI event wakes the drain
+ * immediately, so input latency stays ~0 regardless of the idle backoff.
+ */
+export class AdaptiveBlockingPump {
+  readonly #drain: (timeoutMs: number) => boolean;
+  readonly #minTimeoutMs: number;
+  readonly #maxTimeoutMs: number;
+  readonly #schedule: TickScheduler;
+  #timeoutMs: number;
+  #running = false;
+
+  constructor(drain: (timeoutMs: number) => boolean, options?: AdaptiveBlockingPumpOptions) {
+    this.#drain = drain;
+    this.#minTimeoutMs = options?.minTimeoutMs ?? DEFAULT_MIN_TIMEOUT_MS;
+    this.#maxTimeoutMs = options?.maxTimeoutMs ?? DEFAULT_MAX_TIMEOUT_MS;
+    this.#schedule = options?.schedule ?? defaultScheduler;
+    this.#timeoutMs = this.#minTimeoutMs;
+  }
+
+  get isRunning(): boolean {
+    return this.#running;
+  }
+
+  /** The drain timeout (ms) the next tick will use. */
+  get timeoutMs(): number {
+    return this.#timeoutMs;
+  }
+
+  /** Begin pumping. Idempotent — a second call while running is a no-op. */
+  start(): void {
+    if (this.#running) {
+      return;
+    }
+    this.#running = true;
+    this.#tick();
+  }
+
+  /** Stop pumping. Idempotent — safe to call when not running. */
+  stop(): void {
+    this.#running = false;
+  }
+
+  #tick(): void {
+    if (!this.#running) {
+      return;
+    }
+    let active = false;
+    try {
+      active = this.#drain(this.#timeoutMs);
+    } catch (error) {
+      // A failure draining one tick must not tear down the whole pump.
+      log.error('drain tick threw', error);
+    }
+    this.#timeoutMs = active
+      ? this.#minTimeoutMs
+      : Math.min(this.#timeoutMs * 2, this.#maxTimeoutMs);
+    this.#schedule(() => this.#tick());
+  }
+}
