@@ -101,7 +101,7 @@ Most core modules behave the same. Anything not yet implemented throws an action
 
 ## Status
 
-**Alpha** — `0.1.0-alpha.3`. If you are already running this in production, we admire your courage and decline all responsibility. If you are a large company doing an evaluation, please read the word "alpha" three more times before proceeding. If it is still 2027 and this file still opens with "alpha," feel free to open an issue titled "are you OK".
+**Alpha** — `0.1.0-alpha.5`. If you are already running this in production, we admire your courage and decline all responsibility. If you are a large company doing an evaluation, please read the word "alpha" three more times before proceeding. If it is still 2027 and this file still opens with "alpha," feel free to open an issue titled "are you OK".
 
 ## Documentation
 

@@ -4,7 +4,24 @@ description: Bunmaska is pre-release, so this is one honest snapshot rather than
 order: 2
 ---
 
-The current version is **`0.1.0-alpha.4`**, live on npm - `npm i bunmaska`. Newest first; still a curated snapshot rather than a per-commit log.
+The current version is **`0.1.0-alpha.5`**, live on npm - `npm i bunmaska`. Newest first; still a curated snapshot rather than a per-commit log.
+
+## `0.1.0-alpha.5`
+
+Frameless windows, a real preload, and a dev loop that doesn't blink.
+
+**Highlights**
+
+- **Custom frameless title bars.** `frame: false` windows get an app-region drag handle and built-in window controls, shared across platforms - native drag on macOS, real controls on Windows. See [Frameless Windows](/docs/concepts/frameless-windows).
+- **Preloads can import.** The preload is now bundled before injection, so `import`s in your preload work instead of silently breaking `window.api`.
+- **`BrowserWindow.setPosition` / `setBounds`** - full on Windows, best-effort on macOS and Linux.
+- **Live reload in dev.** `bunmaska dev` reloads the renderer when assets change instead of restarting the whole app.
+
+**Fixes**
+
+- `bunmaska build` skips dotfiles and never copies the build output into itself when collecting runtime assets.
+- Windows web view is sized to the client area, so content is no longer clipped by the window frame.
+- The frameless title-bar script no longer leaks `__bunmaska` into the page world on macOS and Linux.
 
 ## `0.1.0-alpha.4`
 
