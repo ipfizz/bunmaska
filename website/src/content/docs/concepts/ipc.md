@@ -21,7 +21,7 @@ ipcMain.handle("add", (_event, a: number, b: number) => a + b);
 
 ## Preload: expose a safe surface
 
-The preload runs in an **isolated world** and is injected verbatim, so keep it plain JavaScript. Two globals are available to it: `contextBridge` and `__bunmaska`.
+The preload runs in an **isolated world** and is **bundled before injection**, so you can `import` modules — just keep it browser code (no Node APIs). Two globals are available to it: `contextBridge` and `__bunmaska`.
 
 ```js
 // preload.js

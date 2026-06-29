@@ -20,7 +20,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
-import { copyAppAssets } from './app-assets';
+import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 
 /** Minimum macOS the bundle declares it supports. */
 const MINIMUM_SYSTEM_VERSION = '11.0';
@@ -436,8 +436,9 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   await compileBinary(opts.entry, layout.executablePath);
   chmodSync(layout.executablePath, 0o755);
 
-  // Ship the entry's runtime assets (the page, the preload) beside the binary.
-  copyAppAssets(opts.entry, layout.macosDir);
+  // Ship the entry's runtime assets (the page, the preload) beside the binary, then
+  // bundle a module-using preload so it runs as a classic script in the packaged app.
+  bundlePreloadAssets(layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
 
   let iconFile: string | undefined;
   if (opts.icon !== undefined) {

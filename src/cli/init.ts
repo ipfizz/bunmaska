@@ -87,7 +87,8 @@ app.on('window-all-closed', () => {
 
 const preloadJs = (): string =>
   `// Runs in Bunmaska's isolated preload world (Electron contextIsolation). It is
-// injected verbatim — keep it plain JS. Two globals are available here:
+// bundled before injection, so you can import modules here — keep it browser code
+// (no Node APIs). Two globals are available here:
 //   contextBridge.exposeInMainWorld(key, api)  — expose a safe surface to the page
 //   __bunmaska.invoke(channel, ...args)          — call an ipcMain.handle handler
 // The page can then call window.api.ping(); it cannot reach Node or the bridge.
