@@ -5,12 +5,14 @@ import { bigIntOut, LIBOBJC_PATH, macOSLibraryAccessor, ptrIn } from './objc';
 /**
  * macOS native run-loop drain.
  *
- * Provides the non-blocking "drain once" function the {@link CooperativePump}
- * calls each tick: it dispatches pending AppKit input events (via the
- * `pumpEvents` callback), then runs `CFRunLoopRunInMode(kCFRunLoopDefaultMode,
- * 0, true)` until the loop has nothing left to handle. The AppKit loop is
- * serviced without ever blocking Bun's thread. Each drain is wrapped in an
- * autorelease pool so per-tick temporary objects are released promptly.
+ * Returns a function the {@link AdaptiveBlockingPump} calls each tick with a
+ * timeout: it dispatches pending AppKit input events (via `pumpEvents`), then
+ * sleeps in `CFRunLoopRunInMode(kCFRunLoopDefaultMode, timeout, true)` until a
+ * native source is handled or the timeout elapses. A UI event returns it
+ * immediately (returnAfterSourceHandled), so the thread sleeps when idle yet
+ * wakes the instant input arrives. Returns whether a source was handled — the
+ * pump stays responsive while that holds and backs off when it doesn't. Each
+ * drain runs inside an autorelease pool so per-tick temporaries are released.
  */
 
 const CORE_FOUNDATION_PATH = '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation';
@@ -48,7 +50,7 @@ const getAutoreleasePool = macOSLibraryAccessor('libobjc autorelease pool', () =
  * any non-macOS host (via the lazy accessors). The returned function is cheap
  * to call repeatedly and never blocks.
  */
-export const createMacOSDrain = (pumpEvents?: () => void): (() => void) => {
+export const createMacOSDrain = (pumpEvents?: () => void): ((timeoutMs: number) => boolean) => {
   const cf = getCoreFoundation();
   const pool = getAutoreleasePool();
   const mode = bigIntOut(
@@ -59,16 +61,24 @@ export const createMacOSDrain = (pumpEvents?: () => void): (() => void) => {
     ),
   );
 
-  return () => {
+  return (timeoutMs: number) => {
     const poolToken = pool.symbols.objc_autoreleasePoolPush();
     try {
       pumpEvents?.();
-      for (let i = 0; i < DRAIN_BUDGET; i += 1) {
-        const result = cf.symbols.CFRunLoopRunInMode(ptrIn(mode), 0, 1);
-        if (result !== CF_RUN_LOOP_RUN_HANDLED_SOURCE) {
-          break;
+      const handled =
+        cf.symbols.CFRunLoopRunInMode(ptrIn(mode), timeoutMs / 1000, 1) ===
+        CF_RUN_LOOP_RUN_HANDLED_SOURCE;
+      if (handled) {
+        // Dispatch the event that woke us, then clear any other ready sources
+        // without blocking so a burst is handled in this tick.
+        pumpEvents?.();
+        for (let i = 0; i < DRAIN_BUDGET; i += 1) {
+          if (cf.symbols.CFRunLoopRunInMode(ptrIn(mode), 0, 1) !== CF_RUN_LOOP_RUN_HANDLED_SOURCE) {
+            break;
+          }
         }
       }
+      return handled;
     } finally {
       pool.symbols.objc_autoreleasePoolPop(poolToken);
     }

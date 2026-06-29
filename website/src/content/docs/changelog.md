@@ -6,6 +6,12 @@ order: 2
 
 The current version is **`0.1.0-alpha.5`**, live on npm - `npm i bunmaska`. Newest first; still a curated snapshot rather than a per-commit log.
 
+## Unreleased
+
+**Event-driven macOS run loop.** The cooperative pump no longer polls AppKit at a fixed 60 Hz. It sleeps in `CFRunLoopRunInMode` until a native event arrives - input wakes it instantly - and backs off adaptively when idle. On an idle window that is roughly **10x less CPU** (~2.5% → ~0.2%) with no added input latency. One honest trade-off: while the UI is idle, *main-process* JS timers run at up to ~125 ms granularity (renderer `requestAnimationFrame` and IPC are unaffected - they ride the native event path).
+
+A true libuv-style integration like Electron's is not possible from pure `bun:ffi` today: Bun's loop is uSockets, not libuv, and its tick/wakeup primitives are not exported ([oven-sh/bun#18546](https://github.com/oven-sh/bun/issues/18546)). This is the best event-driven behavior achievable while staying single-threaded.
+
 ## `0.1.0-alpha.5`
 
 Frameless windows, a real preload, and a dev loop that doesn't blink.

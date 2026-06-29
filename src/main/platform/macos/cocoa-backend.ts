@@ -7,7 +7,7 @@ import {
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { CooperativePump } from '../../run-loop';
+import { AdaptiveBlockingPump } from '../../run-loop';
 import type {
   NativeAppKit,
   NativeApplication,
@@ -739,7 +739,7 @@ class MacOSApplication implements NativeApplication {
   #started = false;
   #app: Handle = 0n;
   #appDelegate: Handle = 0n;
-  #pump: CooperativePump | undefined;
+  #pump: AdaptiveBlockingPump | undefined;
   #readyCallbacks: Array<() => void> = [];
   #onActivate: ((hasVisibleWindows: boolean) => void) | undefined;
   #onOpenUrl: ((url: string) => void) | undefined;
@@ -777,7 +777,7 @@ class MacOSApplication implements NativeApplication {
     this.#distantPast = rt.msgSend(rt.classes.get('NSDate'), rt.selectors.get('distantPast'));
     this.#eventPumpMode = rt.msgSend(nsString('kCFRunLoopDefaultMode'), rt.selectors.get('retain'));
 
-    this.#pump = new CooperativePump(createMacOSDrain(() => this.#pumpAppEvents()));
+    this.#pump = new AdaptiveBlockingPump(createMacOSDrain(() => this.#pumpAppEvents()));
     this.#pump.start();
     this.#started = true;
     log.info('application started');
