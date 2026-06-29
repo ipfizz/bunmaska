@@ -49,7 +49,7 @@ ipcMain.handle("add", (_event, a, b) => a + b);
 ```
 
 ```ts
-// preload.js (injected into the isolated world - keep it plain JS)
+// preload.js (isolated world, bundled before injection - imports work)
 contextBridge.exposeInMainWorld("api", {
   add: (a, b) => __bunmaska.invoke("add", a, b),
 });

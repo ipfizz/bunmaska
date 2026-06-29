@@ -1,14 +1,13 @@
 import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { makeCancelableEvent } from '../../common/cancelable-event';
-import { InvalidArgumentError } from '../../common/errors';
 import type { NativeWindow, WindowEventType } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
+import { startDevReload } from '../dev-reload';
 import { nativeApp } from '../native-app';
 import type { Rect } from '../platform/native';
 import { app } from './app';
 import { installWindowResolver, type PopupTarget } from './menu';
+import { loadPreloadScript } from './preload';
 import { session } from './session';
 import { WebContents } from './web-contents';
 
@@ -49,25 +48,6 @@ export type BrowserWindowOptions = {
   readonly fullscreen?: boolean;
   /** Per-window renderer preferences. */
   readonly webPreferences?: WebPreferences;
-};
-
-/**
- * Resolve a `webPreferences.preload` path to an absolute path and read its
- * source synchronously. Returns `undefined` when no preload is configured;
- * throws {@link InvalidArgumentError} naming the path when it cannot be read.
- */
-const readPreloadScript = (preload: string | undefined): string | undefined => {
-  if (preload === undefined) {
-    return undefined;
-  }
-  const absolutePath = resolve(preload);
-  try {
-    return readFileSync(absolutePath, 'utf8');
-  } catch (cause) {
-    throw new InvalidArgumentError(`failed to read webPreferences.preload at ${absolutePath}`, {
-      cause,
-    });
-  }
 };
 
 const DEFAULT_WIDTH = 800;
@@ -116,6 +96,9 @@ const registry = new Map<number, BrowserWindow>();
 const popupTargets = new WeakMap<BrowserWindow, PopupTarget>();
 let nextId = 1;
 
+/** Installed once, in dev, so a renderer change live-reloads instead of restarting. */
+let devReloadInstalled = false;
+
 /** Reset the window registry and id counter. Test-only. */
 export const resetWindowRegistryForTesting = (): void => {
   registry.clear();
@@ -137,11 +120,21 @@ export class BrowserWindow extends EventEmitter {
   constructor(options: BrowserWindowOptions = {}) {
     super();
     ensureNativeStarted();
+    // In dev, the first window installs the stdin reload listener so a renderer
+    // change refreshes the page in place instead of restarting the whole app.
+    if (process.env['BUNMASKA_DEV'] === '1' && !devReloadInstalled) {
+      devReloadInstalled = true;
+      startDevReload(() => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          window.webContents.reload();
+        }
+      });
+    }
     this.id = nextId;
     nextId += 1;
 
     this.#resizable = options.resizable ?? true;
-    const preloadScript = readPreloadScript(options.webPreferences?.preload);
+    const preloadScript = loadPreloadScript(options.webPreferences?.preload);
     this.#native = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,

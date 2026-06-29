@@ -13,6 +13,7 @@ These examples import Bunmaska via a relative path (`../../src/main`) because th
 live inside the repo. In your own project you would `import { app, BrowserWindow }
 from 'bunmaska'` instead — see `bunmaska init` for a scaffold.
 
-> Note on preloads: a preload script is injected into the page's isolated world
-> *verbatim*, so it must be plain JavaScript and uses the injected `contextBridge`
-> and `__bunmaska` globals rather than `import`. See `ipc-demo/preload.js`.
+> Note on preloads: a preload script runs in the page's isolated world. It is
+> bundled before injection, so you can `import` modules — just keep it browser code
+> (no Node APIs) and use the injected `contextBridge` and `__bunmaska` globals. See
+> `ipc-demo/preload.js`.

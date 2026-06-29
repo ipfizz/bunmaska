@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { copyAppAssets, isRuntimeAsset } from '../../../src/cli/app-assets';
+import type { PreloadBundler } from '../../../src/common/preload-bundle';
+import { bundlePreloadAssets, copyAppAssets, isRuntimeAsset } from '../../../src/cli/app-assets';
 
 describe('isRuntimeAsset', () => {
   test('keeps page, preload, styles, images and data', () => {
@@ -48,5 +49,45 @@ describe('copyAppAssets', () => {
 
   test('returns empty when the entry directory is absent', () => {
     expect(copyAppAssets('/no/such/dir/main.ts', tmpdir())).toEqual([]);
+  });
+});
+
+describe('bundlePreloadAssets', () => {
+  const fakeBundler = (out: string): PreloadBundler => ({ available: true, bundle: () => out });
+
+  test('bundles a module-using preload.js in place and returns it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-prebundle-'));
+    writeFileSync(
+      join(dir, 'preload.js'),
+      "import './x.js';\ncontextBridge.exposeInMainWorld('api', {});\n",
+    );
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>');
+
+    const rewritten = bundlePreloadAssets(
+      dir,
+      ['preload.js', 'index.html'],
+      fakeBundler('(() => {})();'),
+    );
+
+    expect(rewritten).toEqual(['preload.js']);
+    expect(readFileSync(join(dir, 'preload.js'), 'utf8')).toBe('(() => {})();');
+  });
+
+  test('leaves a plain preload and any non-preload asset untouched', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-prebundle-'));
+    const plain = "contextBridge.exposeInMainWorld('api', {});\n";
+    writeFileSync(join(dir, 'preload.js'), plain);
+    // A page script that uses import is NOT a preload — it must not be rewritten.
+    writeFileSync(join(dir, 'app.js'), "import './x.js';\n");
+
+    const rewritten = bundlePreloadAssets(
+      dir,
+      ['preload.js', 'app.js'],
+      fakeBundler('SHOULD-NOT-APPEAR'),
+    );
+
+    expect(rewritten).toEqual([]);
+    expect(readFileSync(join(dir, 'preload.js'), 'utf8')).toBe(plain);
+    expect(readFileSync(join(dir, 'app.js'), 'utf8')).toBe("import './x.js';\n");
   });
 });
