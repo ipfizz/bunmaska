@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { makeCancelableEvent } from '../../common/cancelable-event';
 import type { NativeWindow, WindowEventType } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
+import { startDevReload } from '../dev-reload';
 import { nativeApp } from '../native-app';
 import type { Rect } from '../platform/native';
 import { app } from './app';
@@ -95,6 +96,9 @@ const registry = new Map<number, BrowserWindow>();
 const popupTargets = new WeakMap<BrowserWindow, PopupTarget>();
 let nextId = 1;
 
+/** Installed once, in dev, so a renderer change live-reloads instead of restarting. */
+let devReloadInstalled = false;
+
 /** Reset the window registry and id counter. Test-only. */
 export const resetWindowRegistryForTesting = (): void => {
   registry.clear();
@@ -116,6 +120,16 @@ export class BrowserWindow extends EventEmitter {
   constructor(options: BrowserWindowOptions = {}) {
     super();
     ensureNativeStarted();
+    // In dev, the first window installs the stdin reload listener so a renderer
+    // change refreshes the page in place instead of restarting the whole app.
+    if (process.env['BUNMASKA_DEV'] === '1' && !devReloadInstalled) {
+      devReloadInstalled = true;
+      startDevReload(() => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          window.webContents.reload();
+        }
+      });
+    }
     this.id = nextId;
     nextId += 1;
 

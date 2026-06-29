@@ -18,7 +18,10 @@ setTimeout(() => finish('PRELOAD_IMPORT_FAIL timeout', 1), 25000);
 
 // A preload that pulls a value out of an imported sibling module and exposes it.
 const dir = mkdtempSync(join(tmpdir(), 'bunmaska-preload-import-'));
-writeFileSync(join(dir, 'helper.js'), 'export const greet = (name) => `hi ${name} from helper`;\n');
+writeFileSync(
+  join(dir, 'helper.js'),
+  'export const greet = (name) => "hi " + name + " from helper";\n',
+);
 const preloadPath = join(dir, 'preload.js');
 writeFileSync(
   preloadPath,

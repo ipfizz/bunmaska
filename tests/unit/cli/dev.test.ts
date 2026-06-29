@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  classifyChange,
   DEV_DEFAULT_ENTRY,
   type DevDeps,
   DevSupervisor,
   resolveDevEntry,
-  shouldRestart,
 } from '../../../src/cli/dev';
 
 describe('resolveDevEntry', () => {
@@ -18,18 +18,25 @@ describe('resolveDevEntry', () => {
   });
 });
 
-describe('shouldRestart', () => {
-  test('restarts on a source change', () => {
-    expect(shouldRestart('src/main.ts')).toBe(true);
-    expect(shouldRestart('index.html')).toBe(true);
+describe('classifyChange', () => {
+  test('restarts on a TypeScript (main-process) change', () => {
+    expect(classifyChange('src/main.ts')).toBe('restart');
+    expect(classifyChange('src/window.tsx')).toBe('restart');
+    expect(classifyChange('bunmaska.config.ts')).toBe('restart');
+  });
+
+  test('live-reloads on a renderer asset change', () => {
+    expect(classifyChange('src/index.html')).toBe('reload');
+    expect(classifyChange('src/styles.css')).toBe('reload');
+    expect(classifyChange('src/preload.js')).toBe('reload');
   });
 
   test('ignores dependency/VCS/build dirs and dotfiles', () => {
-    expect(shouldRestart('node_modules/x/index.js')).toBe(false);
-    expect(shouldRestart('.git/HEAD')).toBe(false);
-    expect(shouldRestart('dist/app.js')).toBe(false);
-    expect(shouldRestart('src/.main.ts.swp')).toBe(false);
-    expect(shouldRestart('')).toBe(false);
+    expect(classifyChange('node_modules/x/index.js')).toBe('ignore');
+    expect(classifyChange('.git/HEAD')).toBe('ignore');
+    expect(classifyChange('dist/app.js')).toBe('ignore');
+    expect(classifyChange('src/.main.ts.swp')).toBe('ignore');
+    expect(classifyChange('')).toBe('ignore');
   });
 });
 
@@ -38,6 +45,7 @@ const makeHarness = (): {
   deps: DevDeps;
   spawns: string[];
   kills: number;
+  reloads: number;
   watcherClosed: () => boolean;
   fireChange: (relPath: string) => void;
   runTimer: () => void;
@@ -45,6 +53,7 @@ const makeHarness = (): {
 } => {
   const spawns: string[] = [];
   let kills = 0;
+  let reloads = 0;
   let closed = false;
   let onChange: ((relPath: string) => void) | undefined;
   let timerFn: (() => void) | undefined;
@@ -55,6 +64,9 @@ const makeHarness = (): {
       return {
         kill: () => {
           kills += 1;
+        },
+        reload: () => {
+          reloads += 1;
         },
       };
     },
@@ -83,6 +95,9 @@ const makeHarness = (): {
     get kills() {
       return kills;
     },
+    get reloads() {
+      return reloads;
+    },
     watcherClosed: () => closed,
     fireChange: (relPath) => onChange?.(relPath),
     runTimer: () => timerFn?.(),
@@ -97,7 +112,7 @@ describe('DevSupervisor', () => {
     expect(h.spawns).toEqual(['src/main.ts']);
   });
 
-  test('a relevant change restarts the child after the debounce fires', () => {
+  test('a TypeScript change restarts the child after the debounce fires', () => {
     const h = makeHarness();
     const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fireChange('src/main.ts');
@@ -105,16 +120,38 @@ describe('DevSupervisor', () => {
     h.runTimer();
     expect(h.spawns).toEqual(['src/main.ts', 'src/main.ts']);
     expect(sup.starts).toBe(2);
+    expect(sup.reloads).toBe(0);
   });
 
-  test('an ignored change never schedules a restart', () => {
+  test('a renderer asset change live-reloads instead of restarting', () => {
+    const h = makeHarness();
+    const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fireChange('src/index.html');
+    h.runTimer();
+    expect(h.spawns).toHaveLength(1); // no respawn — the window stays open
+    expect(h.reloads).toBe(1);
+    expect(sup.reloads).toBe(1);
+    expect(sup.starts).toBe(1);
+  });
+
+  test('a restart supersedes a reload coalesced into the same window', () => {
+    const h = makeHarness();
+    const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fireChange('src/index.html'); // would reload
+    h.fireChange('src/main.ts'); // but a TS change wins
+    h.runTimer();
+    expect(sup.starts).toBe(2);
+    expect(h.reloads).toBe(0);
+  });
+
+  test('an ignored change never schedules anything', () => {
     const h = makeHarness();
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fireChange('node_modules/x.js');
     expect(h.pendingTimers()).toBe(0);
   });
 
-  test('rapid changes coalesce into a single restart', () => {
+  test('rapid changes coalesce into a single action', () => {
     const h = makeHarness();
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fireChange('src/a.ts');
