@@ -1,46 +1,64 @@
 ---
+import { Icon } from "astro-icon/components";
 import BundleSizeCounter from "./ui/BundleSizeCounter";
 ---
 
-<section class="section-border reveal">
+<section class="section-border">
   <div class="bento">
     <div class="cell col-span-6 md:col-span-3">
-      <p class="eyebrow">The download</p>
+      <p class="eyebrow">Bundle size</p>
       <BundleSizeCounter client:visible />
       <p class="body mt-auto">
-        A minimal Electron app starts at 150&thinsp;MB+. This is the whole
-        thing — no Chromium, no giant runtime, only what your app needs.
+        No Chromium. No giant runtime. Ship only what your app needs.
       </p>
     </div>
     <div class="cell col-span-6 md:col-span-3">
+      <span class="icon-wrap">
+        <Icon name="lucide:zap" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">Bun + JavaScriptCore</h3>
+      <p class="body">Fast startup. Modern runtime. Native WebKit rendering.</p>
+    </div>
+    <div class="cell col-span-6 md:col-span-2">
+      <span class="icon-wrap">
+        <Icon name="lucide:puzzle" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">No native builds</h3>
+      <p class="body">
+        No node-gyp. No rebuild scripts. No compiler adventures.
+      </p>
+    </div>
+    <div class="cell col-span-6 md:col-span-2">
+      <span class="icon-wrap">
+        <Icon name="lucide:monitor" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">Native WebKit</h3>
+      <p class="body">Uses the OS rendering engine — no bundled browser.</p>
+    </div>
+    <div class="cell col-span-6 md:col-span-2">
+      <span class="icon-wrap">
+        <Icon name="lucide:package-open" size={24} class="text-accent-text" />
+      </span>
+      <h3 class="heading">Zero runtime deps</h3>
+      <p class="body">Fewer moving parts. Smaller attack surface.</p>
+    </div>
+    <div class="cell col-span-6 space-y-1.5 md:col-span-4">
       <p class="eyebrow">Familiar developer experience</p>
       <h3 class="heading-lg">
         Electron-style APIs.<br />
         Native implementation.
       </h3>
       <p class="body mt-auto">
-        Keep the mental model — <code>app</code>, <code>BrowserWindow</code>,
-        <code>ipcMain</code> — and drop the bundled browser. Bun runs your main
-        process; the OS renders your windows.
+        Keep the mental model. Drop the Chromium dependency. Build desktop apps
+        with less overhead and fewer surprises.
       </p>
     </div>
-    <div class="cell col-span-6 md:col-span-2">
-      <p class="stat">0</p>
-      <h3 class="heading">compiled native code</h3>
-      <p class="body">
-        Pure <code>bun:ffi</code>. No node-gyp, no rebuild scripts, no compiler
-        adventures.
+    <div class="cell col-span-6 md:col-span-2 justify-center">
+      <p class="stat accent">3</p>
+      <p class="mt-1 text-sm font-semibold text-text">Platforms</p>
+      <p class="mt-1 text-xs tracking-wide text-text-faint">
+        Windows · macOS · Linux
       </p>
-    </div>
-    <div class="cell col-span-6 md:col-span-2">
-      <p class="stat">0</p>
-      <h3 class="heading">runtime dependencies</h3>
-      <p class="body">Fewer moving parts. A smaller attack surface.</p>
-    </div>
-    <div class="cell col-span-6 md:col-span-2">
-      <p class="stat">3</p>
-      <h3 class="heading">platforms</h3>
-      <p class="body">macOS · Linux · Windows (beta) — the system's own WebKit on every one.</p>
     </div>
   </div>
 </section>
@@ -55,23 +73,63 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
   .cell {
     border-right: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
-    padding: 1.75rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
     min-height: 180px;
   }
 
-  /* The stat role rides the serif display voice — numbers as typography,
-     not icon tiles. */
-  .stat,
-  .cell :global(.stat) {
-    font-family: var(--font-serif);
-    font-size: 2.75rem;
-    line-height: 1.05;
-    letter-spacing: -0.01em;
-    color: var(--accent-text);
+  .icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    background-color: var(--accent-bg);
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .icon-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      115deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.18) 50%,
+      transparent 65%
+    );
+    transform: translateX(-180%);
+    animation: shine 4s ease-in-out infinite;
+  }
+
+  @keyframes shine {
+    0%,
+    75% {
+      transform: translateX(-180%);
+    }
+
+    100% {
+      transform: translateX(180%);
+    }
+  }
+
+  .stat {
+    font-size: var(--text-5xl);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text);
     margin-bottom: auto;
+  }
+
+  .stat.accent {
+    color: var(--accent-text);
   }
 
   .heading-lg {
@@ -86,16 +144,12 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
     font-size: var(--text-base);
     font-weight: 600;
     color: var(--text);
+    margin-bottom: 0.4rem;
   }
 
   .body {
     font-size: var(--text-sm);
     color: var(--text-faint);
     line-height: 1.6;
-  }
-
-  .body code {
-    font-family: var(--font-mono);
-    font-size: 0.85em;
   }
 </style>

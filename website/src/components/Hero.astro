@@ -1,43 +1,44 @@
 ---
-import { DISPLAY } from "../styles/constants.ts";
-import DashedBox from "./DashedBox.astro";
-import CodeBlock from "./ui/CodeBlock.astro";
+import DashedBox from "../components/DashedBox.astro";
+import codeblock from "../assets/code_block.png";
+import { Image } from "astro:assets";
 import InstallTabs from "./ui/InstallTabs.tsx";
-
-const helloApp = `import { app, BrowserWindow } from "bunmaska";
-
-app.whenReady().then(() => {
-  const win = new BrowserWindow({
-    width: 960,
-    height: 720,
-    title: "Hello Bunmaska",
-  });
-  win.loadURL("https://example.com");
-});`;
+import { HEAD } from "../styles/constants.ts";
+import AnimatedBadge from "./ui/AnimatedBadge.astro";
 ---
 
 <section class="relative overflow-hidden">
-  <DashedBox columns={16} class="h-full w-full py-14 sm:py-16">
+  <DashedBox columns={16} class="h-full w-full py-12">
     <div
-      class="pointer-events-none absolute inset-0"
-      style="background: radial-gradient(55% 45% at 50% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%);"
+      class="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(255,191,73,0.08),transparent_55%)]"
     >
     </div>
-    <div class="relative mx-auto flex max-w-3xl flex-col items-center gap-7 px-6 text-center">
-      <p class="tag font-mono">Bun + system WebKit · no Chromium</p>
-      <h1 class={`${DISPLAY} max-w-[24ch]`}>
-        Build an app before you finish your
-        <span class="italic text-accent-text">bun-maska &amp; chai.</span>
-      </h1>
-      <p class="max-w-[52ch] text-text-muted">
-        A drop-in Electron replacement on Bun and the WebKit your OS already
-        ships. From zero to a native window in about
-        <span class="serif-note text-accent-text">ninety seconds.</span>
-      </p>
-      <div class="w-full max-w-xl text-left">
-        <CodeBlock code={helloApp} lang="ts" title="src/main.ts" />
+    <div class="flex flex-col h-full items-center justify-center space-y-4">
+      <AnimatedBadge text="Speed of Bun + Flexibility of WebKit" />
+      <div class="text-center">
+        <h1 style="font-family:var(--font-serif);" class="text-4xl font-bold">
+          Build an app before you finish your <span class="text-accent-text"
+            >bunmaska & chai.</span
+          >
+        </h1>
       </div>
-      <div class="flex w-full justify-center">
+      <div class="relative">
+        <Image
+          src={codeblock}
+          alt="A minimal Bunmaska app - a few lines of TypeScript that open a native window"
+          class="w-full max-w-[37.5rem] h-auto"
+        />
+      </div>
+      <h2 class={HEAD}>
+        From zero to a window in about 
+        <span
+          class="italic text-accent-text"
+          style="font-family:var(--font-serif);"
+        >
+          ~ 90 seconds.
+        </span>
+      </h2>
+      <div class="flex justify-center relative w-full">
         <InstallTabs client:visible />
       </div>
       <div class="flex flex-wrap items-center justify-center gap-3">

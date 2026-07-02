@@ -45,7 +45,7 @@ const LINKS = [
         }
       </div>
       <span
-        class="ml-1 rounded-sm border border-border p-2"
+        class="ml-1 border border-[var(--border)] rounded-[var(--radius-sm)] p-2"
       >
         <a
           href={GITHUB}
@@ -53,7 +53,10 @@ const LINKS = [
           rel="noopener noreferrer"
           aria-label="Bunmaska on GitHub"
         >
-<Icon name="mdi:github" class="h-4.5 w-4.5" />
+          <Icon
+            name="mdi:github"
+            class="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5"
+          />
         </a>
       </span>
       <span class="ml-1">
@@ -62,7 +65,7 @@ const LINKS = [
       <button
         id="nav-toggle"
         type="button"
-        class="ml-1 inline-flex items-center justify-center rounded-sm border border-border p-2 text-text-muted transition-colors hover:text-text md:hidden"
+        class="ml-1 inline-flex items-center justify-center border border-[var(--border)] rounded-[var(--radius-sm)] p-2 text-text-muted transition-colors hover:text-text md:hidden"
         aria-label="Open menu"
         aria-expanded="false"
         aria-controls="mobile-menu"
