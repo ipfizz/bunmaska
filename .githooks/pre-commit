@@ -1,0 +1,26 @@
+#!/bin/sh
+# Auto-format staged files with Biome before they are committed, so no un-run
+# formatting ever lands in a commit. Covers the core package and website/src
+# (both are in the root biome.json). `--staged` limits Biome to staged files;
+# `--write` applies formatting. Linting/type-check/tests stay in `validate` —
+# this hook only formats, and never blocks a commit on lint findings.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# (or run `bun run setup:hooks`). See .admin/CONTRIBUTING.md.
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "pre-commit: bun not found on PATH; skipping Biome format" >&2
+  exit 0
+fi
+
+# Format the staged, Biome-supported files in place.
+bunx biome format --write --staged >/dev/null 2>&1 || true
+
+# Re-stage anything Biome reformatted (only files that were already staged).
+git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
+  case "$file" in
+    *.ts | *.tsx | *.js | *.jsx | *.mjs | *.json | *.css) git add "$file" ;;
+  esac
+done
+
+exit 0
