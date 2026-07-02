@@ -13,10 +13,9 @@ const stats = [
   <div class="text-center">
     <p class="eyebrow mb-4">The whole thing</p>
     <h2 class={HEAD}>
-      ~16–23 MB. Yes, 
+      ~16-23 MB. Yes, 
       <span
-        class="italic text-accent-text"
-        style="font-family:var(--font-serif);"
+        class="serif-accent text-accent-text"
       >
         all of it.
       </span>
@@ -38,7 +37,7 @@ const stats = [
     </div>
     <div>
       <div class="mb-2 flex items-baseline justify-between">
-        <span class="text-sm font-medium text-text"
+        <span class="text-sm text-text"
           >The same app, on Bunmaska</span
         >
         <span class="font-mono text-sm text-accent-text">~16-23 MB</span>
@@ -53,12 +52,12 @@ const stats = [
   </div>
 
   <div
-    class="mt-12 grid grid-cols-2 gap-px overflow-hidden border border-border bg-border md:grid-cols-4"
+    class="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-4"
   >
     {
       stats.map((s) => (
         <div class="bg-bg px-5 py-9 text-center">
-          <div class="whitespace-nowrap text-[1.5rem] font-semibold tracking-tight">
+          <div class="whitespace-nowrap text-[1.5rem] font-medium tracking-tight">
             {s.num}
           </div>
           <div class="mt-1.5 text-sm text-text-muted">{s.label}</div>

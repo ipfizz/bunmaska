@@ -1,0 +1,70 @@
+---
+import { HEAD } from "../styles/constants";
+
+// Head-to-head with the incumbent. Rows a developer actually weighs before
+// committing - the honest ones (where Electron wins) live just below the table.
+const rows: { label: string; electron: string; bunmaska: string }[] = [
+  { label: "Download size", electron: "150 MB+", bunmaska: "~16-23 MB" },
+  { label: "Installed size", electron: "~220 MB", bunmaska: "~60 MB" },
+  { label: "Rendering engine", electron: "Bundled Chromium, in every app", bunmaska: "System WebKit - pinnable via the engine store" },
+  { label: "Runtime", electron: "Node + V8", bunmaska: "Bun + JavaScriptCore" },
+  { label: "Native modules", electron: "node-gyp · N-API · electron-rebuild", bunmaska: "A .ts file that dlopens the OS" },
+  { label: "Compile step", electron: "Yes", bunmaska: "None" },
+  { label: "Runtime dependencies", electron: "Several", bunmaska: "Zero" },
+  { label: "Platforms", electron: "Windows · macOS · Linux", bunmaska: "Windows (x64) · macOS · Linux" },
+  { label: "API surface", electron: "The original", bunmaska: "Drop-in, ~70-80% parity" },
+  { label: "Maturity", electron: "10+ years, runs everything", bunmaska: "Alpha" },
+];
+---
+
+<section class="section-border reveal">
+  <div class="wrap py-16 sm:py-20">
+    <div class="mx-auto max-w-[46ch] text-center">
+      <p class="eyebrow mb-4">Bunmaska vs Electron</p>
+      <h2 class={HEAD}>
+        Same shape.
+        <span class="serif-accent text-accent-text">a tenth of the weight.</span>
+      </h2>
+      <p class="mt-4 text-sm text-text-faint">
+        Same APIs you already write, swapping the two heaviest parts underneath -
+        the browser engine and the runtime.
+      </p>
+    </div>
+
+    <div class="mx-auto mt-12 max-w-3xl overflow-hidden rounded-md border border-border">
+      <div class="grid grid-cols-[1.1fr_1fr_1fr] bg-bg-subtle text-sm">
+        <div class="px-4 py-3 sm:px-5"></div>
+        <div class="px-4 py-3 font-medium text-text-muted sm:px-5">Electron</div>
+        <div class="border-l border-border px-4 py-3 font-medium text-accent-text sm:px-5">
+          Bunmaska
+        </div>
+      </div>
+      {
+        rows.map((row, i) => (
+          <div
+            class:list={[
+              "grid grid-cols-[1.1fr_1fr_1fr] text-sm",
+              i > 0 && "border-t border-border",
+            ]}
+          >
+            <div class="px-4 py-3 text-text-faint sm:px-5">{row.label}</div>
+            <div class="px-4 py-3 text-text-muted sm:px-5">{row.electron}</div>
+            <div class="border-l border-border bg-accent-bg/30 px-4 py-3 font-medium text-text sm:px-5">
+              {row.bunmaska}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="mx-auto mt-6 max-w-2xl text-center text-sm text-text-faint">
+      Electron still wins on the things a decade buys - Windows-on-ARM, the last
+      ~20% of the API, per-window crash isolation, and a vast ecosystem. We leave
+      those rows in; the full honest breakdown is on the
+      <a
+        href="/docs/compare/bunmaska-vs-electron"
+        class="text-accent-text underline underline-offset-2">comparison page</a
+      >.
+    </p>
+  </div>
+</section>

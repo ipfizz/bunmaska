@@ -9,38 +9,40 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
       <p class="eyebrow">Bundle size</p>
       <BundleSizeCounter client:visible />
       <p class="body mt-auto">
-        No Chromium. No giant runtime. Ship only what your app needs.
+        The whole app, not a browser you re-ship with it. Downloads in seconds;
+        updates are a fraction of the size.
       </p>
     </div>
     <div class="cell col-span-6 md:col-span-3">
       <span class="icon-wrap">
         <Icon name="lucide:zap" size={24} class="text-accent-text" />
       </span>
-      <h3 class="heading">Bun + JavaScriptCore</h3>
-      <p class="body">Fast startup. Modern runtime. Native WebKit rendering.</p>
+      <h3 class="heading">Runs on Bun</h3>
+      <p class="body">Boots in milliseconds, runs TypeScript natively - no transpile step - and JavaScriptCore keeps memory lean. The Node APIs you know, a much faster runtime underneath.</p>
     </div>
     <div class="cell col-span-6 md:col-span-2">
       <span class="icon-wrap">
         <Icon name="lucide:puzzle" size={24} class="text-accent-text" />
       </span>
-      <h3 class="heading">No native builds</h3>
+      <h3 class="heading">Native code, no build</h3>
       <p class="body">
-        No node-gyp. No rebuild scripts. No compiler adventures.
+        Call the OS from a <code>.ts</code> file. No node-gyp, no
+        electron-rebuild, no toolchain that breaks on someone else's machine.
       </p>
     </div>
     <div class="cell col-span-6 md:col-span-2">
       <span class="icon-wrap">
         <Icon name="lucide:monitor" size={24} class="text-accent-text" />
       </span>
-      <h3 class="heading">Native WebKit</h3>
-      <p class="body">Uses the OS rendering engine — no bundled browser.</p>
+      <h3 class="heading">WebKit, on your terms</h3>
+      <p class="body">System WebKit by default - that's the tiny download. Pin an exact, signed build from the engine store when byte-for-byte consistency matters. Never Chromium.</p>
     </div>
     <div class="cell col-span-6 md:col-span-2">
       <span class="icon-wrap">
         <Icon name="lucide:package-open" size={24} class="text-accent-text" />
       </span>
       <h3 class="heading">Zero runtime deps</h3>
-      <p class="body">Fewer moving parts. Smaller attack surface.</p>
+      <p class="body">No runtime dependencies, no compiled native code, no postinstall scripts. Your SBOM is “Bun + your code.”</p>
     </div>
     <div class="cell col-span-6 space-y-1.5 md:col-span-4">
       <p class="eyebrow">Familiar developer experience</p>
@@ -49,14 +51,15 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
         Native implementation.
       </h3>
       <p class="body mt-auto">
-        Keep the mental model. Drop the Chromium dependency. Build desktop apps
-        with less overhead and fewer surprises.
+        The same <code>app</code>, <code>BrowserWindow</code> and
+        <code>ipcMain</code> you already write - the heavy parts swapped
+        underneath, not the API you migrate to.
       </p>
     </div>
     <div class="cell col-span-6 md:col-span-2 justify-center">
       <p class="stat accent">3</p>
-      <p class="mt-1 text-sm font-semibold text-text">Platforms</p>
-      <p class="mt-1 text-xs tracking-wide text-text-faint">
+      <p class="mt-1 text-sm font-medium text-text">Platforms</p>
+      <p class="mt-1 text-sm tracking-wide text-text-faint">
         Windows · macOS · Linux
       </p>
     </div>
@@ -121,7 +124,7 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
 
   .stat {
     font-size: var(--text-5xl);
-    font-weight: 500;
+    font-weight: 300;
     line-height: 1;
     letter-spacing: -0.02em;
     color: var(--text);
@@ -134,7 +137,7 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
 
   .heading-lg {
     font-size: var(--text-xl);
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.25;
     color: var(--text);
     margin-bottom: 0.5rem;
@@ -142,7 +145,7 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
 
   .heading {
     font-size: var(--text-base);
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text);
     margin-bottom: 0.4rem;
   }

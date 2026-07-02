@@ -18,12 +18,12 @@ export default function InstallTabs() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } catch {
-      // Clipboard access denied — the copy button is a progressive enhancement.
+      // Clipboard access denied - the copy button is a progressive enhancement.
     }
   };
 
   return (
-    <div className="w-full max-w-132 overflow-hidden rounded-lg border border-border bg-surface text-left">
+    <div className="w-full max-w-132 overflow-hidden rounded-md border border-border bg-surface text-left">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex gap-1" role="tablist" aria-label="Package manager">
           {TABS.map((t) => {

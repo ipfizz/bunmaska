@@ -64,9 +64,9 @@ const platforms: {
   {
     name: "Windows",
     icon: windows,
-    status: "beta",
+    status: "shipping",
     arch: "x64 today · ARM64 on the roadmap",
-    note: "WinCairo WebKit, built from source. Engine hosting still in progress.",
+    note: "WinCairo WebKit, built from source. Engine hosting is the next step.",
   },
 ];
 ---
@@ -76,19 +76,17 @@ const platforms: {
     <h2 class={HEAD}>
       Three platforms,
       <span
-        class="italic text-accent-text mx-1"
-        style="font-family:var(--font-serif);"
+        class="serif-accent text-accent-text mx-1"
       >
         no chromium
       </span>
       on any of them.
     </h2>
     <p class="mt-4 text-xs text-text-muted">
-      macOS and Linux ship today - each driving the operating system's own WebKit,
-      in pure <code>bun:ffi</code>, across x64 and ARM. Windows is in the build now
-      (beta, x64) on a from-source WinCairo engine - never Chromium - with engine
-      hosting the last step before it ships end-to-end. A few APIs differ per
-      platform, and we publish exactly which on the
+      All three ship today - each driving the operating system's own WebKit in
+      pure <code>bun:ffi</code>. macOS and Linux use the system engine; Windows
+      builds its own WinCairo (it ships no WebKit) - never Chromium. It's alpha,
+      and a few APIs differ per platform - we publish exactly which on the
       <a
         href="/docs/migrating/parity"
         class="text-accent-text underline underline-offset-2">parity page</a
@@ -96,7 +94,7 @@ const platforms: {
     </p>
   </div>
   <div
-    class="mx-auto mt-12 grid gap-px overflow-hidden border bg-border sm:grid-cols-3"
+    class="mx-auto mt-12 grid gap-px overflow-hidden rounded-md border bg-border sm:grid-cols-3"
   >
     {
       platforms.map((p) => {
@@ -121,7 +119,7 @@ const platforms: {
                 {s.label}
               </span>
             </div>
-            <h3 class="mt-4 font-semibold">{p.name}</h3>
+            <h3 class="mt-4 font-medium">{p.name}</h3>
             <p class="mt-1 text-sm text-text-muted">{p.arch}</p>
             <p class="mt-2 text-sm text-text-faint">{p.note}</p>
           </div>
