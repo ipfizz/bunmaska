@@ -12,7 +12,7 @@ The short version: on maturity, ecosystem, and depth-of-Windows, Electron wins -
 | --- | --- | --- |
 | Download size | 150 MB+ | **~16-23 MB** |
 | Installed size | ~220 MB | **~60 MB** |
-| Rendering engine | bundled Chromium (every app, again) | **OS-native WebKit** (not bundled) |
+| Rendering engine | bundled Chromium (every app, again) | **system WebKit** by default, pinnable via the engine store (from-source WinCairo on Windows) |
 | Runtime | Node + V8 | **Bun + JavaScriptCore** |
 | Process model | multi-process (sandboxed renderers) | **single cooperatively-pumped process** |
 | Native modules | node-gyp / N-API / electron-rebuild | **a `.ts` file that `dlopen`s the OS** |
