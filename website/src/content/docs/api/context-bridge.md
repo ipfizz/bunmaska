@@ -5,6 +5,7 @@ order: 6
 ---
 
 Create a safe bridge from an isolated preload world into the page's main world. In Bunmaska the preload (and this `contextBridge`) run in a dedicated isolated JS world - `WKContentWorld 'BunmaskaPreload'` on macOS, the `BunmaskaPreload` named world on Linux - so the page cannot see preload globals directly. `exposeInMainWorld` bridges across that boundary using a shared-`document` `CustomEvent` channel, materialising `window[apiKey]` in the page.
+> **Windows caveat:** on Windows (WinCairo) there is no isolated-world API yet, so the bridge runs in the **page world** - the isolation guarantee is weaker than on macOS/Linux. Don't rely on world isolation as a security boundary on Windows; see the [parity page](/docs/migrating/parity).
 
 Process: Renderer (preload)
 

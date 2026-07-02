@@ -29,7 +29,7 @@ Installing the package gives you the `bunmaska` command - scaffold, dev, run, an
 ```sh
 bunmaska init my-app     # scaffold a runnable starter
 bunmaska dev             # run with file-watch + auto-restart
-bunmaska build           # produce a .dmg (macOS) or AppDir/.deb (Linux)
+bunmaska build           # a .app (add --dmg for a disk image) or AppDir/.deb
 ```
 
 Install it globally if you want the command everywhere:

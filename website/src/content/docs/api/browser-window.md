@@ -509,7 +509,7 @@ win.webContents.on('did-finish-load', () => {
 
 Bunmaska implements the window-management core but omits large swaths of Electron's `BrowserWindow` surface. Notable gaps:
 
-- **`setPosition` / `getPosition` / `setBounds` / `setContentBounds` / `getContentBounds` / `getNormalBounds`** - no positional setters; only `setSize` and `getBounds`/`getSize` exist. (On Linux, position is fundamentally constrained by GTK4/Wayland anyway.)
+- **`setContentBounds` / `getContentBounds` / `getNormalBounds`** - the content-bounds variants. (`setPosition`/`getPosition`/`setBounds` exist since alpha.5: full on Windows, best-effort placement on macOS, size-only on Linux where GTK4/Wayland leaves placement to the compositor - see the parity page.)
 - **`setContentSize` / `getContentSize` / `getMaximumSize` / `setMaximumSize`** - only the minimum-size pair and `setSize` are wired.
 - **`setMovable` / `setMinimizable` / `setMaximizable` / `setClosable` / `setFocusable`** and their getters - the constraint setters beyond `setResizable` are absent.
 - **`setBackgroundColor` / `getBackgroundColor`, `setHasShadow` / `hasShadow`, `setVibrancy`** - no appearance/material APIs.

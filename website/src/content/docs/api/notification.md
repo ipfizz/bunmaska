@@ -99,7 +99,7 @@ A secondary line shown under the title. Wired only on macOS (mapped to `NSUserNo
 
 `silent: boolean`
 
-Whether to suppress the notification sound. Works on both platforms. Defaults to `false`. (On macOS, `silent: false` opts into the default sound name, since `NSUserNotification` is otherwise silent.)
+Whether to suppress the notification sound. Works on macOS and Linux. Defaults to `false`. (On macOS, `silent: false` opts into the default sound name, since `NSUserNotification` is otherwise silent.)
 
 ```ts
 import { Notification } from 'bunmaska';

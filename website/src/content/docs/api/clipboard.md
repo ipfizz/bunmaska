@@ -14,7 +14,7 @@ One deliberate difference from Electron: all **read** methods are asynchronous a
 
 `readText(): Promise<string>`
 
-Reads the clipboard's plain-text contents, resolving to `''` if the clipboard holds no text. Asynchronous on both platforms (unlike Electron, which returns a string synchronously).
+Reads the clipboard's plain-text contents, resolving to `''` if the clipboard holds no text. Asynchronous on every platform (unlike Electron, which returns a string synchronously).
 
 ```ts
 import { clipboard } from 'bunmaska';
@@ -42,7 +42,7 @@ clipboard.writeText('hello i am a bit of text!');
 
 `readHTML(): Promise<string>`
 
-Reads the clipboard's HTML markup, resolving to `''` if the clipboard holds no HTML. Asynchronous on both platforms.
+Reads the clipboard's HTML markup, resolving to `''` if the clipboard holds no HTML. Asynchronous on every platform.
 
 ```ts
 import { clipboard } from 'bunmaska';
@@ -70,7 +70,7 @@ clipboard.writeHTML('<b>Hi</b>');
 
 `readImage(): Promise<NativeImage>`
 
-Reads the image on the clipboard, resolving to a [`NativeImage`](native-image.md). If the clipboard holds no image, resolves to an empty `NativeImage` (`nativeImage.createEmpty()`). Asynchronous on both platforms.
+Reads the image on the clipboard, resolving to a [`NativeImage`](native-image.md). If the clipboard holds no image, resolves to an empty `NativeImage` (`nativeImage.createEmpty()`). Asynchronous on every platform.
 
 ```ts
 import { clipboard } from 'bunmaska';
@@ -108,7 +108,7 @@ console.log(clipboard.availableFormats());
 // [ 'text/plain', ... ]
 ```
 
-Note: Bunmaska reports MIME-style format names (e.g. `text/plain`, `text/html`, `image/png`) on both platforms, matching Electron's Linux output rather than the macOS `public.*` UTI naming.
+Note: Bunmaska reports MIME-style format names (e.g. `text/plain`, `text/html`, `image/png`), matching Electron's Linux output rather than the macOS `public.*` UTI naming. (The Linux backend currently leaks raw GDK format strings here - a known drift being normalized in alpha.6.)
 
 ### `clipboard.clear()`
 
@@ -133,4 +133,4 @@ Comparing against Electron's `clipboard`, the following members are **not** impl
 - **`has(format)`** - no per-format availability check; use `availableFormats()` and test membership yourself.
 - **`read(format)` / `readBuffer(format)` / `writeBuffer(format, buffer)`** - no arbitrary-format raw read/write. Bunmaska handles only text, HTML, and PNG images through the typed methods above.
 - **`write(data)`** - no single combined write of `{ text, html, image, rtf, bookmark }` in one call; write each format with its dedicated method.
-- **Synchronous reads** - intentionally not offered. `readText`, `readHTML`, and `readImage` are `Promise`-returning on both platforms (the Linux backend is fundamentally async); there is no sync variant. Plan to `await`.
+- **Synchronous reads** - intentionally not offered. `readText`, `readHTML`, and `readImage` are `Promise`-returning on every platform (the Linux backend is fundamentally async); there is no sync variant. Plan to `await`.

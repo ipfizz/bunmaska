@@ -41,6 +41,8 @@ Compiles your app with `bun build --compile`, bundles it next to the Bun runtime
 bunmaska build
 ```
 
+The entry defaults to the `entry` in your `bunmaska.config.ts` (the `init` scaffold sets it); pass it explicitly (`bunmaska build src/main.ts`) to override.
+
 ## `bunmaska build --update`
 
 Everything `build` does, plus it emits the auto-update feed (`update.json` + a content-hashed `.tar.zst`) that the runtime `autoUpdater` consumes. Because there's no 150 MB engine to re-download, updates are tiny.

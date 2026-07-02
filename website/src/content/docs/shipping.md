@@ -35,7 +35,7 @@ If your app uses the **default** (the system WebKit), there is nothing to delive
 
 If your app **pins** a specific WebKit (the [tested == shipped](/docs/concepts/engine) tier), the engine has to get onto the user's machine somehow - and crucially, **the user never runs `bunmaska engine install` for that**. `engine install` is a developer command. Delivery to an end user is the app's own job, three ways:
 
-1. **Embed it in the bundle** (`--embed-engine`) - the engine rides inside the distributable; first launch unpacks it into the shared store, and later apps reuse it. Bigger first download, tiny everything after. *Designed; not built yet.*
+1. **Embed it in the bundle** (`--embed-engine <dir>`) - the engine rides inside the distributable. *Built for Windows today* (a Windows app needs it - there is no system WebKit); on Linux the same flag is the escape hatch when you can't rely on the distro's WebKitGTK.
 2. **Fetch on first run** - the app's runtime downloads its pinned engine (signature-verified) into the store the first time it launches. *Designed; not built yet.*
 3. **Fall back to the system WebKit** - if the pinned engine isn't present, the app launches anyway on the system WebKit and says so on stderr. *This is today's behavior, and it means the app always starts.*
 

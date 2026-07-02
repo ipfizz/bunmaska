@@ -36,6 +36,7 @@ export const sidebar: NavGroup[] = [
     items: [
       { slug: 'concepts/ipc', label: 'IPC & Context Bridge' },
       { slug: 'concepts/engine', label: 'Pinned WebKit Engine' },
+      { slug: 'concepts/frameless-windows', label: 'Frameless Windows' },
       { slug: 'cli', label: 'The CLI' },
     ],
   },

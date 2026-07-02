@@ -14,12 +14,13 @@ From your project root:
 bunmaska build
 ```
 
-This produces distributables **for the operating system you run it on**. Build macOS artifacts on a Mac, Linux artifacts on Linux. (Bunmaska bundles a system-WebKit `dlopen`, so a build is "your compiled code + the Bun runtime" - there is no engine to cross-ship.)
+The entry comes from your `bunmaska.config.ts` (pass it explicitly — `bunmaska build src/main.ts` — if you prefer). By default this targets **the operating system you run it on**; `--target macos|linux|windows` cross-builds from another host (a macOS `.app` still needs a macOS host for codesign). A build is "your compiled code + the Bun runtime" — on macOS and Linux there is no engine to ship at all.
 
 ## macOS
 
 ```sh
-bunmaska build                 # → MyApp.app + MyApp.dmg
+bunmaska build                 # → MyApp.app
+bunmaska build --dmg           # → MyApp.app + MyApp.dmg
 ```
 
 You get:
@@ -33,7 +34,7 @@ You get:
 APPLE_ID="you@example.com" \
 TEAM_ID="XXXXXXXXXX" \
 BUNMASKA_NOTARIZE_PASSWORD="app-specific-password" \
-bunmaska build --sign --notarize
+bunmaska build --sign "Developer ID Application: Your Name (TEAMID)" --notarize
 ```
 
 A signed + notarized app passes macOS Gatekeeper without a warning. (Requires an Apple Developer account - $99/yr, one account, unlimited apps.)

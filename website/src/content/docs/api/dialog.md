@@ -8,7 +8,7 @@ The `dialog` module displays native system dialogs for opening and saving files 
 
 Process: Main
 
-Unlike Electron, every Bunmaska dialog method is async and returns a Promise. There are no `*Sync` variants - the macOS backend happens to run its panels modally under the hood, but the public API is Promise-only so your code reads the same on both platforms.
+Unlike Electron, every Bunmaska dialog method is async and returns a Promise. There are no `*Sync` variants - the macOS backend happens to run its panels modally under the hood, but the public API is Promise-only so your code reads the same on every platform.
 
 ```ts
 import { dialog } from 'bunmaska';

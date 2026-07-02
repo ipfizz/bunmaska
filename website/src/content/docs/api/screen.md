@@ -80,7 +80,7 @@ console.log('window will live on display:', display.id);
 
 Returns `Point` - the current cursor position in top-left screen coordinates.
 
-> **Stub on both platforms (v1).** This currently returns `{ x: 0, y: 0 }` on macOS *and* Linux. On macOS, `NSEvent.mouseLocation` returns an `NSPoint` struct, which hits the same bun:ffi struct-return wall that blocks display origins (and would also need a bottom-left-origin flip). On Linux, the GTK4 pointer position requires a surface + seat + device that this read-only enumeration backend does not hold. Don't rely on this value yet.
+> **Stub everywhere (v1).** This currently returns `{ x: 0, y: 0 }` on macOS, Linux and Windows. On macOS, `NSEvent.mouseLocation` returns an `NSPoint` struct, which hits the same bun:ffi struct-return wall that blocks display origins (and would also need a bottom-left-origin flip). On Linux, the GTK4 pointer position requires a surface + seat + device that this read-only enumeration backend does not hold. Don't rely on this value yet.
 
 ```ts
 import { screen } from 'bunmaska';
@@ -132,7 +132,7 @@ Compared to Electron's `screen`, these are missing:
 
 * **Events** - `display-added`, `display-removed`, and `display-metrics-changed` are not implemented. Bunmaska's `screen` is a plain object, not an `EventEmitter`, so there is no hot-plug or metrics-change notification. Re-call `getAllDisplays()` if you need fresh data.
 * **DIP/physical conversion methods** - `screenToDipPoint`, `dipToScreenPoint`, `screenToDipRect`, and `dipToScreenRect` are absent. (These are Windows-only or Windows/Linux-only in Electron; Bunmaska does not implement them on any backend, including Windows.)
-* **Working `getCursorScreenPoint()`** - present but stubbed to `{0,0}` on both platforms (see above).
+* **Working `getCursorScreenPoint()`** - present but stubbed to `{0,0}` everywhere (see above).
 * **Real `workArea`** - reported but always equal to `bounds`; the OS-chrome inset is not subtracted yet.
 * **Accurate macOS multi-monitor origins** - secondary-display `bounds.x`/`bounds.y` are `(0,0)` on macOS pending bun:ffi struct-return support. Linux origins are exact.
 * **Extra `Display` fields** - Electron's `Display` also carries `label`, `colorSpace`, `colorDepth`, `depthPerComponent`, `displayFrequency`, `monochrome`, `accelerometerSupport`, `touchSupport`, and `maximumCursorSize`. Bunmaska's `Display` exposes only the geometry-and-essentials subset listed above. Additionally, `rotation` is macOS-only and `internal` is macOS-only.

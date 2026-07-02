@@ -20,7 +20,7 @@ The result is an app that downloads in **~16-23 MB** instead of 150 MB+, and a n
 
 ## Status
 
-It's **alpha**. It genuinely works on **macOS, Linux, and Windows** today - real windows, the OS's own WebKit rendering (system on macOS/Linux, a from-source WinCairo build bundled on Windows), Electron-style IPC with context isolation, menus, tray, dialogs, clipboard (incl. images), `nativeImage`, `safeStorage`, `powerMonitor`, and a CLI that packages real `.dmg`/`.deb`/`.exe` distributables. A few APIs differ per platform - `printToPDF`/`capturePage` are macOS-only, and those two plus custom `protocol://` are engine-blocked on Windows - and the [parity matrix](/docs/migrating/parity) is honest about every cell. Some method-level corners are still being filled in.
+It's **alpha**. It genuinely works on **macOS, Linux, and Windows** today - real windows, the OS's own WebKit rendering (system on macOS/Linux, a from-source WinCairo build bundled on Windows), Electron-style IPC with context isolation, menus, tray, dialogs, clipboard (incl. images), `nativeImage`, `safeStorage`, `powerMonitor`, and a CLI that packages real `.app`/`.deb`/`.exe` distributables (plus `.dmg` with a flag). A few APIs differ per platform - `printToPDF`/`capturePage` are macOS-only, and those two plus custom `protocol://` are engine-blocked on Windows - and the [parity matrix](/docs/migrating/parity) is honest about every cell. Some method-level corners are still being filled in.
 
 If you're evaluating it for production, read the word "alpha" one more time, then keep reading anyway.
 

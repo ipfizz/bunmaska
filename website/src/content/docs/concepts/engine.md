@@ -63,7 +63,7 @@ bunmaska engine verify <id>      # structural integrity check
 bunmaska doctor                  # runtime, store, and the engine this project resolves
 ```
 
-Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything. The signing key for the official feed is a **trust anchor baked into Bunmaska** - it's public, verified automatically, and there's nothing to configure.
+Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything. When the official hosted feed ships, its signing key will be a **trust anchor baked into Bunmaska** — public, verified automatically, nothing to configure. Until then, an install from a URL takes the feed's public key explicitly (the CLI reads `BUNMASKA_ENGINE_PUBKEY`, or set `engine.feed.publicKey` in `bunmaska.config`).
 
 ## Self-hosting an engine feed (advanced)
 
@@ -92,6 +92,6 @@ Where each piece stands today:
 - **The pinned-engine tier works on Linux now.** You can pin an engine, install it into the shared store, and have an app load *that* WebKit from the store instead of the system one - with its whole dependency closure self-contained.
 - **Downloadable engines and the final render pass are next.** Serving prebuilt engines from a signed feed to `install`, and rendering through the relocated helper processes, are in progress; the catalog of hosted engines isn't filled in yet.
 - **macOS pinning is designed** - it means shipping a signed `WebKit.framework` resolved from the store. The default stays system WKWebView; pinning is opt-in.
-- **Windows brings its own WebKit (WinCairo), never WebView2** (that's Chromium). It's deferred behind macOS + Linux.
+- **Windows brings its own WebKit (WinCairo), never WebView2** (that's Chromium). The Win32 backend ships today (beta, x64); you build the WinCairo engine from source and embed it, until the hosted feed lands.
 
 So today the default - the system WebKit - is what nearly every app should use. The pinned tier is the opt-in path to byte-for-byte "tested == shipped."

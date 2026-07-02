@@ -1,6 +1,6 @@
 ---
 title: Changelog
-description: Bunmaska is pre-release, so this is one honest snapshot rather than a running history. Once it's published to npm, every release gets an entry here.
+description: Every published release gets an entry here - what shipped, what broke, and what we deferred, honestly.
 order: 2
 ---
 
@@ -109,8 +109,8 @@ See the full [API Reference](/docs/api/app) for what each one actually implement
 **Known limits**
 
 - **Alpha** - the API surface will move between releases. Pin your version.
-- **No Windows** yet (planned via WinCairo - see the [roadmap](/roadmap)).
-- ~70-80% Electron parity; `session.cookies`, `BrowserWindow.setBounds`, and some `webContents` events are still in progress.
+- **Windows is beta** (x64, from-source WinCairo - see the [roadmap](/roadmap)); ARM64 waits on upstream.
+- ~70-80% Electron parity; `session.cookies` and some `webContents` events are still in progress.
 - `autoUpdater.quitAndInstall`'s final atomic swap-and-relaunch is experimental.
 
-> What changes here next: once `bunmaska` is live on npm, this page becomes a real changelog - dated entries, version by version. Until then, the [roadmap](/roadmap) is the forward-looking companion to this snapshot.
+> The [roadmap](/roadmap) is the forward-looking companion to this page: every stop between here and beta, with exit criteria.

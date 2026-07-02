@@ -60,7 +60,7 @@ Now `window.api.add(20, 22)` resolves to `42`, round-tripped through real WebKit
 ## Ship it
 
 ```sh
-bunmaska build          # .dmg on macOS, AppDir + .deb on Linux
+bunmaska build          # .app on macOS (--dmg for a disk image), AppDir + .deb on Linux
 bunmaska build --update # also emit the auto-update feed
 ```
 

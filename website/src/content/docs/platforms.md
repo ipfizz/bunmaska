@@ -12,7 +12,7 @@ Bunmaska ships on **macOS, Linux, and now Windows** - each driving the operating
 | --- | --- | --- | --- |
 | **macOS** | ✅ Shipping | Apple Silicon (ARM64) + Intel (x64) | AppKit + `WKWebView` |
 | **Linux** | ✅ Shipping | x64 + ARM64 (incl. Raspberry Pi) | GTK 4 + WebKitGTK 6 |
-| **Windows** | ✅ Shipping (x64) | x64 today · ARM64 on the roadmap | WinCairo WebKit (built from source, bundled) |
+| **Windows** | 🟡 Beta (x64) | x64 today · ARM64 on the roadmap | WinCairo WebKit (built from source, bundled) |
 
 ## macOS
 
@@ -32,7 +32,7 @@ A from-scratch Win32 backend on pure `bun:ffi` - native windows + a cooperative 
 
 - **Architectures:** `x64` today. Upstream WinCairo is x64-only, so **ARM64 is on the roadmap**, not shipping. 32-bit (x86) is not supported, on purpose.
 - **Engine:** Windows ships no system WebKit, so an app loads a **WinCairo `WebKit2.dll`** - built from WebKit source by us (a clang-cl from-source build, proven end-to-end) and bundled with the app, or resolved from the engine store. The engine directory is placed on the DLL search path so its dependency closure (ICU, libcurl, ANGLE, …) resolves beside it.
-- **The distribution piece:** you can ship a Windows app **today** by building the engine and embedding it (`bunmaska build --embed-engine`, or point `BUNMASKA_WEBKIT_PATH` at a build). What's still coming is a **hosted prebuilt engine** so you don't have to build it yourself - the publish step that makes it turnkey.
+- **The distribution piece:** you can ship a Windows app **today** by building the engine and embedding it (`bunmaska build --embed-engine <dir>`, or point `BUNMASKA_WEBKIT_PATH` at a build). What's still coming is a **hosted prebuilt engine** so you don't have to build it yourself - the publish step that makes it turnkey.
 - **Engine-blocked gaps:** `printToPDF`, `capturePage`, and custom `protocol://` schemes can't be served on Windows - the WinCairo WebKit2 C API simply doesn't expose those entry points (confirmed against the DLL's exports). They throw a clear error rather than silently no-op. DevTools, the tray context menu, and a fully isolated content world are follow-ups. Full picture on the [parity matrix](/docs/migrating/parity).
 
 ## Requirements (all platforms)
