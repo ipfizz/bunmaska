@@ -10,7 +10,7 @@ const { slug } = Astro.props;
 const items = breadcrumbItems(slug);
 ---
 
-<nav aria-label="Breadcrumb" class="-ml-5 text-sm text-text-muted">
+<nav aria-label="Breadcrumb" class="text-[0.8125rem] text-text-muted">
   <ol class="flex flex-wrap items-center gap-2">
     {
       items.map((item, index) => {

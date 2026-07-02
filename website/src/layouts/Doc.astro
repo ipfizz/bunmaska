@@ -26,25 +26,46 @@ const { prev, next } = prevNext(slug);
 
 <Base title={title} description={description}>
   <Nav />
-  <div class="mx-auto w-full py-6 max-w-6xl lg:h-[calc(100dvh-4rem)] lg:overflow-hidden">
+  <div class="mx-auto w-full max-w-[88rem] px-5 md:px-8">
     <div
-      class="grid grid-cols-1 gap-x-2 gap-y-4 lg:h-full lg:min-h-0 lg:grid-cols-[14rem_minmax(0,1fr)_13rem] lg:overflow-hidden"
+      class="grid grid-cols-1 py-8 lg:grid-cols-[15rem_minmax(0,1fr)_13rem] lg:gap-x-10 lg:py-12 xl:gap-x-16"
     >
-      <aside class="hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain pr-2">
+      {/* Mobile: collapsible docs nav (the sidebar is hidden below lg). */}
+      <details class="docs-menu mb-6 lg:hidden">
+        <summary
+          class="flex cursor-pointer items-center justify-between rounded-sm border border-border bg-surface px-3.5 py-2.5 text-sm text-text-muted"
+        >
+          <span>Documentation menu</span>
+          <span class="chevron text-text-faint" aria-hidden="true">›</span>
+        </summary>
+        <div class="mt-3 rounded-sm border border-border bg-surface p-4">
+          <Sidebar current={slug} />
+        </div>
+      </details>
+
+      <aside
+        class="hidden lg:block lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-10 lg:pr-1"
+      >
         <Sidebar current={slug} />
       </aside>
 
-      <div class="min-w-0 lg:h-full border-l border-r px-4 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
-        <article class="prose">
-          <Breadcrumbs slug={slug} />
-          <h1>{title}</h1>
-          {description && <p class="lead">{description}</p>}
+      <div class="min-w-0">
+        <Breadcrumbs slug={slug} />
+        <header class="mt-4 border-b border-border pb-6">
+          <h1 class="text-[1.75rem] leading-[1.15] font-medium tracking-tight text-balance">
+            {title}
+          </h1>
+          {description && <p class="lead mt-3">{description}</p>}
+        </header>
+        <article class="prose mt-7">
           <slot />
         </article>
         <PrevNext prev={prev} next={next} />
       </div>
 
-      <aside class="hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+      <aside
+        class="hidden lg:block lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-10"
+      >
         <Toc headings={headings} />
       </aside>
     </div>
@@ -54,10 +75,22 @@ const { prev, next } = prevNext(slug);
 
 <style>
   .lead {
-    font-size: 1rem;
+    font-size: 0.9375rem;
     line-height: 1.6;
     color: var(--text-muted);
-    margin-top: 0.5em;
+    max-width: 66ch;
+  }
+  .docs-menu summary {
+    list-style: none;
+  }
+  .docs-menu summary::-webkit-details-marker {
+    display: none;
+  }
+  .docs-menu .chevron {
+    transition: transform 0.15s ease;
+  }
+  .docs-menu[open] .chevron {
+    transform: rotate(90deg);
   }
 </style>
 
@@ -75,7 +108,9 @@ const { prev, next } = prevNext(slug);
           await navigator.clipboard.writeText(text);
           btn.classList.add("copied");
           setTimeout(() => btn.classList.remove("copied"), 1400);
-        } catch {}
+        } catch {
+          // Clipboard access denied - the copy button is a progressive enhancement.
+        }
       });
     });
 </script>

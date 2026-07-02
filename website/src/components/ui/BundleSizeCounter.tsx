@@ -68,7 +68,7 @@ export default function BundleCounter({
   )`;
 
   return (
-    <p ref={ref} className="stat mt-4 text-5xl font-bold tabular-nums" style={{ color }}>
+    <p ref={ref} className="stat mt-4 text-5xl font-light tabular-nums" style={{ color }}>
       ~{value}MB
     </p>
   );

@@ -12,8 +12,8 @@ const { prev, next } = Astro.props;
   {
     prev ? (
       <a href={`/docs/${prev.slug}`} class="card card-hover p-4 text-left">
-        <span class="text-sm text-text-faint">← Previous</span>
-        <span class="mt-1 block font-medium text-text">{prev.label}</span>
+        <span class="text-[0.8125rem] text-text-faint">← Previous</span>
+        <span class="mt-1 block text-[0.9375rem] font-medium text-text">{prev.label}</span>
       </a>
     ) : (
       <span />
@@ -22,8 +22,8 @@ const { prev, next } = Astro.props;
   {
     next && (
       <a href={`/docs/${next.slug}`} class="card card-hover p-4 text-right sm:col-start-2">
-        <span class="text-sm text-text-faint">Next →</span>
-        <span class="mt-1 block font-medium text-text">{next.label}</span>
+        <span class="text-[0.8125rem] text-text-faint">Next →</span>
+        <span class="mt-1 block text-[0.9375rem] font-medium text-text">{next.label}</span>
       </a>
     )
   }

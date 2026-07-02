@@ -7,24 +7,26 @@ interface Props {
 const { current } = Astro.props;
 ---
 
-<nav aria-label="Docs" class="text-sm">
+<nav aria-label="Docs">
   {
     sidebar.map((group) => (
-      <div class="mb-7">
-        <p class="eyebrow mb-2.5">{group.title}</p>
-        <ul class="space-y-0.5">
+      <div class="mb-6">
+        <p class="mb-2 text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-text-faint">
+          {group.title}
+        </p>
+        <ul class="border-l border-border">
           {group.items.map((item) => {
             const active = item.slug === current;
             return (
-              <li class="ml-1">
+              <li>
                 <a
                   href={`/docs/${item.slug}`}
                   aria-current={active ? "page" : undefined}
                   class:list={[
-                    "block border-l-3 p-1.5 pl-3 transition-colors",
+                    "-ml-px block border-l py-[0.3rem] pl-3 pr-2 text-[0.8125rem] leading-snug transition-colors",
                     active
-                      ? "bg-accent-bg border-accent-text font-medium text-text"
-                      : "border-transparent text-text-muted hover:bg-accent-bg hover:text-text",
+                      ? "border-accent font-medium text-accent-text"
+                      : "border-transparent text-text-muted hover:border-border-strong hover:text-text",
                   ]}
                 >
                   {item.label}
