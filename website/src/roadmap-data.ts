@@ -60,7 +60,7 @@ export const milestones: readonly Milestone[] = [
       'Cross-distro Linux engines (an old-glibc base, one build across distros).',
       'Engine delivery for end users: embedded in the bundle or fetched on first run. Never something a user types.',
     ],
-    exit: 'a fresh machine goes install → init → build → running app on a pinned engine, on all three OSes',
+    exit: 'a fresh machine goes install > init > build > running app on a pinned engine, on all three OSes',
   },
   {
     version: 'alpha.8',
@@ -83,7 +83,7 @@ export const milestones: readonly Milestone[] = [
     note: 'every box below is verifiable. No box, no beta.',
     items: [
       'The API surface is frozen for the beta line; semver discipline begins.',
-      'install → init → dev → build → launch runs end-to-end in CI on macOS, Linux and Windows - not just unit-green.',
+      'install > init > dev > build > launch runs end-to-end in CI on macOS, Linux and Windows - not just unit-green.',
       'Hosted engines are live and the auto-updater has shipped a real update to a real app.',
       'At least five real open-source Electron apps run via dependency swap, and one app we use daily has run for two weeks without a crash.',
       'Docs are complete: every implemented method documented, the parity matrix exact, the migration guide tested against a real app.',
