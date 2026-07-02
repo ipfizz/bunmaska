@@ -63,7 +63,7 @@ bunmaska engine verify <id>      # structural integrity check
 bunmaska doctor                  # runtime, store, and the engine this project resolves
 ```
 
-Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything. When the official hosted feed ships, its signing key will be a **trust anchor baked into Bunmaska** — public, verified automatically, nothing to configure. Until then, an install from a URL takes the feed's public key explicitly (the CLI reads `BUNMASKA_ENGINE_PUBKEY`, or set `engine.feed.publicKey` in `bunmaska.config`).
+Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything. When the official hosted feed ships, its signing key will be a **trust anchor baked into Bunmaska** - public, verified automatically, nothing to configure. Until then, an install from a URL takes the feed's public key explicitly (the CLI reads `BUNMASKA_ENGINE_PUBKEY`, or set `engine.feed.publicKey` in `bunmaska.config`).
 
 ## Self-hosting an engine feed (advanced)
 

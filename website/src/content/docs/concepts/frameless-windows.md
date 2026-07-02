@@ -33,13 +33,13 @@ Electron uses the `-webkit-app-region: drag` CSS property to mark a draggable re
 .titlebar button { --app-region: no-drag; }  /* ...but not from the buttons */
 ```
 
-Custom properties inherit, so set `--app-region: drag` on the bar and `--app-region: no-drag` on the controls inside it — exactly the cascade you'd get from Electron's app-region. A left-button press anywhere in a `drag` region starts a native window move (edge-snap, shake-to-minimise and all).
+Custom properties inherit, so set `--app-region: drag` on the bar and `--app-region: no-drag` on the controls inside it - exactly the cascade you'd get from Electron's app-region. A left-button press anywhere in a `drag` region starts a native window move (edge-snap, shake-to-minimise and all).
 
-> Under the hood Bunmaska also mirrors `--app-region` onto the native `-webkit-app-region`, so on macOS — where WKWebView honours it directly — dragging is fully native.
+> Under the hood Bunmaska also mirrors `--app-region` onto the native `-webkit-app-region`, so on macOS - where WKWebView honours it directly - dragging is fully native.
 
 ## Window controls
 
-A built-in API is injected into every page — no `ipcMain` handler to write:
+A built-in API is injected into every page - no `ipcMain` handler to write:
 
 ```js
 window.__bunmaska.window.minimize();
@@ -53,7 +53,7 @@ A minimal custom title bar:
 ```html
 <div class="titlebar">
   <span class="title">My App</span>
-  <button onclick="__bunmaska.window.minimize()">—</button>
+  <button onclick="__bunmaska.window.minimize()">-</button>
   <button onclick="__bunmaska.window.toggleMaximize()">▢</button>
   <button onclick="__bunmaska.window.close()">✕</button>
 </div>
@@ -65,7 +65,7 @@ A minimal custom title bar:
 
 ## Platform support
 
-We don't lie in tables — this one is still filling in:
+We don't lie in tables - this one is still filling in:
 
 | | Frameless (`frame: false`) | Drag (`--app-region`) | `window.__bunmaska.window` controls |
 | --- | :---: | :---: | :---: |

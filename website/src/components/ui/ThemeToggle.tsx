@@ -23,7 +23,7 @@ export default function ThemeToggle() {
     try {
       localStorage.setItem('theme', next);
     } catch {
-      // localStorage unavailable (private mode) — the toggle still works for the session.
+      // localStorage unavailable (private mode) - the toggle still works for the session.
     }
   };
 

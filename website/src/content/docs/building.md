@@ -14,7 +14,7 @@ From your project root:
 bunmaska build
 ```
 
-The entry comes from your `bunmaska.config.ts` (pass it explicitly — `bunmaska build src/main.ts` — if you prefer). By default this targets **the operating system you run it on**; `--target macos|linux|windows` cross-builds from another host (a macOS `.app` still needs a macOS host for codesign). A build is "your compiled code + the Bun runtime" — on macOS and Linux there is no engine to ship at all.
+The entry comes from your `bunmaska.config.ts` (pass it explicitly - `bunmaska build src/main.ts` - if you prefer). By default this targets **the operating system you run it on**; `--target macos|linux|windows` cross-builds from another host (a macOS `.app` still needs a macOS host for codesign). A build is "your compiled code + the Bun runtime" - on macOS and Linux there is no engine to ship at all.
 
 ## macOS
 
