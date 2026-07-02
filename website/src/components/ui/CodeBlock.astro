@@ -26,7 +26,7 @@ const { code, lang = "ts", title } = Astro.props;
   document.querySelectorAll<HTMLButtonElement>(".codepanel .copy-btn[data-code]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(btn.dataset.code ?? "");
+        await navigator.clipboard.writeText(btn.dataset["code"] ?? "");
         btn.classList.add("copied");
         setTimeout(() => btn.classList.remove("copied"), 1400);
       } catch {}

@@ -4,9 +4,9 @@ import "../styles/global.css";
 import { VERSION } from "../site";
 
 interface Props {
-  title?: string;
-  description?: string;
-  image?: string;
+  title?: string | undefined;
+  description?: string | undefined;
+  image?: string | undefined;
 }
 
 const DEFAULT_TITLE = "Bunmaska - Electron, minus the Chromium";

@@ -10,7 +10,9 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "check": "astro check",
+    "validate": "astro check && astro build"
   },
   "dependencies": {
     "@astrojs/mdx": "^6.0.3",
@@ -31,6 +33,8 @@
     "tailwindcss": "^4.3.1"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14"
+    "@astrojs/check": "^0.9.9",
+    "@types/bun": "^1.3.14",
+    "typescript": "^6.0.3"
   }
 }

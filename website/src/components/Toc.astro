@@ -45,7 +45,7 @@ const items = headings.filter((h) => h.depth === 2 || h.depth === 3);
 <script>
   const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(".toc a[data-toc]"));
   if (links.length) {
-    const map = new Map(links.map((l) => [l.dataset.toc, l]));
+    const map = new Map(links.map((l) => [l.dataset["toc"], l]));
     const observer = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {

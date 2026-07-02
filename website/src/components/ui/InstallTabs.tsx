@@ -1,23 +1,25 @@
-import { useState } from "react";
+import { useState } from 'react';
 
 const TABS = [
-  { key: "bun", label: "bun", cmd: "bun add bunmaska" },
-  { key: "npm", label: "npm", cmd: "npm install bunmaska" },
+  { key: 'bun', label: 'bun', cmd: 'bun add bunmaska' },
+  { key: 'npm', label: 'npm', cmd: 'npm install bunmaska' },
 ] as const;
 
-type Key = (typeof TABS)[number]["key"];
+type Key = (typeof TABS)[number]['key'];
 
 export default function InstallTabs() {
-  const [active, setActive] = useState<Key>("bun");
+  const [active, setActive] = useState<Key>('bun');
   const [copied, setCopied] = useState(false);
-  const cmd = TABS.find((t) => t.key === active)!.cmd;
+  const cmd = (TABS.find((t) => t.key === active) ?? TABS[0]).cmd;
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(cmd);
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
-    } catch {}
+    } catch {
+      // Clipboard access denied — the copy button is a progressive enhancement.
+    }
   };
 
   return (
@@ -34,8 +36,10 @@ export default function InstallTabs() {
                 aria-selected={on}
                 onClick={() => setActive(t.key)}
                 className={
-                  "rounded-sm px-2.5 py-1 text-sm transition-colors " +
-                  (on ? "bg-bg-subtle font-medium text-text" : "text-text-faint hover:text-text-muted")
+                  'rounded-sm px-2.5 py-1 text-sm transition-colors ' +
+                  (on
+                    ? 'bg-bg-subtle font-medium text-text'
+                    : 'text-text-faint hover:text-text-muted')
                 }
               >
                 {t.label}
@@ -47,7 +51,7 @@ export default function InstallTabs() {
           type="button"
           onClick={copy}
           aria-label="Copy install command"
-          className={"copy-btn copy-btn--light" + (copied ? " copied" : "")}
+          className={'copy-btn copy-btn--light' + (copied ? ' copied' : '')}
         />
       </div>
 

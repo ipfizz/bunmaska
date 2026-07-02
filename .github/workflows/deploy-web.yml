@@ -29,6 +29,19 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      # The site is held to the same bar as the framework: biome (ts/tsx) +
+      # `astro check` (strict tsconfig over every .astro/.ts) gate the deploy.
+      - name: Install framework dev tools (biome)
+        run: bun install --frozen-lockfile
+        working-directory: .
+
+      - name: Lint + format-check the site code
+        run: bunx biome ci website/src
+        working-directory: .
+
+      - name: Type-check the site
+        run: bun run check
+
       - name: Build the site
         run: bun run build
 

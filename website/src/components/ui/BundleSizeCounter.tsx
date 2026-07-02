@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 
 interface BundleCounterProps {
   from?: number;
@@ -19,16 +19,16 @@ export default function BundleCounter({
   useEffect(() => {
     if (!ref.current) return;
 
-    const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
+    const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry.isIntersecting) return;
+        if (!entry?.isIntersecting) return;
 
         observer.disconnect();
 
         // Respect reduced-motion: jump straight to the final value, no animation.
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
           setProgress(1);
           setValue(to);
           return;
@@ -68,11 +68,7 @@ export default function BundleCounter({
   )`;
 
   return (
-    <p
-      ref={ref}
-      className="stat mt-4 text-5xl font-bold tabular-nums"
-      style={{ color }}
-    >
+    <p ref={ref} className="stat mt-4 text-5xl font-bold tabular-nums" style={{ color }}>
       ~{value}MB
     </p>
   );

@@ -6,7 +6,7 @@ interface Props {
 
 const { type = "note", title } = Astro.props;
 
-const styles: Record<string, { border: string; bg: string; label: string; icon: string }> = {
+const styles: Record<NonNullable<Props["type"]>, { border: string; bg: string; label: string; icon: string }> = {
   note: { border: "var(--border-strong)", bg: "var(--bg-subtle)", label: "Note", icon: "›" },
   tip: { border: "var(--accent)", bg: "var(--accent-bg)", label: "Tip", icon: "★" },
   caution: { border: "var(--maska-500)", bg: "var(--accent-bg)", label: "Caution", icon: "▲" },
