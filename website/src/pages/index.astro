@@ -8,6 +8,7 @@ import FeatureGrid from "../components/FeatureGrid.astro";
 import Moat from "../components/Moat.astro";
 import Platforms from "../components/Platforms.astro";
 import PinWebkits from "../components/PinWebkits.astro";
+import Compare from "../components/Compare.astro";
 import QuickStartWalkthrough from "../components/QuickStartWalkthrough.astro";
 import CLICommands from "../components/CLICommands.astro";
 import TradeOffs from "../components/TradeOffs.astro";
@@ -16,13 +17,14 @@ import FinalCTA from "../components/FinalCTA.astro";
 
 <Base>
   <Nav />
+  <Hero />
   <main class="max-w-6xl mx-auto">
-    <Hero />
     <FeatureGrid />
     <SizeStory />
     <Moat />
     <PinWebkits />
     <Platforms />
+    <Compare />
     <QuickStartWalkthrough />
     <CLICommands />
     <TradeOffs />

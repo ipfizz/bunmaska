@@ -5,20 +5,32 @@ import { Image } from "astro:assets";
 import InstallTabs from "./ui/InstallTabs.tsx";
 import { HEAD } from "../styles/constants.ts";
 import AnimatedBadge from "./ui/AnimatedBadge.astro";
+import HeroPixels from "./ui/HeroPixels.tsx";
 ---
 
-<section class="relative overflow-hidden">
-  <DashedBox columns={16} class="h-full w-full py-12">
+<section class="relative -mt-16 w-full overflow-hidden">
+  <DashedBox columns={16} class="h-full w-full pb-12 pt-28">
+    <div class="absolute inset-0" aria-hidden="true">
+      <HeroPixels client:load />
+    </div>
+    {/* Content-protection scrim: quiets the dither behind the headline/code. */}
+    <div
+      class="pointer-events-none absolute inset-0"
+      style="background: radial-gradient(62% 66% at 50% 42%, color-mix(in srgb, var(--bg) 92%, transparent) 35%, transparent 82%);"
+    >
+    </div>
     <div
       class="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(255,191,73,0.08),transparent_55%)]"
     >
     </div>
-    <div class="flex flex-col h-full items-center justify-center space-y-4">
+    <div class="relative mx-auto flex h-full max-w-6xl flex-col items-center justify-center space-y-4 px-6">
       <AnimatedBadge text="Speed of Bun + Flexibility of WebKit" />
       <div class="text-center">
-        <h1 style="font-family:var(--font-serif);" class="text-4xl font-bold">
-          Build an app before you finish your <span class="text-accent-text"
-            >bunmaska & chai.</span
+        <h1
+          class="mx-auto max-w-[24ch] font-serif leading-[1.08] text-balance text-[clamp(2.25rem,4.5vw,3rem)]"
+        >
+          Build an app before you finish your <span
+            class="italic text-accent-text">bunmaska &amp; chai.</span
           >
         </h1>
       </div>
@@ -32,8 +44,7 @@ import AnimatedBadge from "./ui/AnimatedBadge.astro";
       <h2 class={HEAD}>
         From zero to a window in about 
         <span
-          class="italic text-accent-text"
-          style="font-family:var(--font-serif);"
+          class="serif-accent text-accent-text"
         >
           ~ 90 seconds.
         </span>

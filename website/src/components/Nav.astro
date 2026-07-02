@@ -18,7 +18,7 @@ const LINKS = [
     <div class="flex items-baseline gap-2">
       <a
         href="/"
-        class="text-base font-semibold tracking-tight uppercase"
+        class="text-base font-medium tracking-tight uppercase"
         aria-label="Bunmaska home">Bunmaska</a
       >
       <a
@@ -105,10 +105,14 @@ const LINKS = [
 </header>
 
 <style>
+  /* Transparent over the hero; a blurred, bordered bar appears only on scroll. */
   #site-nav {
-    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    background: transparent;
+    backdrop-filter: none;
   }
   #site-nav.scrolled {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(12px);
     border-bottom-color: var(--border);
   }
 </style>
