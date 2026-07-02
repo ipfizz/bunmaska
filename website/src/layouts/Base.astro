@@ -60,7 +60,7 @@ const jsonLd = {
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
     {/* No-flash theme bootstrap - runs before paint */}
     <script is:inline>
       (function () {
@@ -75,5 +75,30 @@ const jsonLd = {
   </head>
   <body>
     <slot />
+    <script>
+      // Scroll reveals: hide-then-show only when we can actually observe.
+      const els = document.querySelectorAll(".reveal");
+      const motionOk = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (els.length && motionOk && "IntersectionObserver" in window) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const e of entries) {
+              if (e.isIntersecting) {
+                e.target.classList.add("reveal-in");
+                io.unobserve(e.target);
+              }
+            }
+          },
+          { threshold: 0.05 },
+        );
+        for (const el of els) {
+          // Never hide what's already on screen at load.
+          if (el.getBoundingClientRect().top > window.innerHeight) {
+            el.classList.add("reveal-init");
+            io.observe(el);
+          }
+        }
+      }
+    </script>
   </body>
 </html>

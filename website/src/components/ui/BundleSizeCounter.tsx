@@ -6,70 +6,50 @@ interface BundleCounterProps {
   duration?: number;
 }
 
+/**
+ * The download-size stat. It RESTS at the true value (~16 MB) — SSR, no-JS and
+ * post-animation all read correctly — and only when scrolled into view does it
+ * replay Electron's 150 MB collapsing down to Bunmaska's 16, once.
+ */
 export default function BundleCounter({
   from = 150,
   to = 16,
-  duration = 2400,
+  duration = 1800,
 }: BundleCounterProps) {
-  const [value, setValue] = useState(from);
-  const [progress, setProgress] = useState(0);
-
+  const [value, setValue] = useState(to);
+  const [progress, setProgress] = useState(1);
   const ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (!ref.current) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
-
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry?.isIntersecting) return;
-
         observer.disconnect();
-
-        // Respect reduced-motion: jump straight to the final value, no animation.
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          setProgress(1);
-          setValue(to);
-          return;
-        }
-
         const start = performance.now();
-
         const animate = (now: number) => {
           const p = Math.min((now - start) / duration, 1);
-
           const eased = easeOutCubic(p);
-
           setProgress(eased);
-
           setValue(Math.round(from - (from - to) * eased));
-
-          if (p < 1) {
-            requestAnimationFrame(animate);
-          }
+          if (p < 1) requestAnimationFrame(animate);
         };
-
         requestAnimationFrame(animate);
       },
       { threshold: 0.5 },
     );
-
     observer.observe(ref.current);
-
     return () => observer.disconnect();
   }, [from, to, duration]);
 
-  // Red -> current text color
-  const color = `color-mix(
-    in srgb,
-    #ef4444 ${(1 - progress) * 100}%,
-    var(--text) ${progress * 100}%
-  )`;
+  const color = `color-mix(in srgb, var(--danger) ${(1 - progress) * 100}%, var(--accent-text) ${progress * 100}%)`;
 
   return (
-    <p ref={ref} className="stat mt-4 text-5xl font-bold tabular-nums" style={{ color }}>
-      ~{value}MB
+    <p ref={ref} className="stat tabular-nums" style={{ color }}>
+      ~{value}&thinsp;MB
     </p>
   );
 }

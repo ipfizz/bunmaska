@@ -82,63 +82,34 @@
   --maska-600: #c2860b;
   --maska-700: #99680a;
 
-  --bg: #fcfcfb;
-  --bg-subtle: #f6f5f2;
-  --bg-muted: #efeeea;
-  --surface: #ffffff;
-  --border: #e7e5e0;
-  --accent-border: #aeaeae1c;
-  --border-strong: #d6d3cc;
-  --text: #1a1916;
-  --text-muted: #4a4842;
-  --text-faint: #6b675f;
-  --accent: #e0a019;
-  --accent-text: #99680a;
-  --accent-bg: #fbf3df;
-  --success: #2f7d4f;
-  --danger: #c0392b;
+  /* One definition per token; light-dark() flips with color-scheme, which
+     [data-theme] pins below (system preference is the default). */
+  --bg: light-dark(#fcfcfb, #0c0c0b);
+  --bg-subtle: light-dark(#f6f5f2, #141413);
+  --bg-muted: light-dark(#efeeea, #1b1b19);
+  --surface: light-dark(#ffffff, #161614);
+  --border: light-dark(#e7e5e0, #262521);
+  --accent-border: light-dark(#aeaeae1c, #35230756);
+  --border-strong: light-dark(#d6d3cc, #34322c);
+  --text: light-dark(#1a1916, #f4f2ec);
+  --text-muted: light-dark(#4a4842, #bcb7ac);
+  --text-faint: light-dark(#6b675f, #8f8a80);
+  --accent: light-dark(#e0a019, #f4c66a);
+  --accent-text: light-dark(#99680a, #f4c66a);
+  --accent-bg: light-dark(#fbf3df, #221c0e);
+  --success: light-dark(#2f7d4f, #5fbe86);
+  --danger: light-dark(#c0392b, #e5736a);
 
-  --width-page: 1120px;
+  --width-page: 1152px;
   --width-prose: 68ch;
 }
 
-:root[data-theme="dark"],
-.dark {
-  --bg: #0c0c0b;
-  --bg-subtle: #141413;
-  --bg-muted: #1b1b19;
-  --surface: #161614;
-  --border: #262521;
-  --border-strong: #34322c;
-  --text: #f4f2ec;
-  --text-muted: #bcb7ac;
-  --text-faint: #8f8a80;
-  --accent: #f4c66a;
-  --accent-border: #35230756;
-  --accent-text: #f4c66a;
-  --accent-bg: #221c0e;
-  --success: #5fbe86;
-  --danger: #e5736a;
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0c0c0b;
-    --bg-subtle: #141413;
-    --bg-muted: #1b1b19;
-    --surface: #161614;
-    --border: #262521;
-    --border-strong: #34322c;
-    --text: #f4f2ec;
-    --text-muted: #bcb7ac;
-    --text-faint: #8f8a80;
-    --accent: #f4c66a;
-    --accent-border: #35230756;
-    --accent-text: #f4c66a;
-    --accent-bg: #221c0e;
-    --success: #5fbe86;
-    --danger: #e5736a;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @layer base {
@@ -607,6 +578,29 @@
 .prose h2 a,
 .prose h3 a {
   text-decoration: none;
+}
+
+
+/* ---------------- Scroll reveals ---------------- *
+ * Content is VISIBLE by default (no-JS, print, crawlers, screenshots all
+ * safe). A tiny script in Base.astro adds .reveal-init only when JS +
+ * IntersectionObserver + motion-ok, then .reveal-in as sections enter.  */
+.reveal-init {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.reveal-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+@media print {
+  .reveal-init {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 .section-border {

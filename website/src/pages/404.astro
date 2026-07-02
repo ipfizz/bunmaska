@@ -1,0 +1,25 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import { DISPLAY } from "../styles/constants";
+---
+
+<Base title="404" description="This page doesn't exist. The window handle is dangling.">
+  <Nav />
+  <main class="wrap flex min-h-[60dvh] flex-col items-center justify-center gap-6 py-20 text-center">
+    <p class="eyebrow">404</p>
+    <h1 class={`${DISPLAY} max-w-[20ch]`}>
+      Dangling <span class="italic text-accent-text">window handle.</span>
+    </h1>
+    <p class="max-w-[44ch] text-text-muted">
+      This page was closed, moved, or never opened. Unlike a WebKit crash, this
+      one won't take the whole app down.
+    </p>
+    <div class="flex flex-wrap items-center justify-center gap-3">
+      <a href="/" class="btn btn-accent">Back home →</a>
+      <a href="/docs/introduction" class="btn btn-ghost">Read the docs</a>
+    </div>
+  </main>
+  <Footer />
+</Base>
