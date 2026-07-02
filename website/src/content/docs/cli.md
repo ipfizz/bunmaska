@@ -51,7 +51,7 @@ Everything `build` does, plus it emits the auto-update feed (`update.json` + a c
 bunmaska build --update --channel stable
 ```
 
-> `quitAndInstall`'s final atomic swap-and-relaunch is still experimental. The check → download → verify → stage engine is solid; the very last step is the alpha part.
+> `quitAndInstall`'s final atomic swap-and-relaunch is still experimental. The check > download > verify > stage engine is solid; the very last step is the alpha part.
 
 ## `bunmaska engine <subcommand>`
 

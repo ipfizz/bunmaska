@@ -34,7 +34,7 @@ const menu = Menu.buildFromTemplate([
       { role: 'quit' },
     ],
   },
-  { role: 'editMenu' }, // macro role → expands to a full standard Edit submenu
+  { role: 'editMenu' }, // macro role > expands to a full standard Edit submenu
 ]);
 
 Menu.setApplicationMenu(menu);

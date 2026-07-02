@@ -19,8 +19,8 @@ The entry comes from your `bunmaska.config.ts` (pass it explicitly - `bunmaska b
 ## macOS
 
 ```sh
-bunmaska build                 # → MyApp.app
-bunmaska build --dmg           # → MyApp.app + MyApp.dmg
+bunmaska build                 # > MyApp.app
+bunmaska build --dmg           # > MyApp.app + MyApp.dmg
 ```
 
 You get:
@@ -46,7 +46,7 @@ Build on the architecture you're targeting: an **Apple Silicon** Mac produces `a
 ## Linux
 
 ```sh
-bunmaska build                 # → AppDir (.tar.gz) + MyApp.deb
+bunmaska build                 # > AppDir (.tar.gz) + MyApp.deb
 ```
 
 You get:

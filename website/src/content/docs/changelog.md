@@ -8,7 +8,7 @@ The current version is **`0.1.0-alpha.5`**, live on npm - `npm i bunmaska`. Newe
 
 ## Unreleased
 
-**Event-driven macOS run loop.** The cooperative pump no longer polls AppKit at a fixed 60 Hz. It sleeps in `CFRunLoopRunInMode` until a native event arrives - input wakes it instantly - and backs off adaptively when idle. On an idle window that is roughly **10x less CPU** (~2.5% → ~0.2%) with no added input latency. One honest trade-off: while the UI is idle, *main-process* JS timers run at up to ~125 ms granularity (renderer `requestAnimationFrame` and IPC are unaffected - they ride the native event path).
+**Event-driven macOS run loop.** The cooperative pump no longer polls AppKit at a fixed 60 Hz. It sleeps in `CFRunLoopRunInMode` until a native event arrives - input wakes it instantly - and backs off adaptively when idle. On an idle window that is roughly **10x less CPU** (~2.5% > ~0.2%) with no added input latency. One honest trade-off: while the UI is idle, *main-process* JS timers run at up to ~125 ms granularity (renderer `requestAnimationFrame` and IPC are unaffected - they ride the native event path).
 
 A true libuv-style integration like Electron's is not possible from pure `bun:ffi` today: Bun's loop is uSockets, not libuv, and its tick/wakeup primitives are not exported ([oven-sh/bun#18546](https://github.com/oven-sh/bun/issues/18546)). This is the best event-driven behavior achievable while staying single-threaded.
 
@@ -68,7 +68,7 @@ The pinned-WebKit engine store - the opt-in path to "tested == shipped." Most ap
 **Highlights**
 
 - **Side-by-side engine store** at `~/.bunmaska/webkit/` - content-addressed, many versions coexist, each app resolves its own pin (no global switch). Install marker, content-hash integrity, refcount, and garbage collection.
-- **Launch resolver** - env → baked `engine.id` → marker check → loud fallback to the system WebKit if a pin is missing (the app still launches).
+- **Launch resolver** - env > baked `engine.id` > marker check > loud fallback to the system WebKit if a pin is missing (the app still launches).
 - **`bunmaska engine` CLI** (`list` / `which` / `install` / `use` / `prune` / `verify`) and **`bunmaska doctor`**.
 - **Signed feed install** - `engine install <url>` verifies an Ed25519 signature + content hash before extracting.
 - **Apps register on launch** so `prune` only collects engines nothing needs.
@@ -103,7 +103,7 @@ See the full [API Reference](/docs/api/app) for what each one actually implement
 
 - Real context isolation in a dedicated isolated world on both platforms.
 - The CLI: `bunmaska init` / `dev` / `run` / `build`.
-- Packaging to real distributables - `.app`/`.dmg` (macOS), AppDir/`.deb` (Linux) - plus a pure-Bun `autoUpdater` (check → download → verify → stage).
+- Packaging to real distributables - `.app`/`.dmg` (macOS), AppDir/`.deb` (Linux) - plus a pure-Bun `autoUpdater` (check > download > verify > stage).
 - `webContents.capturePage` + `printToPDF` and `session.clearStorageData` (macOS).
 
 **Known limits**

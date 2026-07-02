@@ -64,4 +64,4 @@ bunmaska build          # .app on macOS (--dmg for a disk image), AppDir + .deb 
 bunmaska build --update # also emit the auto-update feed
 ```
 
-That's the loop: `init → dev → build`. Tell your laptop fan it can sit this one out.
+That's the loop: `init > dev > build`. Tell your laptop fan it can sit this one out.
