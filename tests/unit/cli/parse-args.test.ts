@@ -38,12 +38,8 @@ describe('parseArgs', () => {
     });
   });
 
-  test('build requires an entry', () => {
-    const cmd = parseArgs(['build']);
-    expect(cmd.kind).toBe('error');
-    if (cmd.kind === 'error') {
-      expect(cmd.message).toMatch(/entry/i);
-    }
+  test('build without an entry parses; the entry resolves from config at dispatch', () => {
+    expect(parseArgs(['build'])).toEqual({ kind: 'build', options: {} });
   });
 
   test('build captures the entry with default options', () => {

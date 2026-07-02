@@ -48,7 +48,7 @@ export type Command =
   | { readonly kind: 'init'; readonly dir: string }
   | { readonly kind: 'dev'; readonly entry?: string }
   | { readonly kind: 'run'; readonly entry: string; readonly args: readonly string[] }
-  | { readonly kind: 'build'; readonly entry: string; readonly options: BuildOptions }
+  | { readonly kind: 'build'; readonly entry?: string; readonly options: BuildOptions }
   | { readonly kind: 'engine'; readonly sub: EngineSubcommand }
   | { readonly kind: 'doctor'; readonly target?: string }
   | { readonly kind: 'error'; readonly message: string };
@@ -157,10 +157,8 @@ const parseBuild = (rest: readonly string[]): Command => {
     return { kind: 'error', message: `bunmaska build: unexpected argument ${token}` };
   }
 
-  if (entry === undefined) {
-    return { kind: 'error', message: 'bunmaska build: missing <entry.ts>' };
-  }
-  return { kind: 'build', entry, options };
+  // A missing entry is legal here: dispatch falls back to the config's `entry`.
+  return entry === undefined ? { kind: 'build', options } : { kind: 'build', entry, options };
 };
 
 /** Parse the `bunmaska engine <action> …` tail into a {@link Command}. */

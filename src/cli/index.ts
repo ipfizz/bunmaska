@@ -51,7 +51,8 @@ Usage:
   bunmaska init [dir]                    Scaffold a new Bunmaska project (default: .)
   bunmaska dev [entry.ts]                Run the app, restarting on file changes
   bunmaska run <entry.ts> [args...]      Launch a Bunmaska app (bun run <entry>)
-  bunmaska build <entry.ts> [options]    Bundle a distributable app
+  bunmaska build [entry.ts] [options]    Bundle a distributable app (entry defaults
+                                         to the config's "entry")
   bunmaska engine <subcommand>           Manage the pinned-WebKit engine store
   bunmaska doctor [dir]                   Report runtime, store, and the engine pin
   bunmaska --help                        Show this help
@@ -173,6 +174,14 @@ const runBuild = async (
   command: Extract<Command, { kind: 'build' }>,
   deps: DispatchDeps,
 ): Promise<number> => {
+  // The explicit argument wins, then the config's `entry` — mirroring `bunmaska dev`.
+  const entry = command.entry ?? (await loadConfig(process.cwd())).config.entry;
+  if (entry === undefined) {
+    err(
+      'bunmaska build: missing <entry.ts> — pass it explicitly or set `entry` in bunmaska.config.ts.',
+    );
+    return 1;
+  }
   const target = resolveTarget(command.options.target);
   // Only macOS hosts can produce a macOS .app; Linux distributables cross-build
   // from macOS (and build natively on Linux).
@@ -199,11 +208,11 @@ const runBuild = async (
     return 1;
   }
 
-  const name = command.options.name ?? deriveName(command.entry);
+  const name = command.options.name ?? deriveName(entry);
   if (target === 'linux') {
     const { engineId, embed } = await resolveProjectEngine();
     const result = await buildLinuxApp({
-      entry: command.entry,
+      entry,
       name,
       engineId,
       ...(embed ? { embedEngine: true } : {}),
@@ -221,7 +230,7 @@ const runBuild = async (
   if (target === 'windows') {
     const { engineId } = await resolveProjectEngine();
     const result = await buildWindowsApp({
-      entry: command.entry,
+      entry,
       name,
       engineId,
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
@@ -239,7 +248,7 @@ const runBuild = async (
 
   const buildMac = deps.buildMac ?? buildMacApp;
   const appPath = await buildMac({
-    entry: command.entry,
+    entry,
     name,
     ...(command.options.id !== undefined ? { id: command.options.id } : {}),
     ...(command.options.out !== undefined ? { out: command.options.out } : {}),
