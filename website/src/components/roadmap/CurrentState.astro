@@ -1,20 +1,26 @@
 ---
-
+import { snapshot } from "../../roadmap-data";
 ---
 
-<section class="section-border bg-bg-subtle">
+<section class="section-border reveal bg-bg-subtle">
   <div class="wrap py-10 sm:py-12">
-    <div
-      class="mx-auto max-w-4xl rounded-sm border border-border bg-surface px-6 py-8 text-center sm:px-8"
-    >
-      <p class="eyebrow mb-4">Where we are today</p>
-      <p class="mx-auto max-w-[68ch] text-text-muted">
-        The framework works on macOS, Linux, and Windows (x64), the
-        pinned-engine store and CLI are in place, and a self-contained,
-        relocatable WebKit - including a from-source WinCairo build for Windows
-        - can be built and loaded from the store. Published on npm; the next
-        milestone is hosting those engines so any app can fetch a prebuilt WebKit.
-      </p>
+    <p class="eyebrow mb-6 text-center">Where we are today</p>
+    <div class="mx-auto grid max-w-4xl grid-cols-2 gap-px overflow-hidden border border-border bg-border md:grid-cols-4">
+      {
+        snapshot.map((s) => (
+          <div class="bg-bg px-5 py-8 text-center">
+            <div class="whitespace-nowrap text-[1.5rem] font-semibold tracking-tight">{s.value}</div>
+            <div class="mt-1.5 text-sm text-text-muted">{s.label}</div>
+          </div>
+        ))
+      }
     </div>
+    <p class="mx-auto mt-6 max-w-[68ch] text-center text-sm text-text-faint">
+      Published on npm; the site you're reading is the docs. The framework runs
+      on macOS, Linux and Windows (x64), the pinned-engine store and CLI are in
+      place, and self-contained relocatable WebKits — including a from-source
+      WinCairo build — load from the store in CI. The per-method truth lives on
+      the <a href="/docs/migrating/parity" class="text-accent-text underline underline-offset-2">parity page</a>.
+    </p>
   </div>
 </section>

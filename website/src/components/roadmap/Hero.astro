@@ -14,19 +14,21 @@ const { version } = Astro.props;
     style="background: radial-gradient(55% 45% at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);"
   >
   </div>
-  <div class="wrap pb-16 text-center sm:pb-20 pt-14">
+  <div class="wrap pb-14 pt-14 text-center sm:pb-16">
     <p class="eyebrow mb-5">Roadmap</p>
     <h1 class={`mx-auto max-w-[18ch] ${DISPLAY}`} style="letter-spacing:-0.01em;">
-      Where this is <span class="italic text-accent-text">actually going.</span>
+      The road to <span class="italic text-accent-text">beta.</span>
     </h1>
     <p class="mx-auto mt-6 max-w-[58ch] text-text-muted">
-      The goal: an Electron-class developer experience that ships tiny apps on WebKit instead of a bundled
-      browser - with native modules that don't need a compiler. Here's what's done, what's next, and the parts
-      we're deliberately taking slowly. No vapor; if it isn't built, it says so.
+      An Electron-class developer experience that ships tiny apps on WebKit
+      instead of a bundled browser — with native modules that never need a
+      compiler. Below: what's shipped, the exact stops between here and beta,
+      and what "beta" has to prove before we'll say the word. No vapor; if it
+      isn't built, it says so.
     </p>
     <div class="mt-8 flex flex-wrap items-center justify-center gap-2">
-      <span class="tag">v{version}</span>
-      <span class="tag">macOS · Linux · Windows</span>
+      <span class="tag font-mono">v{version}</span>
+      <span class="tag">macOS · Linux · Windows (beta)</span>
       <span class="tag">MIT</span>
     </div>
   </div>

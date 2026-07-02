@@ -1,33 +1,28 @@
 ---
-import { Icon } from "astro-icon/components";
 import { HEAD } from "../../styles/constants";
 
 const cards = [
   {
-    icon: "lucide:shield-x",
     t: "Not WebView2",
-    d: "The easy Windows path is WebView2 - Microsoft Edge, i.e. Chromium. We didn't take it. Windows renders on WinCairo WebKit, the real WebKit port, loaded from the same engine store as every other platform.",
+    d: "The easy Windows path is WebView2 — Microsoft Edge, i.e. Chromium. We didn't take it. Windows renders on WinCairo WebKit, the real WebKit port, loaded from the same engine store as every other platform.",
   },
   {
-    icon: "lucide:wrench",
     t: "A real Win32 backend",
-    d: "Built from scratch on bun:ffi - window + message pump, the WinCairo WebKit view and IPC bridge, and ~10 modules (clipboard, tray, safeStorage via DPAPI, screen, shell, global shortcuts, power, theme). It runs on a windows-latest CI runner.",
+    d: "Built from scratch on bun:ffi — window + message pump, the WinCairo WebKit view and IPC bridge, and the full secondary-module set (clipboard incl. images, dialogs, tray, safeStorage via DPAPI, screen, shell, shortcuts, power, theme). It runs on a windows-latest CI runner.",
   },
   {
-    icon: "lucide:cpu",
     t: "x64 today, ARM64 next. Never 32-bit.",
-    d: "x64 ships now; ARM64 is on the roadmap (upstream WinCairo is x64-only for the moment). Windows is moving to ARM - Snapdragon X, Copilot+ PCs, NVIDIA's 2026 laptops - so ARM64 is a when, not an if. x86 isn't on the list at all.",
+    d: "x64 is in beta now; ARM64 waits on upstream WinCairo. Windows is moving to ARM — so ARM64 is a when, not an if. x86 isn't on the list at all.",
   },
   {
-    icon: "lucide:package",
     t: "Still the expensive platform",
-    d: "Windows has no system WebKit, so we ship and maintain the WinCairo engine ourselves - CVE treadmill and all. That's why the last piece is hosting the WinCairo builds, so a Windows app can fetch its engine.",
+    d: "Windows has no system WebKit, so we ship and maintain the WinCairo engine ourselves — CVE treadmill and all. That's why hosting the WinCairo builds is on the alpha.7 stop: a Windows app has to be able to fetch its engine.",
   },
 ];
 ---
 
-<section class="section-border bg-bg-subtle">
-  <div class="wrap py-20 sm:py-24">
+<section class="section-border reveal bg-bg-subtle">
+  <div class="wrap py-16 sm:py-20">
     <div class="mx-auto max-w-[52ch] text-center">
       <p class="eyebrow mb-4">The one everyone asks about</p>
       <h2 class={HEAD}>
@@ -36,28 +31,26 @@ const cards = [
         >
       </h2>
       <p class="mt-4 text-text-muted">
-        Windows used to be the "someday" platform. It's now in the build - a from-scratch Win32 backend with
-        WinCairo WebKit. Here's the honest state, gaps and all.
+        Windows is in beta — a from-scratch Win32 backend with WinCairo WebKit,
+        green on CI. Here's the honest state, gaps and all.
       </p>
     </div>
 
-    <div class="mx-auto mt-12 grid max-w-5xl gap-5 sm:grid-cols-2">
+    <div class="mx-auto mt-12 grid max-w-4xl gap-px overflow-hidden border border-border bg-border sm:grid-cols-2">
       {
         cards.map((card) => (
-          <div class="group rounded-sm border border-border bg-surface p-7 transition-colors duration-200 hover:border-border-strong hover:bg-bg-subtle/60">
-            <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xs border border-border bg-accent-bg text-accent-text transition-colors duration-200 group-hover:border-accent-text" aria-hidden="true">
-              <Icon name={card.icon} class="h-4.5 w-4.5" />
-            </div>
+          <div class="bg-surface p-7">
             <h3 class="font-semibold">{card.t}</h3>
-            <p class="mt-2 text-text-muted">{card.d}</p>
+            <p class="mt-2 text-sm text-text-muted">{card.d}</p>
           </div>
         ))
       }
     </div>
     <p class="mx-auto mt-6 max-w-[64ch] text-center text-sm text-text-faint">
-      Honest status: the backend is built and runs on a Windows CI runner, but a Windows app still needs a WinCairo
-      engine in the store - and we don't host those builds yet. So Windows is real in the code; shipping it
-      end-to-end waits on the hosted engine, the same step Linux is waiting on.
+      Honest status: the backend is built and runs on a Windows CI runner, but a
+      Windows app still needs a WinCairo engine in the store — and we don't host
+      those builds yet. Windows is real in the code; shipping it end-to-end
+      waits on the hosted engine, the same step Linux is waiting on.
     </p>
   </div>
 </section>

@@ -5,17 +5,20 @@ import Footer from "../components/Footer.astro";
 import { VERSION } from "../site";
 import RoadmapHero from "../components/roadmap/Hero.astro";
 import RoadmapCurrentState from "../components/roadmap/CurrentState.astro";
-import RoadmapPhases from "../components/roadmap/Phases.astro";
+import RoadmapTrack from "../components/roadmap/Track.astro";
 import RoadmapWindowsDetail from "../components/roadmap/WindowsDetail.astro";
 import RoadmapCTA from "../components/roadmap/CTA.astro";
 ---
 
-<Base title="Roadmap" description="What Bunmaska is building, where it is today, and the honest plan - including Windows (WinCairo WebKit, x64 today and ARM64 next, never WebView2).">
+<Base
+  title="Roadmap"
+  description="The road to beta: what's shipped at alpha, the exact milestones between here and v0.2.0-beta.1, and the checkable bar a beta has to clear — including the honest Windows (WinCairo, never WebView2) status."
+>
   <Nav />
   <main class="mx-auto max-w-6xl">
     <RoadmapHero version={VERSION} />
     <RoadmapCurrentState />
-    <RoadmapPhases />
+    <RoadmapTrack />
     <RoadmapWindowsDetail />
     <RoadmapCTA />
   </main>

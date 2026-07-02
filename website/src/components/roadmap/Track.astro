@@ -1,0 +1,158 @@
+---
+import { HEAD } from "../../styles/constants";
+import { milestones, STATUS_LABEL } from "../../roadmap-data";
+
+const DOT: Record<string, string> = {
+  shipped: "var(--success)",
+  now: "var(--accent)",
+  next: "var(--border-strong)",
+  planned: "var(--border-strong)",
+  beta: "var(--accent)",
+  later: "var(--border-strong)",
+};
+
+const inlineCode = (text: string): string =>
+  text.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em] text-text">$1</code>');
+---
+
+<section class="section-border py-16 sm:py-20">
+  <div class="wrap">
+    <div class="mx-auto mb-12 max-w-[52ch] text-center">
+      <p class="eyebrow mb-4">The track</p>
+      <h2 class={HEAD}>
+        One line from here to beta. Every stop has an exit test.
+      </h2>
+    </div>
+
+    <ol class="track mx-auto max-w-3xl">
+      {
+        milestones.map((m) => (
+          <li class={`node reveal ${m.status}`}>
+            <span class="dot" style={`--dot:${DOT[m.status]};`} aria-hidden="true" />
+            <div class="head">
+              <span class="version font-mono">{m.version}</span>
+              <span class={`pill ${m.status}`}>{STATUS_LABEL[m.status]}</span>
+              {m.status === "now" && <span class="serif-note here text-accent-text">← you are here</span>}
+            </div>
+            <h3 class="mt-2 font-semibold tracking-tight">{m.title}</h3>
+            <p class="serif-note mt-1 text-text-faint">{m.note}</p>
+            <ul class="mt-4 space-y-2.5">
+              {m.items.map((item) => (
+                <li class="flex gap-3 text-sm text-text-muted">
+                  <span
+                    class="mt-[0.55em] h-1.5 w-1.5 flex-none rounded-full"
+                    style={`background:${DOT[m.status]};`}
+                    aria-hidden="true"
+                  />
+                  <span set:html={inlineCode(item)} />
+                </li>
+              ))}
+            </ul>
+            {m.exit && (
+              <p class="exit mt-4 font-mono text-xs">
+                <span class="text-accent-text">exit&nbsp;criteria</span> · {m.exit}
+              </p>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .track {
+    position: relative;
+    padding-left: 1.75rem;
+  }
+  /* The rail: a hairline that draws itself as you scroll (CSS-only, falls
+     back to a static line, dies under reduced-motion). */
+  .track::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--accent), var(--border-strong));
+    transform-origin: top;
+  }
+  .node {
+    position: relative;
+    padding-bottom: 3rem;
+  }
+  .node:last-child {
+    padding-bottom: 0;
+  }
+  .dot {
+    position: absolute;
+    left: -1.75rem;
+    top: 6px;
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 2px solid var(--dot);
+  }
+  .node.now .dot,
+  .node.beta .dot {
+    background: var(--dot);
+  }
+
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+  .version {
+    font-size: var(--text-sm);
+    color: var(--text);
+    font-weight: 500;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    height: 1.45rem;
+    padding-inline: 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+  }
+  .pill.shipped {
+    color: var(--success);
+  }
+  .pill.now,
+  .pill.beta {
+    color: var(--accent-text);
+    background: var(--accent-bg);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+
+  .exit {
+    color: var(--text-faint);
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+
+  /* The beta node reads as the destination: a bordered card on the rail. */
+  .node.beta {
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    border-radius: var(--radius-md);
+    padding: 1.5rem 1.5rem 1.5rem 1.75rem;
+    margin-left: -0.25rem;
+    margin-bottom: 3rem;
+  }
+  .node.beta .dot {
+    left: -1.5rem;
+  }
+  .node.beta:last-child {
+    margin-bottom: 0;
+  }
+</style>
