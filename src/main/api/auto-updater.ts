@@ -3,12 +3,14 @@ import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  type ArtifactOs,
   contentHash,
   isNewerVersion,
   parseUpdateManifest,
   type UpdateManifest,
 } from '../../common/manifest';
 import { createLogger } from '../../common/logger';
+import { type Arch, currentArch as hostArch, currentPlatform } from '../../common/platform';
 import { verifyArtifact } from '../../common/signature';
 import { app } from './app';
 
@@ -20,10 +22,12 @@ import { app } from './app';
  * `checking-for-update`, `update-available`, `update-not-available`,
  * `update-downloaded` and `error`. The flow is explicit (electron-updater
  * style): {@link AutoUpdaterImpl.checkForUpdates} fetches the channel's
- * `update.json` and compares versions; {@link AutoUpdaterImpl.downloadUpdate}
- * fetches the artifact, verifies its size + wyhash against the manifest, and
- * stages the decompressed tar; {@link AutoUpdaterImpl.quitAndInstall} delegates
- * the irreversible bundle swap + relaunch to the installer seam.
+ * `update.json`, checks it targets this os/arch/channel, and compares versions;
+ * {@link AutoUpdaterImpl.downloadUpdate} fetches the artifact, verifies its
+ * Ed25519 `.sig` against the publisher's key (authenticity) plus size + wyhash
+ * (corruption), and stages the decompressed tar; {@link
+ * AutoUpdaterImpl.quitAndInstall} delegates the irreversible bundle swap +
+ * relaunch to the installer seam. The feed must be https.
  *
  * Every side effect (network, decompression, disk, install) is an injectable
  * dependency, so the check/download/verify/stage engine is fully unit-tested.
@@ -42,6 +46,23 @@ export type FeedURLOptions = {
    * the app publisher's own release key (baked into the app), not a Bunmaska key.
    */
   readonly publicKey?: string;
+  /** If set, a manifest whose `channel` differs is rejected (channel confusion). */
+  readonly channel?: string;
+};
+
+/**
+ * Caps guarding the decompression step against a zip bomb: a tiny signed-looking
+ * artifact that expands to gigabytes and OOMs the process. The compressed cap is
+ * checked against the declared size before any fetch; the decompressed cap after.
+ */
+export const MAX_COMPRESSED_ARTIFACT_BYTES = 512 * 1024 * 1024;
+export const MAX_DECOMPRESSED_TAR_BYTES = 2 * 1024 * 1024 * 1024;
+
+/** Throw if a byte length exceeds `max`. The zip-bomb guard; allocation-free to test. */
+export const assertSizeWithin = (length: number, max: number, what: string): void => {
+  if (length > max) {
+    throw new Error(`autoUpdater: ${what} exceeds the ${max}-byte limit (got ${length})`);
+  }
 };
 
 /** http is refused for any host but these — dev feeds served from localhost. */
@@ -76,6 +97,8 @@ export type AutoUpdaterDeps = {
   readonly fetchText: (url: string) => Promise<string>;
   readonly fetchBytes: (url: string) => Promise<Uint8Array>;
   readonly currentVersion: () => string;
+  readonly currentOs: () => ArtifactOs;
+  readonly currentArch: () => Arch;
   readonly decompress: (bytes: Uint8Array) => Uint8Array;
   readonly stage: (tarBytes: Uint8Array, manifest: UpdateManifest) => Promise<string>;
   readonly install: (staged: StagedUpdate) => void;
@@ -127,6 +150,8 @@ const productionDeps = (): AutoUpdaterDeps => ({
   fetchText: httpFetchText,
   fetchBytes: httpFetchBytes,
   currentVersion: () => app.getVersion(),
+  currentOs: currentPlatform,
+  currentArch: hostArch,
   decompress: (bytes) => new Uint8Array(Bun.zstdDecompressSync(bytes)),
   stage: stageToTmp,
   install: defaultInstall,
@@ -136,6 +161,7 @@ export class AutoUpdaterImpl extends EventEmitter {
   #deps: AutoUpdaterDeps;
   #feedURL: string | undefined;
   #publicKey: string | undefined;
+  #channel: string | undefined;
   #available: UpdateManifest | undefined;
   #staged: StagedUpdate | undefined;
 
@@ -174,6 +200,9 @@ export class AutoUpdaterImpl extends EventEmitter {
     this.#feedURL = opts.url;
     if (opts.publicKey !== undefined) {
       this.#publicKey = opts.publicKey;
+    }
+    if (opts.channel !== undefined) {
+      this.#channel = opts.channel;
     }
   }
 
@@ -223,6 +252,22 @@ export class AutoUpdaterImpl extends EventEmitter {
     } catch (cause) {
       throw this.#emitError(cause);
     }
+    const os = this.#deps.currentOs();
+    const arch = this.#deps.currentArch();
+    if (manifest.os !== os || manifest.arch !== arch) {
+      throw this.#emitError(
+        new Error(
+          `autoUpdater: update targets ${manifest.os}/${manifest.arch}, not this ${os}/${arch} build`,
+        ),
+      );
+    }
+    if (this.#channel !== undefined && manifest.channel !== this.#channel) {
+      throw this.#emitError(
+        new Error(
+          `autoUpdater: update is on channel "${manifest.channel}", not the configured "${this.#channel}"`,
+        ),
+      );
+    }
     if (!isNewerVersion(manifest.version, this.#deps.currentVersion())) {
       this.#available = undefined;
       this.emit('update-not-available', toUpdateInfo(manifest));
@@ -253,6 +298,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     }
     try {
       const publicKey = this.#requirePublicKey();
+      assertSizeWithin(manifest.size, MAX_COMPRESSED_ARTIFACT_BYTES, 'compressed artifact');
       const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact));
       if (bytes.length !== manifest.size) {
         throw new Error(
@@ -272,6 +318,7 @@ export class AutoUpdaterImpl extends EventEmitter {
         throw new Error('autoUpdater: artifact signature verification failed');
       }
       const tarBytes = this.#deps.decompress(bytes);
+      assertSizeWithin(tarBytes.length, MAX_DECOMPRESSED_TAR_BYTES, 'decompressed update');
       const tarPath = await this.#deps.stage(tarBytes, manifest);
       const staged: StagedUpdate = { manifest, tarPath };
       this.#staged = staged;

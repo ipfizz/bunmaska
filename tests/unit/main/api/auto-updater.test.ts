@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  assertSizeWithin,
   AutoUpdaterImpl,
   type AutoUpdaterDeps,
+  MAX_COMPRESSED_ARTIFACT_BYTES,
+  MAX_DECOMPRESSED_TAR_BYTES,
   type StagedUpdate,
 } from '../../../../src/main/api/auto-updater';
 import {
@@ -48,6 +51,8 @@ const makeUpdater = (overrides: Partial<AutoUpdaterDeps>, feedVersion = '2.0.0')
       url.endsWith('.sig') ? SIG : serializeUpdateManifest(manifest(feedVersion)),
     fetchBytes: async () => ARTIFACT,
     currentVersion: () => '1.0.0',
+    currentOs: () => 'macos',
+    currentArch: () => 'arm64',
     decompress: (bytes) => {
       decompressed.push(bytes);
       return TAR;
@@ -143,6 +148,27 @@ describe('autoUpdater.checkForUpdates', () => {
     h.updater.setFeedURL('https://feed');
     await expect(h.updater.checkForUpdates()).rejects.toThrow(/not valid JSON/);
   });
+
+  test('rejects an update built for another os/arch', async () => {
+    const h = makeUpdater({ currentOs: () => 'linux' }, '2.0.0'); // manifest targets macos
+    h.updater.setFeedURL('https://feed');
+    await expect(h.updater.checkForUpdates()).rejects.toThrow(/macos.*linux|linux.*build/i);
+    expect(h.events).toContain('error');
+  });
+
+  test('rejects an update on a different channel than configured', async () => {
+    const h = makeUpdater({}, '2.0.0'); // manifest channel is "stable"
+    h.updater.setFeedURL({ url: 'https://feed', publicKey: KEYS.publicKey, channel: 'canary' });
+    await expect(h.updater.checkForUpdates()).rejects.toThrow(/channel/i);
+    expect(h.events).toContain('error');
+  });
+
+  test('accepts a matching configured channel', async () => {
+    const h = makeUpdater({}, '2.0.0');
+    h.updater.setFeedURL({ url: 'https://feed', publicKey: KEYS.publicKey, channel: 'stable' });
+    const result = await h.updater.checkForUpdates();
+    expect(result?.updateInfo.version).toBe('2.0.0');
+  });
 });
 
 describe('autoUpdater.downloadUpdate', () => {
@@ -193,6 +219,41 @@ describe('autoUpdater.downloadUpdate', () => {
     h.updater.setFeedURL(FEED);
     await h.updater.checkForUpdates();
     await expect(h.updater.downloadUpdate()).rejects.toThrow(/hash mismatch/);
+  });
+
+  test('refuses an artifact whose declared size exceeds the compressed cap', async () => {
+    let fetched = false;
+    const h = makeUpdater(
+      {
+        fetchText: async (url) =>
+          url.endsWith('.sig')
+            ? SIG
+            : serializeUpdateManifest({
+                ...manifest('2.0.0'),
+                size: MAX_COMPRESSED_ARTIFACT_BYTES + 1,
+              }),
+        fetchBytes: async () => {
+          fetched = true;
+          return ARTIFACT;
+        },
+      },
+      '2.0.0',
+    );
+    h.updater.setFeedURL(FEED);
+    await h.updater.checkForUpdates();
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/exceeds|limit/i);
+    expect(fetched).toBe(false); // rejected before spending the download
+  });
+});
+
+describe('assertSizeWithin (zip-bomb guard)', () => {
+  test('passes at or below the cap and throws above it', () => {
+    expect(() => assertSizeWithin(100, 100, 'thing')).not.toThrow();
+    expect(() => assertSizeWithin(101, 100, 'thing')).toThrow(/exceeds/);
+  });
+
+  test('the decompressed cap is larger than the compressed cap', () => {
+    expect(MAX_DECOMPRESSED_TAR_BYTES).toBeGreaterThan(MAX_COMPRESSED_ARTIFACT_BYTES);
   });
 });
 
