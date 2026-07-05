@@ -53,6 +53,10 @@ export type OpenDialogSpec = {
   readonly canChooseFiles: boolean;
   readonly canChooseDirectories: boolean;
   readonly allowsMultipleSelection: boolean;
+  /** Show the "New Folder" button so the user can create a directory in-panel. */
+  readonly canCreateDirectories: boolean;
+  /** Directory the panel opens at (`''` = system default / last location). */
+  readonly defaultPath: string;
   /** Allowed file extensions (without dots); empty means any file. */
   readonly extensions: ReadonlyArray<string>;
 };
@@ -111,6 +115,15 @@ export const buildOpenPanel = (spec: OpenDialogSpec): Handle => {
     rt.selectors.get('setAllowsMultipleSelection:'),
     spec.allowsMultipleSelection ? 1 : 0,
   );
+  msgSendU8(panel, rt.selectors.get('setCanCreateDirectories:'), spec.canCreateDirectories ? 1 : 0);
+  if (spec.defaultPath.length > 0) {
+    const url = msgSendPtr(
+      rt.classes.get('NSURL'),
+      rt.selectors.get('fileURLWithPath:'),
+      nsString(spec.defaultPath),
+    );
+    msgSendPtr(panel, rt.selectors.get('setDirectoryURL:'), url);
+  }
   if (spec.extensions.length > 0) {
     msgSendPtr(panel, rt.selectors.get('setAllowedFileTypes:'), nsArrayOfStrings(spec.extensions));
   }

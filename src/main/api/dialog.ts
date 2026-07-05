@@ -42,8 +42,15 @@ export type FileFilter = {
 };
 
 export type OpenDialogOptions = {
-  /** Defaults to `['openFile']`. */
-  readonly properties?: ReadonlyArray<'openFile' | 'openDirectory' | 'multiSelections'>;
+  /**
+   * Defaults to `['openFile']`. `createDirectory` (macOS) shows the panel's
+   * "New Folder" button so the user can create a folder while picking.
+   */
+  readonly properties?: ReadonlyArray<
+    'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'
+  >;
+  /** Directory the panel opens at (its containing folder, for a file path). */
+  readonly defaultPath?: string;
   /** File-type filters; the selectable extensions are their union. */
   readonly filters?: ReadonlyArray<FileFilter>;
 };
@@ -149,6 +156,8 @@ export const dialog: Dialog = {
       canChooseFiles: properties.includes('openFile'),
       canChooseDirectories: properties.includes('openDirectory'),
       allowsMultipleSelection: properties.includes('multiSelections'),
+      canCreateDirectories: properties.includes('createDirectory'),
+      defaultPath: options.defaultPath ?? '',
       extensions: flattenFilterExtensions(options.filters),
     });
     return { canceled: filePaths.length === 0, filePaths };

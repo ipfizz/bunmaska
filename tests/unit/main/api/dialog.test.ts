@@ -79,16 +79,23 @@ describe('dialog.showOpenDialog', () => {
       canChooseFiles: true,
       canChooseDirectories: false,
       allowsMultipleSelection: false,
+      canCreateDirectories: false,
+      defaultPath: '',
       extensions: [],
     });
   });
 
   test('maps properties to panel flags', async () => {
-    await dialog.showOpenDialog({ properties: ['openDirectory', 'multiSelections'] });
+    await dialog.showOpenDialog({
+      properties: ['openDirectory', 'multiSelections', 'createDirectory'],
+      defaultPath: '/Volumes',
+    });
     expect(lastOpen).toEqual({
       canChooseFiles: false,
       canChooseDirectories: true,
       allowsMultipleSelection: true,
+      canCreateDirectories: true,
+      defaultPath: '/Volumes',
       extensions: [],
     });
   });

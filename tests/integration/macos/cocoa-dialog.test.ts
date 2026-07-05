@@ -46,6 +46,8 @@ if (currentPlatform() === 'macos') {
         canChooseFiles: true,
         canChooseDirectories: false,
         allowsMultipleSelection: false,
+        canCreateDirectories: true,
+        defaultPath: '',
         extensions: [],
       });
       expect(panel).not.toBe(0n);
@@ -56,6 +58,8 @@ if (currentPlatform() === 'macos') {
         canChooseFiles: false,
         canChooseDirectories: true,
         allowsMultipleSelection: true,
+        canCreateDirectories: false,
+        defaultPath: '/Volumes',
         extensions: [],
       });
       expect(panel).not.toBe(0n);
@@ -66,6 +70,8 @@ if (currentPlatform() === 'macos') {
         canChooseFiles: true,
         canChooseDirectories: false,
         allowsMultipleSelection: false,
+        canCreateDirectories: false,
+        defaultPath: '',
         extensions: ['png', 'jpg'],
       });
       expect(panel).not.toBe(0n);
