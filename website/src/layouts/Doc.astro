@@ -6,7 +6,7 @@ import Sidebar from "../components/Sidebar.astro";
 import Breadcrumbs from "../components/Breadcrumbs.astro";
 import Toc from "../components/Toc.astro";
 import PrevNext from "../components/PrevNext.astro";
-import { prevNext } from "../nav";
+import { prevNext, breadcrumbItems } from "../nav";
 
 interface Heading {
   depth: number;
@@ -16,15 +16,45 @@ interface Heading {
 interface Props {
   title: string;
   description?: string | undefined;
+  seoTitle?: string | undefined;
   slug: string;
   headings: Heading[];
 }
 
-const { title, description, slug, headings } = Astro.props;
+const { title, description, seoTitle, slug, headings } = Astro.props;
 const { prev, next } = prevNext(slug);
+const abs = (path: string) => new URL(path, Astro.site).href;
+
+// Breadcrumb graph (Home > Group > Page) built from the nav, absolute URLs.
+const crumbs = [{ label: "Home", href: "/" }, ...breadcrumbItems(slug)];
+const breadcrumbList = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: crumbs.map((c, i) => ({
+    "@type": "ListItem",
+    position: i + 1,
+    name: c.label,
+    item: abs(c.href),
+  })),
+};
+// Every doc is a TechArticle; dates omitted rather than faked.
+const techArticle = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  headline: title,
+  ...(description ? { description } : {}),
+  url: abs(`/docs/${slug}`),
+  author: { "@type": "Organization", name: "bunmaska" },
+  publisher: { "@type": "Organization", name: "bunmaska" },
+};
 ---
 
-<Base title={title} description={description}>
+<Base
+  title={seoTitle ?? title}
+  description={description}
+  ogType="article"
+  jsonLd={[breadcrumbList, techArticle]}
+>
   <Nav />
   <div class="mx-auto w-full max-w-[88rem] px-5 md:px-8">
     <div

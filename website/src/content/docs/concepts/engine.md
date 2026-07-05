@@ -1,6 +1,7 @@
 ---
 title: Pinned WebKit Engine
-description: By default Bunmaska renders on the WebKit already on the machine. When you need the exact build you tested, pin it - resolved from a shared, side-by-side store. The "tested == shipped" story, honestly scoped.
+description: "Pin a signature-verified WebKit build shared across apps - a WebKit version manager for desktop apps. System WebKit by default; tested equals shipped."
+seoTitle: "The engine store - pin an exact WebKit version"
 order: 3
 ---
 

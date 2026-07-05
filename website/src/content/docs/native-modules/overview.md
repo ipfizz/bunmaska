@@ -1,6 +1,7 @@
 ---
 title: Buildless Native Modules
-description: The moat. A native module is a .ts file with a dlopen symbol table over the OS's stable C ABI - no node-gyp, no N-API, no electron-rebuild, no compile step.
+description: "A native module is a .ts file that dlopens the OS through bun:ffi. Native modules without node-gyp, N-API, electron-rebuild, or any compile step."
+seoTitle: "Buildless native modules in Bun - no node-gyp"
 order: 1
 ---
 

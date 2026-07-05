@@ -1,6 +1,7 @@
 ---
 title: Bunmaska vs Electron
-description: The head-to-head - same shape, a tenth of the weight - with the rows where Electron still wins left in, because we're allergic to lying.
+description: "bunmaska vs Electron: a fraction of the size, no bundled Chromium, buildless native modules, a drop-in API - and the rows where Electron still wins."
+seoTitle: "bunmaska vs Electron - the honest head-to-head"
 order: 1
 ---
 

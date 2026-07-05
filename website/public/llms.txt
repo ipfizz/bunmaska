@@ -1,0 +1,41 @@
+# bunmaska
+
+> A drop-in Electron replacement built on Bun and your operating system's own
+> WebKit. No bundled Chromium. Native modules that are just `.ts` files (no
+> node-gyp). Pure `bun:ffi`, zero compiled native code, zero runtime deps.
+> Alpha, open source (MIT). Runs on macOS, Linux, and Windows (x64).
+
+bunmaska keeps the Electron API surface (`app`, `BrowserWindow`, `ipcMain`,
+`ipcRenderer`, `Menu`, `dialog`, `clipboard`, `webContents`) and swaps the
+runtime to Bun and the renderer to the system's WebKit (WKWebView on macOS,
+WebKitGTK on Linux, from-source WinCairo on Windows - never Chromium/WebView2).
+It is a lightweight Electron alternative without Chromium: apps are a fraction
+of the size, the OS patches the browser engine, and there is no node-gyp /
+electron-rebuild / N-API build step for native modules.
+
+## Docs
+
+- [Introduction](https://bunmaska.org/docs/introduction): what bunmaska is and how it maps to Electron.
+- [Why bunmaska](https://bunmaska.org/docs/why-bunmaska): the runtime (Bun) and engine (system WebKit) story, and the measured size/dependency case.
+- [Installation](https://bunmaska.org/docs/installation): `npm i bunmaska` / `bun add bunmaska` and prerequisites.
+- [Quickstart](https://bunmaska.org/docs/quickstart): from zero to a native window.
+- [Platform support](https://bunmaska.org/docs/platforms): the honest per-platform status (macOS + Linux full, Windows x64 beta).
+- [The CLI](https://bunmaska.org/docs/cli): `init` / `dev` / `build` and the engine-store subcommands.
+
+## Concepts
+
+- [Native modules (buildless, no node-gyp)](https://bunmaska.org/docs/native-modules/overview): a native module is a `.ts` file that `dlopen`s the OS.
+- [The engine store (pin an exact WebKit version)](https://bunmaska.org/docs/concepts/engine): system WebKit by default, or pin a signature-verified build shared across apps.
+- [IPC and context isolation](https://bunmaska.org/docs/concepts/ipc): the main/renderer bridge.
+
+## Migrating from Electron
+
+- [Migration guide](https://bunmaska.org/docs/migrating-from-electron): change your imports, keep your app.
+- [API parity matrix](https://bunmaska.org/docs/migrating/parity): the single source of truth for which Electron modules/methods exist, per platform.
+- [bunmaska vs Electron](https://bunmaska.org/docs/compare/bunmaska-vs-electron): honest head-to-head, including where Electron still wins.
+
+## Project
+
+- [Roadmap](https://bunmaska.org/roadmap): shipped, in progress, and the honest path to beta.
+- [GitHub](https://github.com/ipfizz/bunmaska)
+- [npm](https://www.npmjs.com/package/bunmaska)

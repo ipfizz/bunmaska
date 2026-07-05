@@ -1,0 +1,114 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import { faq, faqPageJsonLd } from "../faq";
+
+const title = "A lightweight Electron alternative without Chromium";
+const description =
+  "bunmaska is an Electron alternative built on Bun and system WebKit - no bundled Chromium, no CVE re-ship treadmill, a drop-in API. Honest alpha status inside.";
+---
+
+<Base title={title} description={description} jsonLd={faqPageJsonLd()}>
+  <Nav />
+  <main class="mx-auto max-w-[72ch] px-6 py-16 sm:py-20">
+    <article class="prose">
+      <p class="eyebrow">Electron alternatives</p>
+      <h1>A lightweight Electron alternative without Chromium</h1>
+      <p class="lead">
+        <strong>bunmaska</strong> is a drop-in Electron alternative built on
+        <a href="https://bun.sh">Bun</a> and your operating system's own WebKit. It keeps
+        the Electron API you already know and drops the one thing that makes Electron apps
+        heavy: the bundled copy of Chromium in every build.
+      </p>
+
+      <h2>Why look past Electron?</h2>
+      <p>
+        Electron is a decade-old incumbent that runs half your desktop, and for many teams
+        it's still the right call. But it ships a whole browser engine with every app, which
+        means big downloads, a chunk of RAM per window, and a security treadmill: every
+        Chromium CVE is one you re-ship, even when it has nothing to do with your code. A
+        lighter Electron alternative that renders on the system's own WebKit sidesteps all
+        three - the OS patches the browser engine for you.
+      </p>
+
+      <h2>What bunmaska keeps</h2>
+      <p>
+        The API. You keep writing against <code>app</code>, <code>BrowserWindow</code>,
+        <code>ipcMain</code>, <code>ipcRenderer</code>, <code>Menu</code>, <code>dialog</code>,
+        <code>clipboard</code>, and <code>webContents</code> - so migrating an existing app is
+        mostly changing an import. See the
+        <a href="/docs/migrating-from-electron">migration guide</a> and the exact
+        <a href="/docs/migrating/parity">API parity matrix</a>.
+      </p>
+
+      <h2>What makes it different from other Electron alternatives</h2>
+      <ul>
+        <li>
+          <strong>No bundled Chromium</strong> - macOS and Linux render on the system WebKit;
+          Windows ships a from-source WinCairo build, never WebView2.
+          <a href="/docs/platforms">Platform support →</a>
+        </li>
+        <li>
+          <strong>Buildless native modules</strong> - a native module is a <code>.ts</code>
+          file that <code>dlopen</code>s the OS. No node-gyp, no electron-rebuild, no compile
+          step. <a href="/docs/native-modules/overview">Native modules →</a>
+        </li>
+        <li>
+          <strong>Pin the exact WebKit you tested</strong> - an engine store that installs a
+          signature-verified build once and shares it across apps.
+          <a href="/docs/concepts/engine">The engine store →</a>
+        </li>
+      </ul>
+
+      <h2>How it compares</h2>
+      <table>
+        <thead>
+          <tr><th>Tool</th><th>Renderer</th><th>Language</th><th>API</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Electron</td><td>Bundled Chromium</td><td>JS / TS</td><td>The original</td></tr>
+          <tr><td>Tauri</td><td>System WebView</td><td>Rust + JS</td><td>Its own</td></tr>
+          <tr><td>Electrobun</td><td>System WebView</td><td>Bun / TS</td><td>Its own</td></tr>
+          <tr><td><strong>bunmaska</strong></td><td>System WebKit</td><td>Bun / TS</td><td><strong>Drop-in Electron</strong></td></tr>
+        </tbody>
+      </table>
+      <p>
+        Head-to-heads: <a href="/docs/compare/bunmaska-vs-electron">bunmaska vs Electron</a>,
+        <a href="/compare/electrobun">bunmaska vs Electrobun</a>, and
+        <a href="/compare/tauri">Tauri without Rust</a>.
+      </p>
+
+      <h2>The honest part</h2>
+      <p>
+        It's alpha. It runs on macOS, Linux, and Windows (x64), it covers most of the Electron
+        surface real apps use, and it's single-process (no per-window crash isolation). We
+        publish exactly what works, per platform, on the
+        <a href="/docs/migrating/parity">parity matrix</a> - no vapor. If you need the last
+        slice of the API or battle-tested stability today, use Electron and check back.
+      </p>
+
+      <h2>FAQ</h2>
+      {
+        faq.map((item) => (
+          <div class="mt-6">
+            <h3>{item.q}</h3>
+            <p>{item.a}</p>
+          </div>
+        ))
+      }
+
+      <p class="mt-10">
+        <a class="btn btn-accent" href="/docs/quickstart">Get started →</a>
+      </p>
+    </article>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .lead {
+    font-size: 1.05rem;
+    color: var(--text-muted);
+  }
+</style>

@@ -1,37 +1,64 @@
 ---
 import "../fonts";
 import "../styles/global.css";
-import { VERSION } from "../site";
+import { VERSION, GITHUB, NPM } from "../site";
 
 interface Props {
   title?: string | undefined;
   description?: string | undefined;
   image?: string | undefined;
+  imageAlt?: string | undefined;
+  ogType?: "website" | "article" | undefined;
+  noindex?: boolean | undefined;
+  /** Extra JSON-LD graphs to append (FAQPage, BreadcrumbList, TechArticle, ...). */
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[] | undefined;
 }
 
-const DEFAULT_TITLE = "Bunmaska - Electron, minus the Chromium";
+const DEFAULT_TITLE = "bunmaska - a drop-in Electron replacement built on Bun";
+const DEFAULT_DESCRIPTION =
+  "bunmaska is a drop-in Electron replacement built on Bun and your OS's own WebKit - no bundled Chromium, no node-gyp. Native modules that are just .ts files. Alpha, open source, MIT.";
 const {
-  title = DEFAULT_TITLE,
-  description = "A drop-in Electron replacement on Bun + WebKit. No bundled Chromium, native modules that are just .ts files, and an engine store for pinning the exact WebKit you tested. macOS, Linux and Windows (x64). Alpha.",
+  title,
+  description = DEFAULT_DESCRIPTION,
   image = "/og.png",
+  imageAlt = "bunmaska - a drop-in Electron replacement on Bun and system WebKit, no bundled Chromium",
+  ogType = "website",
+  noindex = false,
+  jsonLd,
 } = Astro.props;
 
-const fullTitle = title === DEFAULT_TITLE ? title : `${title} - Bunmaska`;
+// A page passes its keyword-rich phrase as `title`; the brand suffix is added
+// once. The home page (no title) uses the full default.
+const fullTitle = title ? `${title} | bunmaska` : DEFAULT_TITLE;
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const ogImage = new URL(image, Astro.site).href;
+const isHome = Astro.url.pathname === "/";
 
-const jsonLd = {
+// Site-wide identity graph. SoftwareApplication only where it belongs (home);
+// WebSite everywhere. Page-specific graphs (FAQPage/Breadcrumb/TechArticle)
+// are appended via the `jsonLd` prop.
+const website = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "bunmaska",
+  url: Astro.site?.href,
+  description: DEFAULT_DESCRIPTION,
+};
+const softwareApp = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "Bunmaska",
+  name: "bunmaska",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "macOS, Linux, Windows",
-  description,
+  description: DEFAULT_DESCRIPTION,
   url: Astro.site?.href,
   softwareVersion: VERSION,
   license: "https://opensource.org/licenses/MIT",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  sameAs: [GITHUB, NPM],
 };
+const extra = jsonLd === undefined ? [] : Array.isArray(jsonLd) ? jsonLd : [jsonLd];
+const graphs = [website, ...(isHome ? [softwareApp] : []), ...extra];
 ---
 
 <!doctype html>
@@ -45,22 +72,22 @@ const jsonLd = {
     <link rel="canonical" href={canonical} />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
     <meta name="generator" content={Astro.generator} />
-    <meta property="og:site_name" content="Bunmaska" />
+    <meta property="og:site_name" content="bunmaska" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Bunmaska - a drop-in Electron replacement on Bun + WebKit, no bundled Chromium" />
+    <meta property="og:image:alt" content={imageAlt} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    {graphs.map((g) => <script is:inline type="application/ld+json" set:html={JSON.stringify(g)} />)}
     {/* No-flash theme bootstrap - runs before paint */}
     <script is:inline>
       (function () {

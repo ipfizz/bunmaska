@@ -1,6 +1,7 @@
 ---
 title: Platform Support
-description: Exactly which operating systems and CPU architectures Bunmaska runs on today, and the plan for the ones it doesn't.
+description: "Which WebKit bunmaska uses on each OS: WKWebView on macOS, WebKitGTK on Linux, from-source WinCairo on Windows (x64, beta). Never Chromium."
+seoTitle: "Platform support - macOS, Linux, Windows (x64)"
 order: 4
 ---
 

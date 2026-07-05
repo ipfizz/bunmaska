@@ -1,0 +1,73 @@
+---
+import Base from "../../layouts/Base.astro";
+import Nav from "../../components/Nav.astro";
+import Footer from "../../components/Footer.astro";
+
+const title = "Tauri without Rust - bunmaska";
+const description =
+  "Want Tauri's tiny, no-Chromium apps but all TypeScript instead of Rust? bunmaska keeps the Electron mental model on Bun and system WebKit. Trade-offs, honestly.";
+---
+
+<Base title={title} description={description}>
+  <Nav />
+  <main class="mx-auto max-w-[72ch] px-6 py-16 sm:py-20">
+    <article class="prose">
+      <p class="eyebrow">Compare</p>
+      <h1>Tauri without Rust?</h1>
+      <p class="lead">
+        <a href="https://tauri.app">Tauri</a> and bunmaska agree on the important thing: render
+        on the system's WebView, never bundle Chromium, ship small apps. The difference is what
+        you write. Tauri's backend is Rust; bunmaska's is TypeScript on <a href="https://bun.sh">Bun</a>,
+        with Electron's API on top.
+      </p>
+
+      <h2>The Rust question</h2>
+      <p>
+        Tauri is excellent and production-ready, and its Rust core is a real strength - fast,
+        safe, tiny. It's also the thing teams cite when they bounce off it: if your app is
+        TypeScript end to end, the backend becomes a second language to learn and maintain. With
+        bunmaska the whole app is TypeScript. Need to reach the OS? A native module is a
+        <code>.ts</code> file that <code>dlopen</code>s a system library - no Rust, no node-gyp,
+        no build step. <a href="/docs/native-modules/overview">Native modules →</a>
+      </p>
+
+      <h2>How they line up</h2>
+      <table>
+        <thead>
+          <tr><th></th><th>Tauri</th><th>bunmaska</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Backend language</td><td>Rust</td><td><strong>TypeScript</strong> (on Bun)</td></tr>
+          <tr><td>Renderer</td><td>System WebView</td><td>System WebKit (never Chromium)</td></tr>
+          <tr><td>API shape</td><td>Its own (commands / invoke)</td><td><strong>Drop-in Electron</strong></td></tr>
+          <tr><td>Native access</td><td>Rust crates + commands</td><td>A .ts file via bun:ffi</td></tr>
+          <tr><td>Maturity</td><td>Production-ready</td><td>Alpha</td></tr>
+        </tbody>
+      </table>
+
+      <h2>The honest trade-off</h2>
+      <p>
+        Tauri wins on maturity, ecosystem, and a battle-tested production track record today -
+        bunmaska is alpha. If you need to ship to real users right now and Rust isn't a
+        blocker, Tauri is the safer bet. If you want the same no-Chromium payoff while staying
+        in TypeScript and keeping the Electron mental model, bunmaska is aimed squarely at you.
+      </p>
+
+      <p class="mt-8">
+        <a class="btn btn-accent" href="/docs/quickstart">Get started →</a>
+        <a class="btn btn-ghost" href="/alternatives">All Electron alternatives</a>
+      </p>
+    </article>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .lead {
+    font-size: 1.05rem;
+    color: var(--text-muted);
+  }
+  .prose .btn {
+    text-decoration: none;
+  }
+</style>

@@ -1,6 +1,7 @@
 ---
 title: API Parity & Gaps
-description: Roughly 70-80% of Electron's surface, weighted to what real apps use - and we publish the per-platform gap, honestly, so you can check before you commit.
+description: "The single source of truth for which Electron modules and methods bunmaska implements, per platform (macOS, Linux, Windows). Honest, cell by cell."
+seoTitle: "Electron API parity matrix - per module, per platform"
 order: 2
 ---
 

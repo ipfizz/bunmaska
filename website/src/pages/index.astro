@@ -13,9 +13,10 @@ import QuickStartWalkthrough from "../components/QuickStartWalkthrough.astro";
 import CLICommands from "../components/CLICommands.astro";
 import TradeOffs from "../components/TradeOffs.astro";
 import FinalCTA from "../components/FinalCTA.astro";
+import { faqPageJsonLd } from "../faq";
 ---
 
-<Base>
+<Base jsonLd={faqPageJsonLd()}>
   <Nav />
   <Hero />
   <main class="max-w-6xl mx-auto">

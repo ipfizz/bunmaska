@@ -1,6 +1,7 @@
 ---
 title: Introduction
-description: Bunmaska is a drop-in Electron replacement built on Bun + WebKit - same APIs, none of the Chromium.
+description: "bunmaska is a drop-in Electron replacement built on Bun and system WebKit. Same app, BrowserWindow and ipcMain APIs - no bundled Chromium. Alpha."
+seoTitle: "Introduction - a drop-in Electron replacement on Bun"
 order: 1
 ---
 

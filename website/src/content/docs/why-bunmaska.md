@@ -1,6 +1,7 @@
 ---
 title: Why Bunmaska
-description: Because shipping a whole browser engine with every desktop app is how we ended up with 14 GB of RAM disappearing into a chat window.
+description: "Why a Bun desktop app framework can drop bundled Chromium: the runtime is Bun, the renderer is your OS's own WebKit, the bridge is pure bun:ffi."
+seoTitle: "How bunmaska works - Bun + system WebKit, pure bun:ffi"
 order: 2
 ---
 

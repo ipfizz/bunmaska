@@ -1,6 +1,7 @@
 ---
 title: The CLI
-description: One command - bunmaska - that scaffolds, runs, watches, packages, and auto-updates your app. Pure Bun, no Xcode project, no electron-builder.
+description: "Scaffold, run, and package a Bun desktop app with one CLI: bunmaska init / dev / build, plus the engine-store commands to pin a WebKit version."
+seoTitle: "The bunmaska CLI - init, dev, build, engine store"
 order: 2
 ---
 

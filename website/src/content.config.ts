@@ -8,6 +8,9 @@ const docs = defineCollection({
     title: z.string(),
     description: z.string().optional(),
     order: z.number().optional(),
+    // A keyword-rich <title> for SEO, distinct from the short nav/H1 `title`.
+    seoTitle: z.string().optional(),
+    keywords: z.array(z.string()).optional(),
   }),
 });
 

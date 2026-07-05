@@ -1,0 +1,72 @@
+---
+import Base from "../../layouts/Base.astro";
+import Nav from "../../components/Nav.astro";
+import Footer from "../../components/Footer.astro";
+
+const title = "bunmaska vs Electrobun";
+const description =
+  "Both are Bun + system WebView. bunmaska adds an Electron-compatible API, buildless native modules, and a WebKit engine store. An honest head-to-head.";
+---
+
+<Base title={title} description={description}>
+  <Nav />
+  <main class="mx-auto max-w-[72ch] px-6 py-16 sm:py-20">
+    <article class="prose">
+      <p class="eyebrow">Compare</p>
+      <h1>bunmaska vs Electrobun</h1>
+      <p class="lead">
+        bunmaska and <a href="https://electrobun.dev">Electrobun</a> are the two projects
+        building desktop apps on <a href="https://bun.sh">Bun</a> and the system's WebView
+        instead of a bundled Chromium. They share a thesis and differ on almost everything
+        above it. Here's the honest comparison.
+      </p>
+
+      <h2>What they share</h2>
+      <p>
+        Bun as the runtime, the operating system's own WebView as the renderer, and a hard
+        line against shipping Chromium. Both produce small apps for the same structural reason.
+      </p>
+
+      <h2>Where they differ</h2>
+      <table>
+        <thead>
+          <tr><th></th><th>Electrobun</th><th>bunmaska</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>API</td><td>Its own RPC-style API</td><td><strong>Drop-in Electron</strong> (app, BrowserWindow, ipcMain, ...)</td></tr>
+          <tr><td>Native code</td><td>A compiled Zig/Bun core + native wrapper</td><td><strong>Pure bun:ffi</strong>, zero compiled native code</td></tr>
+          <tr><td>Native modules</td><td>Via the runtime</td><td><strong>A .ts file that dlopens the OS</strong> - no node-gyp</td></tr>
+          <tr><td>Engine</td><td>System WebView</td><td>System WebKit, or <strong>pin an exact build</strong> via the engine store</td></tr>
+          <tr><td>Updates</td><td>bsdiff delta updates</td><td>Full-download auto-updater (deltas planned)</td></tr>
+          <tr><td>Maturity</td><td>v1 stable</td><td>Alpha</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Which should you use?</h2>
+      <p>
+        If you want a mature, stable Bun desktop framework today and are happy learning its
+        API, Electrobun is further along - it hit v1 while bunmaska is still alpha. If you're
+        migrating an existing Electron app (or you want to keep the Electron mental model),
+        want native modules with no build step, or need to pin an exact WebKit version,
+        bunmaska is built for exactly that. Both refuse to ship Chromium; pick the one whose
+        API and maturity match where you are.
+      </p>
+
+      <p class="mt-8">
+        <a class="btn btn-accent" href="/docs/introduction">Read the docs →</a>
+        <a class="btn btn-ghost" href="/alternatives">All Electron alternatives</a>
+      </p>
+    </article>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .lead {
+    font-size: 1.05rem;
+    color: var(--text-muted);
+  }
+  .prose .btn {
+    text-decoration: none;
+  }
+</style>

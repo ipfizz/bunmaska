@@ -1,6 +1,7 @@
 ---
 title: IPC & Context Bridge
-description: The same main-to-renderer plumbing you know from Electron - handle, invoke, and a context bridge in a real isolated world.
+description: "The main/renderer bridge in bunmaska: ipcMain, ipcRenderer, the context bridge, and preload - Electron-shaped IPC with context isolation on system WebKit."
+seoTitle: "IPC and context isolation in bunmaska"
 order: 1
 ---
 

@@ -1,6 +1,7 @@
 ---
 title: Migrating from Electron
-description: Point your imports at the drop-in shim, find the gaps immediately instead of at 2 a.m., and move renderer device access into the main process.
+description: "Move an Electron app to bunmaska by changing your imports. What maps one-to-one, what differs, and the drop-in electron shim that errors honestly."
+seoTitle: "Migrate from Electron to bunmaska"
 order: 1
 ---
 

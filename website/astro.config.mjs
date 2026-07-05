@@ -13,6 +13,7 @@ import rehypeCopyButton from './src/rehype-copy-button.mjs';
 export default defineConfig({
   site: 'https://bunmaska.org',
   output: 'static',
+  trailingSlash: 'never',
   integrations: [react(), mdx(), icon(), sitemap()],
   redirects: {
     '/docs': '/docs/introduction',
