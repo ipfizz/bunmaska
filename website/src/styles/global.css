@@ -125,7 +125,7 @@
     background-color: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: 0.875rem;
     line-height: 1.6;
     text-rendering: optimizeLegibility;
   }
