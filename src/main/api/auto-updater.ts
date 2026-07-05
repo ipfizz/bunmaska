@@ -9,6 +9,7 @@ import {
   type UpdateManifest,
 } from '../../common/manifest';
 import { createLogger } from '../../common/logger';
+import { verifyArtifact } from '../../common/signature';
 import { app } from './app';
 
 /**
@@ -33,7 +34,23 @@ import { app } from './app';
 const log = createLogger('auto-updater');
 
 /** Options accepted by {@link AutoUpdaterImpl.setFeedURL}. */
-export type FeedURLOptions = { readonly url: string };
+export type FeedURLOptions = {
+  readonly url: string;
+  /**
+   * PEM Ed25519 public key that every downloaded artifact's detached `.sig` must
+   * verify against. Required to download — unsigned updates are refused. This is
+   * the app publisher's own release key (baked into the app), not a Bunmaska key.
+   */
+  readonly publicKey?: string;
+};
+
+/** http is refused for any host but these — dev feeds served from localhost. */
+const LOCAL_FEED_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** Whether a feed URL is transport-secure: https anywhere, http only on localhost. */
+const isSecureFeedUrl = (parsed: URL): boolean =>
+  parsed.protocol === 'https:' ||
+  (parsed.protocol === 'http:' && LOCAL_FEED_HOSTS.has(parsed.hostname));
 
 /** The Electron-shaped update descriptor carried by `update-*` events. */
 export type UpdateInfo = {
@@ -118,6 +135,7 @@ const productionDeps = (): AutoUpdaterDeps => ({
 export class AutoUpdaterImpl extends EventEmitter {
   #deps: AutoUpdaterDeps;
   #feedURL: string | undefined;
+  #publicKey: string | undefined;
   #available: UpdateManifest | undefined;
   #staged: StagedUpdate | undefined;
 
@@ -131,13 +149,32 @@ export class AutoUpdaterImpl extends EventEmitter {
     this.#deps = { ...this.#deps, ...deps };
   }
 
-  /** Set the base URL of the channel feed (where `update.json` + artifacts live). */
+  /**
+   * Set the base URL of the channel feed (where `update.json` + artifacts live),
+   * and optionally the release `publicKey` that downloaded artifacts must verify
+   * against. The URL must be https (http is allowed only for localhost) so a
+   * plaintext MITM cannot serve a malicious feed.
+   */
   setFeedURL(options: FeedURLOptions | string): void {
-    const url = typeof options === 'string' ? options : options.url;
-    if (typeof url !== 'string' || url.length === 0) {
+    const opts = typeof options === 'string' ? { url: options } : options;
+    if (typeof opts.url !== 'string' || opts.url.length === 0) {
       throw new Error('autoUpdater.setFeedURL: a non-empty url is required');
     }
-    this.#feedURL = url;
+    let parsed: URL;
+    try {
+      parsed = new URL(opts.url);
+    } catch {
+      throw new Error(`autoUpdater.setFeedURL: invalid url ${JSON.stringify(opts.url)}`);
+    }
+    if (!isSecureFeedUrl(parsed)) {
+      throw new Error(
+        `autoUpdater.setFeedURL: refusing a non-HTTPS feed url ${JSON.stringify(opts.url)} (https is required; http is allowed only for localhost)`,
+      );
+    }
+    this.#feedURL = opts.url;
+    if (opts.publicKey !== undefined) {
+      this.#publicKey = opts.publicKey;
+    }
   }
 
   /** The configured feed URL, or `''` if none is set. */
@@ -150,6 +187,15 @@ export class AutoUpdaterImpl extends EventEmitter {
       throw new Error('autoUpdater: feed URL is not set; call setFeedURL first');
     }
     return this.#feedURL;
+  }
+
+  #requirePublicKey(): string {
+    if (this.#publicKey === undefined || this.#publicKey.length === 0) {
+      throw new Error(
+        'autoUpdater: no update public key configured; pass { publicKey } to setFeedURL — unsigned updates are refused',
+      );
+    }
+    return this.#publicKey;
   }
 
   /** Emit `error` (only if a listener is attached) and return the normalized Error. */
@@ -189,9 +235,13 @@ export class AutoUpdaterImpl extends EventEmitter {
 
   /**
    * Download the artifact for the update found by the most recent
-   * {@link checkForUpdates}, verify its byte length + wyhash against the
-   * manifest, decompress it, and stage the tar on disk. Emits `update-downloaded`.
-   * Rejects (and emits `error`) if no update is pending or integrity fails.
+   * {@link checkForUpdates}, verify its length + wyhash (corruption) AND its
+   * detached Ed25519 `.sig` against the configured `publicKey` (authenticity),
+   * decompress it, and stage the tar on disk. Emits `update-downloaded`. Rejects
+   * (and emits `error`) if no update is pending, no public key is configured, or
+   * any check fails. The signature — not the wyhash — is what makes an update
+   * trustworthy: a feed/MITM controls the manifest, so its size + hash are
+   * self-referential; only the publisher's key can produce a valid `.sig`.
    */
   async downloadUpdate(): Promise<StagedUpdate> {
     const feedURL = this.#requireFeedURL();
@@ -202,6 +252,7 @@ export class AutoUpdaterImpl extends EventEmitter {
       );
     }
     try {
+      const publicKey = this.#requirePublicKey();
       const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact));
       if (bytes.length !== manifest.size) {
         throw new Error(
@@ -213,6 +264,12 @@ export class AutoUpdaterImpl extends EventEmitter {
         throw new Error(
           `autoUpdater: artifact hash mismatch (expected ${manifest.hash}, got ${actualHash})`,
         );
+      }
+      const signature = (
+        await this.#deps.fetchText(joinUrl(feedURL, `${manifest.artifact}.sig`))
+      ).trim();
+      if (!verifyArtifact(publicKey, bytes, signature)) {
+        throw new Error('autoUpdater: artifact signature verification failed');
       }
       const tarBytes = this.#deps.decompress(bytes);
       const tarPath = await this.#deps.stage(tarBytes, manifest);

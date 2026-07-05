@@ -9,10 +9,17 @@ import {
   serializeUpdateManifest,
   type UpdateManifest,
 } from '../../../../src/common/manifest';
+import { generateSigningKeyPair, signArtifact } from '../../../../src/common/signature';
 
 const ARTIFACT = new Uint8Array([10, 20, 30, 40, 50, 60, 70, 80]);
 const ARTIFACT_HASH = contentHash(ARTIFACT);
 const TAR = new Uint8Array([1, 2, 3]);
+
+// The publisher's release key. A downloaded artifact's `.sig` must verify against
+// its public half, so the feed serves a `.sig` signed by the private half.
+const KEYS = generateSigningKeyPair();
+const SIG = signArtifact(KEYS.privateKey, ARTIFACT);
+const FEED = { url: 'https://feed', publicKey: KEYS.publicKey };
 
 const manifest = (version: string): UpdateManifest => ({
   name: 'My App',
@@ -37,7 +44,8 @@ const makeUpdater = (overrides: Partial<AutoUpdaterDeps>, feedVersion = '2.0.0')
   const decompressed: Uint8Array[] = [];
   const events: string[] = [];
   const deps: Partial<AutoUpdaterDeps> = {
-    fetchText: async () => serializeUpdateManifest(manifest(feedVersion)),
+    fetchText: async (url) =>
+      url.endsWith('.sig') ? SIG : serializeUpdateManifest(manifest(feedVersion)),
     fetchBytes: async () => ARTIFACT,
     currentVersion: () => '1.0.0',
     decompress: (bytes) => {
@@ -75,6 +83,22 @@ describe('autoUpdater.setFeedURL / getFeedURL', () => {
   test('rejects an empty url', () => {
     const { updater } = makeUpdater({});
     expect(() => updater.setFeedURL('')).toThrow(/non-empty url/);
+  });
+
+  test('rejects a non-HTTPS feed url', () => {
+    const { updater } = makeUpdater({});
+    expect(() => updater.setFeedURL('http://evil.example/feed')).toThrow(/https/i);
+  });
+
+  test('rejects a malformed url', () => {
+    const { updater } = makeUpdater({});
+    expect(() => updater.setFeedURL('not a url')).toThrow(/invalid url/i);
+  });
+
+  test('allows http only for a localhost dev feed', () => {
+    const { updater } = makeUpdater({});
+    updater.setFeedURL('http://localhost:8080/feed');
+    expect(updater.getFeedURL()).toBe('http://localhost:8080/feed');
   });
 
   test('getFeedURL is empty before configuration', () => {
@@ -128,9 +152,17 @@ describe('autoUpdater.downloadUpdate', () => {
     await expect(h.updater.downloadUpdate()).rejects.toThrow(/no update available/);
   });
 
-  test('verifies, decompresses, stages, and emits update-downloaded', async () => {
+  test('refuses to download when no public key is configured (unsigned updates)', async () => {
     const h = makeUpdater({}, '2.0.0');
     h.updater.setFeedURL('https://feed');
+    await h.updater.checkForUpdates();
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/public key/i);
+    expect(h.events).toContain('error');
+  });
+
+  test('verifies signature + hash, decompresses, stages, and emits update-downloaded', async () => {
+    const h = makeUpdater({}, '2.0.0');
+    h.updater.setFeedURL(FEED);
     await h.updater.checkForUpdates();
     const staged = await h.updater.downloadUpdate();
     expect(staged.manifest.version).toBe('2.0.0');
@@ -139,9 +171,17 @@ describe('autoUpdater.downloadUpdate', () => {
     expect(h.events).toContain('update-downloaded');
   });
 
+  test('rejects an artifact whose signature does not verify against the public key', async () => {
+    const h = makeUpdater({}, '2.0.0');
+    h.updater.setFeedURL({ url: 'https://feed', publicKey: generateSigningKeyPair().publicKey });
+    await h.updater.checkForUpdates();
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/signature/i);
+    expect(h.events).toContain('error');
+  });
+
   test('rejects + emits error on an artifact size mismatch', async () => {
     const h = makeUpdater({ fetchBytes: async () => new Uint8Array([1, 2]) }, '2.0.0');
-    h.updater.setFeedURL('https://feed');
+    h.updater.setFeedURL(FEED);
     await h.updater.checkForUpdates();
     await expect(h.updater.downloadUpdate()).rejects.toThrow(/size mismatch/);
     expect(h.events).toContain('error');
@@ -150,7 +190,7 @@ describe('autoUpdater.downloadUpdate', () => {
   test('rejects on an artifact hash mismatch', async () => {
     const wrong = new Uint8Array([9, 9, 9, 9, 9, 9, 9, 9]); // same length, different bytes
     const h = makeUpdater({ fetchBytes: async () => wrong }, '2.0.0');
-    h.updater.setFeedURL('https://feed');
+    h.updater.setFeedURL(FEED);
     await h.updater.checkForUpdates();
     await expect(h.updater.downloadUpdate()).rejects.toThrow(/hash mismatch/);
   });
@@ -164,7 +204,7 @@ describe('autoUpdater.quitAndInstall', () => {
 
   test('delegates the staged update to the installer', async () => {
     const h = makeUpdater({}, '2.0.0');
-    h.updater.setFeedURL('https://feed');
+    h.updater.setFeedURL(FEED);
     await h.updater.checkForUpdates();
     await h.updater.downloadUpdate();
     h.updater.quitAndInstall();
