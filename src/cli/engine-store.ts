@@ -34,7 +34,7 @@ import {
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve, sep } from 'node:path';
 import { BunmaskaError } from '../common/errors';
 import { contentHash } from '../common/manifest';
 
@@ -59,6 +59,31 @@ const defaultHome = (env: StoreEnv): string =>
  */
 export const enginesPath = (env: StoreEnv = process.env): string =>
   env['BUNMASKA_ENGINES_PATH'] ?? join(defaultHome(env), 'webkit');
+
+/**
+ * Reject an engine id that is not a single, contained directory segment under
+ * `root`. An id reaches the store from an untrusted source — a remote feed
+ * manifest (`engine-remote.ts`) or an `engine.json` — and is used verbatim to
+ * build a directory that install then `rm`s and `rename`s over. Without this an
+ * id like `../../x` or an absolute path is a traversal + arbitrary-delete. Bars
+ * separators, absolute paths, `.`/`..`, and anything resolving outside `root`.
+ */
+export const assertSafeEngineId = (root: string, id: string): void => {
+  const base = resolve(root);
+  const dir = resolve(base, id);
+  const unsafe =
+    id.length === 0 ||
+    id.includes('/') ||
+    id.includes('\\') ||
+    id.includes('\0') ||
+    isAbsolute(id) ||
+    !dir.startsWith(base + sep);
+  if (unsafe) {
+    throw new BunmaskaError(`engine store: refusing unsafe engine id ${JSON.stringify(id)}`, {
+      code: 'ERR_ENGINE_ID',
+    });
+  }
+};
 
 /** Absolute dir of one engine id under the store root. */
 export const engineDir = (root: string, id: string): string => join(root, id);
@@ -152,6 +177,7 @@ export const installFromSource = async (
   source: InstallSource,
   deps: InstallDeps,
 ): Promise<InstallResult> => {
+  assertSafeEngineId(root, source.id);
   if (isInstalled(root, source.id)) {
     return { id: source.id, installed: false };
   }
@@ -222,6 +248,7 @@ export const installFromDir = async (
   deps: { readonly copyTree?: (from: string, to: string) => void } = {},
 ): Promise<InstallResult> => {
   const manifest = readEngineManifest(sourceDir);
+  assertSafeEngineId(root, manifest.id);
   if (isInstalled(root, manifest.id)) {
     return { id: manifest.id, installed: false };
   }

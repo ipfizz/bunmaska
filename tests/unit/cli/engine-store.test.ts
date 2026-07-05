@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
 import {
+  assertSafeEngineId,
   enginesPath,
   engineDir,
   gc,
@@ -120,6 +121,37 @@ describe('installFromSource', () => {
     expect(first.installed).toBe(true);
     expect(second.installed).toBe(false);
     expect(extracts).toBe(1);
+  });
+
+  test('rejects an unsafe (path-traversal) id before touching the filesystem', async () => {
+    const root = makeTmpDir();
+    let extracted = false;
+    const deps = {
+      extract: async (b: Uint8Array, d: string) => {
+        extracted = true;
+        await fakeExtract(b, d);
+      },
+    };
+    for (const id of ['../escape', '../../etc', 'a/b', '..', '.', '']) {
+      await expect(installFromSource(root, fakeSource(id), deps)).rejects.toThrow(
+        /unsafe engine id/,
+      );
+    }
+    expect(extracted).toBe(false);
+  });
+});
+
+describe('assertSafeEngineId', () => {
+  const root = '/store/webkit';
+
+  test('accepts a well-formed engine id', () => {
+    expect(() => assertSafeEngineId(root, ID)).not.toThrow();
+  });
+
+  test('rejects separators, absolute paths, dot segments, and empties', () => {
+    for (const id of ['../x', '..', '.', '', 'a/b', 'a\\b', '/abs/path', 'x/../../y']) {
+      expect(() => assertSafeEngineId(root, id)).toThrow(/unsafe engine id/);
+    }
   });
 });
 

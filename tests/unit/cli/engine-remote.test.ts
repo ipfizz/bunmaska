@@ -117,4 +117,21 @@ describe('installFromUrl', () => {
     ).rejects.toThrow(/integrity|hash/i);
     expect(existsSync(engineDir(root, ID))).toBe(false);
   });
+
+  // The .sig covers the artifact bytes, NOT the .json — so a hostile feed can pair
+  // a validly-signed artifact with a traversal id. The store guard must still refuse.
+  test('rejects a path-traversal id even when the signature is valid', async () => {
+    const root = makeTmpDir();
+    const work = makeTmpDir();
+    const artifact = await buildArtifact(work);
+    const hash = contentHash(artifact);
+    const { publicKey, privateKey } = generateSigningKeyPair();
+    const manifest = JSON.stringify({ id: '../pwned', hash });
+    const sig = signArtifact(privateKey, artifact);
+
+    await expect(
+      installFromUrl(root, base, publicKey, { fetch: fixtureFeed(artifact, manifest, sig) }),
+    ).rejects.toThrow(/unsafe engine id/);
+    expect(existsSync(join(root, '..', 'pwned'))).toBe(false);
+  });
 });
