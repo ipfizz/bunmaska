@@ -34,8 +34,9 @@ const HANDLER_NAME = 'bunmaska';
 /** Page-world handler name `executeJavaScript` posts its result to. */
 const EXEC_HANDLER_NAME = 'bunmaskaExec';
 
-/** Reject a pending `executeJavaScript` after this long (ms). */
-const EXEC_TIMEOUT_MS = 30_000;
+/** Reject a pending `executeJavaScript` after this long (ms). Generous so heavy in-page work — a
+ * large file download via XHR, a slow server-rendered PDF — isn't cut off mid-flight. */
+const EXEC_TIMEOUT_MS = 120_000;
 
 const log = createLogger('windows-web-contents');
 
