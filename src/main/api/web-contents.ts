@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { isAbsolute, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createLogger } from '../../common/logger';
 import { decodeEnvelope, encodeEnvelope } from '../ipc/ipc-protocol';
 import type { NativeInputEvent, NativeWebContents } from '../platform/native';
@@ -92,7 +93,8 @@ export class WebContents extends EventEmitter {
   /** Load a local file by path. */
   loadFile(filePath: string): void {
     const absolute = isAbsolute(filePath) ? filePath : resolve(filePath);
-    this.#native.loadURL(`file://${absolute}`);
+    // percent-encode via URL — a raw `file://${path}` breaks on spaces/#/? (NSURL returns nil)
+    this.#native.loadURL(pathToFileURL(absolute).href);
   }
 
   /** The current page URL, or `''` before the first navigation. */

@@ -82,6 +82,23 @@ const reset = (): void => {
 beforeEach(reset);
 afterEach(reset);
 
+describe('WebContents.loadFile', () => {
+  test('percent-encodes spaces and reserved characters in the file url', () => {
+    const loaded: string[] = [];
+    const { native } = makeFakeNative();
+    const wc = new WebContents({ ...native, loadURL: (url: string) => loaded.push(url) });
+    const path =
+      process.platform === 'win32' ? 'C:\\My Apps\\page #1.html' : '/my apps/page #1.html';
+    wc.loadFile(path);
+    expect(loaded).toHaveLength(1);
+    const url = loaded[0] as string;
+    expect(url.startsWith('file://')).toBe(true);
+    expect(url).toContain('page%20%231.html');
+    expect(url).not.toContain(' ');
+    expect(url).not.toContain('#');
+  });
+});
+
 describe('WebContents.insertCSS / removeInsertedCSS', () => {
   test('insertCSS injects the css and resolves to a key', async () => {
     const { native, execs } = makeFakeNative();
