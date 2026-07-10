@@ -49,7 +49,9 @@ export const parseRemoteManifest = (text: string): RemoteManifest => {
 /** Decompress a `.tar.zst` byte stream and extract its tree into `destDir`. */
 export const zstdTarExtract = async (bytes: Uint8Array, destDir: string): Promise<void> => {
   const tarBytes = Bun.zstdDecompressSync(bytes);
-  const proc = Bun.spawn(['tar', '-xf', '-', '-C', destDir], {
+  // extract via cwd, not `-C <dir>` — Windows bsdtar mangles backslash paths
+  const proc = Bun.spawn(['tar', '-xf', '-'], {
+    cwd: destDir,
     stdin: tarBytes,
     stdout: 'ignore',
     stderr: 'pipe',

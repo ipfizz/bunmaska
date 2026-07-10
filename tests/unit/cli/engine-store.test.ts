@@ -240,6 +240,15 @@ describe('installFromDir', () => {
     mkdirSync(bogus, { recursive: true });
     await expect(installFromDir(root, bogus)).rejects.toThrow(/engine\.json/i);
   });
+
+  test('accepts an engine.json written with a UTF-8 BOM (Windows tooling)', async () => {
+    const root = makeTmpDir();
+    const src = makeEngineDir(root, ID);
+    const manifest = JSON.stringify({ id: ID, soname: 'libwebkitgtk-6.0.so.4' });
+    writeFileSync(join(src, 'engine.json'), `\uFEFF${manifest}`);
+    const result = await installFromDir(root, src);
+    expect(result).toEqual({ id: ID, installed: true });
+  });
 });
 
 describe('verifyEngine', () => {

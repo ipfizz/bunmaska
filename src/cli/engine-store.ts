@@ -216,7 +216,8 @@ export type EngineManifest = {
 export const readEngineManifest = (dir: string): EngineManifest => {
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8'));
+    // strip a UTF-8 BOM — Windows tooling (PowerShell 5.1) writes one
+    raw = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8').replace(/^\uFEFF/, ''));
   } catch {
     throw new BunmaskaError(`engine: no readable engine.json in ${dir}`, {
       code: 'ERR_ENGINE_MANIFEST',
