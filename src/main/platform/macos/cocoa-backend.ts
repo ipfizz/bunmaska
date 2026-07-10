@@ -868,6 +868,11 @@ class MacOSApplication implements NativeApplication {
       false,
     );
 
+    // AppKit defaults releasedWhenClosed to YES for programmatic NSWindows, so a
+    // close would dealloc it while we still hold the handle (use-after-free). We
+    // own the lifetime — release explicitly in teardown instead.
+    msgSendU8(window, rt.selectors.get('setReleasedWhenClosed:'), 0);
+
     const configuration = rt.msgSend(
       rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
       rt.selectors.get('init'),
