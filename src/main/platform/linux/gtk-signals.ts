@@ -180,6 +180,33 @@ export const makeScriptMessageCallback = (onMessage: (json: string) => void): JS
   }, SCRIPT_MESSAGE_CB_DEF);
 };
 
+/** Anything with a native trampoline that must be freed off the current stack. */
+type Closable = { close: () => void };
+
+/**
+ * Close each callback's native trampoline on a LATER tick, never synchronously.
+ * A signal handler runs on GTK's stack; closing its own {@link JSCallback} while
+ * that stack is live frees the trampoline GTK is about to return into (SIGSEGV,
+ * the D022b discipline). Disconnecting the handler is safe synchronously; only
+ * the `.close()` is deferred. Empty batches schedule nothing.
+ */
+export const deferCallbackClose = (
+  callbacks: readonly Closable[],
+  schedule: (fn: () => void) => void = (fn) => {
+    setTimeout(fn, 0);
+  },
+): void => {
+  if (callbacks.length === 0) {
+    return;
+  }
+  const pending = [...callbacks];
+  schedule(() => {
+    for (const cb of pending) {
+      cb.close();
+    }
+  });
+};
+
 /** A live signal connection: its handler id and the retained callback thunk. */
 export type SignalConnection = {
   readonly handlerId: bigint;
@@ -228,16 +255,23 @@ export class SignalRegistry {
     return this.#connections.length;
   }
 
-  /** Disconnect every handler then close its callback thunk. Idempotent. */
+  /**
+   * Disconnect every handler synchronously (no more signals fire), then close
+   * the callback thunks on a LATER tick via {@link deferCallbackClose} — safe to
+   * call from inside a signal handler's own invocation (e.g. close-request).
+   * Idempotent.
+   */
   disconnectAll(): void {
     if (this.#connections.length === 0) {
       return;
     }
     const gobject = loadGObjectFFI();
+    const callbacks: JSCallback[] = [];
     for (const { instance, connection } of this.#connections) {
       gobject.symbols.g_signal_handler_disconnect(instance, connection.handlerId);
-      connection.callback.close();
+      callbacks.push(connection.callback);
     }
     this.#connections.length = 0;
+    deferCallbackClose(callbacks);
   }
 }

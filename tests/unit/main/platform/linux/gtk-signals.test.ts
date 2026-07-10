@@ -3,6 +3,7 @@ import {
   CLOSE_REQUEST_CB_DEF,
   closeRequestDecision,
   CREATE_CB_DEF,
+  deferCallbackClose,
   DESTROY_CB_DEF,
   LOAD_CHANGED_CB_DEF,
   LOAD_FAILED_CB_DEF,
@@ -98,5 +99,38 @@ describe('SignalRegistry', () => {
     expect(registry.size).toBe(0);
     expect(() => registry.disconnectAll()).not.toThrow();
     expect(registry.size).toBe(0);
+  });
+});
+
+describe('deferCallbackClose (never close a thunk inside its own invocation)', () => {
+  it('does not close synchronously; closes only when the scheduled task runs', () => {
+    let closed = 0;
+    const cb = { close: () => (closed += 1) };
+    let scheduled: (() => void) | undefined;
+    deferCallbackClose([cb], (fn) => {
+      scheduled = fn;
+    });
+    expect(closed).toBe(0);
+    scheduled?.();
+    expect(closed).toBe(1);
+  });
+
+  it('is a no-op (does not schedule) for an empty list', () => {
+    let scheduledCount = 0;
+    deferCallbackClose([], () => {
+      scheduledCount += 1;
+    });
+    expect(scheduledCount).toBe(0);
+  });
+
+  it('closes every callback in the batch on the deferred tick', () => {
+    const closes: number[] = [];
+    const cbs = [0, 1, 2].map((i) => ({ close: () => closes.push(i) }));
+    let scheduled: (() => void) | undefined;
+    deferCallbackClose(cbs, (fn) => {
+      scheduled = fn;
+    });
+    scheduled?.();
+    expect(closes).toEqual([0, 1, 2]);
   });
 });
