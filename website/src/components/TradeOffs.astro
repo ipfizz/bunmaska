@@ -1,24 +1,10 @@
 ---
 import { HEAD } from "../styles/constants";
+import { homeFaq } from "../faq";
 
-const faqs = [
-  [
-    "Windows?",
-    "It ships (x64) - on a from-source WinCairo WebKit build (never Chromium), green on CI alongside macOS and Linux. A few APIs are engine-blocked there (custom protocols, printToPDF, capturePage); ARM64 and a hosted prebuilt engine are still on the roadmap. The parity matrix is honest about every cell.",
-  ],
-  [
-    "Production-ready?",
-    "It says alpha for a reason. Use it for the thing you were going to rewrite anyway.",
-  ],
-  [
-    "Why no Chromium?",
-    "Because it's already on your computer, and shipping a second one is how we got here.",
-  ],
-  [
-    "What's the catch?",
-    "~70-80% of Electron's surface, and we publish the parity matrix so you can check before you commit.",
-  ],
-];
+// Shared with the home FAQPage JSON-LD (index.astro) so the markup matches the
+// visible cards exactly — a mismatch drops the rich result.
+const faqs = homeFaq.map((item) => [item.q, item.a] as const);
 ---
 
 <section class="relative overflow-hidden py-12 section-border">

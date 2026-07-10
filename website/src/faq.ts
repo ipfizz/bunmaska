@@ -33,6 +33,29 @@ export const faq: readonly FaqItem[] = [
   },
 ];
 
+// The home page renders these four (TradeOffs.astro) — a tighter, wittier set
+// than the full /alternatives FAQ. Kept here so the visible cards and the home
+// FAQPage JSON-LD come from ONE source (Google requires the markup to match what
+// the visitor sees, or the rich result is dropped).
+export const homeFaq: readonly FaqItem[] = [
+  {
+    q: 'Windows?',
+    a: 'It ships (x64) - on a from-source WinCairo WebKit build (never Chromium), green on CI alongside macOS and Linux. A few APIs are engine-blocked there (custom protocols, printToPDF, capturePage); ARM64 and a hosted prebuilt engine are still on the roadmap. The parity matrix is honest about every cell.',
+  },
+  {
+    q: 'Production-ready?',
+    a: 'It says alpha for a reason. Use it for the thing you were going to rewrite anyway.',
+  },
+  {
+    q: 'Why no Chromium?',
+    a: "Because it's already on your computer, and shipping a second one is how we got here.",
+  },
+  {
+    q: "What's the catch?",
+    a: "~70-80% of Electron's surface, and we publish the parity matrix so you can check before you commit.",
+  },
+];
+
 export function faqPageJsonLd(faqItems: readonly FaqItem[] = faq): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
