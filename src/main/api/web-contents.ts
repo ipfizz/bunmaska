@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { isAbsolute, resolve } from 'node:path';
 import { createLogger } from '../../common/logger';
 import { decodeEnvelope, encodeEnvelope } from '../ipc/ipc-protocol';
-import type { NativeWebContents } from '../platform/native';
+import type { NativeInputEvent, NativeWebContents } from '../platform/native';
 import { ipcMain } from './ipc-main';
 import { type NativeImage, nativeImage } from './native-image';
 
@@ -219,6 +219,16 @@ export class WebContents extends EventEmitter {
   /** The User-Agent override set via {@link setUserAgent}, or `''` if none (platform default). */
   getUserAgent(): string {
     return this.#userAgent;
+  }
+
+  /**
+   * Synthesize a trusted input event into the page (Electron's `sendInputEvent`).
+   * The page receives a real `isTrusted === true` event, which a script-dispatched
+   * event cannot fake — needed to drive sites that reject synthetic clicks.
+   * Implemented on Windows; other backends throw `UnsupportedPlatformError`.
+   */
+  sendInputEvent(event: NativeInputEvent): void {
+    this.#native.sendInputEvent(event);
   }
 
   /**

@@ -3,6 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InvalidArgumentError } from '../../../../src/common/errors';
+import { app } from '../../../../src/main/api/app';
+import {
+  BrowserWindow,
+  resetWindowRegistryForTesting,
+} from '../../../../src/main/api/browser-window';
+import { session } from '../../../../src/main/api/session';
+import { resetWebContentsIdsForTesting } from '../../../../src/main/api/web-contents';
 import { resetBootstrapForTesting } from '../../../../src/main/bootstrap';
 import { setNativeAppForTesting } from '../../../../src/main/native-app';
 import type {
@@ -13,13 +20,6 @@ import type {
   Rect,
   WindowEventType,
 } from '../../../../src/main/platform/native';
-import {
-  BrowserWindow,
-  resetWindowRegistryForTesting,
-} from '../../../../src/main/api/browser-window';
-import { app } from '../../../../src/main/api/app';
-import { session } from '../../../../src/main/api/session';
-import { resetWebContentsIdsForTesting } from '../../../../src/main/api/web-contents';
 import { appExitCodes, installSafeAppExit } from '../../../helpers/safe-app-exit';
 
 type FakeWindow = NativeWindow & {
@@ -96,6 +96,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     onRendererEnvelope: () => undefined,
     onNavigation: () => undefined,
     setWindowOpenHandler: () => undefined,
+    sendInputEvent: () => undefined,
   };
   return {
     webContents,

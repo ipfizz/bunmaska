@@ -1,9 +1,10 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import type { NativeNavigationEvent } from '../native';
+import type { NativeInputEvent, NativeNavigationEvent } from '../native';
 import { wkRelease, wkString, wkStringToJs, wkUrl, wkUrlToJs } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
 import { loadKernel32, loadUser32 } from './win32-ffi';
+import { postWindowsInputEvent } from './windows-input';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
 /**
@@ -372,6 +373,14 @@ export class WindowsWebView {
     const uaRef = wkString(userAgent);
     loadWebKit2().symbols.WKPageSetCustomUserAgent(this.#page, uaRef);
     wkRelease(uaRef);
+  }
+
+  /** Post a synthesized input event to this view's HWND (trusted on WinCairo). */
+  sendInputEvent(event: NativeInputEvent): void {
+    const hwnd = loadWebKit2().symbols.WKViewGetWindow(this.#view);
+    if (hwnd !== 0n) {
+      postWindowsInputEvent(hwnd, event);
+    }
   }
 
   /** Release the view, destroy the host child, and close every callback. Idempotent. */

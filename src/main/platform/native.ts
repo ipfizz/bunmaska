@@ -54,6 +54,35 @@ export type NativeNavigationEvent =
       readonly errorDescription: string;
     };
 
+/** A mouse button for a synthesized {@link MouseInputEvent}. */
+export type MouseButton = 'left' | 'middle' | 'right';
+
+/**
+ * A synthesized mouse event — the subset of Electron's `MouseInputEvent` Bunmaska
+ * delivers. Coordinates are logical pixels relative to the top-left of the web
+ * view's content area.
+ */
+export type MouseInputEvent = {
+  readonly type: 'mouseDown' | 'mouseUp' | 'mouseMove';
+  readonly x: number;
+  readonly y: number;
+  /** The button for `mouseDown`/`mouseUp` (default `left`). Ignored for `mouseMove`. */
+  readonly button?: MouseButton;
+};
+
+/**
+ * A synthesized keyboard event — the subset of Electron's `KeyboardInputEvent`
+ * Bunmaska delivers. `keyCode` is an Electron accelerator key string: a single
+ * character (`'a'`, `'5'`) or a named key (`'Enter'`, `'Escape'`, `'Tab'`).
+ */
+export type KeyboardInputEvent = {
+  readonly type: 'keyDown' | 'keyUp' | 'char';
+  readonly keyCode: string;
+};
+
+/** An input event accepted by {@link NativeWebContents.sendInputEvent}. */
+export type NativeInputEvent = MouseInputEvent | KeyboardInputEvent;
+
 /**
  * The web view embedded in a window. Bunmaska's `WebContents` delegates to this.
  *
@@ -108,6 +137,13 @@ export interface NativeWebContents {
   setZoomFactor(factor: number): void;
   /** Override the User-Agent string sent on subsequent navigations. */
   setUserAgent(userAgent: string): void;
+  /**
+   * Synthesize a trusted input event into the page (Electron's
+   * `webContents.sendInputEvent`). Delivered through the engine's native input
+   * path, so the page sees `isTrusted === true` — unlike a script-dispatched DOM
+   * event. Implemented on Windows (WinCairo); other backends throw until wired.
+   */
+  sendInputEvent(event: NativeInputEvent): void;
   /** Deliver a raw IPC envelope (JSON) to the renderer's preload bridge. */
   sendEnvelopeToRenderer(envelopeJson: string): void;
   /** Register a callback for raw IPC envelopes (JSON) posted by the renderer. */

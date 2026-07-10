@@ -1,4 +1,5 @@
 import { FFIType } from 'bun:ffi';
+import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
 import {
   generateChannelId,
@@ -7,7 +8,10 @@ import {
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
+import { protocol } from '../../api/protocol';
+import { buildExecWrapper } from '../../ipc/exec-wrapper';
 import { AdaptiveBlockingPump } from '../../run-loop';
+import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type {
   NativeAppKit,
   NativeApplication,
@@ -18,13 +22,12 @@ import type {
   Rect,
   WindowEventType,
 } from '../native';
-import { buildExecWrapper } from '../../ipc/exec-wrapper';
-import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import { windowControlsScript } from '../window-controls';
+import * as cocoaApp from './cocoa-app';
+import { createAppDelegate } from './cocoa-app-delegate';
 import { makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
-import { nsDataToBytes } from './cocoa-native-image';
 import { cancelMenuTracking, popUpMenu } from './cocoa-menu';
 import {
   msgSendF64,
@@ -42,23 +45,21 @@ import {
   msgSendSize,
   msgSendU8,
 } from './cocoa-msgsend-variants';
-import * as cocoaApp from './cocoa-app';
-import { createAppDelegate } from './cocoa-app-delegate';
+import { nsDataToBytes } from './cocoa-native-image';
+import { createNavigationDelegate } from './cocoa-navigation-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { cocoa } from './cocoa-runtime';
-import { createNavigationDelegate } from './cocoa-navigation-delegate';
-import { createUIDelegate } from './cocoa-ui-delegate';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
-import { createUrlSchemeHandler } from './cocoa-url-scheme-handler';
-import { protocol } from '../../api/protocol';
-import { createWindowDelegate } from './cocoa-window-delegate';
 import {
   BORDERLESS_WINDOW_STYLE,
   type CocoaWindowStyle,
   computeWindowStyleMask,
   STANDARD_WINDOW_STYLE,
 } from './cocoa-style-mask';
+import { createUIDelegate } from './cocoa-ui-delegate';
+import { createUrlSchemeHandler } from './cocoa-url-scheme-handler';
 import { loadWebKit } from './cocoa-webkit';
+import { createWindowDelegate } from './cocoa-window-delegate';
 import type { Handle } from './objc';
 
 /**
@@ -425,6 +426,10 @@ class MacOSWebContents implements NativeWebContents {
         block,
       );
     });
+  }
+
+  sendInputEvent(): void {
+    throw new UnsupportedPlatformError('webContents.sendInputEvent is not yet supported on macOS');
   }
 
   /**

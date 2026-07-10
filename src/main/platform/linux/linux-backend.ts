@@ -9,6 +9,7 @@ import {
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { CooperativePump } from '../../run-loop';
 import { cstr } from '../cstr';
+import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import type {
   NativeApplication,
   NativeNavigationEvent,
@@ -21,7 +22,6 @@ import type {
 import { windowControlsScript } from '../window-controls';
 import { ExecResultChannel } from './eval-js';
 import { loadGtkFFI } from './gtk-ffi';
-import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { getCurrentAppMenu, getMenuEntry, realizeForWindow } from './gtk-menu';
 import { loadGtkMenuFFI } from './gtk-menu-ffi';
 import { createLinuxDrain } from './gtk-run-loop';
@@ -33,8 +33,8 @@ import {
   makeNotifyCallback,
   SignalRegistry,
 } from './gtk-signals';
-import { registerAllSchemes } from './webkit-uri-scheme';
 import { createWebViewWithIpc, sendToRenderer } from './webkit-ipc';
+import { registerAllSchemes } from './webkit-uri-scheme';
 import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
 
 /**
@@ -246,6 +246,10 @@ class LinuxWebContents implements NativeWebContents {
     return Promise.reject(
       new UnsupportedPlatformError('webContents.capturePage is not yet supported on Linux'),
     );
+  }
+
+  sendInputEvent(): void {
+    throw new UnsupportedPlatformError('webContents.sendInputEvent is not yet supported on Linux');
   }
 
   /** @internal Reject every still-pending exec; called on window close. */

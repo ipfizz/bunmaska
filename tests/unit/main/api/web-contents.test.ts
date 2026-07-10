@@ -56,6 +56,7 @@ const makeFakeNative = (): {
     setWindowOpenHandler: (cb) => {
       onWindowOpen = cb;
     },
+    sendInputEvent: () => undefined,
   };
   return {
     native,
@@ -311,6 +312,19 @@ describe('WebContents navigation events', () => {
     expect(fired).toBe(1);
   });
 
+  test('dom-ready fires only from the native event, not on did-navigate', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents(native);
+    let fired = 0;
+    wc.on('dom-ready', () => {
+      fired += 1;
+    });
+    fireNavigation({ type: 'did-navigate' });
+    expect(fired).toBe(0);
+    fireNavigation({ type: 'dom-ready' });
+    expect(fired).toBe(1);
+  });
+
   test('did-fail-load carries the error code and description', () => {
     const { native, fireNavigation } = makeFakeNative();
     const wc = new WebContents(native);
@@ -400,6 +414,7 @@ describe('WebContents navigation', () => {
       onRendererEnvelope: () => undefined,
       onNavigation: () => undefined,
       setWindowOpenHandler: () => undefined,
+      sendInputEvent: () => undefined,
     };
     const wc = new WebContents(native);
     wc.reload();
