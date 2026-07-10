@@ -39,6 +39,10 @@ jobs:
       # Windows' 250-char limit when nested under the workspace.
       WEBKIT_OUTPUTDIR: C:\wkb
       LLVM_DIR: C:\llvm20\clang+llvm-20.1.8-x86_64-pc-windows-msvc
+      # Publish steps are gated on these so forks / unconfigured runs still build
+      # + prove the engine, skipping pack/sign/upload when the secrets are absent.
+      HAVE_KEY: ${{ secrets.ENGINE_SIGNING_KEY != '' }}
+      HAVE_R2: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - name: Checkout bunmaska
         uses: actions/checkout@v4
@@ -144,3 +148,31 @@ jobs:
           name: ${{ steps.id.outputs.engine_id }}
           path: ${{ runner.temp }}\store\${{ steps.id.outputs.engine_id }}
           retention-days: 7
+
+      # Pack + sign the engine into the 3-file feed layout, then publish to R2.
+      # Gated on the signing key being present, so forks / unconfigured runs still
+      # build + prove the engine without needing the release secret.
+      - name: Pack + sign the engine for the feed
+        if: ${{ env.HAVE_KEY == 'true' }}
+        working-directory: bunmaska
+        env:
+          ENGINE_SIGNING_KEY: ${{ secrets.ENGINE_SIGNING_KEY }}
+        run: |
+          $key = "$env:RUNNER_TEMP\engine-signing-key.pem"
+          Set-Content -Path $key -Value $env:ENGINE_SIGNING_KEY -NoNewline
+          bun tools/engine/pack-engine.ts `
+            "$env:RUNNER_TEMP\store\${{ steps.id.outputs.engine_id }}" `
+            "$env:RUNNER_TEMP\feed" $key
+          Remove-Item $key -Force
+        shell: pwsh
+
+      - name: Publish the signed engine to R2
+        if: ${{ env.HAVE_KEY == 'true' && env.HAVE_R2 == 'true' }}
+        working-directory: bunmaska
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bun tools/engine/publish-engine-r2.ts `
+            "$env:RUNNER_TEMP\feed" "${{ steps.id.outputs.engine_id }}" --bucket bunmaska-engines
+        shell: pwsh
