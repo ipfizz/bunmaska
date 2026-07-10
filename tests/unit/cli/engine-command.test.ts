@@ -128,12 +128,19 @@ describe('engine install', () => {
     expect(c.text()).toContain(`installed ${ID}`);
   });
 
-  test('remote URL install errors (exit 1) when no signing key is available', async () => {
+  test('remote URL install uses the baked release anchor when no self-hosted key is configured', async () => {
     const c = capture(makeTmpDir());
-    expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, c.deps)).toBe(
-      1,
-    );
-    expect(c.err.join('\n')).toMatch(/signing key|publicKey/i);
+    let seenKey: string | undefined;
+    const deps = {
+      ...c.deps,
+      installUrl: async (_root: string, _url: string, key: string) => {
+        seenKey = key;
+        return { id: ID, installed: true };
+      },
+    };
+    expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, deps)).toBe(0);
+    expect(seenKey).toContain('BEGIN PUBLIC KEY');
+    expect(c.text()).toContain(`installed ${ID}`);
   });
 });
 
