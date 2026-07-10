@@ -59,6 +59,29 @@ const installCleanExit = (): void => {
   });
 };
 
+/**
+ * A single `WKContext` — WebKit's process pool + default website data store (cookies, localStorage)
+ * — shared by EVERY view, so all windows see ONE session, exactly like Electron's default session.
+ * With a per-view context, a newly-opened window started with an empty, logged-OUT session, which
+ * broke SSO bridges (e.g. AIS) that open a second window expecting the eportal login to be visible.
+ * Created lazily and retained for the process lifetime (it outlives individual views — never freed).
+ */
+let sharedContext: Pointer | null = null;
+const sharedWebKitContext = (): Pointer => {
+  if (sharedContext !== null) {
+    return sharedContext;
+  }
+  const s = loadWebKit2().symbols;
+  const contextConfig = s.WKContextConfigurationCreate();
+  const context = s.WKContextCreateWithConfiguration(contextConfig);
+  wkRelease(contextConfig);
+  if (context === null) {
+    throw new FFIError('WKContextCreateWithConfiguration returned NULL');
+  }
+  sharedContext = context;
+  return context;
+};
+
 // WKPageNavigationClientV0 (x64): a 16-byte base { int version; padding; const void* }
 // followed by 21 function pointers. We wire five and NULL the rest.
 const NAV_CLIENT_SIZE = 184;
@@ -167,7 +190,6 @@ export class WindowsWebView {
   readonly #view: Pointer;
   readonly #page: Pointer;
   readonly #hostWindow: bigint;
-  readonly #retainedContext: Pointer;
   readonly #retainedController: Pointer;
   readonly #callbacks: JSCallback[];
   #disposed = false;
@@ -176,14 +198,12 @@ export class WindowsWebView {
     view: Pointer,
     page: Pointer,
     hostWindow: bigint,
-    context: Pointer,
     controller: Pointer,
     callbacks: JSCallback[],
   ) {
     this.#view = view;
     this.#page = page;
     this.#hostWindow = hostWindow;
-    this.#retainedContext = context;
     this.#retainedController = controller;
     this.#callbacks = callbacks;
   }
@@ -195,12 +215,9 @@ export class WindowsWebView {
     const wk = loadWebKit2();
     const s = wk.symbols;
 
-    const contextConfig = s.WKContextConfigurationCreate();
-    const context = s.WKContextCreateWithConfiguration(contextConfig);
-    wkRelease(contextConfig);
-    if (context === null) {
-      throw new FFIError('WKContextCreateWithConfiguration returned NULL');
-    }
+    // Shared session (Electron parity): every view uses ONE context, so a window opened after login
+    // sees the logged-in session — the SSO bridge windows (AIS/TRACES) depend on this.
+    const context = sharedWebKitContext();
 
     const controller = s.WKUserContentControllerCreate();
     if (controller === null) {
@@ -268,7 +285,7 @@ export class WindowsWebView {
       callbacks.push(...setupNavigationClient(page, options.onNavigationEvent));
     }
 
-    return new WindowsWebView(view, page, hostWindow, context, controller, callbacks);
+    return new WindowsWebView(view, page, hostWindow, controller, callbacks);
   }
 
   /** The underlying `WKPageRef`. */
@@ -406,7 +423,7 @@ export class WindowsWebView {
     wk.symbols.WKPageSetPageNavigationClient(this.#page, null);
     wk.symbols.WKUserContentControllerRemoveAllUserMessageHandlers(this.#retainedController);
     wkRelease(this.#retainedController);
-    wkRelease(this.#retainedContext);
+    // The shared WKContext is process-lifetime — never released here (it outlives this view).
     retainTrampolines(this.#callbacks);
   }
 }
