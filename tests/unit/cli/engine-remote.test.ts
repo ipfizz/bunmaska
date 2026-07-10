@@ -6,6 +6,8 @@ import { contentHash } from '../../../src/common/manifest';
 import { generateSigningKeyPair, signArtifact } from '../../../src/cli/engine-signature';
 import { engineDir, isInstalled } from '../../../src/cli/engine-store';
 import {
+  DEFAULT_ENGINE_FEED_URL,
+  engineFeedArtifactUrl,
   installFromUrl,
   parseRemoteManifest,
   type RemoteFetch,
@@ -54,6 +56,18 @@ const fixtureFeed = (
     throw new Error(`unexpected url ${url}`);
   };
 };
+
+describe('engineFeedArtifactUrl', () => {
+  test('maps an id to <feed>/<id>.tar.zst on the official feed by default', () => {
+    expect(engineFeedArtifactUrl(ID)).toBe(`${DEFAULT_ENGINE_FEED_URL}/${ID}.tar.zst`);
+  });
+
+  test('uses a custom feed base and tolerates a trailing slash', () => {
+    expect(engineFeedArtifactUrl(ID, 'https://mirror.example/e/')).toBe(
+      `https://mirror.example/e/${ID}.tar.zst`,
+    );
+  });
+});
 
 describe('parseRemoteManifest', () => {
   test('requires id + hash strings', () => {

@@ -11,7 +11,7 @@ import { compareEngineIds, isSystemEngine, parseEngineId } from '../common/engin
 import type { BunmaskaConfig } from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import type { EngineSubcommand } from './parse-args';
-import { defaultRemoteFetch, installFromUrl } from './engine-remote';
+import { defaultRemoteFetch, engineFeedArtifactUrl, installFromUrl } from './engine-remote';
 import { resolveEnginePublicKey } from './engine-signature';
 import {
   gc,
@@ -91,27 +91,43 @@ const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Pr
 const installedMessage = (result: InstallResult): string =>
   result.installed ? `installed ${result.id}` : `${result.id} is already installed (nothing to do)`;
 
+/** True for a bare, well-formed engine-id (not `system`, not a path, not a URL). */
+const isBareEngineId = (source: string): boolean => {
+  if (isSystemEngine(source)) {
+    return false;
+  }
+  try {
+    parseEngineId(source);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const runInstall = async (source: string, deps: EngineCommandDeps): Promise<number> => {
+  // A bare engine-id resolves to the configured (or official) feed's artifact URL.
+  const config = await deps.readConfig('.');
+  const url = isBareEngineId(source)
+    ? engineFeedArtifactUrl(source, config.engine?.feed?.url ?? undefined)
+    : source;
   // A http(s) source is a published feed artifact: verify its signature + hash.
-  if (/^https?:\/\//.test(source)) {
-    const config = await deps.readConfig('.');
+  if (/^https?:\/\//.test(url)) {
     const publicKey = resolveEnginePublicKey({
       feedPublicKey: config.engine?.feed?.publicKey,
       env: deps.env,
     });
     if (publicKey === undefined) {
       deps.err(
-        'bunmaska engine install: no signing key to verify this engine. The official release key ' +
-          'is not baked in yet; for a self-hosted feed, set engine.feed.publicKey in bunmaska.config. ' +
-          'Local engine directories install without a feed.',
+        'bunmaska engine install: no signing key to verify this engine. For a self-hosted feed, ' +
+          'set engine.feed.publicKey in bunmaska.config. Local engine directories install without a feed.',
       );
       return 1;
     }
     const installUrl =
       deps.installUrl ??
-      ((root, url, key) => installFromUrl(root, url, key, { fetch: defaultRemoteFetch }));
+      ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));
     try {
-      deps.out(installedMessage(await installUrl(deps.root, source, publicKey)));
+      deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
       return 0;
     } catch (error) {
       deps.err(
@@ -127,8 +143,8 @@ const runInstall = async (source: string, deps: EngineCommandDeps): Promise<numb
     return 0;
   }
   deps.err(
-    `bunmaska engine install: ${JSON.stringify(source)} is neither a local engine directory nor ` +
-      'an http(s) feed URL. Pass a built engine dir, or a published .tar.zst URL.',
+    `bunmaska engine install: ${JSON.stringify(source)} is neither a local engine directory, an ` +
+      'engine-id, nor an http(s) feed URL. Pass a built engine dir, an engine-id, or a .tar.zst URL.',
   );
   return 1;
 };

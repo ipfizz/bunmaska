@@ -106,10 +106,10 @@ describe('engine install', () => {
     expect(c.text()).toContain(`installed ${ID}`);
   });
 
-  test('errors (exit 1) on a source that is neither a dir nor a URL', async () => {
+  test('errors (exit 1) on a source that is neither a dir, an id, nor a URL', async () => {
     const c = capture(makeTmpDir());
-    expect(await runEngine({ action: 'install', source: ID }, c.deps)).toBe(1);
-    expect(c.err.join('\n')).toMatch(/local engine directory|feed URL/i);
+    expect(await runEngine({ action: 'install', source: 'not-an-engine' }, c.deps)).toBe(1);
+    expect(c.err.join('\n')).toMatch(/local engine directory|engine-id|feed URL/i);
   });
 
   test('remote URL install uses the self-hosted feed key from bunmaska.config', async () => {
@@ -141,6 +141,35 @@ describe('engine install', () => {
     expect(await runEngine({ action: 'install', source: 'https://feed/x.tar.zst' }, deps)).toBe(0);
     expect(seenKey).toContain('BEGIN PUBLIC KEY');
     expect(c.text()).toContain(`installed ${ID}`);
+  });
+
+  test('a bare engine-id resolves to the official feed artifact url', async () => {
+    const c = capture(makeTmpDir());
+    let seenUrl: string | undefined;
+    const deps = {
+      ...c.deps,
+      installUrl: async (_root: string, url: string, _key: string) => {
+        seenUrl = url;
+        return { id: ID, installed: true };
+      },
+    };
+    expect(await runEngine({ action: 'install', source: ID }, deps)).toBe(0);
+    expect(seenUrl).toBe(`https://engines.bunmaska.org/${ID}.tar.zst`);
+    expect(c.text()).toContain(`installed ${ID}`);
+  });
+
+  test('a self-hosted feed url in config replaces the default feed for a bare id', async () => {
+    const c = capture(makeTmpDir(), { engine: { feed: { url: 'https://mirror.example/e' } } });
+    let seenUrl: string | undefined;
+    const deps = {
+      ...c.deps,
+      installUrl: async (_root: string, url: string, _key: string) => {
+        seenUrl = url;
+        return { id: ID, installed: true };
+      },
+    };
+    expect(await runEngine({ action: 'install', source: ID }, deps)).toBe(0);
+    expect(seenUrl).toBe(`https://mirror.example/e/${ID}.tar.zst`);
   });
 });
 

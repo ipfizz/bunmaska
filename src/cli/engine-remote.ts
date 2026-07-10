@@ -13,6 +13,18 @@ import { BunmaskaError } from '../common/errors';
 import { installFromSource, type InstallResult } from './engine-store';
 import { verifyArtifact } from './engine-signature';
 
+/**
+ * The official Bunmaska engine feed. Engines are published at
+ * `<base>/<engine-id>.tar.zst` (plus `.json` + `.sig`), so an engine-id maps to
+ * a URL with no directory index needed. A self-hosted mirror overrides this via
+ * `bunmaska.config` `engine.feed.url`.
+ */
+export const DEFAULT_ENGINE_FEED_URL = 'https://engines.bunmaska.org';
+
+/** The artifact URL base for an engine-id at a feed (default: the official feed). */
+export const engineFeedArtifactUrl = (id: string, feedBase = DEFAULT_ENGINE_FEED_URL): string =>
+  `${feedBase.replace(/\/+$/, '')}/${id}.tar.zst`;
+
 /** Download the bytes at a URL (default: `fetch`). */
 export type RemoteFetch = (url: string) => Promise<Uint8Array>;
 
