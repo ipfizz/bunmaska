@@ -97,6 +97,9 @@ export const buildCompileArgs = (
   meta: WindowsMetadata,
 ): string[] => {
   const args = ['build', entry, '--compile', '--target=bun-windows-x64', '--outfile', outfile];
+  // Distribution builds are minified: a smaller binary with mangled identifiers (modest
+  // tamper-raising — string constants still survive, so true secret protection is server-side).
+  args.push('--minify');
   if (meta.hideConsole) {
     args.push('--windows-hide-console');
   }

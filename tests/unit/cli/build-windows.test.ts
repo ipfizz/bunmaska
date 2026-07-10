@@ -84,6 +84,10 @@ describe('buildCompileArgs', () => {
     expect(args[i + 1]).toBe(join('out', 'My App.exe'));
   });
 
+  test('minifies the distribution binary', () => {
+    expect(args).toContain('--minify');
+  });
+
   test('embeds the PE version metadata', () => {
     expect(args).toContain('--windows-title');
     expect(args[args.indexOf('--windows-title') + 1]).toBe('My App');
