@@ -46,12 +46,14 @@ const fakeSource = (id: string, body = 'ENGINE-BYTES'): InstallSource => {
   return { id, bytes, expectedHash: contentHash(bytes) };
 };
 
-/** Extract that writes a deterministic engine tree from the tarball bytes. */
+/** Extract a deterministic engine tree; the engine.json id is decoded from the
+ *  bytes (fakeSource embeds it), so a genuine artifact's signed id is preserved. */
 const fakeExtract = async (bytes: Uint8Array, destDir: string): Promise<void> => {
+  const id = new TextDecoder().decode(bytes).split(':')[0] ?? '';
   const { mkdirSync } = await import('node:fs');
   mkdirSync(join(destDir, 'lib'), { recursive: true });
   writeFileSync(join(destDir, 'lib', 'libwebkitgtk-6.0.so.4'), bytes);
-  writeFileSync(join(destDir, 'engine.json'), JSON.stringify({ soname: 'libwebkitgtk-6.0.so.4' }));
+  writeFileSync(join(destDir, 'engine.json'), JSON.stringify({ id, soname: 'libwebkitgtk-6.0.so.4' }));
 };
 
 describe('enginesPath (env-driven default root)', () => {
@@ -138,6 +140,50 @@ describe('installFromSource', () => {
       );
     }
     expect(extracted).toBe(false);
+  });
+
+  test('rejects store-reserved ids (.links, __dirlock) before touching the filesystem', async () => {
+    const root = makeTmpDir();
+    let extracted = false;
+    const deps = {
+      extract: async (b: Uint8Array, d: string) => {
+        extracted = true;
+        await fakeExtract(b, d);
+      },
+    };
+    for (const id of ['.links', '__dirlock', '.tmp-x', 'INSTALLATION_COMPLETE']) {
+      await expect(installFromSource(root, fakeSource(id), deps)).rejects.toThrow(
+        /unsafe engine id/,
+      );
+    }
+    expect(extracted).toBe(false);
+  });
+
+  test('rejects a substituted engine — extracted engine.json id must match the claimed id', async () => {
+    const root = makeTmpDir();
+    // A genuinely-signed OLDER artifact (its engine.json says ID2) served under ID's URL.
+    const substituted: InstallSource = { ...fakeSource(ID2), id: ID, expectedHash: fakeSource(ID2).expectedHash };
+    await expect(installFromSource(root, substituted, { extract: fakeExtract })).rejects.toThrow(
+      /different id/i,
+    );
+    // Neither the claimed nor the real dir is left behind, and the marker is not written.
+    expect(isInstalled(root, ID)).toBe(false);
+    expect(existsSync(engineDir(root, ID))).toBe(false);
+  });
+
+  test('two concurrent installs of the same id: exactly one wins, store stays intact', async () => {
+    const root = makeTmpDir();
+    const deps = { extract: fakeExtract };
+    const [a, b] = await Promise.all([
+      installFromSource(root, fakeSource(ID), deps),
+      installFromSource(root, fakeSource(ID), deps),
+    ]);
+    expect([a.installed, b.installed].filter(Boolean)).toHaveLength(1);
+    expect(isInstalled(root, ID)).toBe(true);
+    expect(verifyEngine(root, ID).ok).toBe(true);
+    // No orphaned staging dirs left behind.
+    const { readdirSync } = await import('node:fs');
+    expect(readdirSync(root).some((n) => n.startsWith('.tmp-'))).toBe(false);
   });
 });
 

@@ -76,6 +76,9 @@ export const assertSafeEngineId = (root: string, id: string): void => {
     id.includes('/') ||
     id.includes('\\') ||
     id.includes('\0') ||
+    id.startsWith('.') || // .links, .tmp-*, dotfiles — reserved store internals
+    id === LOCK_FILE ||
+    id === INSTALLATION_COMPLETE ||
     isAbsolute(id) ||
     !dir.startsWith(base + sep);
   if (unsafe) {
@@ -192,12 +195,31 @@ export const installFromSource = async (
   const staging = mkdtempSync(join(root, '.tmp-'));
   try {
     await deps.extract(source.bytes, staging);
-    const dest = engineDir(root, source.id);
-    rmSync(dest, { recursive: true, force: true }); // clear any partial prior install
-    renameSync(staging, dest);
-    writeFileSync(markerPath(root, source.id), `${new Date().toISOString()}\n`);
-    deps.onMarker?.();
-    return { id: source.id, installed: true };
+    // Bind the store dir to the SIGNED engine.json inside the artifact: the .sig
+    // covers the bytes, not the claimed id, so without this a genuinely-signed
+    // older/other engine could install under a different pinned id (downgrade).
+    const extracted = readEngineManifest(staging);
+    if (extracted.id !== source.id) {
+      throw new BunmaskaError(
+        `engine ${source.id}: signed engine.json declares a different id ${JSON.stringify(extracted.id)}`,
+        { code: 'ERR_ENGINE_INTEGRITY' },
+      );
+    }
+    // Swap-into-place + marker under the store lock so a concurrent install or gc
+    // in another process can't race the rename (extract already ran on a private
+    // staging dir, so the slow part is NOT inside the lock).
+    return await withLock(root, async () => {
+      if (isInstalled(root, source.id)) {
+        rmSync(staging, { recursive: true, force: true });
+        return { id: source.id, installed: false };
+      }
+      const dest = engineDir(root, source.id);
+      rmSync(dest, { recursive: true, force: true }); // clear any partial prior install
+      renameSync(staging, dest);
+      writeFileSync(markerPath(root, source.id), `${new Date().toISOString()}\n`);
+      deps.onMarker?.();
+      return { id: source.id, installed: true };
+    });
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     throw error;
@@ -258,11 +280,17 @@ export const installFromDir = async (
   const staging = mkdtempSync(join(root, '.tmp-'));
   try {
     copyTree(sourceDir, staging);
-    const dest = engineDir(root, manifest.id);
-    rmSync(dest, { recursive: true, force: true });
-    renameSync(staging, dest);
-    writeFileSync(markerPath(root, manifest.id), `${new Date().toISOString()}\n`);
-    return { id: manifest.id, installed: true };
+    return await withLock(root, async () => {
+      if (isInstalled(root, manifest.id)) {
+        rmSync(staging, { recursive: true, force: true });
+        return { id: manifest.id, installed: false };
+      }
+      const dest = engineDir(root, manifest.id);
+      rmSync(dest, { recursive: true, force: true });
+      renameSync(staging, dest);
+      writeFileSync(markerPath(root, manifest.id), `${new Date().toISOString()}\n`);
+      return { id: manifest.id, installed: true };
+    });
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     throw error;
@@ -326,27 +354,32 @@ export type GcResult = {
 export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => {
   const exists = deps.exists ?? existsSync;
   const dryRun = deps.dryRun === true;
-  let droppedLinks = 0;
-  const used = new Set<string>();
-  for (const link of readLinks(root)) {
-    if (exists(link.app)) {
-      used.add(link.engine);
-    } else {
-      droppedLinks += 1;
-      if (!dryRun) {
-        unlinkApp(root, link.app);
+  const scan = (): GcResult => {
+    let droppedLinks = 0;
+    const used = new Set<string>();
+    for (const link of readLinks(root)) {
+      if (exists(link.app)) {
+        used.add(link.engine);
+      } else {
+        droppedLinks += 1;
+        if (!dryRun) {
+          unlinkApp(root, link.app);
+        }
       }
     }
-  }
-  const installed = listInstalled(root);
-  const removed = installed.filter((id) => !used.has(id)).sort();
-  const kept = installed.filter((id) => used.has(id)).sort();
-  if (!dryRun) {
-    for (const id of removed) {
-      rmSync(engineDir(root, id), { recursive: true, force: true });
+    const installed = listInstalled(root);
+    const removed = installed.filter((id) => !used.has(id)).sort();
+    const kept = installed.filter((id) => used.has(id)).sort();
+    if (!dryRun) {
+      for (const id of removed) {
+        rmSync(engineDir(root, id), { recursive: true, force: true });
+      }
     }
-  }
-  return { kept, removed, droppedLinks };
+    return { kept, removed, droppedLinks };
+  };
+  // A dry run mutates nothing, so it needs no lock; a real gc takes the store
+  // lock so it can't delete an engine a concurrent install is renaming in.
+  return dryRun ? scan() : withLock(root, async () => scan());
 };
 
 const sleep = (ms: number): Promise<void> => Bun.sleep(ms);
