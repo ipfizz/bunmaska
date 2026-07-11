@@ -35,7 +35,13 @@ app.whenReady().then(() => {
 
 ### `app.isReady()`
 
-There is no `isReady()` method - use the `isReady` property below. (Noted here only because Electron developers reach for it out of habit.)
+Returns `boolean` - `true` if the `ready` event has already fired. A method, matching Electron (you can also `await app.whenReady()`).
+
+```ts
+if (!app.isReady()) {
+  await app.whenReady();
+}
+```
 
 ### `app.quit([exitCode])`
 
@@ -348,7 +354,7 @@ Returns:
 
 * `event` Event
 
-Emitted once, when Bunmaska has finished initializing and is ready to create windows. Fires at most once. You can also check the `isReady` property or use `whenReady()`.
+Emitted once, when Bunmaska has finished initializing and is ready to create windows. Fires at most once. You can also call `isReady()` or use `whenReady()`.
 
 Note: unlike Electron, Bunmaska's `ready` does not carry a `launchInfo` argument.
 
@@ -432,18 +438,6 @@ app.on('window-all-closed', () => {
 ```
 
 ## Properties
-
-### `app.isReady`
-
-A `boolean` property - `true` if the `ready` event has already fired. This is the property form Bunmaska exposes; there is no `isReady()` method.
-
-```ts
-import { app } from 'bunmaska'
-
-if (!app.isReady) {
-  await app.whenReady()
-}
-```
 
 ### `app.isPackaged` _Readonly_
 

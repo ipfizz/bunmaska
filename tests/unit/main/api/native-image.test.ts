@@ -206,7 +206,9 @@ describe('NativeImage.toPNG', () => {
       makeFakeBackend({ handle: 7n, width: 1, height: 1, empty: false }, png),
     );
     const image = nativeImage.createFromPath('/tmp/x.png');
-    expect(Array.from(image.toPNG())).toEqual(Array.from(png));
+    const bytes = image.toPNG();
+    expect(Buffer.isBuffer(bytes)).toBe(true); // Electron returns a Buffer, not a bare Uint8Array
+    expect(Array.from(bytes)).toEqual(Array.from(png));
     expect(encodeCalls).toEqual([7n]);
   });
 

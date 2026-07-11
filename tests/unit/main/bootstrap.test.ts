@@ -80,7 +80,7 @@ describe('bootstrap native wiring', () => {
     resetBootstrapForTesting();
     setNativeAppForTesting(native);
     ensureNativeStarted();
-    expect(app.isReady).toBe(true);
+    expect(app.isReady()).toBe(true);
   });
 
   test('forwards native open-url to the app open-url event', () => {

@@ -55,14 +55,16 @@ describe('App singleton', () => {
 });
 
 describe('App.isReady', () => {
-  test('is false on a fresh instance', () => {
-    expect(new App().isReady).toBe(false);
+  test('is a method (Electron parity), false on a fresh instance', () => {
+    const a = new App();
+    expect(typeof a.isReady).toBe('function');
+    expect(a.isReady()).toBe(false);
   });
 
   test('is true after markReady', () => {
     const a = new App();
     a.markReady();
-    expect(a.isReady).toBe(true);
+    expect(a.isReady()).toBe(true);
   });
 });
 
@@ -128,7 +130,7 @@ describe('App.whenReady', () => {
     const a = new App();
     a.setStartHook(() => a.markReady());
     await a.whenReady();
-    expect(a.isReady).toBe(true);
+    expect(a.isReady()).toBe(true);
   });
 });
 

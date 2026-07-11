@@ -84,8 +84,8 @@ export class App extends EventEmitter {
     }
   }
 
-  /** Whether the `ready` event has already fired. */
-  get isReady(): boolean {
+  /** Whether the `ready` event has already fired. A method, matching Electron. */
+  isReady(): boolean {
     return this.#ready;
   }
 

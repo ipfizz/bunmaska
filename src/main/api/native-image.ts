@@ -148,20 +148,20 @@ export class NativeImage {
     return this.#height === 0 ? 0 : this.#width / this.#height;
   }
 
-  /** Encode the image to PNG bytes. Returns an empty buffer for an empty image. */
-  toPNG(): Uint8Array {
+  /** Encode the image to PNG bytes (a `Buffer`, matching Electron). Empty when empty. */
+  toPNG(): Buffer {
     if (this.#empty) {
-      return new Uint8Array(0);
+      return Buffer.alloc(0);
     }
-    return this.#backend.encodePng(this.#handle);
+    return Buffer.from(this.#backend.encodePng(this.#handle));
   }
 
-  /** Encode the image to JPEG bytes at `quality` (0–100). Empty buffer when empty. */
-  toJPEG(quality = 92): Uint8Array {
+  /** Encode the image to JPEG bytes (a `Buffer`) at `quality` (0-100). Empty when empty. */
+  toJPEG(quality = 92): Buffer {
     if (this.#empty) {
-      return new Uint8Array(0);
+      return Buffer.alloc(0);
     }
-    return this.#backend.encodeJpeg(this.#handle, quality);
+    return Buffer.from(this.#backend.encodeJpeg(this.#handle, quality));
   }
 
   /** The image as a `data:image/png;base64,...` URL (empty payload when empty). */
