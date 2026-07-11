@@ -513,17 +513,26 @@ class MacOSWindow implements NativeWindow {
   readonly #window: Handle;
   readonly #contents: MacOSWebContents;
   readonly #teardown: () => void;
+  readonly #releaseNative: () => void;
   #bounds: Rect;
   #tornDown = false;
+  #released = false;
   #onClosed: (() => void) | undefined;
   #onClose: (() => boolean) | undefined;
   #activePopupMenu: Handle = 0n;
   readonly #eventHandlers = new Map<WindowEventType, () => void>();
 
-  constructor(window: Handle, contents: MacOSWebContents, bounds: Rect, teardown: () => void) {
+  constructor(
+    window: Handle,
+    contents: MacOSWebContents,
+    bounds: Rect,
+    teardown: () => void,
+    releaseNative: () => void,
+  ) {
     this.#window = window;
     this.#contents = contents;
     this.#teardown = teardown;
+    this.#releaseNative = releaseNative;
     this.#bounds = bounds;
   }
 
@@ -553,6 +562,16 @@ class MacOSWindow implements NativeWindow {
     this.#tornDown = true;
     this.#teardown();
     this.#onClosed?.();
+    // Balance our alloc of the NSWindow + WKWebView (both kept alive by
+    // setReleasedWhenClosed:NO) on a LATER tick — AppKit's -close is still on the
+    // stack here, so releasing now would risk the use-after-free that flag avoids.
+    setTimeout(() => {
+      if (this.#released) {
+        return;
+      }
+      this.#released = true;
+      this.#releaseNative();
+    }, 0);
   }
 
   /** @internal Surface a non-preventable lifecycle event. Called by the delegate. */
@@ -1041,6 +1060,17 @@ class MacOSApplication implements NativeApplication {
       contents?.rejectPendingExecs();
     };
 
+    // Deferred, post-close balance of the two objects we alloc'd and kept alive
+    // with setReleasedWhenClosed:NO. Detach the delegate first so no late
+    // notification fires, then release the WKWebView and the NSWindow (the window
+    // dealloc cascades to its content view). The delegate's JSCallback IMPs are
+    // process-lifetime (defineObjcClass) and are NOT released here.
+    const releaseNative = (): void => {
+      msgSendPtr(window, rt.selectors.get('setDelegate:'), 0n);
+      cocoa().msgSend(webview, rt.selectors.get('release'));
+      cocoa().msgSend(window, rt.selectors.get('release'));
+    };
+
     nativeWindow = new MacOSWindow(
       window,
       contents,
@@ -1051,6 +1081,7 @@ class MacOSApplication implements NativeApplication {
         height: options.height,
       },
       teardown,
+      releaseNative,
     );
 
     // Set the NSWindowDelegate: it routes `windowShouldClose:` (the preventable
