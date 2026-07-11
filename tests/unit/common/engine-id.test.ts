@@ -61,6 +61,11 @@ describe('parseEngineId', () => {
     ['non-numeric upstream', 'webkitgtk-6.0-latest-bunmaska1-linux-x64'],
     ['empty', ''],
     ['the system sentinel is not a parseable id', SYSTEM_ENGINE],
+    ['a path separator in rev', 'webkitgtk-6.0-2.52.4-bun/aska1-linux-x64'],
+    ['a backslash in rev', 'webkitgtk-6.0-2.52.4-bun\\aska1-linux-x64'],
+    ['dot-dot traversal in api', 'webkitgtk-..-2.52.4-bunmaska1-linux-x64'],
+    ['a percent escape in rev', 'webkitgtk-6.0-2.52.4-bun%2faska1-linux-x64'],
+    ['whitespace in rev', 'webkitgtk-6.0-2.52.4-bun aska1-linux-x64'],
   ])('rejects %s', (_label, id) => {
     expect(() => parseEngineId(id)).toThrow(BunmaskaError);
   });

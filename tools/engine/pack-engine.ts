@@ -29,10 +29,10 @@ writeFileSync(base, packed.artifact);
 writeFileSync(`${base}.json`, JSON.stringify(packed.manifest));
 writeFileSync(`${base}.sig`, packed.signature);
 
-const mb = (n: number): string => (n / (1024 * 1024)).toFixed(1);
+const mb = (n: number | undefined): string => ((n ?? 0) / (1024 * 1024)).toFixed(1);
 process.stdout.write(
   `packed ${packed.manifest.id}\n` +
-    `  artifact: ${basename(base)}  ${mb(packed.manifest.size)} MB (tar ${mb(packed.tarSize)} MB, zstd level ${packed.level})\n` +
+    `  artifact: ${basename(base)}  ${mb(packed.manifest.size)} MB\n` +
     `  hash:     ${packed.manifest.hash}\n` +
     `  feed dir: ${outDir}\n`,
 );

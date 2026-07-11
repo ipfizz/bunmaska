@@ -97,8 +97,13 @@ export const parseEngineId = (id: string): EngineRef => {
       `engine-id: upstream must be a dotted numeric version (got ${JSON.stringify(upstream)})`,
     );
   }
-  if (api.length === 0 || rev.length === 0) {
-    throw new InvalidArgumentError('engine-id: api and rev must be non-empty');
+  // Ids become URLs, store paths, and baked files — api/rev must be plain tokens
+  // (alphanumeric-bounded, dots/underscores inside), never separators or escapes.
+  const token = /^[A-Za-z0-9](?:[A-Za-z0-9._]*[A-Za-z0-9])?$/;
+  if (!token.test(api) || !token.test(rev)) {
+    throw new InvalidArgumentError(
+      `engine-id: api and rev must be plain tokens (got ${JSON.stringify(api)}, ${JSON.stringify(rev)})`,
+    );
   }
   return {
     engine: engine as EngineFamily,

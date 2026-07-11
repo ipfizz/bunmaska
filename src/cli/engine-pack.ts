@@ -41,10 +41,6 @@ export type PackedEngine = {
   readonly artifact: Uint8Array;
   readonly manifest: RemoteManifest;
   readonly signature: string;
-  /** Uncompressed tar size, for a size-report line. */
-  readonly tarSize: number;
-  /** The zstd level used (informational). */
-  readonly level: number;
 };
 
 /** Injectable side effects for {@link packEngineDir}. */
@@ -71,7 +67,5 @@ export const packEngineDir = async (
     artifact,
     manifest: { id: manifest.id, hash, size: artifact.length, soname: manifest.soname },
     signature,
-    tarSize: Bun.zstdDecompressSync(artifact).length,
-    level: 3,
   };
 };
