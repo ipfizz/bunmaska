@@ -3,7 +3,12 @@ import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createLogger } from '../../common/logger';
 import { decodeEnvelope, encodeEnvelope } from '../ipc/ipc-protocol';
-import type { NativeInputEvent, NativeWebContents } from '../platform/native';
+import type {
+  KeyboardInputEvent,
+  MouseInputEvent,
+  NativeInputEvent,
+  NativeWebContents,
+} from '../platform/native';
 import { ipcMain } from './ipc-main';
 import { type NativeImage, nativeImage } from './native-image';
 
@@ -19,6 +24,16 @@ import { type NativeImage, nativeImage } from './native-image';
  */
 
 const log = createLogger('web-contents');
+
+/** Electron-shaped options for {@link WebContents.loadFile}. */
+export type LoadFileOptions = {
+  /** URL fragment appended after `#` (e.g. a hash-router route). */
+  readonly hash?: string;
+  /** Query params as an object, serialized to a query string. */
+  readonly query?: Record<string, string>;
+  /** Raw query string (takes precedence over `query`). */
+  readonly search?: string;
+};
 
 let nextId = 1;
 
@@ -90,11 +105,30 @@ export class WebContents extends EventEmitter {
     this.#native.loadURL(url);
   }
 
-  /** Load a local file by path. */
-  loadFile(filePath: string): void {
+  /**
+   * Load a local file by path. `options` mirror Electron's: `hash` (fragment for
+   * hash-routed SPAs), `query` (object) or `search` (raw string) for the query.
+   * The path itself is percent-encoded, so spaces/`#`/`?` in the FILE NAME load
+   * correctly — pass a fragment via `options.hash`, not inside `filePath`.
+   */
+  loadFile(filePath: string, options?: LoadFileOptions): void {
     const absolute = isAbsolute(filePath) ? filePath : resolve(filePath);
-    // percent-encode via URL — a raw `file://${path}` breaks on spaces/#/? (NSURL returns nil)
-    this.#native.loadURL(pathToFileURL(absolute).href);
+    if (absolute.startsWith('\\\\')) {
+      log.warn(
+        `loadFile: UNC paths (${absolute}) are not resolved by the WebKit file loader; ` +
+          'copy the files locally or serve them over http',
+      );
+    }
+    const url = pathToFileURL(absolute);
+    if (options?.search !== undefined) {
+      url.search = options.search;
+    } else if (options?.query !== undefined) {
+      url.search = new URLSearchParams(options.query).toString();
+    }
+    if (options?.hash !== undefined) {
+      url.hash = options.hash;
+    }
+    this.#native.loadURL(url.href);
   }
 
   /** The current page URL, or `''` before the first navigation. */
@@ -230,6 +264,23 @@ export class WebContents extends EventEmitter {
    * Implemented on Windows; other backends throw `UnsupportedPlatformError`.
    */
   sendInputEvent(event: NativeInputEvent): void {
+    // Validate at the boundary (Electron throws on a bad event): an unknown type
+    // must not silently no-op, and non-finite coordinates must not coerce to a
+    // TRUSTED click at (0, 0) on whatever element sits there.
+    const type = (event as { type?: unknown }).type;
+    if (type === 'mouseDown' || type === 'mouseUp' || type === 'mouseMove') {
+      const { x, y } = event as MouseInputEvent;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new TypeError(`sendInputEvent: ${type} requires finite numeric x and y`);
+      }
+    } else if (type === 'keyDown' || type === 'keyUp' || type === 'char') {
+      const { keyCode } = event as KeyboardInputEvent;
+      if (typeof keyCode !== 'string' || keyCode.length === 0) {
+        throw new TypeError(`sendInputEvent: ${type} requires a non-empty string keyCode`);
+      }
+    } else {
+      throw new TypeError(`sendInputEvent: invalid event type ${JSON.stringify(type)}`);
+    }
     this.#native.sendInputEvent(event);
   }
 

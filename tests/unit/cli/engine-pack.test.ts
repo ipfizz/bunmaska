@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateSigningKeyPair } from '../../../src/cli/engine-signature';
 import { packEngineDir } from '../../../src/cli/engine-pack';
-import { installFromUrl, type RemoteFetch } from '../../../src/cli/engine-remote';
+import { installFromUrl, type RemoteFetch, zstdTarExtract } from '../../../src/cli/engine-remote';
 import { contentHash } from '../../../src/common/manifest';
 import { engineDir, isInstalled } from '../../../src/cli/engine-store';
 
@@ -69,5 +69,20 @@ describe('packEngineDir', () => {
     const { privateKey } = generateSigningKeyPair();
     const empty = makeTmpDir();
     await expect(packEngineDir(empty, privateKey)).rejects.toThrow(/engine\.json/i);
+  });
+
+  test('does not ship the store-local INSTALLATION_COMPLETE marker inside the artifact', async () => {
+    const { privateKey } = generateSigningKeyPair();
+    const dir = makeEngineDir();
+    // A relocate step may leave the marker in the dir; it must NOT be packed.
+    writeFileSync(join(dir, 'INSTALLATION_COMPLETE'), '2026-07-10T00:00:00Z\n');
+    const packed = await packEngineDir(dir, privateKey);
+
+    // Extract the artifact directly and confirm the marker is absent.
+    const out = makeTmpDir();
+    await zstdTarExtract(packed.artifact, out);
+    expect(existsSync(join(out, 'INSTALLATION_COMPLETE'))).toBe(false);
+    expect(existsSync(join(out, 'engine.json'))).toBe(true);
+    expect(existsSync(join(out, 'lib', 'libwebkitgtk-6.0.so.4'))).toBe(true);
   });
 });

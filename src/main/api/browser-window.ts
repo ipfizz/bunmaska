@@ -9,7 +9,7 @@ import { app } from './app';
 import { installWindowResolver, type PopupTarget } from './menu';
 import { loadPreloadScript } from './preload';
 import { session } from './session';
-import { WebContents } from './web-contents';
+import { type LoadFileOptions, WebContents } from './web-contents';
 
 /**
  * A top-level application window — the drop-in equivalent of Electron's
@@ -208,8 +208,8 @@ export class BrowserWindow extends EventEmitter {
   }
 
   /** Load a local file into the window's web contents. */
-  loadFile(filePath: string): void {
-    this.webContents.loadFile(filePath);
+  loadFile(filePath: string, options?: LoadFileOptions): void {
+    this.webContents.loadFile(filePath, options);
   }
 
   setTitle(title: string): void {

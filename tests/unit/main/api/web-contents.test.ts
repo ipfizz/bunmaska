@@ -97,6 +97,59 @@ describe('WebContents.loadFile', () => {
     expect(url).not.toContain(' ');
     expect(url).not.toContain('#');
   });
+
+  test('appends hash and query options (Electron parity for hash-routed SPAs)', () => {
+    const loaded: string[] = [];
+    const { native } = makeFakeNative();
+    const wc = new WebContents({ ...native, loadURL: (url: string) => loaded.push(url) });
+    const path = process.platform === 'win32' ? 'C:\\app\\index.html' : '/app/index.html';
+    wc.loadFile(path, { hash: '/settings', query: { tab: 'a b' } });
+    const url = loaded[0] as string;
+    expect(url).toContain('index.html');
+    expect(url).toContain('?tab=a+b');
+    expect(url.endsWith('#/settings')).toBe(true);
+  });
+});
+
+describe('WebContents.sendInputEvent (validation before FFI)', () => {
+  test('throws on an unrecognized event type instead of silently no-op', () => {
+    const calls: unknown[] = [];
+    const { native } = makeFakeNative();
+    const wc = new WebContents({ ...native, sendInputEvent: (e) => calls.push(e) });
+    expect(() => wc.sendInputEvent({ type: 'mousedown', x: 1, y: 1 } as never)).toThrow(/invalid/i);
+    expect(() => wc.sendInputEvent({ type: 'mouseWheel', x: 1, y: 1 } as never)).toThrow(
+      /invalid/i,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  test('throws on non-finite mouse coordinates (no trusted click at 0,0)', () => {
+    const calls: unknown[] = [];
+    const { native } = makeFakeNative();
+    const wc = new WebContents({ ...native, sendInputEvent: (e) => calls.push(e) });
+    expect(() => wc.sendInputEvent({ type: 'mouseDown', x: Number.NaN, y: 10 })).toThrow(/finite/i);
+    expect(() => wc.sendInputEvent({ type: 'mouseMove', x: 1, y: undefined as never })).toThrow(
+      /finite/i,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  test('throws on an empty keyboard keyCode', () => {
+    const calls: unknown[] = [];
+    const { native } = makeFakeNative();
+    const wc = new WebContents({ ...native, sendInputEvent: (e) => calls.push(e) });
+    expect(() => wc.sendInputEvent({ type: 'char', keyCode: '' })).toThrow(/keyCode/i);
+    expect(calls).toHaveLength(0);
+  });
+
+  test('forwards a valid event to the native layer', () => {
+    const calls: unknown[] = [];
+    const { native } = makeFakeNative();
+    const wc = new WebContents({ ...native, sendInputEvent: (e) => calls.push(e) });
+    wc.sendInputEvent({ type: 'mouseDown', x: 3, y: 4, button: 'left' });
+    wc.sendInputEvent({ type: 'char', keyCode: 'a' });
+    expect(calls).toHaveLength(2);
+  });
 });
 
 describe('WebContents.insertCSS / removeInsertedCSS', () => {

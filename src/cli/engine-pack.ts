@@ -20,7 +20,9 @@ import { readEngineManifest } from './engine-store';
 /** Compress a directory tree to `.tar.zst` bytes — the inverse of {@link zstdTarExtract}. */
 export const zstdTarCompress = async (srcDir: string): Promise<Uint8Array> => {
   // tar from cwd:srcDir (not `-C <dir>`) — Windows bsdtar mangles a backslash path arg.
-  const proc = Bun.spawn(['tar', '-cf', '-', '.'], {
+  // Exclude INSTALLATION_COMPLETE: it is a store-LOCAL marker written last by a
+  // verified install, never shipped inside the artifact (would void the invariant).
+  const proc = Bun.spawn(['tar', '--exclude', './INSTALLATION_COMPLETE', '-cf', '-', '.'], {
     cwd: srcDir,
     stdout: 'pipe',
     stderr: 'pipe',
