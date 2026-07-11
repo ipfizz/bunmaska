@@ -46,10 +46,16 @@ describe('parseEngineId', () => {
     });
   });
 
-  test('accepts the reserved windows/webview2 namespace', () => {
-    const parsed = parseEngineId('webview2-fixed-126.0.2592-bunmaska1-windows-x64');
-    expect(parsed.engine).toBe('webview2');
+  test('parses a Windows WinCairo engine under the webkit family (D044)', () => {
+    const parsed = parseEngineId('webkit-2-2.53.3-bunmaska1-windows-x64');
+    expect(parsed.engine).toBe('webkit');
     expect(parsed.os).toBe('windows');
+  });
+
+  test('rejects the retired webview2 family', () => {
+    expect(() => parseEngineId('webview2-fixed-126.0.2592-bunmaska1-windows-x64')).toThrow(
+      BunmaskaError,
+    );
   });
 
   test.each([

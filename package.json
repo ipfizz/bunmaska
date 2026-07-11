@@ -1,6 +1,6 @@
 {
   "name": "bunmaska",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "description": "A drop-in Electron replacement on Bun and your OS's own WebKit. No bundled Chromium, native modules that are just .ts files.",
   "keywords": [
     "electron",

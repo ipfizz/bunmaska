@@ -6,7 +6,7 @@ order: 3
 
 `webContents` controls and observes the page rendered inside a [`BrowserWindow`](browser-window.md). You don't construct it directly - you reach it through `win.webContents`, and most content methods on `BrowserWindow` delegate straight to it. It extends Node's `EventEmitter`, and on construction it bridges the native web view to `ipcMain`, so `ipcMain.handle` / `ipcRenderer.invoke` and `webContents.send` / `ipcRenderer.on` work with no per-window wiring.
 
-A heads-up on scope: Bunmaska has exactly one frame per view. There is no Chromium underneath, so anything that depends on the multi-frame / multi-process model (subframes, `mainFrame`, `RenderProcessGone`, the debugger / CDP, input synthesis) simply isn't here. What follows is what the class actually exposes.
+A heads-up on scope: Bunmaska has exactly one frame per view. There is no Chromium underneath, so anything that depends on the multi-frame / multi-process model (subframes, `mainFrame`, `RenderProcessGone`, the debugger / CDP) simply isn't here. What follows is what the class actually exposes.
 
 ## Methods
 
@@ -23,15 +23,29 @@ const win = new BrowserWindow({ width: 800, height: 600 });
 win.webContents.loadURL('https://example.com');
 ```
 
-### `contents.loadFile(filePath)`
+### `contents.loadFile(filePath[, options])`
 
 * `filePath` string
+* `options` Object (optional)
+  * `hash` string (optional) - fragment appended after `#` (e.g. a hash-router route).
+  * `query` Record<string, string> (optional) - query params serialized into the query string.
+  * `search` string (optional) - raw query string; takes precedence over `query`.
 
-Loads a local file. Relative paths are resolved against the current working directory and turned into a `file://` URL.
+Loads a local file. Relative paths are resolved against the current working directory and turned into a `file://` URL. The path is percent-encoded, so file names containing spaces, `#`, or `?` load correctly - which is exactly why a route fragment must go in `options.hash`, **not** inside `filePath` (a `#` in the path is now treated as a literal character in the file name, not a fragment separator).
 
 ```ts
 win.webContents.loadFile('renderer/index.html');
 ```
+
+```ts
+// hash-router route + query -> file:///…/index.html?tab=account#/settings
+win.webContents.loadFile('renderer/index.html', {
+  hash: '/settings',
+  query: { tab: 'account' },
+});
+```
+
+A UNC path (`\\server\share\…`) logs a warning: the WebKit file loader ignores the file-URL host, so copy the files locally or serve them over http instead.
 
 ### `contents.getURL()`
 
@@ -205,6 +219,40 @@ win.webContents.setUserAgent('Bunmaska/1.0');
 
 Returns `string` - the User-Agent override set via `setUserAgent`, or `''` if none (in which case the platform default is used).
 
+### `contents.sendInputEvent(event)`
+
+* `event` Object - a mouse **or** a keyboard event:
+  * **Mouse** - `{ type, x, y, button? }`
+    * `type` string - `'mouseDown'`, `'mouseUp'`, or `'mouseMove'`.
+    * `x` number - client pixels from the view content's left edge.
+    * `y` number - client pixels from the view content's top edge.
+    * `button` string (optional) - `'left'` (default), `'middle'`, or `'right'`. Ignored for `mouseMove`.
+  * **Keyboard** - `{ type, keyCode }`
+    * `type` string - `'keyDown'`, `'keyUp'`, or `'char'`.
+    * `keyCode` string - an Electron accelerator key: a single character (`'a'`, `'5'`) or a named key (`'Enter'`, `'Escape'`, `'Tab'`).
+
+Synthesizes a **trusted** input event into the page. Unlike a script-dispatched DOM event (which the page sees as `isTrusted === false`), the page receives a real event with `isTrusted === true` - so this drives sites and widgets that reject synthetic clicks.
+
+_Windows only._ On macOS and Linux it throws `UnsupportedPlatformError`. (On Windows the message is posted to the view's own HWND, so it works on a hidden window and never steals the user's focus.)
+
+It validates before dispatch, so a bad event throws rather than firing something wrong: a `TypeError` on an unknown `type`, on a non-finite mouse `x` / `y` (so a typo can't fire a trusted click at `0,0`), or on an empty keyboard `keyCode`.
+
+Coordinates are client pixels relative to the view content's top-left, correct at 100% display scale; per-monitor DPI scaling is a follow-up.
+
+```ts
+// click at (120, 48) in the page
+win.webContents.sendInputEvent({ type: 'mouseMove', x: 120, y: 48 });
+win.webContents.sendInputEvent({ type: 'mouseDown', x: 120, y: 48, button: 'left' });
+win.webContents.sendInputEvent({ type: 'mouseUp', x: 120, y: 48, button: 'left' });
+
+// type a character, then press Enter
+win.webContents.sendInputEvent({ type: 'char', keyCode: 'a' });
+win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+```
+
+Honest follow-up limits: there are no keyboard modifiers yet, synthesized drags don't carry button state, and `KeyboardEvent.code` / scan codes and the F1-F24 keys are not wired.
+
 ### `contents.setWindowOpenHandler(handler)`
 
 * `handler` Function - receives `{ url }` and returns `{ action: 'allow' | 'deny' }`.
@@ -363,7 +411,7 @@ Electron's `webContents` is huge; Bunmaska implements the navigation + scripting
 - **Cancellable navigation** - there is no `will-navigate` / `will-redirect`, and the `event` objects passed to the events that do fire have no `preventDefault()`.
 - **Process / lifecycle events** - `render-process-gone`, `unresponsive` / `responsive`, `crashed`, `destroyed`, `will-prevent-unload`. There's no separate renderer process to go gone.
 - **DevTools protocol** - no `debugger` (CDP), no `inspectElement`, no `setDevToolsWebContents`. DevTools is open/close/toggle only.
-- **Input & focus** - no `sendInputEvent`, `before-input-event` / `input-event`, `focus()` / `isFocused()`, `beginFrameSubscription`, `startDrag`.
+- **Input & focus** - no `before-input-event` / `input-event`, `focus()` / `isFocused()`, `beginFrameSubscription`, `startDrag`. (`sendInputEvent` does exist, on Windows - see above.)
 - **Printing & content** - `print()` (only `printToPDF`, macOS-only; engine-blocked on Windows), `savePage`, `getPrintersAsync`, `findInPage` / `stopFindInPage`.
 - **Editing & clipboard commands** - `undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`/`replace`, `cut`-style menu wiring, `replaceMisspelling`.
 - **Media / audio** - `isAudioMuted` / `setAudioMuted`, `setBackgroundThrottling`, `getOSProcessId`, `getProcessId`.

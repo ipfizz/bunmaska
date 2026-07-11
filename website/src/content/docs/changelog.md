@@ -4,13 +4,35 @@ description: Every published release gets an entry here - what shipped, what bro
 order: 2
 ---
 
-The current version is **`0.1.0-alpha.5`**, live on npm - `npm i bunmaska`. Newest first; still a curated snapshot rather than a per-commit log.
+The current version is **`0.1.0-alpha.6`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
 
-## Unreleased
+## `0.1.0-alpha.6`
 
-**Event-driven macOS run loop.** The cooperative pump no longer polls AppKit at a fixed 60 Hz. It sleeps in `CFRunLoopRunInMode` until a native event arrives - input wakes it instantly - and backs off adaptively when idle. On an idle window that is roughly **10x less CPU** (~2.5% > ~0.2%) with no added input latency. One honest trade-off: while the UI is idle, *main-process* JS timers run at up to ~125 ms granularity (renderer `requestAnimationFrame` and IPC are unaffected - they ride the native event path).
+Foundation: the distribution pipeline, trusted input, and the crash-class + security fixes that have to land before the testing framework does. This is not that testing framework - no coverage gates, skip budgets, or shared harness shipped here.
 
-A true libuv-style integration like Electron's is not possible from pure `bun:ffi` today: Bun's loop is uSockets, not libuv, and its tick/wakeup primitives are not exported ([oven-sh/bun#18546](https://github.com/oven-sh/bun/issues/18546)). This is the best event-driven behavior achievable while staying single-threaded.
+**Highlights**
+
+- **Install an engine by id from the signed feed.** `bunmaska engine install <id>` now takes a bare engine-id, resolves it to the official feed (or a configured `engine.feed.url` mirror), verifies the Ed25519 signature against the baked release key and the content hash, and installs it - no more hand-passing a URL. A local engine directory still installs before any feed routing, and an already-installed id is a no-op. Behind it, the whole **pack / sign / publish pipeline** is built and TDD-tested end-to-end: a from-source engine packs to a signed `.tar.zst` (roughly 56 MB from 172 MB), serves over HTTP, and installs on a fresh store into a window that renders. Honest caveat: **hosting go-live is still pending** - the R2 upload is one gated command away, waiting on account enablement, so the official feed isn't answering yet. See [Pinned WebKit Engine](/docs/concepts/engine).
+- **`webContents.sendInputEvent(event)` - trusted input on Windows.** Synthesize a real mouse or keyboard event that the page sees as `isTrusted === true`, which a script-dispatched event can never fake. **Windows only** (WinCairo, via Win32 messages); macOS and Linux throw `UnsupportedPlatformError`. It validates at the boundary - a `TypeError` on an unknown `type`, on non-finite mouse `x`/`y` (a typo can't fire a trusted click at 0,0), or on an empty `keyCode` - instead of a silent no-op. Coordinates are client pixels from the view's top-left, correct at 100% display scale. Honest limits, all follow-ups: no keyboard modifiers yet, synthesized drags don't carry button state, and `KeyboardEvent.code` / scan codes / F1-F24 aren't wired. See [webContents](/docs/api/web-contents).
+- **`loadFile` gets Electron's options.** `webContents.loadFile(filePath, options?)` and `BrowserWindow.loadFile(...)` now accept `{ hash, query, search }`. The file path is percent-encoded, so names with spaces / `#` / `?` load correctly - which means a route fragment goes in `options.hash`, not inside the path. Hash-routed SPAs finally have a supported path. See [webContents](/docs/api/web-contents).
+- **One shared WebKit context on Windows.** All windows and views share a single WebKit context, so a login in one window is a login in the next (session / SSO parity), instead of each view starting from an empty jar.
+- **Smaller Windows binaries.** The Windows build minifies whitespace and syntax. It deliberately does **not** mangle identifiers - that would break `Function.name` and stack traces - so error messages stay readable.
+- **Event-driven macOS run loop.** The cooperative pump no longer polls AppKit at a fixed 60 Hz. It sleeps in `CFRunLoopRunInMode` until a native event arrives - input wakes it instantly - and backs off adaptively when idle. On an idle window that is roughly **10x less CPU** (~2.5% > ~0.2%) with no added input latency. One honest trade-off: while the UI is idle, *main-process* JS timers run at up to ~125 ms granularity (renderer `requestAnimationFrame` and IPC are unaffected - they ride the native event path). A true libuv-style integration like Electron's isn't possible from pure `bun:ffi` today - Bun's loop is uSockets, not libuv, and its tick/wakeup primitives aren't exported ([oven-sh/bun#18546](https://github.com/oven-sh/bun/issues/18546)) - so this is the best event-driven behavior achievable while staying single-threaded.
+
+**Fixes**
+
+- **Linux multi-window crash.** Closing a window from its title bar ran `disconnectAll()`, which freed a GTK signal callback that GTK was mid-return into - a SIGSEGV in any multi-window app. Disconnect is now synchronous and the callback close is deferred a tick.
+- **macOS window use-after-free (and the leak that fix could have caused).** `setReleasedWhenClosed:NO` stops AppKit from deallocating the window out from under us on close; a deferred, guarded release of the `NSWindow` + `WKWebView` in `willClose` keeps that from turning into a leak.
+- **`loadFile` percent-encoding.** A raw `file://${path}` produced a nil `NSURL` and silently loaded nothing for any path with a space, `#`, or `?`; paths are now percent-encoded via `pathToFileURL`.
+- **Two Windows engine-install bugs.** A UTF-8 BOM on `engine.json` broke `JSON.parse`, and the tar extractor mangled a backslash `-C` path - both fixed, and the previously-skipped Windows remote-install test is unskipped.
+- **`dom-ready` fired twice.** It emitted twice per navigation on Windows; now once.
+- **Windows synthesized keystrokes.** `char` on a named key (Enter, etc.) used to type its first letter ("E"); it now emits the control code or nothing. Keystrokes are also sent past the message queue so the pump's `TranslateMessage` no longer synthesizes a duplicate `WM_CHAR`.
+
+**Security**
+
+- **Engine downgrade / substitution closed.** The signature covers the artifact bytes, not the id binding - so a stale or compromised mirror could serve a genuinely release-signed *older* engine under a *newer* pinned id, and it verified and ran. The store now binds the install directory to the id inside the signed `engine.json` and rejects a mismatch.
+- **Reserved store ids rejected.** A hostile manifest id like `.links` or `__dirlock` could have clobbered the store's internals; `assertSafeEngineId` now refuses reserved and dotfile ids.
+- **The store lock now guards install-vs-gc.** The previously-dead `withLock` now wraps the swap-into-place on install and all of `gc`, so a concurrent install can't race a prune. The slow extract stays outside the lock.
 
 ## `0.1.0-alpha.5`
 
@@ -78,7 +100,7 @@ The pinned-WebKit engine store - the opt-in path to "tested == shipped." Most ap
 **Still in progress**
 
 - A **self-contained, relocatable WebKit** that builds and loads from the store - its full dependency closure travels with it (`$ORIGIN`). Next: serving the prebuilt engines from a signed feed + the final render pass.
-- macOS pinned engine (designed, feasible); engine delivery to end users (embed / auto-fetch). _(Windows via WinCairo has since landed - see Unreleased above.)_
+- macOS pinned engine (designed, feasible); engine delivery to end users (embed / auto-fetch). _(Windows via WinCairo has since landed - see alpha.3 above.)_
 
 ## `0.1.0-alpha.0`
 

@@ -19,10 +19,10 @@ import { InvalidArgumentError } from './errors';
 import { compareVersions } from './manifest';
 import type { Arch } from './platform';
 
-/** Which web-engine family a build belongs to. */
-export type EngineFamily = 'webkitgtk' | 'webkit' | 'webview2';
+/** Which web-engine family a build belongs to (`webkit` covers WinCairo + macOS; D044). */
+export type EngineFamily = 'webkitgtk' | 'webkit';
 
-/** The OS an engine binary targets. Windows is reserved ahead of its backend. */
+/** The OS an engine binary targets. */
 export type EngineOs = 'linux' | 'macos' | 'windows';
 
 /** The structured form of an engine-id. */
@@ -41,7 +41,7 @@ export type EngineRef = {
 /** The reserved sentinel meaning "use the OS WebView" (the default). */
 export const SYSTEM_ENGINE = 'system';
 
-const ENGINE_FAMILIES: ReadonlySet<string> = new Set(['webkitgtk', 'webkit', 'webview2']);
+const ENGINE_FAMILIES: ReadonlySet<string> = new Set(['webkitgtk', 'webkit']);
 const ENGINE_OSES: ReadonlySet<string> = new Set(['linux', 'macos', 'windows']);
 const ENGINE_ARCHES: ReadonlySet<string> = new Set(['x64', 'arm64']);
 

@@ -42,10 +42,11 @@ export const milestones: readonly Milestone[] = [
     title: 'Foundation - nothing new ships until what exists is at standard',
     note: 'the unglamorous release. Deliberately.',
     items: [
-      'Work through the full internal code review: the cross-platform drift list (same call, different behavior per OS), the FFI lifetime fixes, and the error paths that swallow instead of throw.',
-      'Electron contract fidelity pass: places where a method exists but its shape quietly differs - return types, event payloads, missing arguments.',
-      'The testing framework grows teeth: coverage measurement with a ratchet, a skip budget (a silently-skipped suite fails CI), shared e2e harness helpers, and the Windows WebKit stack tested on every push instead of on demand.',
-      'The website is held to the framework’s own strict TypeScript + lint bar, gated in CI. (Done - this release is already underway.)',
+      'Landed from the internal code review: the crash-class FFI lifetime fixes, and a security fix that closes an engine-downgrade path - a genuinely-signed older or other engine can no longer install under a different pinned id, because the store now binds the dir to the id inside the signed `engine.json`.',
+      'The engine distribution pipeline is built and signed end-to-end: pack a built engine dir to `.tar.zst`, content-hash it, and Ed25519-sign the bytes; then `bunmaska engine install <id>` resolves the id to the feed, verifies the signature against the baked release key and re-checks the hash before extracting. Tested against an in-memory feed - the live CDN is alpha.7.',
+      'Electron contract-fidelity pass, started: hunting the places where a method exists but its shape quietly differs - return types, event payloads, missing arguments. Underway, not finished.',
+      'Still open, and the reason this release is not done: the testing framework growing teeth - coverage measurement with a ratchet, a skip budget (a silently-skipped suite fails CI), shared e2e harness helpers, and the Windows WebKit stack tested on every push instead of on demand.',
+      'The website is held to the framework’s own strict TypeScript + lint bar, gated in CI. (Done.)',
     ],
     exit: 'validate green on all three CI legs · coverage gate on · zero open confirmed review findings',
   },
@@ -55,7 +56,7 @@ export const milestones: readonly Milestone[] = [
     title: 'Hosted engines - the distribution unlock',
     note: 'any app, any platform, a tested WebKit one fetch away.',
     items: [
-      'The signed engine feed goes live on a CDN (Cloudflare R2), with the release public key baked in as the trust anchor. Linux first, then the WinCairo builds Windows apps need.',
+      'The pack/sign/publish pipeline is already built and tested - a packed engine round-trips through the real install-and-verify path against an in-memory feed, and the release public key is already baked in as the trust anchor. What remains here is enabling the CDN bucket (Cloudflare R2) and pushing the first real upload. Linux first, then the WinCairo builds Windows apps need.',
       'The render pass for the relocatable Linux engine: it loads from the store today; next it draws.',
       'Cross-distro Linux engines (an old-glibc base, one build across distros).',
       'Engine delivery for end users: embedded in the bundle or fetched on first run. Never something a user types.',
@@ -109,6 +110,6 @@ export const milestones: readonly Milestone[] = [
 export const snapshot = [
   { value: '29', label: 'Electron-shaped modules' },
   { value: '~70-80%', label: 'weighted API parity' },
-  { value: '1,630', label: 'tests · 3-OS CI matrix' },
+  { value: '~1,523', label: 'tests passing · 3-OS CI matrix' },
   { value: '0', label: 'compiled native code' },
 ] as const;

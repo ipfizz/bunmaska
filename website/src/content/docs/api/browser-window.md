@@ -69,15 +69,24 @@ const win = new BrowserWindow();
 win.loadURL('https://example.com');
 ```
 
-### `win.loadFile(filePath)`
+### `win.loadFile(filePath[, options])`
 
-`loadFile(filePath: string): void`
+`loadFile(filePath: string, options?: LoadFileOptions): void`
 
-Loads a local HTML file into the window's web contents. Delegates to `webContents.loadFile`. Returns `void`.
+Loads a local HTML file into the window's web contents. Delegates to `webContents.loadFile` (same behavior and options), so relative paths resolve against the current working directory and the resolved path is percent-encoded before becoming a `file://` URL - spaces, `#`, or `?` in the file name load correctly. Put a route fragment in `options.hash`, not inside `filePath`. Returns `void`.
+
+The optional `options` mirror Electron:
+
+- `hash` string - URL fragment appended after `#` (e.g. a hash-router route).
+- `query` object - query params as a `Record<string, string>`, serialized to a query string.
+- `search` string - a raw query string; takes precedence over `query`.
 
 ```ts
 const win = new BrowserWindow();
 win.loadFile('index.html');
+
+// With a hash-router route and query params:
+win.loadFile('app.html', { hash: '/settings', query: { theme: 'dark' } });
 ```
 
 ### `win.setTitle(title)`

@@ -56,6 +56,7 @@ You configure all of this in `bunmaska.config` - there are **no environment vari
 ```sh
 bunmaska engine list             # installed engines (side by side) + refcounts
 bunmaska engine which [dir]      # the engine a project resolves
+bunmaska engine install <id>     # an engine-id, fetched from the official feed
 bunmaska engine install <path>   # a local engine directory
 bunmaska engine install <url>    # a published .tar.zst - signature + hash verified
 bunmaska engine use <id>         # print the per-project config to add (no --global)
