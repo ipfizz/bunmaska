@@ -45,21 +45,9 @@ const fetchFromFeed = async (url: string): Promise<Uint8Array> => {
   return bytes;
 };
 
-// 4. CONSUME: the real installFromUrl — verifies sig + hash, extracts, marks.
-// Windows fix (candidate for engine-remote.ts): bsdtar mangles a backslash `-C <dir>`,
-// so run tar with cwd:destDir instead of passing the path as an arg.
-const extract = async (bytes: Uint8Array, destDir: string): Promise<void> => {
-  const tarBytes = Bun.zstdDecompressSync(bytes);
-  const proc = Bun.spawn(['tar', '-xf', '-'], {
-    cwd: destDir,
-    stdin: tarBytes,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  });
-  const code = await proc.exited;
-  if (code !== 0) throw new Error(`extract: ${await new Response(proc.stderr).text()}`);
-};
-const res = await installFromUrl(STORE, base, publicKey, { fetch: fetchFromFeed, extract });
+// 4. CONSUME: the real installFromUrl with the real default zstdTarExtract —
+// verifies sig + hash, binds the store dir to the signed engine.json id, marks.
+const res = await installFromUrl(STORE, base, publicKey, { fetch: fetchFromFeed });
 process.stdout.write(`INSTALL ${JSON.stringify(res)}\n`);
 
 // 5. Structural proof the fetched engine landed correctly.

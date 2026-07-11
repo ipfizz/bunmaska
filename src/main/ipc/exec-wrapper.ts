@@ -19,6 +19,14 @@
  * JSON-serializable results survive (`JSON.stringify` semantics, e.g. a function
  * result serializes to `undefined`).
  */
+/**
+ * How long `executeJavaScript` waits for its out-of-band result before rejecting.
+ * Generous (2 min) and shared across all three backends so long in-page work — a
+ * large XHR download, a slow server-rendered PDF — isn't cut off, and the contract
+ * is identical per platform.
+ */
+export const EXEC_TIMEOUT_MS = 120_000;
+
 export const buildExecWrapper = (execId: number, handlerName: string, code: string): string => {
   const id = JSON.stringify(execId);
   const name = JSON.stringify(handlerName);

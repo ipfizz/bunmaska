@@ -61,10 +61,9 @@ const installCleanExit = (): void => {
 
 /**
  * A single `WKContext` — WebKit's process pool + default website data store (cookies, localStorage)
- * — shared by EVERY view, so all windows see ONE session, exactly like Electron's default session.
- * With a per-view context, a newly-opened window started with an empty, logged-OUT session, which
- * broke SSO bridges (e.g. AIS) that open a second window expecting the eportal login to be visible.
- * Created lazily and retained for the process lifetime (it outlives individual views — never freed).
+ * — shared by EVERY view, so all windows see ONE session, matching Electron's default-session
+ * semantics (a per-view context would start each new window logged out). Created lazily and retained
+ * for the process lifetime (it outlives individual views — never freed).
  */
 let sharedContext: Pointer | null = null;
 const sharedWebKitContext = (): Pointer => {
@@ -409,8 +408,8 @@ export class WindowsWebView {
     const wk = loadWebKit2();
     // The owning window is hidden, not destroyed (see `commitClose`), so the view
     // persists until process exit. Silence it: stop loading and clear its clients
-    // so a closed webContents emits nothing further, and drop our context/
-    // controller refs. The live WKView itself is NOT released — doing so through
+    // so a closed webContents emits nothing further, and drop our controller ref
+    // (the shared WKContext is process-lifetime). The live WKView itself is NOT released — doing so through
     // raw FFI re-enters a bun:ffi JSCallback during WebKit's multi-process
     // teardown and crashes — so it and its WebProcess are reclaimed by the OS at
     // exit. A clean async teardown is a documented follow-up (`.admin/WINDOWS.md`).

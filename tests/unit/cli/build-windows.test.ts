@@ -84,8 +84,11 @@ describe('buildCompileArgs', () => {
     expect(args[i + 1]).toBe(join('out', 'My App.exe'));
   });
 
-  test('minifies the distribution binary', () => {
-    expect(args).toContain('--minify');
+  test('minifies whitespace and syntax but NOT identifiers (keeps Function.name and stacks intact)', () => {
+    expect(args).toContain('--minify-whitespace');
+    expect(args).toContain('--minify-syntax');
+    expect(args).not.toContain('--minify');
+    expect(args).not.toContain('--minify-identifiers');
   });
 
   test('embeds the PE version metadata', () => {

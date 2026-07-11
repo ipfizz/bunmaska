@@ -7,7 +7,7 @@ import {
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { buildExecWrapper } from '../../ipc/exec-wrapper';
+import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type { NativeInputEvent, NativeNavigationEvent, NativeWebContents } from '../native';
 import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
@@ -33,10 +33,6 @@ import { WindowsWebView } from './windows-webkit-view';
 const HANDLER_NAME = 'bunmaska';
 /** Page-world handler name `executeJavaScript` posts its result to. */
 const EXEC_HANDLER_NAME = 'bunmaskaExec';
-
-/** Reject a pending `executeJavaScript` after this long (ms). Generous so heavy in-page work — a
- * large file download via XHR, a slow server-rendered PDF — isn't cut off mid-flight. */
-const EXEC_TIMEOUT_MS = 120_000;
 
 const log = createLogger('windows-web-contents');
 

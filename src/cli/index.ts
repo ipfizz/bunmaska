@@ -61,8 +61,8 @@ Usage:
 engine subcommands:
   list                  Installed engines (side by side) and their refcounts
   which [dir]           The engine-id a project resolves (defaults to system)
-  install <path|url>    Install an engine: a local engine directory, or a signed
-                        published .tar.zst URL (verified via BUNMASKA_ENGINE_PUBKEY)
+  install <id|path|url> Install an engine: an engine-id (from the official feed),
+                        a local engine directory, or a signed published .tar.zst URL
   use <id> [--for dir]  Pin an engine per-project (there is no global switch)
   prune [--dry-run]     Garbage-collect engines no installed app references
                         (use --force to prune when no app has registered yet)

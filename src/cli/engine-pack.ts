@@ -19,7 +19,7 @@ import { readEngineManifest } from './engine-store';
 
 /** Compress a directory tree to `.tar.zst` bytes — the inverse of {@link zstdTarExtract}. */
 export const zstdTarCompress = async (srcDir: string): Promise<Uint8Array> => {
-  // tar from cwr:srcDir (not `-C <dir>`) — Windows bsdtar mangles a backslash path arg.
+  // tar from cwd:srcDir (not `-C <dir>`) — Windows bsdtar mangles a backslash path arg.
   const proc = Bun.spawn(['tar', '-cf', '-', '.'], {
     cwd: srcDir,
     stdout: 'pipe',

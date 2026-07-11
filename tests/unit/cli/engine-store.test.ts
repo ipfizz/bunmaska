@@ -53,7 +53,10 @@ const fakeExtract = async (bytes: Uint8Array, destDir: string): Promise<void> =>
   const { mkdirSync } = await import('node:fs');
   mkdirSync(join(destDir, 'lib'), { recursive: true });
   writeFileSync(join(destDir, 'lib', 'libwebkitgtk-6.0.so.4'), bytes);
-  writeFileSync(join(destDir, 'engine.json'), JSON.stringify({ id, soname: 'libwebkitgtk-6.0.so.4' }));
+  writeFileSync(
+    join(destDir, 'engine.json'),
+    JSON.stringify({ id, soname: 'libwebkitgtk-6.0.so.4' }),
+  );
 };
 
 describe('enginesPath (env-driven default root)', () => {
@@ -162,7 +165,11 @@ describe('installFromSource', () => {
   test('rejects a substituted engine — extracted engine.json id must match the claimed id', async () => {
     const root = makeTmpDir();
     // A genuinely-signed OLDER artifact (its engine.json says ID2) served under ID's URL.
-    const substituted: InstallSource = { ...fakeSource(ID2), id: ID, expectedHash: fakeSource(ID2).expectedHash };
+    const substituted: InstallSource = {
+      ...fakeSource(ID2),
+      id: ID,
+      expectedHash: fakeSource(ID2).expectedHash,
+    };
     await expect(installFromSource(root, substituted, { extract: fakeExtract })).rejects.toThrow(
       /different id/i,
     );

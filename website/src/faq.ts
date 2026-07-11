@@ -1,6 +1,7 @@
-// Canonical FAQ, reused for the FAQPage JSON-LD (rich-result eligible) on the
-// home + /alternatives pages, and rendered visibly on /alternatives. Answers
-// stay honest and evergreen; anything that churns links to docs.
+// Canonical FAQ, rendered visibly + marked up as FAQPage JSON-LD on /alternatives.
+// The home page uses `homeFaq` (below) for both its visible TradeOffs cards and
+// its FAQPage JSON-LD. Answers stay honest and evergreen; anything that churns
+// links to docs.
 export interface FaqItem {
   readonly q: string;
   readonly a: string;

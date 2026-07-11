@@ -9,7 +9,7 @@ import {
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { protocol } from '../../api/protocol';
-import { buildExecWrapper } from '../../ipc/exec-wrapper';
+import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
 import { AdaptiveBlockingPump } from '../../run-loop';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type {
@@ -117,8 +117,8 @@ const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
 const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
 /** Page-world handler name `executeJavaScript` posts its result to (D022). */
 const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
-/** Reject + clear a pending `executeJavaScript` after this long (ms). */
-const EXEC_TIMEOUT_MS = 30_000;
+/** Reject a pending printToPDF/capturePage after this long (ms) — a bounded render op. */
+const RENDER_TIMEOUT_MS = 30_000;
 /** Name of the isolated `WKContentWorld` the bridge + user preload run in. */
 export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 
@@ -367,8 +367,8 @@ class MacOSWebContents implements NativeWebContents {
     }
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`printToPDF timed out after ${EXEC_TIMEOUT_MS}ms`));
-      }, EXEC_TIMEOUT_MS);
+        reject(new Error(`printToPDF timed out after ${RENDER_TIMEOUT_MS}ms`));
+      }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
         (pdfData, error) => {
           clearTimeout(timer);
@@ -401,8 +401,8 @@ class MacOSWebContents implements NativeWebContents {
     }
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`capturePage timed out after ${EXEC_TIMEOUT_MS}ms`));
-      }, EXEC_TIMEOUT_MS);
+        reject(new Error(`capturePage timed out after ${RENDER_TIMEOUT_MS}ms`));
+      }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
         (image, error) => {
           clearTimeout(timer);

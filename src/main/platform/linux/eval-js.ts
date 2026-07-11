@@ -1,6 +1,6 @@
 import type { Pointer } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
-import { buildExecWrapper } from '../../ipc/exec-wrapper';
+import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
 import { EXEC_HANDLER_NAME, evalInPageWorld } from './webkit-ipc';
 
 /**
@@ -20,9 +20,6 @@ import { EXEC_HANDLER_NAME, evalInPageWorld } from './webkit-ipc';
  */
 
 const log = createLogger('linux-eval-js');
-
-/** Reject + clear a pending `executeJavaScript` after this long (ms). */
-export const EXEC_TIMEOUT_MS = 30_000;
 
 /** A pending `executeJavaScript` awaiting its page-world result message. */
 type PendingExec = {
