@@ -364,31 +364,6 @@ export const msgSendPtrPointPtrReturnsU8 = (
 ): number =>
   getPtrPointPtrReturnsU8Lib().symbols.objc_msgSend(receiver, selector, item, x, y, view);
 
-const PTR_I64_U8_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.i64, FFIType.u8],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getPtrI64U8Lib = macOSLibraryAccessor('msgSendPtrI64U8', () =>
-  dlopen(LIBOBJC_PATH, PTR_I64_U8_VARIANT),
-);
-
-/**
- * Send a message with a pointer arg, an `NSInteger` arg, and a `BOOL` arg —
- * specifically `[WKUserScript initWithSource:injectionTime:forMainFrameOnly:]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
-export const msgSendPtrI64U8 = (
-  receiver: Handle,
-  selector: Handle,
-  arg0: Handle,
-  arg1: bigint,
-  arg2: number,
-): Handle => getPtrI64U8Lib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2);
-
 const PTR4_VARIANT = {
   objc_msgSend: {
     args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
