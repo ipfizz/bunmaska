@@ -8,6 +8,12 @@
  * suite that should run got gated off). Bounds are deliberately generous for now —
  * they catch a catastrophic regression without false-failing normal per-OS
  * variation; ratchet them tighter as each leg's real numbers settle.
+ *
+ * Where it runs: `validate` (macOS + Linux CI, and any local `bun run validate`,
+ * incl. Windows dev boxes where the full suite passes). Windows CI runs the scoped
+ * `validate:windows` (its own gate) because that leg has no engine, so a budget with
+ * mac/linux skip bounds wouldn't fit it; tightening Windows into a full-`validate`
+ * CI leg is the tracked 1d follow-up (needs the engine cached into that leg first).
  */
 import { platform } from 'node:os';
 

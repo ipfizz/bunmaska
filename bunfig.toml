@@ -7,4 +7,6 @@ exact = true
 # signature tables are dense declarations, not logic, so they only dilute the
 # number; test files are excluded so coverage measures src, not the tests.
 coverageSkipTestFiles = true
-coveragePathIgnorePatterns = ["*-ffi.ts"]
+# `**/` is required — bun's glob `*` does not cross `/`, so a bare `*-ffi.ts`
+# would match nothing (every FFI file lives under src/main/platform/*/).
+coveragePathIgnorePatterns = ["**/*-ffi.ts"]
