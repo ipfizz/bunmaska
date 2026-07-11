@@ -4,6 +4,7 @@ import { Menu } from '../../../../src/main/api/menu';
 import {
   Tray,
   type TrayBackend,
+  type TrayImage,
   type TrayInstance,
   setTrayBackendForTesting,
 } from '../../../../src/main/api/tray';
@@ -81,6 +82,17 @@ describe('Tray construction', () => {
 
   test('starts not destroyed', () => {
     expect(new Tray('/tmp/icon.png').isDestroyed()).toBe(false);
+  });
+
+  test('accepts a NativeImage by materializing its PNG to a temp file (Electron parity)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const fakeImage = { toPNG: () => png } as unknown as TrayImage;
+    new Tray(fakeImage);
+    const path = created[0]?.image ?? '';
+    expect(path.endsWith('icon.png')).toBe(true);
+    expect(path).not.toBe('[object Object]');
+    expect(Array.from(readFileSync(path))).toEqual(Array.from(png));
   });
 });
 

@@ -1,10 +1,17 @@
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
 import { linuxTrayBackend } from '../platform/linux/sni-tray';
 import { macosTrayBackend } from '../platform/macos/cocoa-tray';
 import { windowsTrayBackend } from '../platform/windows/windows-tray';
 import type { Menu } from './menu';
+import type { NativeImage } from './native-image';
+
+/** A Tray icon: a filesystem path, or a {@link NativeImage} (Electron parity). */
+export type TrayImage = string | NativeImage;
 
 /**
  * A status-bar / system-tray icon — the drop-in equivalent of Electron's `Tray`.
@@ -85,17 +92,30 @@ export const setTrayBackendForTesting = (fake: TrayBackend | undefined): void =>
 export class Tray extends EventEmitter {
   #instance: TrayInstance;
   #destroyed = false;
+  #iconDir: string | undefined;
 
   /**
-   * Create a tray with the icon at `image` (a filesystem path). On Linux this
-   * throws {@link UnsupportedPlatformError} (deferred — see the class doc).
+   * Create a tray with `image` — a filesystem path or a {@link NativeImage}
+   * (Electron parity). A `NativeImage` is materialized to a temp PNG the native
+   * backends load by path.
    */
-  constructor(image: string) {
+  constructor(image: TrayImage) {
     super();
-    this.#instance = getBackend().create(image);
+    this.#instance = getBackend().create(this.#resolveImagePath(image));
     this.#instance.onClick(() => {
       this.emit('click');
     });
+  }
+
+  /** A path stays a path; a NativeImage is written to a per-instance temp PNG. */
+  #resolveImagePath(image: TrayImage): string {
+    if (typeof image === 'string') {
+      return image;
+    }
+    this.#iconDir ??= mkdtempSync(join(tmpdir(), 'bunmaska-tray-'));
+    const path = join(this.#iconDir, 'icon.png');
+    writeFileSync(path, image.toPNG());
+    return path;
   }
 
   /** Set the hover tooltip. No-op after {@link destroy}. */
@@ -114,12 +134,12 @@ export class Tray extends EventEmitter {
     this.#instance.setTitle(title);
   }
 
-  /** Replace the icon with the image at `image` (a filesystem path). No-op after destroy. */
-  setImage(image: string): void {
+  /** Replace the icon with `image` (a filesystem path or {@link NativeImage}). No-op after destroy. */
+  setImage(image: TrayImage): void {
     if (this.#destroyed) {
       return;
     }
-    this.#instance.setImage(image);
+    this.#instance.setImage(this.#resolveImagePath(image));
   }
 
   /** Attach a context menu (shown on click), or clear it with `null`. No-op after destroy. */

@@ -32,9 +32,9 @@ app.whenReady().then(() => {
 
 ### `new Tray(image)`
 
-- `image` string - a filesystem path to the icon file.
+- `image` string | [NativeImage](native-image.md) - a filesystem path, or a NativeImage.
 
-Creates a status item and shows the icon immediately. Unlike Electron, the `image` argument is a **path string only** - a `NativeImage` is not accepted, and there is no `guid` parameter. A bad or unreadable path does not crash; the icon is simply not set. On macOS, pass a [Template Image](native-image.md) (a filename ending in `Template`) so the menu bar can invert it for light/dark mode.
+Creates a status item and shows the icon immediately. `image` is a filesystem path or a `NativeImage` (a NativeImage is written to a temp PNG the native backends load by path); there is no `guid` parameter. A bad or unreadable path does not crash; the icon is simply not set. On macOS, pass a [Template Image](native-image.md) (a filename ending in `Template`) so the menu bar can invert it for light/dark mode.
 
 ```ts
 import { Tray } from 'bunmaska';
@@ -66,9 +66,9 @@ tray.setTitle('42');
 
 ### `tray.setImage(image)`
 
-- `image` string - a filesystem path to the new icon.
+- `image` string | [NativeImage](native-image.md) - a filesystem path, or a NativeImage.
 
-Replaces the icon. As with the constructor, this takes a path string, not a `NativeImage`. No-op after `destroy()`.
+Replaces the icon. Accepts a path string or a `NativeImage`, as the constructor does. No-op after `destroy()`.
 
 ```ts
 tray.setImage('/path/to/active-iconTemplate.png');
@@ -130,7 +130,7 @@ tray.on('click', () => {
 Compared with Electron's `Tray`, the following are not implemented:
 
 - **`guid` constructor parameter** - no UUID-based icon identity / position persistence.
-- **`NativeImage` arguments** - the constructor, `setImage`, etc. take a path string only.
+- **`guid` (Windows)** - not supported.
 - **`click` event payload** - Bunmaska's `click` carries no `event` / `bounds` / `position`. Electron's `bounds` and `position` data are unavailable.
 - **`right-click` / `double-click` / `middle-click` events** - deferred until a real event source is wired.
 - **All mouse and drag events** - `mouse-up`, `mouse-down`, `mouse-enter`, `mouse-leave`, `mouse-move`, `drop`, `drop-files`, `drop-text`, `drag-enter`, `drag-leave`, `drag-end` are not emitted.
