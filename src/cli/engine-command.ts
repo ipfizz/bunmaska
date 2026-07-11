@@ -105,48 +105,52 @@ const isBareEngineId = (source: string): boolean => {
 };
 
 const runInstall = async (source: string, deps: EngineCommandDeps): Promise<number> => {
-  // A bare engine-id resolves to the configured (or official) feed's artifact URL.
-  const config = await deps.readConfig('.');
-  const url = isBareEngineId(source)
-    ? engineFeedArtifactUrl(source, config.engine?.feed?.url ?? undefined)
-    : source;
-  // A http(s) source is a published feed artifact: verify its signature + hash.
-  if (/^https?:\/\//.test(url)) {
-    const publicKey = resolveEnginePublicKey({
-      feedPublicKey: config.engine?.feed?.publicKey,
-      env: deps.env,
-    });
-    if (publicKey === undefined) {
-      deps.err(
-        'bunmaska engine install: no signing key to verify this engine. For a self-hosted feed, ' +
-          'set engine.feed.publicKey in bunmaska.config. Local engine directories install without a feed.',
-      );
-      return 1;
-    }
-    const installUrl =
-      deps.installUrl ??
-      ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));
-    try {
-      deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
-      return 0;
-    } catch (error) {
-      deps.err(
-        `bunmaska engine install: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
-    }
-  }
-  // Otherwise a local, already-extracted engine directory.
-  if (existsSync(source) && statSync(source).isDirectory()) {
+  const isUrl = /^https?:\/\//.test(source);
+  // A local, already-extracted engine directory wins over feed routing — a dir
+  // whose name happens to be a valid engine-id must not be shadowed by the feed,
+  // and a local install never reads (or is broken by) bunmaska.config.
+  if (!isUrl && existsSync(source) && statSync(source).isDirectory()) {
     const install = deps.installDir ?? installFromDir;
     deps.out(installedMessage(await install(deps.root, source)));
     return 0;
   }
-  deps.err(
-    `bunmaska engine install: ${JSON.stringify(source)} is neither a local engine directory, an ` +
-      'engine-id, nor an http(s) feed URL. Pass a built engine dir, an engine-id, or a .tar.zst URL.',
-  );
-  return 1;
+  if (!isUrl && !isBareEngineId(source)) {
+    deps.err(
+      `bunmaska engine install: ${JSON.stringify(source)} is neither a local engine directory, an ` +
+        'engine-id, nor an http(s) feed URL. Pass a built engine dir, an engine-id, or a .tar.zst URL.',
+    );
+    return 1;
+  }
+  // A bare id already in the store needs no download.
+  if (!isUrl && isInstalled(deps.root, source)) {
+    deps.out(`${source} is already installed (nothing to do)`);
+    return 0;
+  }
+  // A published feed artifact: resolve the URL (bare id -> configured/official
+  // feed), verify its signature + hash, then install via the store.
+  const config = await deps.readConfig('.');
+  const url = isUrl ? source : engineFeedArtifactUrl(source, config.engine?.feed?.url ?? undefined);
+  const publicKey = resolveEnginePublicKey({
+    feedPublicKey: config.engine?.feed?.publicKey,
+    env: deps.env,
+  });
+  if (publicKey === undefined) {
+    deps.err(
+      'bunmaska engine install: no signing key to verify this engine. For a self-hosted feed, ' +
+        'set engine.feed.publicKey in bunmaska.config. Local engine directories install without a feed.',
+    );
+    return 1;
+  }
+  const installUrl =
+    deps.installUrl ??
+    ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));
+  try {
+    deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
+    return 0;
+  } catch (error) {
+    deps.err(`bunmaska engine install: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
 };
 
 const runUse = (id: string, forDir: string | undefined, deps: EngineCommandDeps): number => {

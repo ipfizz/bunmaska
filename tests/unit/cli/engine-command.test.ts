@@ -171,6 +171,44 @@ describe('engine install', () => {
     expect(await runEngine({ action: 'install', source: ID }, deps)).toBe(0);
     expect(seenUrl).toBe(`https://mirror.example/e/${ID}.tar.zst`);
   });
+
+  test('an already-installed bare id is a no-op — it does not re-download', async () => {
+    const root = makeTmpDir();
+    await installFromDir(root, makeEngineDir(root, ID));
+    const c = capture(root);
+    let fetched = false;
+    const deps = {
+      ...c.deps,
+      installUrl: async () => {
+        fetched = true;
+        return { id: ID, installed: false };
+      },
+    };
+    expect(await runEngine({ action: 'install', source: ID }, deps)).toBe(0);
+    expect(fetched).toBe(false);
+    expect(c.text()).toMatch(/already installed/i);
+  });
+
+  test('a local directory is installed locally even when its config would route to a feed', async () => {
+    const root = makeTmpDir();
+    const src = makeEngineDir(root, ID);
+    // A broken config must NOT break a local-directory install (config is only read for feed installs).
+    const c = capture(root);
+    let usedFeed = false;
+    const deps = {
+      ...c.deps,
+      readConfig: async () => {
+        throw new Error('bunmaska.config is broken');
+      },
+      installUrl: async () => {
+        usedFeed = true;
+        return { id: ID, installed: false };
+      },
+    };
+    expect(await runEngine({ action: 'install', source: src }, deps)).toBe(0);
+    expect(usedFeed).toBe(false);
+    expect(c.text()).toContain(`installed ${ID}`);
+  });
 });
 
 describe('engine use', () => {
