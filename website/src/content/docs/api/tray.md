@@ -130,7 +130,6 @@ tray.on('click', () => {
 Compared with Electron's `Tray`, the following are not implemented:
 
 - **`guid` constructor parameter** - no UUID-based icon identity / position persistence.
-- **`guid` (Windows)** - not supported.
 - **`click` event payload** - Bunmaska's `click` carries no `event` / `bounds` / `position`. Electron's `bounds` and `position` data are unavailable.
 - **`right-click` / `double-click` / `middle-click` events** - deferred until a real event source is wired.
 - **All mouse and drag events** - `mouse-up`, `mouse-down`, `mouse-enter`, `mouse-leave`, `mouse-move`, `drop`, `drop-files`, `drop-text`, `drag-enter`, `drag-leave`, `drag-end` are not emitted.
