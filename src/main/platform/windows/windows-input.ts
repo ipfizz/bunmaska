@@ -76,6 +76,9 @@ const buttonUp = (button: MouseButton): number => {
   }
 };
 
+/** Named keys whose VK code IS the character they type (WM_CHAR-producing). */
+const CHAR_PRODUCING_VK = new Set<number>([0x08, 0x09, 0x0d, 0x1b, 0x20]); // BS, Tab, Enter, Esc, Space
+
 /** Win32 virtual-key codes for the non-printable keys we map by Electron key name. */
 const NAMED_VIRTUAL_KEYS = new Map<string, number>([
   ['Backspace', 0x08],
@@ -136,8 +139,20 @@ export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | un
         lParam: mouseLParam(event.x, event.y),
       };
     case 'char': {
-      const charCode = event.keyCode.length > 0 ? event.keyCode.charCodeAt(0) : 0;
-      return { message: WM_CHAR, wParam: BigInt(charCode), lParam: KEYDOWN_LPARAM };
+      // A named key types its control code (Enter -> CR) or nothing (arrows); a
+      // single character types itself. Never the first letter of a key NAME.
+      const named = NAMED_VIRTUAL_KEYS.get(event.keyCode);
+      const charCode =
+        named !== undefined
+          ? CHAR_PRODUCING_VK.has(named)
+            ? named
+            : undefined
+          : event.keyCode.length === 1
+            ? event.keyCode.charCodeAt(0)
+            : undefined;
+      return charCode === undefined
+        ? undefined
+        : { message: WM_CHAR, wParam: BigInt(charCode), lParam: KEYDOWN_LPARAM };
     }
     case 'keyDown': {
       const vk = virtualKey(event.keyCode);
@@ -156,13 +171,27 @@ export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | un
   }
 };
 
+/** Keyboard messages must bypass the pump's queue (see below). */
+const KEYBOARD_MESSAGES = new Set<number>([WM_KEYDOWN, WM_KEYUP, WM_CHAR]);
+
 /**
  * Post a synthesized {@link NativeInputEvent} to a WKView's `hwnd` so WinCairo
  * WebKit delivers it as a trusted DOM event. Unmapped keys are silently ignored.
+ *
+ * Mouse messages are POSTed (async, no focus steal). Keyboard messages are SENT
+ * directly to the view's native WndProc: a POSTed WM_KEYDOWN would pass through
+ * the pump's `TranslateMessage`, which synthesizes a SECOND, real-keyboard-state
+ * WM_CHAR — doubling and corrupting the typed text. SendMessageW skips the queue.
  */
 export const postWindowsInputEvent = (hwnd: bigint, event: NativeInputEvent): void => {
   const msg = inputEventToMessage(event);
-  if (msg !== undefined) {
-    loadUser32().symbols.PostMessageW(hwnd, msg.message, msg.wParam, msg.lParam);
+  if (msg === undefined) {
+    return;
+  }
+  const user32 = loadUser32().symbols;
+  if (KEYBOARD_MESSAGES.has(msg.message)) {
+    user32.SendMessageW(hwnd, msg.message, msg.wParam, msg.lParam);
+  } else {
+    user32.PostMessageW(hwnd, msg.message, msg.wParam, msg.lParam);
   }
 };

@@ -68,6 +68,22 @@ describe('inputEventToMessage', () => {
     expect(msg?.wParam).toBe(BigInt('x'.charCodeAt(0)));
   });
 
+  test('a char event for a control-producing named key uses its control code, not its first letter', () => {
+    // 'Enter' must type a carriage return (0x0d), NOT 'E' (0x45).
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Enter' })?.wParam).toBe(0x0dn);
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Tab' })?.wParam).toBe(0x09n);
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Space' })?.wParam).toBe(0x20n);
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Backspace' })?.wParam).toBe(0x08n);
+  });
+
+  test('a char event for a non-character named key produces no character (undefined)', () => {
+    // Arrows / navigation keys type nothing.
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Left' })).toBeUndefined();
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Home' })).toBeUndefined();
+    expect(inputEventToMessage({ type: 'char', keyCode: 'Delete' })).toBeUndefined();
+    expect(inputEventToMessage({ type: 'char', keyCode: '' })).toBeUndefined();
+  });
+
   test('an unmapped key is a no-op (undefined)', () => {
     expect(inputEventToMessage({ type: 'keyDown', keyCode: 'F13' })).toBeUndefined();
   });
