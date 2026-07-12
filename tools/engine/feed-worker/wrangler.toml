@@ -1,0 +1,12 @@
+name = "bunmaska-engines"
+main = "serve-engines.js"
+compatibility_date = "2024-11-01"
+workers_dev = false
+
+[[r2_buckets]]
+binding = "ENGINES"
+bucket_name = "bunmaska-engines"
+
+[[routes]]
+pattern = "engines.bunmaska.org"
+custom_domain = true
