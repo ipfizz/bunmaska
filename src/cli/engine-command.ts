@@ -11,7 +11,13 @@ import { compareEngineIds, isSystemEngine, parseEngineId } from '../common/engin
 import type { BunmaskaConfig } from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import type { EngineSubcommand } from './parse-args';
-import { defaultRemoteFetch, engineFeedArtifactUrl, installFromUrl } from './engine-remote';
+import { type EngineIndexEntry, fetchEngineIndex } from './engine-index';
+import {
+  DEFAULT_ENGINE_FEED_URL,
+  defaultRemoteFetch,
+  engineFeedArtifactUrl,
+  installFromUrl,
+} from './engine-remote';
 import { resolveEnginePublicKey } from './engine-signature';
 import {
   gc,
@@ -37,6 +43,8 @@ export type EngineCommandDeps = {
   readonly installDir?: (root: string, sourceDir: string) => Promise<InstallResult>;
   /** Remote (feed) install seam (default: {@link installFromUrl} + real fetch). */
   readonly installUrl?: (root: string, url: string, publicKeyPem: string) => Promise<InstallResult>;
+  /** Feed-index seam (default: {@link fetchEngineIndex} + real fetch). */
+  readonly fetchIndex?: (feedBase: string) => Promise<EngineIndexEntry[]>;
 };
 
 /** Sort engine ids ascending, tolerating any non-id dir names. */
@@ -66,6 +74,38 @@ const runList = (deps: EngineCommandDeps): number => {
     const count = refs.get(id) ?? 0;
     deps.out(`${id}  (${count} app${count === 1 ? '' : 's'})`);
   }
+  return 0;
+};
+
+const runAvailable = async (deps: EngineCommandDeps): Promise<number> => {
+  const config = await deps.readConfig('.');
+  const feed = config.engine?.feed?.url ?? undefined;
+  const fetchIndex =
+    deps.fetchIndex ?? ((base: string) => fetchEngineIndex(base, defaultRemoteFetch));
+  let entries: EngineIndexEntry[];
+  try {
+    entries = await fetchIndex(feed ?? DEFAULT_ENGINE_FEED_URL);
+  } catch (error) {
+    deps.err(
+      `bunmaska engine available: could not read the feed index: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 1;
+  }
+  if (entries.length === 0) {
+    deps.out('No engines are published on the feed yet.');
+    return 0;
+  }
+  const here = `${currentPlatform()}/${currentArch()}`;
+  deps.out(
+    `Engines on the feed (this machine is ${here}). * = installed, > = matches this machine:`,
+  );
+  for (const e of [...entries].sort((a, b) => compareEngineIds(a.id, b.id))) {
+    const installedMark = isInstalled(deps.root, e.id) ? '*' : ' ';
+    const hereMark = e.os === currentPlatform() && e.arch === currentArch() ? '>' : ' ';
+    const mb = e.size !== undefined ? `  (${(e.size / (1024 * 1024)).toFixed(0)} MB)` : '';
+    deps.out(`${installedMark}${hereMark} ${e.id}${mb}`);
+  }
+  deps.out('Install one with: bunmaska engine install <id>');
   return 0;
 };
 
@@ -236,6 +276,8 @@ export const runEngine = async (
   switch (sub.action) {
     case 'list':
       return runList(deps);
+    case 'available':
+      return await runAvailable(deps);
     case 'which':
       return await runWhich(sub.target, deps);
     case 'install':

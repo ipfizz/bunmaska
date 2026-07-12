@@ -52,6 +52,49 @@ const capture = (root: string, config: BunmaskaConfig = {}): Captured => {
   };
 };
 
+describe('engine available', () => {
+  test('lists engines from the feed index and points at the install command', async () => {
+    const c = capture(makeTmpDir());
+    const deps = {
+      ...c.deps,
+      fetchIndex: async () => [
+        {
+          engine: 'webkitgtk',
+          api: '6.0',
+          upstream: '2.46.0',
+          rev: 'bunmaska1',
+          os: 'linux',
+          arch: 'x64',
+          id: ID2,
+          size: 92160000,
+        } as never,
+      ],
+    };
+    expect(await runEngine({ action: 'available' }, deps)).toBe(0);
+    expect(c.text()).toContain(ID2);
+    expect(c.text()).toMatch(/bunmaska engine install/);
+  });
+
+  test('reports empty feed gracefully', async () => {
+    const c = capture(makeTmpDir());
+    const deps = { ...c.deps, fetchIndex: async () => [] };
+    expect(await runEngine({ action: 'available' }, deps)).toBe(0);
+    expect(c.text()).toMatch(/no engines/i);
+  });
+
+  test('errors (exit 1) when the feed index cannot be read', async () => {
+    const c = capture(makeTmpDir());
+    const deps = {
+      ...c.deps,
+      fetchIndex: async () => {
+        throw new Error('network down');
+      },
+    };
+    expect(await runEngine({ action: 'available' }, deps)).toBe(1);
+    expect(c.err.join('\n')).toMatch(/could not read the feed index/i);
+  });
+});
+
 describe('engine list', () => {
   test('reports the system default when empty', async () => {
     const c = capture(makeTmpDir());

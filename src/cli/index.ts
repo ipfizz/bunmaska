@@ -60,6 +60,7 @@ Usage:
 
 engine subcommands:
   list                  Installed engines (side by side) and their refcounts
+  available             Engines published on the feed (marks installed + this-machine)
   which [dir]           The engine-id a project resolves (defaults to system)
   install <id|path|url> Install an engine: an engine-id (from the official feed),
                         a local engine directory, or a signed published .tar.zst URL

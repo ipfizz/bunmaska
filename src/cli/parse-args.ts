@@ -36,6 +36,7 @@ export type BuildOptions = {
 /** Subcommands of `bunmaska engine`, for managing the pinned-WebKit store. */
 export type EngineSubcommand =
   | { readonly action: 'list' }
+  | { readonly action: 'available' }
   | { readonly action: 'which'; readonly target?: string }
   | { readonly action: 'install'; readonly source: string }
   | { readonly action: 'use'; readonly id: string; readonly for?: string }
@@ -170,6 +171,8 @@ const parseEngine = (rest: readonly string[]): Command => {
   switch (action) {
     case 'list':
       return { kind: 'engine', sub: { action: 'list' } };
+    case 'available':
+      return { kind: 'engine', sub: { action: 'available' } };
     case 'which': {
       const target = args[0];
       return {

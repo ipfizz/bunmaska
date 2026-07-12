@@ -60,6 +60,7 @@ Manages the pinned-WebKit engine store - the opt-in "tested == shipped" tier. Se
 
 ```sh
 bunmaska engine list             # installed engines (side by side) + refcounts
+bunmaska engine available        # engines published on the feed (marks installed + this-machine)
 bunmaska engine which [dir]      # the engine a project resolves
 bunmaska engine install <path>   # install a local engine directory
 bunmaska engine install <url>    # install a published .tar.zst - signature + hash verified
