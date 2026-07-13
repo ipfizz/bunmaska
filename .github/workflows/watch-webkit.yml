@@ -45,12 +45,7 @@ jobs:
           gh label create engine-update --repo "$GITHUB_REPOSITORY" \
             --description "a newer upstream WebKit is available for the engine feed" \
             --color D93F0B 2>/dev/null || true
+          body=$(printf 'The weekly upstream watch found a newer stable WPE WebKit release.\n\n- Upstream: `%s`\n- Live feed serves: `%s` (https://engines.bunmaska.org/index.json)\n\nTo ship it: dispatch `build-engine-windows.yml` with `webkit_tag=%s`. Pack, sign, publish, and the index refresh all run unattended off the repo secrets. Release policy notes live in the engine hosting runbook (.admin).' "$latest_tag" "$served" "$latest_tag")
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "engine: upstream WebKit $latest available (feed serves $served)" \
-            --label engine-update \
-            --body "The weekly upstream watch found a newer WPE WebKit release.
-
-- Upstream: \`$latest_tag\`
-- Live feed serves: \`$served\` (https://engines.bunmaska.org/index.json)
-
-To ship it: dispatch \`build-engine-windows.yml\` with \`webkit_tag=$latest_tag\`. Pack, sign, publish, and the index refresh all run unattended off the repo secrets. Release policy notes live in the engine hosting runbook (.admin)."
+            --label engine-update --body "$body"
