@@ -21,9 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       webkit_tag:
-        description: 'WebKit git tag to build (e.g. wpewebkit-2.46.0)'
+        description: 'WebKit git tag to build (e.g. wpewebkit-2.53.3)'
         required: true
-        default: 'wpewebkit-2.46.0'
+        default: 'wpewebkit-2.53.3'
   push:
     branches: [feat/windows-engine]
 
@@ -33,7 +33,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 350
     env:
-      WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'wpewebkit-2.46.0' }}
+      WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'wpewebkit-2.53.3' }}
       # Short build-output root (WebKit honours WEBKIT_OUTPUTDIR): vcpkg's ICU build
       # generates pathologically deep try-compile object paths that blow past
       # Windows' 250-char limit when nested under the workspace.
@@ -42,7 +42,9 @@ jobs:
       # Publish steps are gated on these so forks / unconfigured runs still build
       # + prove the engine, skipping pack/sign/upload when the secrets are absent.
       HAVE_KEY: ${{ secrets.ENGINE_SIGNING_KEY != '' }}
-      HAVE_R2: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      # R2_PUBLISH_TOKEN is R2-only, separate from the Pages-scoped
+      # CLOUDFLARE_API_TOKEN deploy-web.yml uses (which has no R2 perms).
+      HAVE_R2: ${{ secrets.R2_PUBLISH_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - name: Checkout bunmaska
         uses: actions/checkout@v4
@@ -170,7 +172,7 @@ jobs:
         if: ${{ env.HAVE_KEY == 'true' && env.HAVE_R2 == 'true' }}
         working-directory: bunmaska
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R2_PUBLISH_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           bun tools/engine/publish-engine-r2.ts `

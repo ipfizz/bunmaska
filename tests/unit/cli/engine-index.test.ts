@@ -5,6 +5,7 @@ import {
   buildEngineIndex,
   engineFeedIndexUrl,
   fetchEngineIndex,
+  mergeEngineIndex,
   parseEngineIndex,
 } from '../../../src/cli/engine-index';
 
@@ -78,5 +79,38 @@ describe('fetchEngineIndex', () => {
     };
     const entries = await fetchEngineIndex(DEFAULT_ENGINE_FEED_URL, fetch);
     expect(entries[0]?.id).toBe(ID);
+  });
+});
+
+describe('mergeEngineIndex', () => {
+  const LINUX_ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
+
+  test('starts a new index when none is published yet', () => {
+    const json = mergeEngineIndex(undefined, {
+      id: ID,
+      hash: 'abc',
+      size: 10,
+      soname: 'WebKit2.dll',
+    });
+    const parsed = parseEngineIndex(json);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ id: ID, hash: 'abc', size: 10 });
+  });
+
+  test('replaces the same-id entry and keeps the others, sorted by id', () => {
+    const existing = buildEngineIndex([
+      { id: ID, size: 1, hash: 'old', soname: 'WebKit2.dll' },
+      { id: LINUX_ID, size: 2, hash: 'keep', soname: 'libwebkitgtk-6.0.so.4' },
+    ]);
+    const json = mergeEngineIndex(existing, { id: ID, hash: 'new', size: 99 });
+    const parsed = parseEngineIndex(json);
+    expect(parsed).toHaveLength(2);
+    expect(parsed.map((e) => e.id)).toEqual([ID, LINUX_ID].sort());
+    expect(parsed.find((e) => e.id === ID)).toMatchObject({ hash: 'new', size: 99 });
+    expect(parsed.find((e) => e.id === LINUX_ID)).toMatchObject({ hash: 'keep' });
+  });
+
+  test('rejects a malformed engine id before it enters the index', () => {
+    expect(() => mergeEngineIndex(undefined, { id: '../evil', hash: 'x' })).toThrow();
   });
 });

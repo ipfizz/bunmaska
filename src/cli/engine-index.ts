@@ -10,7 +10,7 @@
 
 import { type EngineRef, parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
-import { DEFAULT_ENGINE_FEED_URL, type RemoteFetch } from './engine-remote';
+import { DEFAULT_ENGINE_FEED_URL, type RemoteFetch, type RemoteManifest } from './engine-remote';
 
 /** One engine listed in a feed index: the stored fields + the id-derived facts. */
 export type EngineIndexEntry = EngineRef & {
@@ -84,3 +84,27 @@ export const fetchEngineIndex = async (
   fetch: RemoteFetch,
 ): Promise<EngineIndexEntry[]> =>
   parseEngineIndex(new TextDecoder().decode(await fetch(engineFeedIndexUrl(feedBase))));
+
+/**
+ * Merge one engine's manifest into an existing serialized index: same-id entry
+ * replaced, everything else kept, output sorted by id. `indexText` undefined
+ * means "no index published yet" and starts one. This is how a CI publish keeps
+ * `index.json` current without regenerating it from every manifest by hand.
+ */
+export const mergeEngineIndex = (
+  indexText: string | undefined,
+  manifest: RemoteManifest,
+): string => {
+  const existing = indexText === undefined ? [] : parseEngineIndex(indexText);
+  parseEngineId(manifest.id); // reject a malformed id before it enters the index
+  const entries = [
+    ...existing.filter((e) => e.id !== manifest.id),
+    {
+      id: manifest.id,
+      ...(manifest.size !== undefined ? { size: manifest.size } : {}),
+      hash: manifest.hash,
+      ...(manifest.soname !== undefined ? { soname: manifest.soname } : {}),
+    },
+  ].sort((a, b) => a.id.localeCompare(b.id));
+  return buildEngineIndex(entries);
+};
