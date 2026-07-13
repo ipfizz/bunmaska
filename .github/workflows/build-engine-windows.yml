@@ -21,9 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       webkit_tag:
-        description: 'WebKit git tag to build (e.g. wpewebkit-2.53.3)'
+        description: 'WebKit git tag to build (STABLE train only - even minor, e.g. wpewebkit-2.52.5)'
         required: true
-        default: 'wpewebkit-2.53.3'
+        default: 'wpewebkit-2.52.5'
   push:
     branches: [feat/windows-engine]
 
@@ -33,7 +33,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 350
     env:
-      WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'wpewebkit-2.53.3' }}
+      # Hosted engines track the STABLE WPE train only (even minor; WSAs land
+      # there). Development tags (odd minor) are for local experiments, never
+      # the feed.
+      WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'wpewebkit-2.52.5' }}
       # Short build-output root (WebKit honours WEBKIT_OUTPUTDIR): vcpkg's ICU build
       # generates pathologically deep try-compile object paths that blow past
       # Windows' 250-char limit when nested under the workspace.

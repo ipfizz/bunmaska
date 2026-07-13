@@ -1,11 +1,13 @@
 name: watch-webkit
 
-# Weekly upstream watch: compare the newest WPE WebKit tag against the engines
-# the live feed serves, and open an issue when a newer engine should be built.
-# The issue is the tracking record; building stays a human call (dispatch
-# build-engine-windows.yml with the new tag — pack/sign/publish then run
-# unattended off the repo secrets). Skips if an engine-update issue is already
-# open, so it never stacks duplicates.
+# Weekly upstream watch: compare the newest STABLE WPE WebKit tag against the
+# engines the live feed serves, and open an issue when a newer engine should be
+# built. Policy: hosted engines track the STABLE train only (even minor —
+# 2.52.x; odd minors are development and security advisories land on stable),
+# so development tags are filtered out here. The issue is the tracking record;
+# building stays a human call (dispatch build-engine-windows.yml with the new
+# tag — pack/sign/publish then run unattended off the repo secrets). Skips if
+# an engine-update issue is already open, so it never stacks duplicates.
 on:
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
@@ -23,7 +25,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           latest_tag=$(git ls-remote --tags https://github.com/WebKit/WebKit.git 'wpewebkit-*' \
-            | awk -F/ '{print $3}' | grep -E '^wpewebkit-[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            | awk -F/ '{print $3}' | grep -E '^wpewebkit-[0-9]+\.[0-9]+\.[0-9]+$' \
+            | awk -F'[-.]' '$3 % 2 == 0' | sort -V | tail -1)
           latest="${latest_tag#wpewebkit-}"
           served=$(curl -sf https://engines.bunmaska.org/index.json \
             | jq -r '.engines[].id' | cut -d- -f3 | sort -V | tail -1)
