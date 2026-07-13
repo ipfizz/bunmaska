@@ -24,6 +24,10 @@ on:
         description: 'WebKit git tag to build (STABLE train only - even minor, e.g. wpewebkit-2.52.5)'
         required: true
         default: 'wpewebkit-2.52.5'
+      llvm:
+        description: 'LLVM version for clang-cl (older WebKit trains may need an older clang)'
+        required: false
+        default: '20.1.8'
   push:
     branches: [feat/windows-engine]
 
@@ -41,7 +45,8 @@ jobs:
       # generates pathologically deep try-compile object paths that blow past
       # Windows' 250-char limit when nested under the workspace.
       WEBKIT_OUTPUTDIR: C:\wkb
-      LLVM_DIR: C:\llvm20\clang+llvm-20.1.8-x86_64-pc-windows-msvc
+      LLVM_VER: ${{ github.event.inputs.llvm || '20.1.8' }}
+      LLVM_DIR: C:\llvm\clang+llvm-${{ github.event.inputs.llvm || '20.1.8' }}-x86_64-pc-windows-msvc
       # Publish steps are gated on these so forks / unconfigured runs still build
       # + prove the engine, skipping pack/sign/upload when the secrets are absent.
       HAVE_KEY: ${{ secrets.ENGINE_SIGNING_KEY != '' }}
@@ -73,14 +78,15 @@ jobs:
           Expand-Archive "$env:TEMP\gperf.zip" -DestinationPath C:\gperf -Force
         shell: pwsh
 
-      # WinCairo builds with clang-cl: install LLVM 20 (the find_library for
-      # clang_rt.builtins resolves relative to the clang-cl compiler).
-      - name: Install LLVM 20 (clang-cl)
+      # WinCairo builds with clang-cl (the find_library for clang_rt.builtins
+      # resolves relative to the clang-cl compiler). Version is an input so an
+      # older WebKit train can pin the clang it was contemporary with.
+      - name: Install LLVM (clang-cl)
         run: |
           curl.exe -L -o "$env:TEMP\llvm.tar.xz" `
-            "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/clang%2Bllvm-20.1.8-x86_64-pc-windows-msvc.tar.xz"
-          New-Item -ItemType Directory -Force -Path C:\llvm20 | Out-Null
-          tar.exe -xf "$env:TEMP\llvm.tar.xz" -C C:\llvm20
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VER/clang%2Bllvm-$env:LLVM_VER-x86_64-pc-windows-msvc.tar.xz"
+          New-Item -ItemType Directory -Force -Path C:\llvm | Out-Null
+          tar.exe -xf "$env:TEMP\llvm.tar.xz" -C C:\llvm
         shell: pwsh
 
       - name: Set up MSVC (x64)
@@ -105,6 +111,20 @@ jobs:
           }
           if (-not (Test-Path "$env:WEBKIT_OUTPUTDIR\Release\bin\WebKit2.dll")) {
             Write-Error "WebKit2.dll was not produced"; exit 1
+          }
+        shell: pwsh
+
+      # A failed CMake probe (e.g. the atomics check) only explains itself in
+      # CMakeError.log, which dies with the runner - surface it in the job log.
+      - name: Dump CMake configure logs on failure
+        if: failure()
+        run: |
+          foreach ($f in @("CMakeError.log", "CMakeOutput.log")) {
+            $p = "$env:WEBKIT_OUTPUTDIR\Release\CMakeFiles\$f"
+            if (Test-Path $p) {
+              Write-Host "===== tail of $f ====="
+              Get-Content $p -Tail 150
+            }
           }
         shell: pwsh
 
