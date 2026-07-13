@@ -43,7 +43,7 @@ export const milestones: readonly Milestone[] = [
     note: 'the unglamorous release. Deliberately.',
     items: [
       'Landed from the internal code review: the crash-class FFI lifetime fixes, and a security fix that closes an engine-downgrade path - a genuinely-signed older or other engine can no longer install under a different pinned id, because the store now binds the dir to the id inside the signed `engine.json`.',
-      'The engine distribution pipeline is built and signed end-to-end: pack a built engine dir to `.tar.zst`, content-hash it, and Ed25519-sign the bytes; then `bunmaska engine install <id>` resolves the id to the feed, verifies the signature against the baked release key and re-checks the hash before extracting. Tested against an in-memory feed - the live CDN is alpha.7.',
+      'The engine repository is live at engines.bunmaska.org: pack a built engine dir to `.tar.zst`, content-hash it, Ed25519-sign the bytes, publish to R2; `bunmaska engine install <id>` resolves the id against the feed, verifies the signature against the baked release key and re-checks the hash before extracting. The first hosted engine is the WinCairo WebKit Windows apps require - installed from the real CDN, end-to-end.',
       'Electron contract-fidelity pass, started: hunting the places where a method exists but its shape quietly differs - return types, event payloads, missing arguments. Underway, not finished.',
       'Still open, and the reason this release is not done: the testing framework growing teeth - coverage measurement with a ratchet, a skip budget (a silently-skipped suite fails CI), shared e2e harness helpers, and the Windows WebKit stack tested on every push instead of on demand.',
       'The website is held to the framework’s own strict TypeScript + lint bar, gated in CI. (Done.)',
@@ -56,7 +56,7 @@ export const milestones: readonly Milestone[] = [
     title: 'Hosted engines - the distribution unlock',
     note: 'any app, any platform, a tested WebKit one fetch away.',
     items: [
-      'The pack/sign/publish pipeline is already built and tested - a packed engine round-trips through the real install-and-verify path against an in-memory feed, and the release public key is already baked in as the trust anchor. What remains here is enabling the CDN bucket (Cloudflare R2) and pushing the first real upload. Linux first, then the WinCairo builds Windows apps need.',
+      'The feed itself shipped early, in alpha.6: engines.bunmaska.org serves the signed WinCairo engine from Cloudflare R2, and the release public key is baked in as the trust anchor. What remains here is the rest of the catalogue - the hosted Linux engine, and publishing wired into CI instead of run by hand.',
       'The render pass for the relocatable Linux engine: it loads from the store today; next it draws.',
       'Cross-distro Linux engines (an old-glibc base, one build across distros).',
       'Engine delivery for end users: embedded in the bundle or fetched on first run. Never something a user types.',
@@ -110,6 +110,6 @@ export const milestones: readonly Milestone[] = [
 export const snapshot = [
   { value: '29', label: 'Electron-shaped modules' },
   { value: '~70-80%', label: 'weighted API parity' },
-  { value: '~1,523', label: 'tests passing · 3-OS CI matrix' },
+  { value: '~1,600', label: 'tests passing · 3-OS CI matrix' },
   { value: '0', label: 'compiled native code' },
 ] as const;
