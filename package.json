@@ -36,7 +36,7 @@
   },
   "type": "module",
   "bin": {
-    "bunmaska": "./src/cli/index.ts"
+    "bunmaska": "src/cli/index.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
