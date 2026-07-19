@@ -4,7 +4,7 @@ description: "Add an icon, tooltip, title, and context menu to the system status
 order: 11
 ---
 
-`Tray` adds an icon to the system status bar (macOS menu bar), notification area (Linux), or notification area / system tray (Windows). In Bunmaska the native status item is created eagerly in the constructor and reconfigured through forwarding methods, and the class extends Node's `EventEmitter` so the listener API (`on`/`once`/…) matches Electron's contract.
+`Tray` adds an icon to the system status bar (macOS menu bar), notification area (Linux), or notification area / system tray (Windows). In bunmaska the native status item is created eagerly in the constructor and reconfigured through forwarding methods, and the class extends Node's `EventEmitter` so the listener API (`on`/`once`/…) matches Electron's contract.
 
 Platform support is uneven and honest about it:
 
@@ -58,7 +58,7 @@ tray.setToolTip('Syncing - 3 items left');
 
 - `title` string
 
-Sets the text shown next to the icon in the macOS status bar. On Linux this maps to the SNI `Title` (when the live tray is enabled) and is otherwise a no-op. On Windows it is a no-op - tray icons there have no inline text. Note the simplified signature: Bunmaska does **not** accept Electron's `options.fontType` argument. No-op after `destroy()`.
+Sets the text shown next to the icon in the macOS status bar. On Linux this maps to the SNI `Title` (when the live tray is enabled) and is otherwise a no-op. On Windows it is a no-op - tray icons there have no inline text. Note the simplified signature: bunmaska does **not** accept Electron's `options.fontType` argument. No-op after `destroy()`.
 
 ```ts
 tray.setTitle('42');
@@ -125,12 +125,12 @@ tray.on('click', () => {
 });
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
 Compared with Electron's `Tray`, the following are not implemented:
 
 - **`guid` constructor parameter** - no UUID-based icon identity / position persistence.
-- **`click` event payload** - Bunmaska's `click` carries no `event` / `bounds` / `position`. Electron's `bounds` and `position` data are unavailable.
+- **`click` event payload** - bunmaska's `click` carries no `event` / `bounds` / `position`. Electron's `bounds` and `position` data are unavailable.
 - **`right-click` / `double-click` / `middle-click` events** - deferred until a real event source is wired.
 - **All mouse and drag events** - `mouse-up`, `mouse-down`, `mouse-enter`, `mouse-leave`, `mouse-move`, `drop`, `drop-files`, `drop-text`, `drag-enter`, `drag-leave`, `drag-end` are not emitted.
 - **`setPressedImage(image)`** _(macOS)_ - no pressed-state icon.

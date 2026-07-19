@@ -1,12 +1,12 @@
 ---
 title: The Engine Repository
-description: "Which WebKit engines Bunmaska hosts, for which platforms, and how to install a pinned engine from the feed - the live, signed engine repository at engines.bunmaska.org."
-seoTitle: "Bunmaska engine repository - hosted WebKit engines per platform"
+description: "Which WebKit engines bunmaska hosts, for which platforms, and how to install a pinned engine from the feed - the live, signed engine repository at engines.bunmaska.org."
+seoTitle: "bunmaska engine repository - hosted WebKit engines per platform"
 keywords: ["webkit engine store", "pin webkit version desktop app", "bunmaska engine install"]
 order: 4
 ---
 
-The **engine repository** is the signed feed Bunmaska publishes pinned WebKit engines to, at **`https://engines.bunmaska.org`**. It's the hosted half of the [pinned-engine model](engine.md): an app declares the exact engine-id it was tested against, and that engine is fetched, signature-verified, and installed side by side with any others. "Tested == shipped", for real, from the cloud.
+The **engine repository** is the signed feed bunmaska publishes pinned WebKit engines to, at **`https://engines.bunmaska.org`**. It's the hosted half of the [pinned-engine model](engine.md): an app declares the exact engine-id it was tested against, and that engine is fetched, signature-verified, and installed side by side with any others. "Tested == shipped", for real, from the cloud.
 
 You almost never think about it. Most apps use your operating system's own WebKit and download nothing. The repository matters on the one platform that has no system WebKit - Windows - and as an opt-in on Linux.
 
@@ -16,7 +16,7 @@ You almost never think about it. Most apps use your operating system's own WebKi
 | --- | --- | --- |
 | **macOS** | System WKWebView - ships with the OS, nothing to download. | Not needed (and not published). |
 | **Linux** | System WebKitGTK 6 - installed via your package manager. | Optional pin, for exact-version reproducibility (a relocatable Linux engine is on the roadmap). |
-| **Windows** | None - Windows has no system WebKit. | **Required.** Windows always runs a Bunmaska-built WinCairo WebKit, from the feed or embedded in the app. |
+| **Windows** | None - Windows has no system WebKit. | **Required.** Windows always runs a bunmaska-built WinCairo WebKit, from the feed or embedded in the app. |
 
 So the repository is **Windows-first**: today it hosts the WinCairo engine that Windows apps need. macOS and Linux ride their system WebKit unless you deliberately pin.
 
@@ -38,7 +38,7 @@ A `*` means it's already installed locally; a `>` means it matches your OS + arc
 
 ### The engine-id
 
-Every engine has a flat, content-addressed id: `<family>-<api>-<upstream>-<rev>-<os>-<arch>`, e.g. `webkit-2-2.53.3-bunmaska1-windows-x64` (WinCairo WebKit, upstream 2.53.3, Bunmaska build 1, Windows x64). The id encodes exactly what you're getting, and the store keys directories on it so many versions coexist. Supported today: **Windows x64** (ARM64 is on the roadmap). Details in [the engine concept page](engine.md#the-engine-id).
+Every engine has a flat, content-addressed id: `<family>-<api>-<upstream>-<rev>-<os>-<arch>`, e.g. `webkit-2-2.53.3-bunmaska1-windows-x64` (WinCairo WebKit, upstream 2.53.3, bunmaska build 1, Windows x64). The id encodes exactly what you're getting, and the store keys directories on it so many versions coexist. Supported today: **Windows x64** (ARM64 is on the roadmap). Details in [the engine concept page](engine.md#the-engine-id).
 
 ## How to install one
 
@@ -50,7 +50,7 @@ bunmaska engine install webkit-2-2.53.3-bunmaska1-windows-x64
 bunmaska engine install https://engines.bunmaska.org/webkit-2-2.53.3-bunmaska1-windows-x64.tar.zst
 ```
 
-The install downloads the `.tar.zst`, **verifies its Ed25519 signature** against Bunmaska's baked-in release key and its content hash, checks the extracted engine's own signed `engine.json` id matches what you asked for (so a compromised mirror can't swap engines), and installs it into the shared store. Nothing runs before the signature verifies.
+The install downloads the `.tar.zst`, **verifies its Ed25519 signature** against bunmaska's baked-in release key and its content hash, checks the extracted engine's own signed `engine.json` id matches what you asked for (so a compromised mirror can't swap engines), and installs it into the shared store. Nothing runs before the signature verifies.
 
 To pin an app to it, set it in `bunmaska.config` - then `bunmaska build` bakes the id into the bundle and the app resolves it at launch:
 

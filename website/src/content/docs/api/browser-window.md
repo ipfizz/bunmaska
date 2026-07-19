@@ -1,10 +1,10 @@
 ---
 title: "BrowserWindow"
-description: "Create and control top-level application windows in the Bunmaska main process - the drop-in equivalent of Electron's BrowserWindow."
+description: "Create and control top-level application windows in the bunmaska main process - the drop-in equivalent of Electron's BrowserWindow."
 order: 2
 ---
 
-Create and control top-level application windows. `BrowserWindow` is Bunmaska's drop-in equivalent of Electron's class of the same name: it extends Node's `EventEmitter`, owns a `WebContents` for all page-related operations, and is backed by `NSWindow` on macOS, a GTK4 `GtkWindow` on Linux, and a Win32 `HWND` on Windows.
+Create and control top-level application windows. `BrowserWindow` is bunmaska's drop-in equivalent of Electron's class of the same name: it extends Node's `EventEmitter`, owns a `WebContents` for all page-related operations, and is backed by `NSWindow` on macOS, a GTK4 `GtkWindow` on Linux, and a Win32 `HWND` on Windows.
 
 Like Electron, you cannot use this module until the `app` `ready` event has fired.
 
@@ -24,13 +24,13 @@ app.whenReady().then(() => {
 
 ### `new BrowserWindow([options])`
 
-Creates a new window. All options are optional; unspecified options fall back to Bunmaska's defaults (`800x600`, title `"Bunmaska"`, shown immediately, resizable).
+Creates a new window. All options are optional; unspecified options fall back to bunmaska's defaults (`800x600`, title `"bunmaska"`, shown immediately, resizable).
 
 The supported `options` are a deliberately small subset of Electron's `BrowserWindowConstructorOptions`:
 
 - `width` number - content width in pixels. Default `800`.
 - `height` number - content height in pixels. Default `600`.
-- `title` string - initial window title. Default `"Bunmaska"`.
+- `title` string - initial window title. Default `"bunmaska"`.
 - `show` boolean - show the window immediately on creation. Default `true`.
 - `resizable` boolean - whether the user can resize the window. Default `true`.
 - `frame` boolean - draw the OS frame/title bar. `false` opens a frameless window.
@@ -52,7 +52,7 @@ const win = new BrowserWindow({
 });
 ```
 
-There is no `BrowserWindowConstructorOptions` mega-bag here - if an option isn't in the list above, it isn't wired yet. See [Not in Bunmaska (yet)](#not-in-bunmaska-yet).
+There is no `BrowserWindowConstructorOptions` mega-bag here - if an option isn't in the list above, it isn't wired yet. See [Not in bunmaska (yet)](#not-in-bunmaska-yet).
 
 ## Methods
 
@@ -514,9 +514,9 @@ win.webContents.on('did-finish-load', () => {
 });
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Bunmaska implements the window-management core but omits large swaths of Electron's `BrowserWindow` surface. Notable gaps:
+bunmaska implements the window-management core but omits large swaths of Electron's `BrowserWindow` surface. Notable gaps:
 
 - **`setContentBounds` / `getContentBounds` / `getNormalBounds`** - the content-bounds variants. (`setPosition`/`getPosition`/`setBounds` exist since alpha.5: full on Windows, best-effort placement on macOS, size-only on Linux where GTK4/Wayland leaves placement to the compositor - see the parity page.)
 - **`setContentSize` / `getContentSize` / `getMaximumSize` / `setMaximumSize`** - only the minimum-size pair and `setSize` are wired.

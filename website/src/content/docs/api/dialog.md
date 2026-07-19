@@ -1,6 +1,6 @@
 ---
 title: "dialog"
-description: "Native open/save/message/error dialogs for the Bunmaska main process, backed by Cocoa NSAlert/NSOpenPanel on macOS, GtkAlertDialog/GtkFileDialog on Linux, and MessageBoxW/GetOpenFileNameW on Windows."
+description: "Native open/save/message/error dialogs for the bunmaska main process, backed by Cocoa NSAlert/NSOpenPanel on macOS, GtkAlertDialog/GtkFileDialog on Linux, and MessageBoxW/GetOpenFileNameW on Windows."
 order: 9
 ---
 
@@ -8,7 +8,7 @@ The `dialog` module displays native system dialogs for opening and saving files 
 
 Process: Main
 
-Unlike Electron, every Bunmaska dialog method is async and returns a Promise. There are no `*Sync` variants - the macOS backend happens to run its panels modally under the hood, but the public API is Promise-only so your code reads the same on every platform.
+Unlike Electron, every bunmaska dialog method is async and returns a Promise. There are no `*Sync` variants - the macOS backend happens to run its panels modally under the hood, but the public API is Promise-only so your code reads the same on every platform.
 
 ```ts
 import { dialog } from 'bunmaska';
@@ -112,7 +112,7 @@ if (response === 1) {
 
 Returns `void`.
 
-Displays an error-styled alert. Under the hood this is a fire-and-forget call into the message-box backend with `type: 'error'` - unlike Electron's truly synchronous `showErrorBox`, Bunmaska does not block, and on _Linux_ the dialog is shown asynchronously and the call returns immediately. There is no special pre-`ready` / stderr fallback: it always goes through the same native backend.
+Displays an error-styled alert. Under the hood this is a fire-and-forget call into the message-box backend with `type: 'error'` - unlike Electron's truly synchronous `showErrorBox`, bunmaska does not block, and on _Linux_ the dialog is shown asynchronously and the call returns immediately. There is no special pre-`ready` / stderr fallback: it always goes through the same native backend.
 
 ```ts
 import { dialog } from 'bunmaska';
@@ -127,11 +127,11 @@ dialog.showErrorBox('Export failed', 'Could not write to the selected folder.');
 * `name` string - The label shown for this filter group.
 * `extensions` string[] - Allowed extensions, without dots or wildcards (e.g. `'png'`, not `'.png'` or `'*.png'`). Use `'*'` to mean "any file"; it is dropped from the effective extension set rather than expanded.
 
-Bunmaska flattens all of a dialog's filters into a single deduped extension list and passes that to the native panel - it does not render a per-group filter dropdown the way Electron does. The `'*'` wildcard entries are stripped, so a filter list that contains a `'*'` group effectively allows everything.
+bunmaska flattens all of a dialog's filters into a single deduped extension list and passes that to the native panel - it does not render a per-group filter dropdown the way Electron does. The `'*'` wildcard entries are stripped, so a filter list that contains a `'*'` group effectively allows everything.
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-The following Electron `dialog` members are not implemented in the Bunmaska source:
+The following Electron `dialog` members are not implemented in the bunmaska source:
 
 - **Synchronous variants** - `showOpenDialogSync`, `showSaveDialogSync`, and `showMessageBoxSync` do not exist. Use the Promise-returning methods above.
 - **`showCertificateTrustDialog`** - no certificate trust/import dialog.

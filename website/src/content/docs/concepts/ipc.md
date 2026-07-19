@@ -5,7 +5,7 @@ seoTitle: "IPC and context isolation in bunmaska"
 order: 1
 ---
 
-Bunmaska's IPC mirrors Electron's. The main process exposes handlers; a preload script bridges a safe surface to the page; the page calls it. No remote module, no `nodeIntegration` foot-gun - context isolation is on, in a dedicated isolated world.
+bunmaska's IPC mirrors Electron's. The main process exposes handlers; a preload script bridges a safe surface to the page; the page calls it. No remote module, no `nodeIntegration` foot-gun - context isolation is on, in a dedicated isolated world.
 
 ## Main process: handle requests
 

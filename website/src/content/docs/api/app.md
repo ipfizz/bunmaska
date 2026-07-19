@@ -1,12 +1,12 @@
 ---
 title: "app"
-description: "The application lifecycle controller in Bunmaska - a drop-in equivalent of Electron's app for managing readiness, quitting, paths, locale, the single-instance lock, and macOS desktop integration."
+description: "The application lifecycle controller in bunmaska - a drop-in equivalent of Electron's app for managing readiness, quitting, paths, locale, the single-instance lock, and macOS desktop integration."
 order: 1
 ---
 
 Process: Main
 
-The `app` module controls your application's event lifecycle. In Bunmaska it is the drop-in equivalent of Electron's `app`: it tracks readiness, coordinates a clean quit, resolves the standard special directories, reports name/version/locale, manages the single-instance lock, and exposes the macOS desktop bits (dock, hide/show, about panel, badge). It extends Node's `EventEmitter`, so the full listener API (`on` / `once` / `addListener` / `removeListener` / `emit` / …) matches Electron's contract.
+The `app` module controls your application's event lifecycle. In bunmaska it is the drop-in equivalent of Electron's `app`: it tracks readiness, coordinates a clean quit, resolves the standard special directories, reports name/version/locale, manages the single-instance lock, and exposes the macOS desktop bits (dock, hide/show, about panel, badge). It extends Node's `EventEmitter`, so the full listener API (`on` / `once` / `addListener` / `removeListener` / `emit` / …) matches Electron's contract.
 
 `app` is a singleton - import it; do not construct it.
 
@@ -49,7 +49,7 @@ if (!app.isReady()) {
 
 Begins shutting the app down. Emits the cancelable `before-quit` event, then `will-quit`; if a listener calls `preventDefault()` on either, the quit is aborted. If neither vetoes, emits `quit` with the exit code and exits the process. Idempotent - a second call while already quitting is ignored.
 
-Note: unlike Electron, Bunmaska's `quit()` does not run web-page `beforeunload`/`unload` handlers as a veto path; the veto comes from your main-process `before-quit` / `will-quit` listeners.
+Note: unlike Electron, bunmaska's `quit()` does not run web-page `beforeunload`/`unload` handlers as a veto path; the veto comes from your main-process `before-quit` / `will-quit` listeners.
 
 ```ts
 import { app } from 'bunmaska'
@@ -106,7 +106,7 @@ console.log(app.getAppPath())
 
 Returns `string` - a path to the special directory associated with `name`, honoring any override set via `setPath`.
 
-Bunmaska supports the common subset of Electron's names. It does **not** support `recent` (Windows-only in Electron anyway) or `assets`.
+bunmaska supports the common subset of Electron's names. It does **not** support `recent` (Windows-only in Electron anyway) or `assets`.
 
 ```ts
 import { app } from 'bunmaska'
@@ -120,7 +120,7 @@ const dbFile = join(app.getPath('userData'), 'app.db')
 * `name` string - one of the names accepted by `getPath`.
 * `path` string
 
-Overrides the path returned by `getPath` for a given name. Unlike Electron, Bunmaska does not validate that the directory exists - create it yourself if needed.
+Overrides the path returned by `getPath` for a given name. Unlike Electron, bunmaska does not validate that the directory exists - create it yourself if needed.
 
 ```ts
 import { app } from 'bunmaska'
@@ -184,7 +184,7 @@ console.log(app.getLocale()) // e.g. 'en-US'
 
 ### `app.getSystemLocale()`
 
-Returns `string` - the system locale. In Bunmaska this matches `getLocale()` (there is a single resolved host locale rather than Electron's separate Chromium/OS sources).
+Returns `string` - the system locale. In bunmaska this matches `getLocale()` (there is a single resolved host locale rather than Electron's separate Chromium/OS sources).
 
 ```ts
 import { app } from 'bunmaska'
@@ -274,7 +274,7 @@ import { app } from 'bunmaska'
 app.showAboutPanel()
 ```
 
-Bunmaska does not implement `setAboutPanelOptions` - the panel uses platform defaults.
+bunmaska does not implement `setAboutPanelOptions` - the panel uses platform defaults.
 
 ### `app.setBadgeCount([count])` _macOS_
 
@@ -354,9 +354,9 @@ Returns:
 
 * `event` Event
 
-Emitted once, when Bunmaska has finished initializing and is ready to create windows. Fires at most once. You can also call `isReady()` or use `whenReady()`.
+Emitted once, when bunmaska has finished initializing and is ready to create windows. Fires at most once. You can also call `isReady()` or use `whenReady()`.
 
-Note: unlike Electron, Bunmaska's `ready` does not carry a `launchInfo` argument.
+Note: unlike Electron, bunmaska's `ready` does not carry a `launchInfo` argument.
 
 ```ts
 import { app } from 'bunmaska'
@@ -494,7 +494,7 @@ app.userAgentFallback = 'MyApp/1.0'
 
 ### `app.dock` _macOS_ _Readonly_
 
-A `Dock | undefined` property - the macOS dock object, or `undefined` on other platforms. The Bunmaska `Dock` is a small object with:
+A `Dock | undefined` property - the macOS dock object, or `undefined` on other platforms. The bunmaska `Dock` is a small object with:
 
 * `setBadge(text: string): void` - set the dock badge text (`''` clears it).
 * `getBadge(): string` - the current dock badge text.
@@ -509,15 +509,15 @@ app.dock?.setBadge('!')
 app.dock?.bounce('critical')
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Bunmaska implements the lifecycle, paths, metadata, locale, single-instance, and macOS desktop core of Electron's `app`. The following notable Electron members are **not** implemented:
+bunmaska implements the lifecycle, paths, metadata, locale, single-instance, and macOS desktop core of Electron's `app`. The following notable Electron members are **not** implemented:
 
 - **`app.focus()`** - no programmatic app/window focus from the `app` module.
 - **`app.getFileIcon()`** - no file-icon lookup.
 - **Protocol-client APIs** - `setAsDefaultProtocolClient`, `removeAsDefaultProtocolClient`, `isDefaultProtocolClient`, `getApplicationNameForProtocol`, `getApplicationInfoForProtocol` are all absent.
 - **Recent-documents APIs** - `addRecentDocument`, `clearRecentDocuments`, `getRecentDocuments`.
-- **GPU / hardware APIs** - `disableHardwareAcceleration`, `isHardwareAccelerationEnabled`, `disableDomainBlockingFor3DAPIs`, `getGPUFeatureStatus`, `getGPUInfo`, `getAppMetrics`. (Bunmaska runs on system WebKit, not Chromium, so the `chrome://gpu`-shaped surface does not exist.)
+- **GPU / hardware APIs** - `disableHardwareAcceleration`, `isHardwareAccelerationEnabled`, `disableDomainBlockingFor3DAPIs`, `getGPUFeatureStatus`, `getGPUInfo`, `getAppMetrics`. (bunmaska runs on system WebKit, not Chromium, so the `chrome://gpu`-shaped surface does not exist.)
 - **Networking** - `configureHostResolver`, `setProxy`, `resolveProxy`, `importCertificate`, `setClientCertRequestPasswordHandler`, `configureWebAuthn`.
 - **Login items** - `getLoginItemSettings` / `setLoginItemSettings`.
 - **Accessibility APIs** - `isAccessibilitySupportEnabled`, `setAccessibilitySupportEnabled`, `getAccessibilitySupportFeatures`, `setAccessibilitySupportFeatures`, and the `accessibilitySupportEnabled` property.
@@ -526,5 +526,5 @@ Bunmaska implements the lifecycle, paths, metadata, locale, single-instance, and
 - **macOS app-relocation / security APIs** - `isInApplicationsFolder`, `moveToApplicationsFolder`, `isSecureKeyboardEntryEnabled`, `setSecureKeyboardEntryEnabled`, `startAccessingSecurityScopedResource`, `enableSandbox`.
 - **`getPath` names** - `recent` and `assets` are not supported.
 - **Properties** - `commandLine`, `runningUnderARM64Translation`, and `accessibilitySupportEnabled` are not exposed.
-- **Windows taskbar/jump-list APIs** - `setUserTasks`, `getJumpListSettings`, `setJumpList`, `setAppUserModelId`, `setToastActivatorCLSID`, and the `toastActivatorCLSID` property. (Bunmaska runs on Windows, but these jump-list/taskbar extras are not wired on any platform yet.)
+- **Windows taskbar/jump-list APIs** - `setUserTasks`, `getJumpListSettings`, `setJumpList`, `setAppUserModelId`, `setToastActivatorCLSID`, and the `toastActivatorCLSID` property. (bunmaska runs on Windows, but these jump-list/taskbar extras are not wired on any platform yet.)
 - **Events** - many Electron `app` events are not emitted by this module, including `will-finish-launching`, `certificate-error`, `select-client-certificate`, `login`, `gpu-info-update`, `render-process-gone`, `child-process-gone`, `accessibility-support-changed`, `session-created`, and the macOS `did-become-active` / `did-resign-active` / `new-window-for-tab` events. Some cross-cutting events that Electron raises on `app` (e.g. `activate`, `open-url`, `open-file`, `browser-window-created`/`-focus`/`-blur`, `web-contents-created`) are reserved as listenable names but are emitted by the window/web-contents subsystems rather than by this module - consult those modules' docs for current coverage.

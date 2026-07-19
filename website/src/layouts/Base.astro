@@ -41,8 +41,22 @@ const website = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "bunmaska",
+  // The entity-split guard: the brand is one word, but engines tokenize it as
+  // "bun maska" - claim the variants so the name renders and resolves as ours.
+  alternateName: ["bun maska", "bunmaska.org"],
   url: Astro.site?.href,
   description: DEFAULT_DESCRIPTION,
+};
+const organization = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "bunmaska",
+  url: Astro.site?.href,
+  logo: new URL("/logo.png", Astro.site).href,
+  description:
+    "bunmaska is a desktop app framework - a drop-in Electron replacement built on Bun and the system WebKit.",
+  foundingDate: "2026",
+  sameAs: [GITHUB, NPM],
 };
 const softwareApp = {
   "@context": "https://schema.org",
@@ -58,7 +72,7 @@ const softwareApp = {
   sameAs: [GITHUB, NPM],
 };
 const extra = jsonLd === undefined ? [] : Array.isArray(jsonLd) ? jsonLd : [jsonLd];
-const graphs = [website, ...(isHome ? [softwareApp] : []), ...extra];
+const graphs = [website, ...(isHome ? [organization, softwareApp] : []), ...extra];
 ---
 
 <!doctype html>

@@ -1,10 +1,10 @@
 ---
 title: "MenuItem"
-description: "Construct items for native application and context menus in Bunmaska's main process - a flat, immutable subset of Electron's MenuItem."
+description: "Construct items for native application and context menus in bunmaska's main process - a flat, immutable subset of Electron's MenuItem."
 order: 8
 ---
 
-A `MenuItem` is a single entry in a native menu - a normal command, a separator, a checkbox/radio toggle, or a submenu. In Bunmaska it is a plain, immutable value object: you build one from an options bag, hand it to a [`Menu`](./menu), and the menu is realized into a native `NSMenu` (macOS) or GTK menu (Linux). Unlike Electron, Bunmaska's `MenuItem` properties are **read-only** - you configure everything at construction time and you do not mutate the item afterward.
+A `MenuItem` is a single entry in a native menu - a normal command, a separator, a checkbox/radio toggle, or a submenu. In bunmaska it is a plain, immutable value object: you build one from an options bag, hand it to a [`Menu`](./menu), and the menu is realized into a native `NSMenu` (macOS) or GTK menu (Linux). Unlike Electron, bunmaska's `MenuItem` properties are **read-only** - you configure everything at construction time and you do not mutate the item afterward.
 
 ## Class: MenuItem
 
@@ -25,7 +25,7 @@ import { MenuItem } from 'bunmaska';
 - `checked` boolean - defaults to `false`. Only meaningful for `'checkbox'` / `'radio'` items.
 - `accelerator` string - a keyboard accelerator like `'CmdOrCtrl+Q'` (see the limitations note below).
 - `role` [`MenuRole | MenuMacroRole`](#roles) - a predefined action. When set, the role supplies a default label and accelerator and provides the native behavior; if both a `role` and a `click` are given, the role wins and the `click` is ignored.
-- `click` `() => void` - called when the item is activated. Note: Bunmaska's click takes **no arguments** (Electron passes `(menuItem, window, event)`).
+- `click` `() => void` - called when the item is activated. Note: bunmaska's click takes **no arguments** (Electron passes `(menuItem, window, event)`).
 - `submenu` [`Menu`](./menu) `| MenuItemOptions[]` - a child menu. A plain array is auto-converted via `Menu.buildFromTemplate`.
 
 ```ts
@@ -45,7 +45,7 @@ A `MenuItem` is rarely constructed by hand - most code passes plain option objec
 
 ## Properties
 
-All properties are **read-only**. There is no dynamic mutation: changing an item means rebuilding the menu. (Electron lets you flip `menuItem.checked`, `menuItem.enabled`, etc. at runtime; Bunmaska does not - yet.)
+All properties are **read-only**. There is no dynamic mutation: changing an item means rebuilding the menu. (Electron lets you flip `menuItem.checked`, `menuItem.enabled`, etc. at runtime; bunmaska does not - yet.)
 
 ### `menuItem.label`
 
@@ -96,7 +96,7 @@ console.log(toggle.label); // 'Word Wrap'
 
 ## Roles
 
-Bunmaska supports two kinds of role. A role gives an item a default label, accelerator, and native behavior with no explicit `click`.
+bunmaska supports two kinds of role. A role gives an item a default label, accelerator, and native behavior with no explicit `click`.
 
 **Item-level roles** (`MenuRole`) - each maps to a native action:
 
@@ -123,9 +123,9 @@ Menu.setApplicationMenu(menu);
 - _macOS_ - **all** item-level roles are wired. Each maps to a standard first-responder selector (e.g. `undo:`, `terminate:`, `toggleFullScreen:`) routed up the responder chain, so they behave exactly like the native shortcut.
 - _Linux_ - only the editing roles (`undo`, `redo`, `cut`, `copy`, `paste`, `pasteAndMatchStyle`, `delete`, `selectAll`) and the window roles (`minimize`, `close`, `zoom`, `togglefullscreen`) have menu-**click** wiring. The remaining roles (`quit`, `about`, `hide`, `hideOthers`, `unhide`) render as labels with no click action on Linux today - though their keyboard shortcuts still work natively via WebKit.
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Bunmaska's `MenuItem` is a deliberately small, immutable subset of Electron's. Notable gaps versus Electron's reference:
+bunmaska's `MenuItem` is a deliberately small, immutable subset of Electron's. Notable gaps versus Electron's reference:
 
 - **Dynamic mutation** - every property is read-only. Electron's "This property can be dynamically changed" for `label`, `enabled`, `checked`, `visible`, `icon`, etc. does not apply; to change an item you rebuild the menu.
 - **`visible`** - not implemented. There is no way to hide an individual item (`enabled: false` greys it out instead).
@@ -133,7 +133,7 @@ Bunmaska's `MenuItem` is a deliberately small, immutable subset of Electron's. N
 - **`sublabel`, `toolTip`, `accessibilityLabel`** _macOS_ - none of the macOS text adornments are exposed.
 - **`commandId`, `menu`, `userAccelerator`** - no back-references from an item to its sequential id, owning menu, or user-assigned accelerator.
 - **`registerAccelerator`, `acceleratorWorksWhenHidden`, `sharingItem`** - not supported.
-- **Click handler signature** - Bunmaska's `click` takes no arguments; Electron passes `(menuItem, window, event)`.
+- **Click handler signature** - bunmaska's `click` takes no arguments; Electron passes `(menuItem, window, event)`.
 - **`type: 'header'` / `'palette'`** (macOS 14+) - not in the supported `type` set.
 - **Many roles** - only the roles listed above exist. Electron's `reload`, `forceReload`, `toggleDevTools`, `resetZoom`, `zoomIn`, `zoomOut`, `services`, `front`, `appMenu`, `viewMenu`, `fileMenu`, `shareMenu`, the spell-checker/substitutions/speech roles, the tab roles, and `recentDocuments` are **not** implemented. (`appMenu` and `viewMenu` macro roles are explicitly deferred - `appMenu` needs the app name and `viewMenu` needs reload/zoom/devtools roles that don't exist yet.)
 - **Item placement options** - `before`, `after`, `beforeGroupContaining`, `afterGroupContaining` are not supported; ordering is purely the order items are appended.

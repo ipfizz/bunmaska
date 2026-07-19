@@ -31,7 +31,7 @@ If you'd rather start from nothing, this is the whole thing:
 import { app, BrowserWindow } from "bunmaska";
 
 app.whenReady().then(() => {
-  const win = new BrowserWindow({ width: 960, height: 720, title: "Hello Bunmaska" });
+  const win = new BrowserWindow({ width: 960, height: 720, title: "Hello bunmaska" });
   win.loadURL("https://example.com");
 });
 ```

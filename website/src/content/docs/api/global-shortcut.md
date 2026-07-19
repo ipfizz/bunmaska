@@ -8,7 +8,7 @@ Detect keyboard events when the application does not have keyboard focus.
 
 Process: Main
 
-The `globalShortcut` module registers and unregisters system-wide keyboard shortcuts with the operating system, so a key combination can trigger your app even when it is not focused. Bunmaska's implementation parses and validates accelerators in pure TypeScript, tracks which ones are live, and delegates the actual OS grab to a per-platform backend: Carbon on macOS, Xlib `XGrabKey` on Linux, and Win32 `RegisterHotKey` (with `WM_HOTKEY` routed through the cooperative message pump) on Windows. There is no FFI tax for the bookkeeping - only the grab itself touches native code.
+The `globalShortcut` module registers and unregisters system-wide keyboard shortcuts with the operating system, so a key combination can trigger your app even when it is not focused. bunmaska's implementation parses and validates accelerators in pure TypeScript, tracks which ones are live, and delegates the actual OS grab to a per-platform backend: Carbon on macOS, Xlib `XGrabKey` on Linux, and Win32 `RegisterHotKey` (with `WM_HOTKEY` routed through the cooperative message pump) on Windows. There is no FFI tax for the bookkeeping - only the grab itself touches native code.
 
 ```ts
 import { app, globalShortcut } from 'bunmaska';
@@ -63,7 +63,7 @@ app.whenReady().then(() => {
 
 Registers every accelerator in the array against one shared callback. Unparseable or already-taken entries are silently skipped.
 
-Note: unlike Electron, Bunmaska's `registerAll` returns `void` - it does not report a boolean for the batch. Use `isRegistered` afterward if you need to confirm which ones took.
+Note: unlike Electron, bunmaska's `registerAll` returns `void` - it does not report a boolean for the batch. Use `isRegistered` afterward if you need to confirm which ones took.
 
 ```ts
 import { app, globalShortcut } from 'bunmaska';
@@ -83,7 +83,7 @@ app.whenReady().then(() => {
 
 Returns `boolean` - Whether this application currently holds `accelerator`.
 
-This reflects Bunmaska's own registry: it is `true` only for accelerators this app successfully registered and has not unregistered. A combo owned by some other application reads as `false` here.
+This reflects bunmaska's own registry: it is `true` only for accelerators this app successfully registered and has not unregistered. A combo owned by some other application reads as `false` here.
 
 ```ts
 import { globalShortcut } from 'bunmaska';
@@ -125,9 +125,9 @@ This module emits no events. (Electron's `globalShortcut` has none either, so no
 
 This module exposes no properties - only the methods above on the `globalShortcut` singleton.
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-- **`globalShortcut.setSuspended(suspended)`** - Electron can globally pause/resume all shortcut handling (handy while a user is rebinding keys). Not implemented; there is no suspend state in the Bunmaska source.
+- **`globalShortcut.setSuspended(suspended)`** - Electron can globally pause/resume all shortcut handling (handy while a user is rebinding keys). Not implemented; there is no suspend state in the bunmaska source.
 - **`globalShortcut.isSuspended()`** - the companion getter for the above. Also absent.
 - **`registerAll` boolean result** - present, but its signature returns `void` rather than a batch boolean; check individual results with `isRegistered`.
 - **Wayland global shortcuts** - Linux support is X11-only and best-effort. Under Wayland the backend reports unsupported and `register` returns `false`; the `org.freedesktop.portal.GlobalShortcuts` path is deferred.

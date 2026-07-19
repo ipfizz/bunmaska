@@ -1,15 +1,15 @@
 ---
 title: "autoUpdater"
-description: "Application self-update for Bunmaska on macOS, Linux, and Windows: an explicit check/download/verify flow over a version.json feed, with no Squirrel and an experimental install step everywhere."
+description: "Application self-update for bunmaska on macOS, Linux, and Windows: an explicit check/download/verify flow over a version.json feed, with no Squirrel and an experimental install step everywhere."
 order: 23
 ---
 
-Enables Bunmaska apps to update themselves from a channel feed that `bunmaska build` produces. It is a drop-in subset of Electron's `autoUpdater`, but built on plain Bun rather than Squirrel: it reads an `update.json` manifest, compares versions, downloads + integrity-checks the artifact (size and wyhash), decompresses (zstd) and stages a `.tar`, then relaunches via an installer seam.
+Enables bunmaska apps to update themselves from a channel feed that `bunmaska build` produces. It is a drop-in subset of Electron's `autoUpdater`, but built on plain Bun rather than Squirrel: it reads an `update.json` manifest, compares versions, downloads + integrity-checks the artifact (size and wyhash), decompresses (zstd) and stages a `.tar`, then relaunches via an installer seam.
 
 Process: Main. The `autoUpdater` singleton is a Node.js [`EventEmitter`](https://nodejs.org/api/events.html). Two things that differ from Electron up front, so you don't get surprised:
 
 - The flow is **electron-updater style**, not Electron-core style. `checkForUpdates()` does *not* download automatically - you call `downloadUpdate()` yourself once an update is available.
-- The check/download/verify/stage pipeline works on **all three platforms Bunmaska targets - macOS, Linux, and Windows**. There is no Squirrel anywhere in this module. The one caveat is the final **install** step: it is an **experimental stub on every platform** (no Squirrel.Mac, no Squirrel.Windows), so apps are expected to supply their own installer for deterministic results (see _Replacing the installer_).
+- The check/download/verify/stage pipeline works on **all three platforms bunmaska targets - macOS, Linux, and Windows**. There is no Squirrel anywhere in this module. The one caveat is the final **install** step: it is an **experimental stub on every platform** (no Squirrel.Mac, no Squirrel.Windows), so apps are expected to supply their own installer for deterministic results (see _Replacing the installer_).
 
 ```ts
 import { autoUpdater } from 'bunmaska';
@@ -31,7 +31,7 @@ await autoUpdater.checkForUpdates();
 
 Sets the base URL of the channel feed - the directory where `update.json` and the build artifacts live. Accepts either an options object or a bare string. Throws if the URL is missing or empty.
 
-Note the shape: Bunmaska accepts only a `url`. Electron's `headers`, `serverType`, and `allowAnyVersion` options are not implemented (the feed is a static directory + JSON, so there's nothing to authenticate or negotiate).
+Note the shape: bunmaska accepts only a `url`. Electron's `headers`, `serverType`, and `allowAnyVersion` options are not implemented (the feed is a static directory + JSON, so there's nothing to authenticate or negotiate).
 
 ```ts
 import { autoUpdater } from 'bunmaska';
@@ -104,7 +104,7 @@ autoUpdater.on('update-available', async () => {
 
 Installs the staged update and relaunches, via the installer seam. Throws if nothing has been downloaded - call `downloadUpdate()` first. Should only be called after `update-downloaded` has been emitted.
 
-> **Note:** the default installer is **EXPERIMENTAL on every platform** (macOS, Linux, and Windows alike). It hands the staged tar to a best-effort, platform-specific swap-and-relaunch and is the one step not exercised by Bunmaska's test suite. Apps that need deterministic installs should inject their own installer (see _Replacing the installer_ below). _macOS_, _Linux_, and _Windows_ bundle layouts differ, which is exactly why this step is fenced off.
+> **Note:** the default installer is **EXPERIMENTAL on every platform** (macOS, Linux, and Windows alike). It hands the staged tar to a best-effort, platform-specific swap-and-relaunch and is the one step not exercised by bunmaska's test suite. Apps that need deterministic installs should inject their own installer (see _Replacing the installer_ below). _macOS_, _Linux_, and _Windows_ bundle layouts differ, which is exactly why this step is fenced off.
 
 ```ts
 import { autoUpdater } from 'bunmaska';
@@ -168,7 +168,7 @@ Returns:
 
 Emitted after `downloadUpdate()` has fetched, verified, and staged the update. Call `quitAndInstall()` to apply it.
 
-Note the payload differs from Electron: Bunmaska emits a single `UpdateInfo` object. Electron's `releaseNotes`, `releaseDate`, and `updateURL` fields are not present, because the `version.json` manifest does not carry them.
+Note the payload differs from Electron: bunmaska emits a single `UpdateInfo` object. Electron's `releaseNotes`, `releaseDate`, and `updateURL` fields are not present, because the `version.json` manifest does not carry them.
 
 ```ts
 import { autoUpdater } from 'bunmaska';
@@ -224,13 +224,13 @@ const updater = new AutoUpdaterImpl({
 
 `setDepsForTesting()` exists too, but as the name says, it is for tests - don't reach for it in app code.
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
 Compared to Electron's `autoUpdater`, the following are intentionally absent:
 
-- **Squirrel.Windows / MSIX** - Bunmaska runs the same plain tar + zstd pipeline on Windows as elsewhere, so there is no Squirrel.Windows, no MSIX detection, no `allowAnyVersion` downgrade option, and no `--squirrel-firstrun` handling. The check/download/verify/stage steps work on Windows; only the final install is the experimental cross-platform stub.
+- **Squirrel.Windows / MSIX** - bunmaska runs the same plain tar + zstd pipeline on Windows as elsewhere, so there is no Squirrel.Windows, no MSIX detection, no `allowAnyVersion` downgrade option, and no `--squirrel-firstrun` handling. The check/download/verify/stage steps work on Windows; only the final install is the experimental cross-platform stub.
 - **Squirrel.Mac** - even on macOS there is no Squirrel. Integrity is a wyhash content hash + byte-length check against the manifest, and you are responsible for code-signing the swapped bundle yourself.
 - **Event: `before-quit-for-update`** - not emitted. `quitAndInstall()` goes straight through the installer seam (the default calls `app.quit()`).
-- **Automatic download** - Electron downloads as soon as an update is available; Bunmaska makes it an explicit `downloadUpdate()` call (electron-updater style). This is a deliberate behavioral difference, not a missing feature.
+- **Automatic download** - Electron downloads as soon as an update is available; bunmaska makes it an explicit `downloadUpdate()` call (electron-updater style). This is a deliberate behavioral difference, not a missing feature.
 - **`setFeedURL` options `headers`, `serverType`, `allowAnyVersion`** - only `{ url }` (or a bare string) is accepted. The feed is a static directory, so there's nothing to send headers to or negotiate a server type with.
 - **Rich `update-downloaded` payload** - `releaseNotes`, `releaseName` as a standalone arg, `releaseDate`, and `updateURL` are not provided. You get a single `UpdateInfo` (`version`, `releaseName`); the `version.json` manifest carries nothing more.

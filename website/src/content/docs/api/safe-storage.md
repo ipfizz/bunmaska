@@ -8,7 +8,7 @@ order: 21
 
 Process: Main
 
-One deliberate divergence from Electron: there is **no `basic_text` fallback**. Electron will, when no OS keyring is present, fall back to an obfuscated near-plaintext key stored alongside the ciphertext. Bunmaska refuses to pretend that is encryption - with no keyring, `isEncryptionAvailable()` returns `false` and the encrypt/decrypt calls throw. The blob format is also Bunmaska's own versioned layout (`[version:1][iv:12][ciphertext:N][tag:16]`); it is **not** interchangeable with Electron's encrypted blobs.
+One deliberate divergence from Electron: there is **no `basic_text` fallback**. Electron will, when no OS keyring is present, fall back to an obfuscated near-plaintext key stored alongside the ciphertext. bunmaska refuses to pretend that is encryption - with no keyring, `isEncryptionAvailable()` returns `false` and the encrypt/decrypt calls throw. The blob format is also bunmaska's own versioned layout (`[version:1][iv:12][ciphertext:N][tag:16]`); it is **not** interchangeable with Electron's encrypted blobs.
 
 ## Methods
 
@@ -54,10 +54,10 @@ const sealed = readFileSync('/tmp/token.bin');
 const token = safeStorage.decryptString(sealed); // 'my-api-token'
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
 The synchronous core (`isEncryptionAvailable` / `encryptString` / `decryptString`) is fully implemented. The rest of Electron's `safeStorage` surface is absent:
 
-- **`encryptStringAsync` / `decryptStringAsync` / `isAsyncEncryptionAvailable`** - the entire async API with pluggable key providers, key rotation (`shouldReEncrypt`), and temporary-unavailability handling is not implemented. Bunmaska does the one keyring round-trip lazily on first use and caches the key, so encrypt/decrypt after that are pure in-memory AES.
-- **`getSelectedStorageBackend()`** (Electron's _Linux_ method) - there is no backend-name reporting; Bunmaska uses libsecret on Linux and exposes no selector for kwallet variants.
-- **`setUsePlainTextEncryption()`** - intentionally omitted. It exists in Electron to opt into the `basic_text` plaintext-key fallback, which Bunmaska does not have by design.
+- **`encryptStringAsync` / `decryptStringAsync` / `isAsyncEncryptionAvailable`** - the entire async API with pluggable key providers, key rotation (`shouldReEncrypt`), and temporary-unavailability handling is not implemented. bunmaska does the one keyring round-trip lazily on first use and caches the key, so encrypt/decrypt after that are pure in-memory AES.
+- **`getSelectedStorageBackend()`** (Electron's _Linux_ method) - there is no backend-name reporting; bunmaska uses libsecret on Linux and exposes no selector for kwallet variants.
+- **`setUsePlainTextEncryption()`** - intentionally omitted. It exists in Electron to opt into the `basic_text` plaintext-key fallback, which bunmaska does not have by design.

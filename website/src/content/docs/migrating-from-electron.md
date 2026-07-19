@@ -5,7 +5,7 @@ seoTitle: "Migrate from Electron to bunmaska"
 order: 1
 ---
 
-Bunmaska is drop-in **for the core module set**. Most apps that live inside `app` / `BrowserWindow` / `ipcMain` / `Menu` / `dialog` / `clipboard` / `shell` / `Tray` map across with an import change. The long tail is a different story - and we'll be honest about which is which.
+bunmaska is drop-in **for the core module set**. Most apps that live inside `app` / `BrowserWindow` / `ipcMain` / `Menu` / `dialog` / `clipboard` / `shell` / `Tray` map across with an import change. The long tail is a different story - and we'll be honest about which is which.
 
 ## Change your imports
 
@@ -31,7 +31,7 @@ Windows, web contents, IPC, context isolation, menus, dialogs, clipboard (incl. 
 
 ## What needs real work
 
-- **`BrowserView` / `WebContentsView`** - Bunmaska is single-process; these aren't available.
+- **`BrowserView` / `WebContentsView`** - bunmaska is single-process; these aren't available.
 - **Synchronous IPC** (`ipcRenderer.sendSync`) - the context bridge is async-only. Move to `invoke`.
 - **The Chromium-internal surface** - `desktopCapturer`, `net`/`netLog`, `webRequest`/proxy, `crashReporter`, `contentTracing`, extensions. Out of scope by design.
 
@@ -39,6 +39,6 @@ Windows, web contents, IPC, context isolation, menus, dialogs, clipboard (incl. 
 
 **Web Serial, WebHID, and WebUSB are Chromium-only.** System WebKit does not expose `navigator.serial` / `.hid` / `.usb`. If your Electron app does device access from the **renderer**, that code is **not** drop-in - it must move to the main process and cross IPC.
 
-The upside: device access in the main process via [Bunmaska's buildless native modules](/docs/native-modules/overview) is arguably *cleaner* than `node-serialport` - no `node-gyp`, no `electron-rebuild`, no per-arch prebuilds. An Electron app that already does serial in the main process maps over almost unchanged.
+The upside: device access in the main process via [bunmaska's buildless native modules](/docs/native-modules/overview) is arguably *cleaner* than `node-serialport` - no `node-gyp`, no `electron-rebuild`, no per-arch prebuilds. An Electron app that already does serial in the main process maps over almost unchanged.
 
-> The honest framing: Bunmaska is "drop-in if you live inside the core module set." If you lean on `session.cookies`, `BrowserView`, sync IPC, Web Serial, or an N-API addon, expect an *architecture change*, not a recompile.
+> The honest framing: bunmaska is "drop-in if you live inside the core module set." If you lean on `session.cookies`, `BrowserView`, sync IPC, Web Serial, or an N-API addon, expect an *architecture change*, not a recompile.

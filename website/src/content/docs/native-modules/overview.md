@@ -5,7 +5,7 @@ seoTitle: "Buildless native modules in Bun - no node-gyp"
 order: 1
 ---
 
-This is the part Electron can't match without un-bundling Chromium. In Bunmaska, talking to the operating system is not a build problem - it's just code.
+This is the part Electron can't match without un-bundling Chromium. In bunmaska, talking to the operating system is not a build problem - it's just code.
 
 ## What a native module *is*
 
@@ -22,7 +22,7 @@ const { symbols: libc } = dlopen("libc.so.6", {
 export const pid = () => libc.getpid();
 ```
 
-It's not aspirational - it's how Bunmaska itself is built. About thirty system libraries (AppKit, IOKit, Carbon, CoreGraphics, GTK4, WebKitGTK, libsecret, …) are wired exactly this way, with zero compiled native code in the tree.
+It's not aspirational - it's how bunmaska itself is built. About thirty system libraries (AppKit, IOKit, Carbon, CoreGraphics, GTK4, WebKitGTK, libsecret, …) are wired exactly this way, with zero compiled native code in the tree.
 
 ## The three rules you must internalize
 
@@ -41,4 +41,4 @@ A USB serial monitor is the cleanest demo of "buildless native module." The whol
 
 No compiled code. No prebuilds. Just a `.ts` file that opens a file descriptor and talks to it.
 
-> **The Web Serial caveat.** `navigator.serial` / WebHID / WebUSB are **Chromium-only** - system WebKit doesn't implement them. So device access in Bunmaska lives in the **main process** (via FFI) and crosses IPC to the renderer. In exchange, you skip the entire `node-gyp` / `electron-rebuild` dance. It's a cleaner deal than it sounds.
+> **The Web Serial caveat.** `navigator.serial` / WebHID / WebUSB are **Chromium-only** - system WebKit doesn't implement them. So device access in bunmaska lives in the **main process** (via FFI) and crosses IPC to the renderer. In exchange, you skip the entire `node-gyp` / `electron-rebuild` dance. It's a cleaner deal than it sounds.

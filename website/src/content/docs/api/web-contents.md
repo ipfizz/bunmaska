@@ -1,12 +1,12 @@
 ---
 title: "webContents"
-description: "Render and control the web page inside a BrowserWindow - Bunmaska's drop-in WebContents on system WebKit (macOS, Linux, and Windows)."
+description: "Render and control the web page inside a BrowserWindow - bunmaska's drop-in WebContents on system WebKit (macOS, Linux, and Windows)."
 order: 3
 ---
 
 `webContents` controls and observes the page rendered inside a [`BrowserWindow`](browser-window.md). You don't construct it directly - you reach it through `win.webContents`, and most content methods on `BrowserWindow` delegate straight to it. It extends Node's `EventEmitter`, and on construction it bridges the native web view to `ipcMain`, so `ipcMain.handle` / `ipcRenderer.invoke` and `webContents.send` / `ipcRenderer.on` work with no per-window wiring.
 
-A heads-up on scope: Bunmaska has exactly one frame per view. There is no Chromium underneath, so anything that depends on the multi-frame / multi-process model (subframes, `mainFrame`, `RenderProcessGone`, the debugger / CDP) simply isn't here. What follows is what the class actually exposes.
+A heads-up on scope: bunmaska has exactly one frame per view. There is no Chromium underneath, so anything that depends on the multi-frame / multi-process model (subframes, `mainFrame`, `RenderProcessGone`, the debugger / CDP) simply isn't here. What follows is what the class actually exposes.
 
 ## Methods
 
@@ -212,7 +212,7 @@ Returns `number` - the current zoom level (the inverse of `setZoomLevel`).
 Overrides the User-Agent string for subsequent navigations on this view. (No `userAgentMetadata` argument.)
 
 ```ts
-win.webContents.setUserAgent('Bunmaska/1.0');
+win.webContents.setUserAgent('bunmaska/1.0');
 ```
 
 ### `contents.getUserAgent()`
@@ -282,7 +282,7 @@ Closes the developer tools. Best-effort. Stubbed (no-op) on Windows, like `openD
 
 ### `contents.toggleDevTools()`
 
-Opens the devtools if closed, closes them if open (tracked via Bunmaska's own open/closed flag).
+Opens the devtools if closed, closes them if open (tracked via bunmaska's own open/closed flag).
 
 ```ts
 win.webContents.toggleDevTools();
@@ -290,7 +290,7 @@ win.webContents.toggleDevTools();
 
 ### `contents.isDevToolsOpened()`
 
-Returns `boolean` - whether the devtools were last opened by Bunmaska and not since closed. This is Bunmaska's own bookkeeping flag, not a query of the live inspector window.
+Returns `boolean` - whether the devtools were last opened by bunmaska and not since closed. This is bunmaska's own bookkeeping flag, not a query of the live inspector window.
 
 ### `contents.isDestroyed()`
 
@@ -324,7 +324,7 @@ ipcRenderer.on('update-available', (_event, info) => {
 
 ## Events
 
-`webContents` extends `EventEmitter`. Bunmaska emits a deliberately small, navigation-focused subset, driven by the native navigation delegate (macOS) / WebKitGTK load signals (Linux).
+`webContents` extends `EventEmitter`. bunmaska emits a deliberately small, navigation-focused subset, driven by the native navigation delegate (macOS) / WebKitGTK load signals (Linux).
 
 ### Event: 'did-start-loading'
 
@@ -402,9 +402,9 @@ A `number` - process-unique id, matching Electron's `webContents.id`. Read-only.
 console.log(win.webContents.id);
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Electron's `webContents` is huge; Bunmaska implements the navigation + scripting + IPC core and leaves the rest out. Notable gaps:
+Electron's `webContents` is huge; bunmaska implements the navigation + scripting + IPC core and leaves the rest out. Notable gaps:
 
 - **Module-level statics** - `webContents.getAllWebContents()`, `getFocusedWebContents()`, `fromId()`, `fromFrame()`, `fromDevToolsTargetId()`. The class is only reachable via `win.webContents`; there's no registry lookup.
 - **The frame model** - `mainFrame`, `opener`, `frames`, and every multi-frame event (`will-frame-navigate`, `did-frame-navigate`, `did-frame-finish-load`, `did-start-navigation`, `did-navigate-in-page`). One view, one frame, no `WebFrameMain`.

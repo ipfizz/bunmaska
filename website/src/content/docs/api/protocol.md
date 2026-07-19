@@ -6,9 +6,9 @@ order: 17
 
 Register a custom URL scheme and serve its requests from the main process. A handler bound to a scheme like `app` is invoked for every request to that scheme and returns the bytes plus MIME type to serve, so bundled assets can come from `app://host/index.html` without standing up a real HTTP server.
 
-In Bunmaska the public surface is a single module-level registry (there is no per-`session` `protocol` object yet). The registry API itself - `handle`, `unhandle`, `isProtocolHandled`, `getRegisteredSchemes`, `dispatch`, etc. - exists on every platform, including Windows. What differs is **serving**: registered schemes are actually served to web views only on macOS (`WKURLSchemeHandler` via `setURLSchemeHandler:forURLScheme:`) and Linux (WebKitGTK's `webkit_web_context_register_uri_scheme`). On Windows serving is **engine-blocked** - the WinCairo WebKit2 C API exposes no custom-scheme-handler entry point, so a registered scheme such as `app://` will not serve there. Custom schemes must be registered **before** the window/web view that serves them is created - the native backends read the registered schemes at web-view creation and cannot add a scheme to a view that already exists.
+In bunmaska the public surface is a single module-level registry (there is no per-`session` `protocol` object yet). The registry API itself - `handle`, `unhandle`, `isProtocolHandled`, `getRegisteredSchemes`, `dispatch`, etc. - exists on every platform, including Windows. What differs is **serving**: registered schemes are actually served to web views only on macOS (`WKURLSchemeHandler` via `setURLSchemeHandler:forURLScheme:`) and Linux (WebKitGTK's `webkit_web_context_register_uri_scheme`). On Windows serving is **engine-blocked** - the WinCairo WebKit2 C API exposes no custom-scheme-handler entry point, so a registered scheme such as `app://` will not serve there. Custom schemes must be registered **before** the window/web view that serves them is created - the native backends read the registered schemes at web-view creation and cannot add a scheme to a view that already exists.
 
-> A note on the handler shape: unlike Electron's `protocol.handle`, which returns a web `Response`/`Promise<Response>`, Bunmaska's handler is **synchronous** and returns a small `{ data, mimeType }` object (or `undefined` to decline). Plan accordingly - see [Not in Bunmaska (yet)](#not-in-bunmaska-yet).
+> A note on the handler shape: unlike Electron's `protocol.handle`, which returns a web `Response`/`Promise<Response>`, bunmaska's handler is **synchronous** and returns a small `{ data, mimeType }` object (or `undefined` to decline). Plan accordingly - see [Not in bunmaska (yet)](#not-in-bunmaska-yet).
 
 ## Methods
 
@@ -150,11 +150,11 @@ type ProtocolHandler = (request: ProtocolRequest) => ProtocolResponse | undefine
 
 There is also an exported `DEFAULT_MIME_TYPE` constant (`'text/html'`) on the module, used when a handler omits `mimeType`.
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Bunmaska implements the modern `handle`/`unhandle`/`isProtocolHandled` core, but with a simpler handler contract and without the privileged-scheme and interception machinery:
+bunmaska implements the modern `handle`/`unhandle`/`isProtocolHandled` core, but with a simpler handler contract and without the privileged-scheme and interception machinery:
 
-- **Web `Response` handlers** - Electron's `protocol.handle` returns a `Response | Promise<Response>` (and pairs naturally with `net.fetch`). Bunmaska's handler is **synchronous** and returns `{ data, mimeType } | undefined`. No `Promise`, no streaming body, no per-request `status`/`headers` beyond MIME type.
+- **Web `Response` handlers** - Electron's `protocol.handle` returns a `Response | Promise<Response>` (and pairs naturally with `net.fetch`). bunmaska's handler is **synchronous** and returns `{ data, mimeType } | undefined`. No `Promise`, no streaming body, no per-request `status`/`headers` beyond MIME type.
 - **`registerSchemesAsPrivileged(customSchemes)`** - not implemented. You cannot declare a scheme as `standard` / `secure` / `bypassCSP` / `supportFetchAPI` / `stream` / etc. Schemes are served as-is by the platform web view.
 - **Per-`session` protocol** - there is one global registry; no `session.protocol` / `ses.protocol.handle(...)` and no `partition` targeting. A custom scheme applies to the web views created after it is registered.
 - **The deprecated register/intercept family** - `registerFileProtocol`, `registerBufferProtocol`, `registerStringProtocol`, `registerHttpProtocol`, `registerStreamProtocol`, their `intercept*` counterparts, plus `unregisterProtocol` / `uninterceptProtocol` / `isProtocolRegistered` / `isProtocolIntercepted`. Electron itself deprecated these in favor of `handle`, so they are unlikely to return.

@@ -1,10 +1,10 @@
 ---
 title: "contextBridge"
-description: "Renderer-side API for exposing a safe, async-only bridge from an isolated Bunmaska preload world to the page."
+description: "Renderer-side API for exposing a safe, async-only bridge from an isolated bunmaska preload world to the page."
 order: 6
 ---
 
-Create a safe bridge from an isolated preload world into the page's main world. In Bunmaska the preload (and this `contextBridge`) run in a dedicated isolated JS world - `WKContentWorld 'BunmaskaPreload'` on macOS, the `BunmaskaPreload` named world on Linux - so the page cannot see preload globals directly. `exposeInMainWorld` bridges across that boundary using a shared-`document` `CustomEvent` channel, materialising `window[apiKey]` in the page.
+Create a safe bridge from an isolated preload world into the page's main world. In bunmaska the preload (and this `contextBridge`) run in a dedicated isolated JS world - `WKContentWorld 'BunmaskaPreload'` on macOS, the `BunmaskaPreload` named world on Linux - so the page cannot see preload globals directly. `exposeInMainWorld` bridges across that boundary using a shared-`document` `CustomEvent` channel, materialising `window[apiKey]` in the page.
 > **Windows caveat:** on Windows (WinCairo) there is no isolated-world API yet, so the bridge runs in the **page world** - the isolation guarantee is weaker than on macOS/Linux. Don't rely on world isolation as a security boundary on Windows; see the [parity page](/docs/migrating/parity).
 
 Process: Renderer (preload)
@@ -39,7 +39,7 @@ Installs a cross-world host (lazily, on first call) and announces a page-world s
 - **Function values** become async proxies. Calling `window[apiKey].method(...args)` dispatches a request event the isolated host answers, and returns a `Promise` that resolves with the result (or rejects with an `Error`). Arguments and the return value cross via structured clone, so you can pass strings, numbers, booleans, arrays, plain objects, and other cloneable types - but **not** functions, callbacks, or live object references. Even a synchronous-looking handler is async on the page side.
 - **Non-function values** are deep-cloned and deep-frozen into the page object once, at expose time. Later mutations on the isolated side are **not** reflected back to the page.
 
-Calls have a 30-second timeout: if the isolated host never replies, the page-side `Promise` rejects with a timeout error. Calling this outside the Bunmaska isolated preload world (where no cross-world channel exists) throws a `BunmaskaError`.
+Calls have a 30-second timeout: if the isolated host never replies, the page-side `Promise` rejects with a timeout error. Calling this outside the bunmaska isolated preload world (where no cross-world channel exists) throws a `BunmaskaError`.
 
 This is the only method on the module - and unlike Electron's, it is genuinely the whole surface.
 
@@ -85,11 +85,11 @@ contextBridge.exposeInMainWorld('progressAPI', {
 });
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Bunmaska implements only `exposeInMainWorld`. The following Electron `contextBridge` members are **not** present in the source:
+bunmaska implements only `exposeInMainWorld`. The following Electron `contextBridge` members are **not** present in the source:
 
-- **`exposeInIsolatedWorld(worldId, apiKey, api)`** - no arbitrary numeric world IDs. Bunmaska has exactly one isolated preload world (`BunmaskaPreload`); there is no API to target other worlds.
+- **`exposeInIsolatedWorld(worldId, apiKey, api)`** - no arbitrary numeric world IDs. bunmaska has exactly one isolated preload world (`BunmaskaPreload`); there is no API to target other worlds.
 - **`executeInMainWorld(executionScript)`** (_Experimental_) - no way to serialize a function and run it in the main world from the preload.
-- **Synchronous exposed functions** - not a named method, but a real semantic gap: in Electron, functions proxied over the bridge can return synchronously. In Bunmaska every exposed function is async (the page receives a `Promise`), because the transport is an async `CustomEvent` round-trip. Plan your API as async from the start.
-- **Live, mutable non-function values** - Electron also copies-and-freezes, so this matches; just note Bunmaska snapshots data **once** at expose time with no later sync, same as Electron.
+- **Synchronous exposed functions** - not a named method, but a real semantic gap: in Electron, functions proxied over the bridge can return synchronously. In bunmaska every exposed function is async (the page receives a `Promise`), because the transport is an async `CustomEvent` round-trip. Plan your API as async from the start.
+- **Live, mutable non-function values** - Electron also copies-and-freezes, so this matches; just note bunmaska snapshots data **once** at expose time with no later sync, same as Electron.

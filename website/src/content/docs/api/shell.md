@@ -12,7 +12,7 @@ import { shell } from 'bunmaska';
 await shell.openExternal('https://github.com');
 ```
 
-A note on shapes: `openExternal` and `openPath` return Promises (matching Electron), while `showItemInFolder` and `beep` are synchronous. Bunmaska does not have a sandboxed renderer, so unlike Electron there is no "won't work in a sandbox" caveat to worry about here.
+A note on shapes: `openExternal` and `openPath` return Promises (matching Electron), while `showItemInFolder` and `beep` are synchronous. bunmaska does not have a sandboxed renderer, so unlike Electron there is no "won't work in a sandbox" caveat to worry about here.
 
 ## Methods
 
@@ -22,7 +22,7 @@ Returns `Promise<boolean>` - resolves to whether the URL was successfully handed
 
 Opens an external URL in the desktop's default manner - `https:` in the default browser, `mailto:` in the default mail client, and so on. On macOS this goes through `NSWorkspace`; on Linux through the GTK/GIO launcher; on Windows through `ShellExecuteW`.
 
-Note the return type difference from Electron: Electron's `openExternal` resolves to `void` and rejects on failure, whereas Bunmaska resolves to a `boolean` success flag and does not reject. Bunmaska also does not accept the second `options` argument (`activate`, `workingDirectory`, `logUsage`) - those Electron options were either macOS/Windows-specific or no-ops here.
+Note the return type difference from Electron: Electron's `openExternal` resolves to `void` and rejects on failure, whereas bunmaska resolves to a `boolean` success flag and does not reject. bunmaska also does not accept the second `options` argument (`activate`, `workingDirectory`, `logUsage`) - those Electron options were either macOS/Windows-specific or no-ops here.
 
 ```ts
 import { shell } from 'bunmaska';
@@ -68,12 +68,12 @@ import { shell } from 'bunmaska';
 shell.beep();
 ```
 
-## Not in Bunmaska (yet)
+## Not in bunmaska (yet)
 
-Bunmaska implements four of Electron's `shell` methods. The following Electron members are not present in the source:
+bunmaska implements four of Electron's `shell` methods. The following Electron members are not present in the source:
 
 - **`shell.trashItem(path)`** - moving a file to the OS trash/recycle bin is not implemented on either platform. There is no fallback; if you need it today you must shell out yourself.
-- **`shell.openExternal` options** - the `options` argument (`activate` _macOS_, `workingDirectory` _Windows_, `logUsage` _Windows_) is not accepted. Bunmaska's `openExternal` takes only `url`.
-- **`shell.writeShortcutLink(...)` / `shell.readShortcutLink(...)`** - Windows-only shortcut (`.lnk`) APIs. Even though Bunmaska now ships on Windows, these are not implemented; they remain genuinely out of scope rather than merely "not yet."
+- **`shell.openExternal` options** - the `options` argument (`activate` _macOS_, `workingDirectory` _Windows_, `logUsage` _Windows_) is not accepted. bunmaska's `openExternal` takes only `url`.
+- **`shell.writeShortcutLink(...)` / `shell.readShortcutLink(...)`** - Windows-only shortcut (`.lnk`) APIs. Even though bunmaska now ships on Windows, these are not implemented; they remain genuinely out of scope rather than merely "not yet."
 
 One behavioral difference worth repeating: `shell.openExternal` resolves to a `boolean` success flag and never rejects, whereas Electron resolves to `void` and rejects on failure.
