@@ -52,3 +52,20 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@4 pages deploy dist --project-name=bunmaska --branch=main
+
+      # IndexNow: one ping tells Bing (and the AI surfaces riding its index -
+      # Copilot, partly ChatGPT), Yandex, Naver etc. the site changed. Google
+      # does not participate - the sitemap covers it. Key file lives in public/.
+      - name: Ping IndexNow with the deployed URLs
+        run: |
+          KEY=$(ls dist | grep -E '^[0-9a-f]{32}\.txt$' | head -1 | sed 's/\.txt$//')
+          grep -oh '<loc>[^<]*' dist/sitemap-*.xml | sed 's/<loc>//' | grep -v '\.xml$' > /tmp/urls.txt
+          COUNT=$(wc -l < /tmp/urls.txt | tr -d ' ')
+          python3 -c "
+          import json, sys
+          urls = open('/tmp/urls.txt').read().split()
+          print(json.dumps({'host': 'bunmaska.org', 'key': '$KEY', 'keyLocation': f'https://bunmaska.org/$KEY.txt', 'urlList': urls}))
+          " > /tmp/indexnow.json
+          curl -s -w "IndexNow HTTP %{http_code} ($COUNT urls)\n" -o /dev/null \
+            -X POST -H "Content-Type: application/json" \
+            --data @/tmp/indexnow.json https://api.indexnow.org/indexnow
