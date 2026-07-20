@@ -25,7 +25,7 @@ bunmaska dev
 
 ## `bunmaska run <entry>`
 
-Runs an entry file once, no watching. Equivalent to `bun run <entry>` with bunmaska's runtime wiring.
+Runs an entry file once, no watching. Equivalent to `bun run <entry>` with Bunmaska's runtime wiring.
 
 ```sh
 bunmaska run src/main.ts

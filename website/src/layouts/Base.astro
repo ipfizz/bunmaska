@@ -14,9 +14,9 @@ interface Props {
   jsonLd?: Record<string, unknown> | Record<string, unknown>[] | undefined;
 }
 
-const DEFAULT_TITLE = "bunmaska - a drop-in Electron replacement built on Bun";
+const DEFAULT_TITLE = "Bunmaska - a drop-in Electron replacement built on Bun";
 const DEFAULT_DESCRIPTION =
-  "bunmaska is a drop-in Electron replacement built on Bun and your OS's own WebKit - no bundled Chromium, no node-gyp. Native modules that are just .ts files. Alpha, open source, MIT.";
+  "Bunmaska is a drop-in Electron replacement built on Bun and your OS's own WebKit - no bundled Chromium, no node-gyp. Native modules that are just .ts files. Alpha, open source, MIT.";
 const {
   title,
   description = DEFAULT_DESCRIPTION,
@@ -40,28 +40,29 @@ const isHome = Astro.url.pathname === "/";
 const website = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "bunmaska",
-  // The entity-split guard: the brand is one word, but engines tokenize it as
-  // "bun maska" - claim the variants so the name renders and resolves as ours.
-  alternateName: ["bun maska", "bunmaska.org"],
+  name: "Bunmaska",
+  // The entity-split guard: the brand is one word (capital B in prose; the
+  // npm package and domain are lowercase), but engines tokenize it as "bun
+  // maska" - claim the variants so the name renders and resolves as ours.
+  alternateName: ["bunmaska", "bun maska", "bunmaska js", "bunmaska.org"],
   url: Astro.site?.href,
   description: DEFAULT_DESCRIPTION,
 };
 const organization = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "bunmaska",
+  name: "Bunmaska",
   url: Astro.site?.href,
   logo: new URL("/logo.png", Astro.site).href,
   description:
-    "bunmaska is a desktop app framework - a drop-in Electron replacement built on Bun and the system WebKit.",
+    "Bunmaska is a desktop app framework - a drop-in Electron replacement built on Bun and the system WebKit.",
   foundingDate: "2026",
   sameAs: [GITHUB, NPM],
 };
 const softwareApp = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "bunmaska",
+  name: "Bunmaska",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "macOS, Linux, Windows",
   description: DEFAULT_DESCRIPTION,

@@ -1,12 +1,12 @@
 ---
 title: "powerMonitor"
-description: "Monitor system sleep/wake and screen lock/unlock events in the bunmaska main process."
+description: "Monitor system sleep/wake and screen lock/unlock events in the Bunmaska main process."
 order: 19
 ---
 
 Process: Main
 
-`powerMonitor` lets the main process observe system power-state transitions - when the machine suspends or resumes, and when the screen is locked or unlocked. In bunmaska it is an `EventEmitter` that wires native observers on macOS (NSWorkspace sleep/wake plus the distributed screen-lock notifications), Linux (systemd-logind's `PrepareForSleep` and session `Lock`/`Unlock` D-Bus signals), and Windows (`WM_POWERBROADCAST` for suspend/resume and `WM_WTSSESSION_CHANGE` for lock/unlock). It is an event-only module today: the idle-time and battery query surface from Electron is not here yet (see below).
+`powerMonitor` lets the main process observe system power-state transitions - when the machine suspends or resumes, and when the screen is locked or unlocked. In Bunmaska it is an `EventEmitter` that wires native observers on macOS (NSWorkspace sleep/wake plus the distributed screen-lock notifications), Linux (systemd-logind's `PrepareForSleep` and session `Lock`/`Unlock` D-Bus signals), and Windows (`WM_POWERBROADCAST` for suspend/resume and `WM_WTSSESSION_CHANGE` for lock/unlock). It is an event-only module today: the idle-time and battery query surface from Electron is not here yet (see below).
 
 The observers attach once at startup. You import the singleton and listen - no construction, no `startObserving()` call from app code (the bootstrap does that for you).
 
@@ -56,7 +56,7 @@ powerMonitor.on('lock-screen', () => {
 });
 ```
 
-A note on the Linux coarseness (these mirror logind's own limits, not bunmaska bugs): the event only fires when something actually drives the session's logind `Lock` method (e.g. `loginctl lock-session`). A bare `i3lock`/`xscreensaver` that does not integrate with logind will not trigger it. On multi-seat / fast-user-switching systems another session's lock can fire yours, since bunmaska matches the signal on any session path.
+A note on the Linux coarseness (these mirror logind's own limits, not Bunmaska bugs): the event only fires when something actually drives the session's logind `Lock` method (e.g. `loginctl lock-session`). A bare `i3lock`/`xscreensaver` that does not integrate with logind will not trigger it. On multi-seat / fast-user-switching systems another session's lock can fire yours, since Bunmaska matches the signal on any session path.
 
 ### Event: 'unlock-screen'
 
@@ -74,7 +74,7 @@ powerMonitor.on('unlock-screen', () => {
 
 ## Methods
 
-`powerMonitor` is a standard `EventEmitter`, so the usual instance methods (`on`, `once`, `off`/`removeListener`, `removeAllListeners`, `emit`, ...) are available. Beyond those, the only bunmaska-specific method is:
+`powerMonitor` is a standard `EventEmitter`, so the usual instance methods (`on`, `once`, `off`/`removeListener`, `removeAllListeners`, `emit`, ...) are available. Beyond those, the only Bunmaska-specific method is:
 
 ### `powerMonitor.startObserving([observe])`
 
@@ -89,9 +89,9 @@ powerMonitor.startObserving();
 
 > Note: there is also a `resetObservingForTesting()` method. As the name promises, it exists for tests only - do not rely on it in app code.
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
-bunmaska's `powerMonitor` currently covers sleep/wake and screen lock/unlock. The rest of Electron's surface for this module is not implemented:
+Bunmaska's `powerMonitor` currently covers sleep/wake and screen lock/unlock. The rest of Electron's surface for this module is not implemented:
 
 - **`getSystemIdleState(idleThreshold)`** and **`getSystemIdleTime()`** - idle-state/idle-time queries. Unimplemented on all platforms (not Windows-specific); the source flags IOKit/UPower idle queries as a separate follow-up.
 - **`isOnBatteryPower()`** and the **`onBatteryPower`** property - battery vs. AC power state. Unimplemented on all platforms; same follow-up.

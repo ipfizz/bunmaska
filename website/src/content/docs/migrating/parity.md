@@ -5,7 +5,7 @@ seoTitle: "Electron API parity matrix - per module, per platform"
 order: 2
 ---
 
-We're allergic to lying in tables, so here's the honest map. bunmaska implements **~21 of Electron's main-process modules** - about **70-80% of what a typical webview app actually uses** - and now ships on **three platforms**: macOS (AppKit + WKWebView), Linux (GTK 4 + WebKitGTK 6), and Windows (WinCairo WebKit + Win32). No bundled Chromium on any of them.
+We're allergic to lying in tables, so here's the honest map. Bunmaska implements **~21 of Electron's main-process modules** - about **70-80% of what a typical webview app actually uses** - and now ships on **three platforms**: macOS (AppKit + WKWebView), Linux (GTK 4 + WebKitGTK 6), and Windows (WinCairo WebKit + Win32). No bundled Chromium on any of them.
 
 Support is not uniform across platforms, and we won't pretend it is. The table below is the source of truth.
 

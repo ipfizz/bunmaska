@@ -5,7 +5,7 @@ seoTitle: "The engine store - pin an exact WebKit version"
 order: 3
 ---
 
-bunmaska apps render on **the system's WebKit** by default - WKWebView on macOS, WebKitGTK 6 on Linux. That's the whole reason apps are tiny: there's no engine to ship. The trade-off is that the WebKit version varies from machine to machine, so "tested on my laptop" isn't quite "tested on your user's laptop."
+Bunmaska apps render on **the system's WebKit** by default - WKWebView on macOS, WebKitGTK 6 on Linux. That's the whole reason apps are tiny: there's no engine to ship. The trade-off is that the WebKit version varies from machine to machine, so "tested on my laptop" isn't quite "tested on your user's laptop."
 
 When that matters, you can **pin the exact WebKit build you tested**. This page explains how, and is honest about where the feature actually is today.
 
@@ -43,7 +43,7 @@ A flat, content-addressed string - `<engine>-<api>-<upstream>-<rev>-<os>-<arch>`
 webkitgtk-6.0-2.52.4-bunmaska1-linux-x64
 ```
 
-The `upstream` field is the actual WebKit release (the thing that changes how pages render); `rev` is bunmaska's build of it. The id is both the store directory name and the lookup key.
+The `upstream` field is the actual WebKit release (the thing that changes how pages render); `rev` is Bunmaska's build of it. The id is both the store directory name and the lookup key.
 
 ## What happens at launch
 
@@ -66,7 +66,7 @@ bunmaska engine verify <id>      # structural integrity check
 bunmaska doctor                  # runtime, store, and the engine this project resolves
 ```
 
-Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything, and the extracted engine's own signed `engine.json` id must match the id you asked for (so a compromised mirror cannot swap one signed engine in for another). The official feed's signing key is a **trust anchor baked into bunmaska** - public, verified automatically, nothing to configure. To run a private mirror, set `engine.feed = { url, publicKey }` in `bunmaska.config`.
+Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything, and the extracted engine's own signed `engine.json` id must match the id you asked for (so a compromised mirror cannot swap one signed engine in for another). The official feed's signing key is a **trust anchor baked into Bunmaska** - public, verified automatically, nothing to configure. To run a private mirror, set `engine.feed = { url, publicKey }` in `bunmaska.config`.
 
 ## Self-hosting an engine feed (advanced)
 

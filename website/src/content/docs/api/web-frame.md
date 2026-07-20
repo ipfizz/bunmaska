@@ -1,10 +1,10 @@
 ---
 title: "webFrame"
-description: "Renderer-process API for zooming, injecting CSS, and evaluating script in the current bunmaska page - a partial drop-in for Electron's webFrame."
+description: "Renderer-process API for zooming, injecting CSS, and evaluating script in the current Bunmaska page - a partial drop-in for Electron's webFrame."
 order: 24
 ---
 
-Customize the rendering of the current web page from the renderer process. bunmaska's `webFrame` is a renderer-side object that runs inside the page's isolated world (which shares the DOM with the page), so its zoom and CSS mutations affect what you see. It covers the day-to-day subset of Electron's `WebFrame`: zoom, CSS injection, and script evaluation - but it does not yet model the frame-hierarchy tree (`top`/`parent`/`firstChild`), spellcheck, or resource accounting.
+Customize the rendering of the current web page from the renderer process. Bunmaska's `webFrame` is a renderer-side object that runs inside the page's isolated world (which shares the DOM with the page), so its zoom and CSS mutations affect what you see. It covers the day-to-day subset of Electron's `WebFrame`: zoom, CSS injection, and script evaluation - but it does not yet model the frame-hierarchy tree (`top`/`parent`/`firstChild`), spellcheck, or resource accounting.
 
 Process: Renderer
 
@@ -15,7 +15,7 @@ import { webFrame } from 'bunmaska/renderer';
 webFrame.setZoomFactor(2);
 ```
 
-> Note on zoom backing: this renderer-local `webFrame` implements zoom via WebKit's non-standard CSS `zoom` on the document element - a layout-zoom approximation, not the native WKWebView magnification (macOS) or WebKitGTK `zoom_level` (Linux). bunmaska's main process does expose a native page zoom on the window/`webContents` side, but the renderer `webFrame` here is deliberately renderer-local and does not call into it.
+> Note on zoom backing: this renderer-local `webFrame` implements zoom via WebKit's non-standard CSS `zoom` on the document element - a layout-zoom approximation, not the native WKWebView magnification (macOS) or WebKitGTK `zoom_level` (Linux). Bunmaska's main process does expose a native page zoom on the window/`webContents` side, but the renderer `webFrame` here is deliberately renderer-local and does not call into it.
 
 ## Methods
 
@@ -56,7 +56,7 @@ import { webFrame } from 'bunmaska/renderer';
 webFrame.setZoomLevel(1); // ≈ 120%
 ```
 
-> Unlike Chromium/Electron, bunmaska does not enforce the ±300%/50% clamp or the same-origin zoom-propagation policy. The level is a pure mathematical inverse of the factor and is applied to this frame only.
+> Unlike Chromium/Electron, Bunmaska does not enforce the ±300%/50% clamp or the same-origin zoom-propagation policy. The level is a pure mathematical inverse of the factor and is applied to this frame only.
 
 ### `webFrame.getZoomLevel()`
 
@@ -85,7 +85,7 @@ const key = webFrame.insertCSS('body { background: rebeccapurple; }');
 webFrame.removeInsertedCSS(key);
 ```
 
-> Note: Electron's `insertCSS(css, options)` accepts a `cssOrigin: 'user' | 'author'` option. bunmaska's signature takes the CSS string only - every insertion behaves like an author-origin stylesheet.
+> Note: Electron's `insertCSS(css, options)` accepts a `cssOrigin: 'user' | 'author'` option. Bunmaska's signature takes the CSS string only - every insertion behaves like an author-origin stylesheet.
 
 ### `webFrame.removeInsertedCSS(key)`
 
@@ -120,7 +120,7 @@ console.log(title);
 
 This `webFrame` exposes no instance properties. The frame-hierarchy and identity properties from Electron (`top`, `opener`, `parent`, `firstChild`, `nextSibling`, `routingId`, `frameToken`) are not modeled - see below.
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
 The following Electron `webFrame` members are intentionally absent from this module:
 
@@ -133,4 +133,4 @@ The following Electron `webFrame` members are intentionally absent from this mod
 - **Properties `top`, `opener`, `parent`, `firstChild`, `nextSibling`, `routingId`, `frameToken`** - the frame hierarchy is not exposed; `webFrame` represents the current frame only, with no links to relatives.
 - **`insertCSS` `cssOrigin` option**, **`executeJavaScript` `userGesture`/`callback` arguments** - the implemented methods exist but with the trimmed signatures noted above.
 
-Native-backed page zoom (WKWebView magnification on macOS / WebKitGTK `zoom_level` on Linux) does exist in bunmaska's main process, but this renderer `webFrame` does not route through it; a native-backed renderer zoom is a possible future enhancement.
+Native-backed page zoom (WKWebView magnification on macOS / WebKitGTK `zoom_level` on Linux) does exist in Bunmaska's main process, but this renderer `webFrame` does not route through it; a native-backed renderer zoom is a possible future enhancement.

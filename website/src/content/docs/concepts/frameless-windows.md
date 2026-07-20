@@ -4,7 +4,7 @@ description: Drop the OS title bar and draw your own - a draggable region and wi
 order: 4
 ---
 
-Want your own title bar instead of the OS one? Open a **frameless** window and draw the bar in HTML. bunmaska gives you a draggable region and built-in window controls without any per-app IPC wiring.
+Want your own title bar instead of the OS one? Open a **frameless** window and draw the bar in HTML. Bunmaska gives you a draggable region and built-in window controls without any per-app IPC wiring.
 
 ## A frameless window
 
@@ -26,7 +26,7 @@ app.whenReady().then(() => {
 
 ## Make a region draggable: `--app-region`
 
-Electron uses the `-webkit-app-region: drag` CSS property to mark a draggable region. Most of the system WebKits bunmaska drives **don't parse** that Chromium-flavoured property, so bunmaska standardises on a CSS **custom property** instead:
+Electron uses the `-webkit-app-region: drag` CSS property to mark a draggable region. Most of the system WebKits Bunmaska drives **don't parse** that Chromium-flavoured property, so Bunmaska standardises on a CSS **custom property** instead:
 
 ```css
 .titlebar        { --app-region: drag; }     /* drag the window from here   */
@@ -35,7 +35,7 @@ Electron uses the `-webkit-app-region: drag` CSS property to mark a draggable re
 
 Custom properties inherit, so set `--app-region: drag` on the bar and `--app-region: no-drag` on the controls inside it - exactly the cascade you'd get from Electron's app-region. A left-button press anywhere in a `drag` region starts a native window move (edge-snap, shake-to-minimise and all).
 
-> Under the hood bunmaska also mirrors `--app-region` onto the native `-webkit-app-region`, so on macOS - where WKWebView honours it directly - dragging is fully native.
+> Under the hood Bunmaska also mirrors `--app-region` onto the native `-webkit-app-region`, so on macOS - where WKWebView honours it directly - dragging is fully native.
 
 ## Window controls
 

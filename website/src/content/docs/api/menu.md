@@ -8,7 +8,7 @@ Process: Main
 
 The `Menu` module lets you build application menu bars and context (popup) menus. The menu tree is held as plain JS objects and realized into native widgets on demand - a native `NSMenu` on macOS, GTK menus on Linux, and Win32 `HMENU` on Windows. Both context menus and the application menu bar work on all three; role items render as plain labels on Linux/Windows (their native keyboard shortcuts still fire), and accelerator text in labels is a follow-up there.
 
-bunmaska exposes both `Menu` and a companion `MenuItem` class. You typically build menus declaratively with `Menu.buildFromTemplate(...)`, but you can also construct items by hand and `append`/`insert` them.
+Bunmaska exposes both `Menu` and a companion `MenuItem` class. You typically build menus declaratively with `Menu.buildFromTemplate(...)`, but you can also construct items by hand and `append`/`insert` them.
 
 ```ts
 import { Menu, MenuItem } from 'bunmaska';
@@ -226,7 +226,7 @@ const menu = Menu.buildFromTemplate([{ role: 'editMenu' }, { role: 'windowMenu' 
 Menu.setApplicationMenu(menu);
 ```
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
 - **Events** - Electron's `'menu-will-show'` and `'menu-will-close'` are not emitted; `Menu` is not an `EventEmitter` here.
 - **`Menu.sendActionToFirstResponder(action)`** _macOS_ - not implemented; use a `role` to get first-responder behavior instead.

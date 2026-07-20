@@ -4,9 +4,9 @@ description: "Send asynchronous and fire-and-forget messages from a renderer pro
 order: 5
 ---
 
-The `ipcRenderer` module lets a renderer process (your web page) talk to the main process: fire-and-forget `send`, request/response `invoke`, and listeners for messages pushed back from main. It is a thin, typed wrapper over the `globalThis.__bunmaska` bridge that bunmaska's preload bootstrap installs into every page, and it works the same on macOS (WKWebView) and Linux (WebKitGTK).
+The `ipcRenderer` module lets a renderer process (your web page) talk to the main process: fire-and-forget `send`, request/response `invoke`, and listeners for messages pushed back from main. It is a thin, typed wrapper over the `globalThis.__bunmaska` bridge that Bunmaska's preload bootstrap installs into every page, and it works the same on macOS (WKWebView) and Linux (WebKitGTK).
 
-Unlike Electron, bunmaska's `ipcRenderer` is **not** an `EventEmitter` - it is a plain object with a fixed set of methods. There is no `sendSync`, no `postMessage`, and no `<webview>`/`sendToHost`. The `event` argument passed to listeners is currently a placeholder (an empty object), so don't reach for `event.sender` or `event.ports` yet.
+Unlike Electron, Bunmaska's `ipcRenderer` is **not** an `EventEmitter` - it is a plain object with a fixed set of methods. There is no `sendSync`, no `postMessage`, and no `<webview>`/`sendToHost`. The `event` argument passed to listeners is currently a placeholder (an empty object), so don't reach for `event.sender` or `event.ports` yet.
 
 Import it from `bunmaska/renderer` (renderer process). If you use context isolation, call it from your preload and expose a narrow surface via `contextBridge` - same rule as Electron.
 
@@ -57,9 +57,9 @@ try {
 * `channel` string
 * `listener` (event: IpcRendererEvent, ...args: unknown[]) => void
 
-Listens on `channel`. When the main process pushes a message (via `webContents.send`), `listener` is called as `listener(event, ...args)`. To match Electron's signature, the first argument is an `event` object - but in bunmaska it is currently an **empty placeholder** (`{}`), with no `sender` or `ports`. Treat your real data as starting at the second argument.
+Listens on `channel`. When the main process pushes a message (via `webContents.send`), `listener` is called as `listener(event, ...args)`. To match Electron's signature, the first argument is an `event` object - but in Bunmaska it is currently an **empty placeholder** (`{}`), with no `sender` or `ports`. Treat your real data as starting at the second argument.
 
-Note: there is no `addListener` alias in bunmaska - use `on`.
+Note: there is no `addListener` alias in Bunmaska - use `on`.
 
 ```ts
 import { ipcRenderer } from 'bunmaska/renderer';
@@ -89,9 +89,9 @@ ipcRenderer.once('app:ready', (_event) => {
 * `channel` string
 * `listener` (event: IpcRendererEvent, ...args: unknown[]) => void
 
-Removes a previously registered `listener` from `channel`. You must pass the same function reference you gave to `on`/`once` - bunmaska tracks the internal wrapper per `(channel, listener)` pair and unregisters the matching one.
+Removes a previously registered `listener` from `channel`. You must pass the same function reference you gave to `on`/`once` - Bunmaska tracks the internal wrapper per `(channel, listener)` pair and unregisters the matching one.
 
-Note: there is no `off` alias in bunmaska - use `removeListener`.
+Note: there is no `off` alias in Bunmaska - use `removeListener`.
 
 ```ts
 import { ipcRenderer } from 'bunmaska/renderer';
@@ -118,18 +118,18 @@ ipcRenderer.removeAllListeners(); // clear everything
 
 ## Events
 
-None. bunmaska's `ipcRenderer` is a plain object, not an `EventEmitter`, so it emits no module-level events of its own. You receive messages by registering channel listeners with `on` / `once`.
+None. Bunmaska's `ipcRenderer` is a plain object, not an `EventEmitter`, so it emits no module-level events of its own. You receive messages by registering channel listeners with `on` / `once`.
 
 ## Properties
 
 None beyond the methods above. The listener `event` object (`IpcRendererEvent`) is typed as `Record<string, never>` - an intentional empty placeholder, so it currently carries no `sender`, `ports`, or other fields.
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
 Compared with Electron's `ipcRenderer`, these members are **not** implemented:
 
 * **`sendSync(channel, ...args)`** - no synchronous IPC. By design there's no blocking round-trip; use the async `invoke` instead.
 * **`postMessage(channel, message, [transfer])`** - no `MessagePort` transfer to main. The bridge speaks JSON envelopes only, so there's no `MessagePortMain` story yet.
-* **`sendToHost(channel, ...args)`** - no `<webview>` host channel, because bunmaska has no `<webview>` tag.
-* **`off` / `addListener` / `removeListener` aliases** - Electron exposes `off`, `addListener`, and a `removeListener` alias for `EventEmitter` parity. bunmaska ships only the canonical `on`, `once`, `removeListener`, and `removeAllListeners`.
-* **Rich `IpcRendererEvent`** - Electron's event carries `sender`, `senderId`, and `ports`. bunmaska's event is an empty placeholder for now; sender/port details are slated for a later phase.
+* **`sendToHost(channel, ...args)`** - no `<webview>` host channel, because Bunmaska has no `<webview>` tag.
+* **`off` / `addListener` / `removeListener` aliases** - Electron exposes `off`, `addListener`, and a `removeListener` alias for `EventEmitter` parity. Bunmaska ships only the canonical `on`, `once`, `removeListener`, and `removeAllListeners`.
+* **Rich `IpcRendererEvent`** - Electron's event carries `sender`, `senderId`, and `ports`. Bunmaska's event is an empty placeholder for now; sender/port details are slated for a later phase.

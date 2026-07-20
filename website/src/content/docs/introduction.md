@@ -5,7 +5,7 @@ seoTitle: "Introduction - a drop-in Electron replacement on Bun"
 order: 1
 ---
 
-You already know how to use bunmaska, because it looks exactly like Electron. You write against `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard` - the names you've been typing for years. The difference is everything underneath:
+You already know how to use Bunmaska, because it looks exactly like Electron. You write against `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard` - the names you've been typing for years. The difference is everything underneath:
 
 - **Runtime:** Bun, not Node.
 - **Renderer:** the system WebKit (`WKWebView` on macOS, WebKitGTK on Linux) - **not** a second copy of Chromium bundled into every app.
@@ -27,6 +27,6 @@ If you're evaluating it for production, read the word "alpha" one more time, the
 
 ## Where to go next
 
-- [Why bunmaska](/docs/why-bunmaska) - the case, made honestly.
+- [Why Bunmaska](/docs/why-bunmaska) - the case, made honestly.
 - [Installation](/docs/installation) - `npm i bunmaska`.
 - [Quickstart](/docs/quickstart) - from zero to a window in about ninety seconds.

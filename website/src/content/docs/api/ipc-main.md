@@ -1,12 +1,12 @@
 ---
 title: "ipcMain"
-description: "Main-process IPC router for receiving messages and invoke requests from renderer processes in bunmaska."
+description: "Main-process IPC router for receiving messages and invoke requests from renderer processes in Bunmaska."
 order: 4
 ---
 
-The `ipcMain` module receives messages sent from renderer processes. It registers fire-and-forget channel listeners (`on`/`once`) and request/response handlers (`handle`) that respond to `ipcRenderer.invoke`. In bunmaska the transport is WebKit-backed (a `WKScriptMessageHandler` inbound, `evaluateJavaScript` outbound) rather than Chromium's IPC, but the router itself is transport-agnostic and the API mirrors Electron's.
+The `ipcMain` module receives messages sent from renderer processes. It registers fire-and-forget channel listeners (`on`/`once`) and request/response handlers (`handle`) that respond to `ipcRenderer.invoke`. In Bunmaska the transport is WebKit-backed (a `WKScriptMessageHandler` inbound, `evaluateJavaScript` outbound) rather than Chromium's IPC, but the router itself is transport-agnostic and the API mirrors Electron's.
 
-Unlike Electron, bunmaska's `ipcMain` is **not** a Node.js `EventEmitter` - it is a small purpose-built router. That distinction matters in a few places, called out below. It is a singleton, imported from the main entry point:
+Unlike Electron, Bunmaska's `ipcMain` is **not** a Node.js `EventEmitter` - it is a small purpose-built router. That distinction matters in a few places, called out below. It is a singleton, imported from the main entry point:
 
 ```ts
 import { ipcMain } from 'bunmaska';
@@ -23,7 +23,7 @@ To push messages the other way (main to renderer), use [`webContents.send`](./we
   * `event` IpcMainEvent
   * `...args` unknown[]
 
-Listens on `channel`. When a renderer calls `ipcRenderer.send(channel, ...args)`, `listener` is called with `listener(event, ...args)`. Returns `this`, so calls chain. The `event` object exposes `sender` (the originating `WebContents`) - and only that; see [Not in bunmaska (yet)](#not-in-bunmaska-yet).
+Listens on `channel`. When a renderer calls `ipcRenderer.send(channel, ...args)`, `listener` is called with `listener(event, ...args)`. Returns `this`, so calls chain. The `event` object exposes `sender` (the originating `WebContents`) - and only that; see [Not in Bunmaska (yet)](#not-in-bunmaska-yet).
 
 ```ts
 import { ipcMain } from 'bunmaska';
@@ -144,7 +144,7 @@ ipcMain.removeHandler('fs:read-config');
 
 ## Events
 
-`ipcMain` is a plain router in bunmaska, not an `EventEmitter`, so it has no module-level lifecycle events of its own. All "events" are the user-defined channels you subscribe to via `on`/`once`.
+`ipcMain` is a plain router in Bunmaska, not an `EventEmitter`, so it has no module-level lifecycle events of its own. All "events" are the user-defined channels you subscribe to via `on`/`once`.
 
 ## Properties
 
@@ -154,7 +154,7 @@ The `event` argument passed to your listeners and handlers carries a single fiel
 
 * `event.sender` - the `WebContents` that sent the message. This is the only field on both `IpcMainEvent` and `IpcMainInvokeEvent` today. It is enough to identify and reply to a source via `event.sender.send(...)`, but the richer Electron event shape is not present (see below).
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
 The router covers the everyday `on`/`once`/`handle` flow, but several Electron members are absent. Document-worthy gaps:
 

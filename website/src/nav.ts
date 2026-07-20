@@ -18,7 +18,7 @@ export const sidebar: NavGroup[] = [
     title: 'Get Started',
     items: [
       { slug: 'introduction', label: 'Introduction' },
-      { slug: 'why-bunmaska', label: 'Why bunmaska' },
+      { slug: 'why-bunmaska', label: 'Why Bunmaska' },
       { slug: 'installation', label: 'Installation' },
       { slug: 'quickstart', label: 'Quickstart' },
     ],
@@ -93,7 +93,7 @@ export const sidebar: NavGroup[] = [
   },
   {
     title: 'Compare',
-    items: [{ slug: 'compare/bunmaska-vs-electron', label: 'bunmaska vs Electron' }],
+    items: [{ slug: 'compare/bunmaska-vs-electron', label: 'Bunmaska vs Electron' }],
   },
   {
     title: 'Project',

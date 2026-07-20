@@ -4,7 +4,7 @@ description: "Read and respond to the OS dark/light appearance, with a themeSour
 order: 14
 ---
 
-Read and respond to changes in the operating system's native color theme. bunmaska's `nativeTheme` is a main-process singleton that reports whether a dark appearance should be used, lets you force light/dark via `themeSource`, and emits `updated` when the OS appearance flips underneath your app. It reads the real OS setting on every platform - macOS `AppleInterfaceStyle`, Linux `GtkSettings` (`gtk-application-prefer-dark-theme`), and Windows the `AppsUseLightTheme` registry value. **Windows is read-only**: `shouldUseDarkColors` reflects the registry, but the `themeSource` override and live `updated` observation are not yet wired there (live `updated` is a follow-up; the override works on macOS).
+Read and respond to changes in the operating system's native color theme. Bunmaska's `nativeTheme` is a main-process singleton that reports whether a dark appearance should be used, lets you force light/dark via `themeSource`, and emits `updated` when the OS appearance flips underneath your app. It reads the real OS setting on every platform - macOS `AppleInterfaceStyle`, Linux `GtkSettings` (`gtk-application-prefer-dark-theme`), and Windows the `AppsUseLightTheme` registry value. **Windows is read-only**: `shouldUseDarkColors` reflects the registry, but the `themeSource` override and live `updated` observation are not yet wired there (live `updated` is a follow-up; the override works on macOS).
 
 Process: Main. There is no renderer-side `nativeTheme`; query it from main and forward what you need over IPC (the `prefers-color-scheme` CSS media query works in the page regardless).
 
@@ -18,7 +18,7 @@ import { nativeTheme } from 'bunmaska';
 
 Emitted when the underlying native theme changes. In practice this means the value of `shouldUseDarkColors` may have changed - either because the OS appearance flipped, or because you assigned a new `themeSource`. Read the properties you care about to find out what changed.
 
-Note that the OS-driven half of this event only fires once startup has wired the appearance observer (the bunmaska bootstrap does this for you). The assignment-driven half (`themeSource = ...`) always emits.
+Note that the OS-driven half of this event only fires once startup has wired the appearance observer (the Bunmaska bootstrap does this for you). The assignment-driven half (`themeSource = ...`) always emits.
 
 ```ts
 import { nativeTheme } from 'bunmaska';
@@ -43,7 +43,7 @@ win.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors);
 
 ### `nativeTheme.themeSource`
 
-A `string` property - one of `'system'`, `'light'`, or `'dark'` - that overrides the appearance bunmaska would otherwise pick from the OS. Defaults to `'system'`.
+A `string` property - one of `'system'`, `'light'`, or `'dark'` - that overrides the appearance Bunmaska would otherwise pick from the OS. Defaults to `'system'`.
 
 - `'system'` removes the override and follows the OS appearance.
 - `'dark'` makes `shouldUseDarkColors` return `true` and the `prefers-color-scheme` CSS query match `dark`.
@@ -64,7 +64,7 @@ ipcMain.handle('dark-mode:set', (_event, choice: 'system' | 'light' | 'dark') =>
 
 ### `nativeTheme.prefersReducedTransparency` _Readonly_
 
-A `boolean` indicating whether the user has asked the OS to reduce transparency. _macOS_ only: it maps to the Accessibility "Reduce transparency" setting (`NSWorkspace.accessibilityDisplayShouldReduceTransparency`). On Linux and Windows it always returns `false`, since neither exposes an equivalent setting bunmaska reads.
+A `boolean` indicating whether the user has asked the OS to reduce transparency. _macOS_ only: it maps to the Accessibility "Reduce transparency" setting (`NSWorkspace.accessibilityDisplayShouldReduceTransparency`). On Linux and Windows it always returns `false`, since neither exposes an equivalent setting Bunmaska reads.
 
 ```ts
 import { nativeTheme } from 'bunmaska';
@@ -74,14 +74,14 @@ if (nativeTheme.prefersReducedTransparency) {
 }
 ```
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
-bunmaska covers the everyday dark-mode surface (`shouldUseDarkColors`, `themeSource`, `prefersReducedTransparency`, and the `updated` event) but omits several of Electron's accessibility/contrast readouts:
+Bunmaska covers the everyday dark-mode surface (`shouldUseDarkColors`, `themeSource`, `prefersReducedTransparency`, and the `updated` event) but omits several of Electron's accessibility/contrast readouts:
 
 - `shouldUseHighContrastColors` - high-contrast detection is not implemented on any platform.
 - `shouldUseDarkColorsForSystemIntegratedUI` - no separate system-vs-app dark distinction is exposed.
 - `shouldUseInvertedColorScheme` - inverted-color-scheme detection is not wired.
 - `shouldDifferentiateWithoutColor` - the macOS "differentiate without color" accessibility flag is not read.
-- `inForcedColorsMode` - Windows-only in Electron; bunmaska does not read the forced-colors (high-contrast) state on Windows yet, so it does not exist here.
+- `inForcedColorsMode` - Windows-only in Electron; Bunmaska does not read the forced-colors (high-contrast) state on Windows yet, so it does not exist here.
 
-These all return readonly booleans in Electron; if your app reads them, treat them as absent on bunmaska and fall back to `shouldUseDarkColors` plus `prefersReducedTransparency`.
+These all return readonly booleans in Electron; if your app reads them, treat them as absent on Bunmaska and fall back to `shouldUseDarkColors` plus `prefersReducedTransparency`.

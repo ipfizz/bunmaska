@@ -1,6 +1,6 @@
 ---
 title: Building & Distribution
-description: Turn your app into real, shippable distributables for every platform bunmaska supports - .dmg on macOS, AppDir and .deb on Linux, x64 and ARM.
+description: Turn your app into real, shippable distributables for every platform Bunmaska supports - .dmg on macOS, AppDir and .deb on Linux, x64 and ARM.
 order: 5
 ---
 
@@ -54,7 +54,7 @@ You get:
 - **AppDir `.tar.gz`** - a relocatable directory bundle.
 - **`.deb`** - for Debian/Ubuntu and derivatives (the `ar` archive is assembled in pure JS - no `dpkg` toolchain required to produce it).
 
-> The generated `.deb` declares `libwebkitgtk-6.0` as a dependency, so a user's `apt install` pulls the engine in automatically - you don't ship it, and they don't hunt for it. bunmaska never bundles a browser.
+> The generated `.deb` declares `libwebkitgtk-6.0` as a dependency, so a user's `apt install` pulls the engine in automatically - you don't ship it, and they don't hunt for it. Bunmaska never bundles a browser.
 
 ### Architectures
 

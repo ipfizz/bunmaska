@@ -6,7 +6,7 @@ order: 3
 
 ## Requirements
 
-- **[Bun](https://bun.sh) ≥ 1.3.** bunmaska runs on Bun, not Node. This is not negotiable; it's the foundation.
+- **[Bun](https://bun.sh) ≥ 1.3.** Bunmaska runs on Bun, not Node. This is not negotiable; it's the foundation.
 - **macOS, Linux, or Windows.** Each drives the OS's own WebKit - never Chromium.
   - macOS uses AppKit + `WKWebView` via `objc_msgSend`.
   - Linux uses GTK 4 + WebKitGTK 6 via `dlopen` (so `libgtk-4` / `libwebkitgtk-6.0` need to be present - they are on most modern desktops).

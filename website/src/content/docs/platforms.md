@@ -5,7 +5,7 @@ seoTitle: "Platform support - macOS, Linux, Windows (x64)"
 order: 4
 ---
 
-bunmaska ships on **macOS, Linux, and now Windows** - each driving the operating system's own WebKit in pure `bun:ffi`. macOS and Linux use the WebKit that's already on the machine; Windows has none, so it loads a **WinCairo WebKit we build from source and bundle**. Support isn't identical across the three, and we publish exactly where it differs (see the [parity matrix](/docs/migrating/parity)). The honest summary:
+Bunmaska ships on **macOS, Linux, and now Windows** - each driving the operating system's own WebKit in pure `bun:ffi`. macOS and Linux use the WebKit that's already on the machine; Windows has none, so it loads a **WinCairo WebKit we build from source and bundle**. Support isn't identical across the three, and we publish exactly where it differs (see the [parity matrix](/docs/migrating/parity)). The honest summary:
 
 ## The support matrix
 
@@ -17,7 +17,7 @@ bunmaska ships on **macOS, Linux, and now Windows** - each driving the operating
 
 ## macOS
 
-- **Versions:** modern macOS (the WebKit + AppKit symbols bunmaska binds are stable across recent releases).
+- **Versions:** modern macOS (the WebKit + AppKit symbols Bunmaska binds are stable across recent releases).
 - **Architectures:** both Apple Silicon (`arm64`) and Intel (`x64`). Bun runs natively on both; the system WebKit is whatever your Mac ships.
 - This is the **most complete** backend - windows, IPC, menus, tray, dialogs, `capturePage`/`printToPDF`, and packaging all work.
 
@@ -38,7 +38,7 @@ A from-scratch Win32 backend on pure `bun:ffi` - native windows + a cooperative 
 
 ## Requirements (all platforms)
 
-- **[Bun](https://bun.sh) ≥ 1.3** - bunmaska runs on Bun, not Node.
+- **[Bun](https://bun.sh) ≥ 1.3** - Bunmaska runs on Bun, not Node.
 - The system WebKit listed above. **No Chromium is downloaded or bundled, ever.**
 
 Next: [Building & Distribution](/docs/building) - how to package for each of these.

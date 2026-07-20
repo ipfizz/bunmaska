@@ -1,12 +1,12 @@
 ---
 title: "powerSaveBlocker"
-description: "Block the system from entering low-power (sleep) mode in the bunmaska main process."
+description: "Block the system from entering low-power (sleep) mode in the Bunmaska main process."
 order: 20
 ---
 
 Process: Main
 
-The `powerSaveBlocker` module blocks the system (and optionally the display) from entering low-power sleep - for downloads, audio, or video playback. In bunmaska it is a start/stop registry: `start()` asks the platform backend for a native blocker, files it under a fresh incrementing id, and hands you that id; `stop()` releases the native handle and forgets the id.
+The `powerSaveBlocker` module blocks the system (and optionally the display) from entering low-power sleep - for downloads, audio, or video playback. In Bunmaska it is a start/stop registry: `start()` asks the platform backend for a native blocker, files it under a fresh incrementing id, and hands you that id; `stop()` releases the native handle and forgets the id.
 
 Backends are real: macOS holds an IOKit `IOPMAssertion` (synchronous, no run loop needed), Linux holds an `org.freedesktop.ScreenSaver` inhibition cookie over D-Bus, and Windows calls `SetThreadExecutionState` (both `prevent-app-suspension` and `prevent-display-sleep` map to real flags). The module-level API surface matches Electron's exactly - there are no events or properties on this module, so what you see below is the whole thing.
 
@@ -91,9 +91,9 @@ console.log(powerSaveBlocker.isStarted(id)); // false
 console.log(powerSaveBlocker.isStarted(9999)); // false - unknown id
 ```
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
-Electron's `powerSaveBlocker` module is exactly three methods - `start`, `stop`, and `isStarted` - with no events or properties. bunmaska implements all three, so the public surface is fully covered.
+Electron's `powerSaveBlocker` module is exactly three methods - `start`, `stop`, and `isStarted` - with no events or properties. Bunmaska implements all three, so the public surface is fully covered.
 
 A few honest caveats on behavior rather than missing members:
 

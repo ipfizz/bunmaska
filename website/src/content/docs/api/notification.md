@@ -134,9 +134,9 @@ if (Notification.isSupported()) {
 }
 ```
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
-bunmaska implements a deliberately small, honest subset. The following Electron `Notification` members are not present in the current source:
+Bunmaska implements a deliberately small, honest subset. The following Electron `Notification` members are not present in the current source:
 
 - **User-interaction events** - `click`, `reply`, and `action` are deferred in v1. They require OS delegate/action wiring (an `NSUserNotificationCenterDelegate` on macOS, action capabilities on Linux) that is not yet implemented, so they are intentionally not advertised. The `failed` event is also not emitted.
 - **Constructor options** - only `title`, `body`, `subtitle`, and `silent` are supported. `icon`, `hasReply`, `replyPlaceholder`, `sound`, `urgency`, `timeoutType`, `actions`, `closeButtonText`, `id`, `groupId`, `groupTitle`, and `toastXml` are not implemented.

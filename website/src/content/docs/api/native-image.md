@@ -41,7 +41,7 @@ const bytes = readFileSync('/Users/somebody/images/icon.png');
 const image = nativeImage.createFromBuffer(bytes);
 ```
 
-Note: unlike Electron, this takes no `options` argument - there is no raw-bitmap path here (see _Not in bunmaska_). It always decodes encoded image bytes.
+Note: unlike Electron, this takes no `options` argument - there is no raw-bitmap path here (see _Not in Bunmaska_). It always decodes encoded image bytes.
 
 ### `nativeImage.createFromDataURL(dataURL)`
 
@@ -114,7 +114,7 @@ import { nativeImage } from 'bunmaska';
 const ratio = nativeImage.createFromPath('./banner.png').getAspectRatio(); // e.g. 1.777...
 ```
 
-Note: unlike Electron this takes no `scaleFactor` argument (bunmaska images carry a single representation).
+Note: unlike Electron this takes no `scaleFactor` argument (Bunmaska images carry a single representation).
 
 ### `image.toPNG()`
 
@@ -146,7 +146,7 @@ const jpeg = nativeImage.createFromPath('./photo.png').toJPEG(80);
 writeFileSync('./photo.jpg', jpeg);
 ```
 
-> Platform note: `quality` is honored on _macOS_ (via `NSImageCompressionFactor`). On _Linux_ (GdkPixbuf) and _Windows_ (GDI+), the image is saved with the encoder's default quality and the `quality` argument is ignored. The default value differs from Electron's API too: Electron requires `quality`; bunmaska defaults it to `92`.
+> Platform note: `quality` is honored on _macOS_ (via `NSImageCompressionFactor`). On _Linux_ (GdkPixbuf) and _Windows_ (GDI+), the image is saved with the encoder's default quality and the `quality` argument is ignored. The default value differs from Electron's API too: Electron requires `quality`; Bunmaska defaults it to `92`.
 
 ### `image.toDataURL()`
 
@@ -229,7 +229,7 @@ The `nativeImage` module and `NativeImage` class emit no events.
 
 `NativeImage` exposes no public data properties. (Electron's `isMacTemplateImage` property is replaced here by the `setTemplateImage()` / `isTemplateImage()` method pair.)
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
 Comparing against Electron's `nativeImage`, the following are not implemented. Most reflect the single-representation, scalar-metadata design and the macOS-specific AppKit surface.
 

@@ -1,10 +1,10 @@
 ---
 title: "session"
-description: "The main-process session module in bunmaska: a default session with a process-wide User-Agent override and storage-data clearing (macOS, Windows; not yet wired on Linux)."
+description: "The main-process session module in Bunmaska: a default session with a process-wide User-Agent override and storage-data clearing (macOS, Windows; not yet wired on Linux)."
 order: 22
 ---
 
-In Electron, `session` is the kitchen sink for cookies, cache, proxy, permissions, network interception and more. In bunmaska it is currently a much smaller thing: a single **default session** that owns a process-wide User-Agent override and can clear the default data store. That is the honest extent of it today - no partitions, no cookie jar, no proxy, no `webRequest`.
+In Electron, `session` is the kitchen sink for cookies, cache, proxy, permissions, network interception and more. In Bunmaska it is currently a much smaller thing: a single **default session** that owns a process-wide User-Agent override and can clear the default data store. That is the honest extent of it today - no partitions, no cookie jar, no proxy, no `webRequest`.
 
 Process: Main
 
@@ -22,7 +22,7 @@ app.whenReady().then(() => {
 
 ### `session.defaultSession`
 
-A `Session` object - the app's single default session. Unlike Electron, this is the *only* session bunmaska gives you; there is no per-partition or per-path session yet.
+A `Session` object - the app's single default session. Unlike Electron, this is the *only* session Bunmaska gives you; there is no per-partition or per-path session yet.
 
 ```ts
 import { session } from 'bunmaska';
@@ -77,7 +77,7 @@ app.whenReady().then(() => {
 
 Clears the default data store's website data and resolves when the clear completes.
 
-This is the all-or-nothing form. bunmaska does not yet accept Electron's `options` argument (`origin` / `storages`), so you cannot scope the clear to a specific origin or storage type.
+This is the all-or-nothing form. Bunmaska does not yet accept Electron's `options` argument (`origin` / `storages`), so you cannot scope the clear to a specific origin or storage type.
 
 Platform notes on exactly _what_ gets cleared:
 
@@ -95,7 +95,7 @@ async function signOut() {
 }
 ```
 
-## Not in bunmaska (yet)
+## Not in Bunmaska (yet)
 
 The default session is deliberately minimal right now. Compared to Electron's `session` module, the following are **not** implemented:
 

@@ -68,7 +68,7 @@ macOS packaged apps now actually work. Building a real app surfaced four bugs th
 
 ## `0.1.0-alpha.3`
 
-The first npm release - and bunmaska became cross-platform on three OSes with a full **Windows** backend landed on `main`.
+The first npm release - and Bunmaska became cross-platform on three OSes with a full **Windows** backend landed on `main`.
 
 **Highlights**
 
