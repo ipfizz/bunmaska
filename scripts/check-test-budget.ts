@@ -20,12 +20,13 @@ import { platform } from 'node:os';
 type Budget = { minPass: number; maxSkip: number };
 
 const BUDGETS: Record<string, Budget> = {
-  // Only darwin is ratcheted to a measured number (1502 pass / 74 skip at the
-  // test-cleanup commit). linux/win32 keep the loose floor until their real
-  // counts are read off a green CI run — a guessed bound would false-fail.
+  // Ratcheted to the numbers each leg actually reported on a green 3-OS run
+  // (darwin 1502/74, linux 1400/45), with ~5% headroom. win32 CI runs the scoped
+  // `validate:windows`, which does not call this gate at all, so its bound only
+  // fires on a Windows dev box running full validate — left loose deliberately.
   win32: { minPass: 1200, maxSkip: 130 },
   darwin: { minPass: 1400, maxSkip: 90 },
-  linux: { minPass: 1200, maxSkip: 130 },
+  linux: { minPass: 1330, maxSkip: 55 },
 };
 
 const budget = BUDGETS[platform()] ?? { minPass: 1000, maxSkip: 200 };
