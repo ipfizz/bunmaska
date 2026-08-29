@@ -22,5 +22,13 @@ export const createElectronShim = (
     },
   });
 
+/**
+ * Named re-exports, so the documented `import { app } from 'bunmaska/electron'`
+ * works. A named import of an unimplemented module fails at import time with a
+ * standard ESM error; the default export's Proxy is what turns a PROPERTY access
+ * into the actionable {@link notImplementedMessage}.
+ */
+export * from './index';
+
 const electron = createElectronShim();
 export default electron;
