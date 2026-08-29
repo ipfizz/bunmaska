@@ -20,8 +20,11 @@ import { platform } from 'node:os';
 type Budget = { minPass: number; maxSkip: number };
 
 const BUDGETS: Record<string, Budget> = {
+  // Only darwin is ratcheted to a measured number (1502 pass / 74 skip at the
+  // test-cleanup commit). linux/win32 keep the loose floor until their real
+  // counts are read off a green CI run — a guessed bound would false-fail.
   win32: { minPass: 1200, maxSkip: 130 },
-  darwin: { minPass: 1200, maxSkip: 130 },
+  darwin: { minPass: 1400, maxSkip: 90 },
   linux: { minPass: 1200, maxSkip: 130 },
 };
 

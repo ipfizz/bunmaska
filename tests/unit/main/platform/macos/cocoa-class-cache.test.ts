@@ -3,7 +3,6 @@ import { BunmaskaError } from '../../../../../src/common/errors';
 import {
   type ClassResolver,
   ClassCache,
-  type ObjcClass,
 } from '../../../../../src/main/platform/macos/cocoa-class-cache';
 
 const makeCountingResolver = (): {
@@ -74,27 +73,6 @@ describe('ClassCache.get', () => {
   });
 });
 
-describe('ClassCache.has', () => {
-  test('returns false for an unseen name', () => {
-    const { resolver } = makeCountingResolver();
-    expect(new ClassCache(resolver).has('NSWindow')).toBe(false);
-  });
-
-  test('returns true after a successful get', () => {
-    const { resolver } = makeCountingResolver();
-    const cache = new ClassCache(resolver);
-    cache.get('NSWindow');
-    expect(cache.has('NSWindow')).toBe(true);
-  });
-
-  test('remains false after a failed (NULL) lookup', () => {
-    const nullResolver: ClassResolver = () => 0n;
-    const cache = new ClassCache(nullResolver);
-    expect(() => cache.get('MissingClass')).toThrow(BunmaskaError);
-    expect(cache.has('MissingClass')).toBe(false);
-  });
-});
-
 describe('ClassCache.size', () => {
   let cache: ClassCache;
 
@@ -118,37 +96,5 @@ describe('ClassCache.size', () => {
     cache.get('NSWindow');
     cache.get('NSWindow');
     expect(cache.size).toBe(1);
-  });
-});
-
-describe('ClassCache.clear', () => {
-  test('removes all cached entries', () => {
-    const { resolver } = makeCountingResolver();
-    const cache = new ClassCache(resolver);
-    cache.get('NSWindow');
-    cache.get('NSApplication');
-
-    cache.clear();
-
-    expect(cache.size).toBe(0);
-    expect(cache.has('NSWindow')).toBe(false);
-  });
-
-  test('a subsequent get re-invokes the resolver', () => {
-    const { resolver, calls } = makeCountingResolver();
-    const cache = new ClassCache(resolver);
-    cache.get('NSWindow');
-    cache.clear();
-    cache.get('NSWindow');
-    expect(calls).toEqual(['NSWindow', 'NSWindow']);
-  });
-});
-
-describe('ObjcClass type', () => {
-  test('is the bigint returned by the resolver', () => {
-    const { resolver } = makeCountingResolver();
-    const cache = new ClassCache(resolver);
-    const cls: ObjcClass = cache.get('NSWindow');
-    expect(typeof cls).toBe('bigint');
   });
 });

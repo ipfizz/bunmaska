@@ -27,15 +27,7 @@ export class SelectorCache {
     return fresh;
   }
 
-  has(name: string): boolean {
-    return this.#cache.has(name);
-  }
-
   get size(): number {
     return this.#cache.size;
-  }
-
-  clear(): void {
-    this.#cache.clear();
   }
 }
