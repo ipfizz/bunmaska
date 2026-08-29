@@ -1,18 +1,9 @@
 /**
- * Windows distributable builder for the `bunmaska` CLI.
- *
- * The app is cross/native compiled to a single self-contained `.exe` with Bun's
- * `--compile --target=bun-windows-x64`, which embeds the Bun runtime and the
- * app's JS into a Windows PE (this works from a macOS or Linux host too).
  * Windows ships no system WebKit, so at launch Bunmaska `dlopen`s a WinCairo
- * `WebKit2.dll`. With `--embed-engine`, that engine's whole directory is copied
- * into the bundle's `webkit/` folder so the built `.exe` runs with NO environment
- * variables (the runtime resolves a `webkit/` next to the executable — see
- * `webkit2-ffi.ts`); without it, the launch relies on the engine store (the baked
- * `engine.id`) or `BUNMASKA_WEBKIT_PATH`. The output is a portable `<Name>/`
- * directory packaged as a `.zip`. The pure parts (layout paths, compile argv,
- * version normalisation, archive name) are factored out for unit testing; the
- * `.zip` is written with the pure `zip.ts` writer so the build spawns no archiver.
+ * `WebKit2.dll`. With `--embed-engine` that engine's whole directory is copied
+ * into the bundle's `webkit/` folder and the `.exe` runs with NO environment
+ * variables; without it the launch relies on the engine store (the baked
+ * `engine.id`) or `BUNMASKA_WEBKIT_PATH`.
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -38,7 +29,6 @@ export type WindowsLayout = {
   readonly engineIdPath: string;
 };
 
-/** Compute every on-disk path of an `<out>/<Name>` portable tree. Pure. */
 export const windowsLayout = (out: string, name: string): WindowsLayout => {
   const appDir = join(out, name);
   const exeName = `${name}.exe`;
@@ -51,14 +41,12 @@ export const windowsLayout = (out: string, name: string): WindowsLayout => {
   };
 };
 
-/** File name of the `.zip` distributable for an app. Pure. */
 export const zipFileName = (name: string): string => `${name}-windows-x64.zip`;
 
 /**
- * Reduce a SemVer-ish version to the numeric `major.minor.patch` that a Windows
- * PE VERSIONINFO resource (`--windows-version`) accepts: drop `+build` metadata
- * and any `-prerelease`, keep the first three segments, zero-pad short ones, and
- * substitute `0` for a non-numeric segment. `0.1.0-alpha.2` -> `0.1.0`. Pure.
+ * A Windows PE VERSIONINFO resource (`--windows-version`) accepts only a numeric
+ * `major.minor.patch`, so `+build` and `-prerelease` are dropped, short segments
+ * zero-padded, and a non-numeric segment becomes `0`. `0.1.0-alpha.2` -> `0.1.0`.
  */
 export const numericVersion = (version: string): string => {
   const core = (version.split('+', 1)[0] ?? '').split('-', 1)[0] ?? '';
@@ -75,22 +63,16 @@ export const numericVersion = (version: string): string => {
   return parts.join('.');
 };
 
-/** PE metadata + console behaviour baked into the compiled `.exe`. */
 export type WindowsMetadata = {
   readonly title: string;
   readonly publisher: string;
   readonly version: string;
   readonly description: string;
-  /** Suppress the console window for the GUI app (Electron-equivalent default). */
   readonly hideConsole: boolean;
   /** Optional executable icon — must be a `.ico` (Bun does not convert on Windows). */
   readonly icon?: string;
 };
 
-/**
- * Build the `bun build` argv (everything after `bun`) that compiles `entry` to a
- * standalone Windows `.exe` at `outfile` with the given PE metadata. Pure.
- */
 export const buildCompileArgs = (
   entry: string,
   outfile: string,
@@ -114,7 +96,6 @@ export const buildCompileArgs = (
   return args;
 };
 
-/** Run a command, throwing with stderr on a non-zero exit. */
 const spawnOk = async (cmd: readonly string[]): Promise<void> => {
   const proc = Bun.spawn(cmd as string[], { stdout: 'pipe', stderr: 'pipe' });
   const exitCode = await proc.exited;
@@ -125,10 +106,8 @@ const spawnOk = async (cmd: readonly string[]): Promise<void> => {
 };
 
 /**
- * Cross/native compile `entry` to a Windows `.exe` at `outfile`. Spawns the
- * RUNNING Bun (`process.execPath`) rather than a bare `bun`, so the build does
- * not depend on Bun being on `$PATH` and always compiles with this same runtime.
- * Throws on failure.
+ * Spawns the RUNNING Bun (`process.execPath`) rather than a bare `bun`, so the
+ * build does not depend on Bun being on `$PATH`.
  */
 const compileWindowsBinary = async (
   entry: string,
@@ -139,9 +118,8 @@ const compileWindowsBinary = async (
 };
 
 /**
- * Recursively collect every file under `rootDir` into ZIP entries whose names
- * are `<topPrefix>/<relative/path>` with forward slashes (the ZIP convention),
- * so extracting yields a single `<topPrefix>/` folder.
+ * Entry names use forward slashes (the ZIP convention) under a single
+ * `<topPrefix>/` folder, so extracting yields one top-level directory.
  */
 const collectZipEntries = (rootDir: string, topPrefix: string): ZipEntry[] => {
   const entries: ZipEntry[] = [];
@@ -178,11 +156,6 @@ export type BuildWindowsAppResult = {
   readonly zip: string;
 };
 
-/**
- * Produce the Windows distributables for `entry`: a portable `<Name>/` dir with
- * the compiled `.exe` and the baked `engine.id`, plus a `.zip` of it. Returns the
- * produced paths.
- */
 export const buildWindowsApp = async (
   opts: BuildWindowsAppOptions,
 ): Promise<BuildWindowsAppResult> => {
@@ -217,22 +190,19 @@ export const buildWindowsApp = async (
   };
   await compileWindowsBinary(opts.entry, layout.exePath, meta);
 
-  // Ship the entry's runtime assets (the page, the preload) beside the binary, then
-  // bundle a module-using preload so it runs as a classic script in the packaged app.
+  // Bundle a module-using preload so it runs as a classic script in the packaged app.
   bundlePreloadAssets(layout.appDir, copyAppAssets(opts.entry, layout.appDir));
 
   // Bake the engine-id the app pins, read at launch by the engine resolver.
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
 
-  // Bundle the WinCairo engine so the .exe runs with no env vars: copy its whole
-  // directory closure (WebKit2.dll + ICU/libcurl/ANGLE + the helper processes)
-  // into `<Name>/webkit/`, which the runtime finds next to the executable. The
-  // directory was validated above (fail-fast, before the compile).
+  // Copy the engine's whole directory closure (WebKit2.dll + ICU/libcurl/ANGLE +
+  // the helper processes) into `<Name>/webkit/`, which the runtime finds next to
+  // the executable, so the .exe runs with no env vars.
   if (opts.embedEngine !== undefined) {
     cpSync(opts.embedEngine, join(layout.appDir, BUNDLED_ENGINE_DIRNAME), { recursive: true });
   }
 
-  // .zip the portable dir with the <Name>/ folder as the single top level.
   const zip = join(out, zipFileName(opts.name));
   await Bun.write(zip, buildZipArchive(collectZipEntries(layout.appDir, opts.name)));
 

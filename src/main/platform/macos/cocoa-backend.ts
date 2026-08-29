@@ -63,10 +63,9 @@ import { createWindowDelegate } from './cocoa-window-delegate';
 import type { Handle } from './objc';
 
 /**
- * The macOS native backend: concrete `NativeApplication` / `NativeWindow` /
- * `NativeWebContents` built on the AppKit + WebKit FFI primitives and the
- * cooperative CF run-loop pump (D020). All Objective-C handles stay as bigints
- * (D016/D029); selectors are resolved through the shared runtime cache.
+ * The macOS native backend: `NativeApplication` / `NativeWindow` /
+ * `NativeWebContents` on the AppKit + WebKit FFI primitives and the cooperative
+ * CF run-loop pump (D020). Objective-C handles stay bigints (D016/D029).
  */
 
 const log = createLogger('macos-backend');
@@ -184,7 +183,6 @@ const registerCustomSchemes = (configuration: Handle): void => {
   }
 };
 
-/** The window style mask for the given options: frameless, or standard with optional resizing. */
 const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle =>
   options.frame === false
     ? BORDERLESS_WINDOW_STYLE
@@ -858,7 +856,6 @@ class MacOSApplication implements NativeApplication {
     this.#onOpenFile = callback;
   }
 
-  /** macOS AppKit application operations (activation, hide/show, dock tile). */
   readonly appKit: NativeAppKit = {
     setActivationPolicy: cocoaApp.setActivationPolicy,
     hide: cocoaApp.hide,

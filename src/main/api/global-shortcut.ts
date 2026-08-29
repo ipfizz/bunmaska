@@ -15,21 +15,16 @@ import { parseAccelerator } from './accelerator';
  */
 
 /**
- * The native backend the public `globalShortcut` API delegates to. The API owns
- * accelerator parsing and the `isRegistered` registry; the backend owns the OS
- * grab and dispatching the JS `callback` when the hot key fires.
+ * The API owns accelerator parsing and the `isRegistered` registry; the backend
+ * owns the OS grab and dispatching `callback` when the hot key fires.
  */
 export type GlobalShortcutBackend = {
   /** The HONEST per-platform answer to whether global shortcuts can be claimed. */
   isSupported(): boolean;
-  /**
-   * Claim `accelerator` at the OS level and arrange for `callback` to run when it
-   * fires. Returns `false` if the OS refused the grab (e.g. already taken).
-   */
+  /** `false` when the OS refused the grab, e.g. the key is already taken. */
   register(accelerator: string, callback: () => void): boolean;
-  /** Release the OS grab for `accelerator`. No-op if it was not grabbed. */
+  /** No-op if `accelerator` was not grabbed. */
   unregister(accelerator: string): void;
-  /** Release every grab this backend holds. */
   unregisterAll(): void;
 };
 
@@ -54,17 +49,16 @@ const getBackend = (): GlobalShortcutBackend => {
   throw new UnsupportedPlatformError(`globalShortcut is not supported on ${currentPlatform()} yet`);
 };
 
-/** Override the native backend. Test-only. */
+/** @internal */
 export const setGlobalShortcutBackendForTesting = (
   fake: GlobalShortcutBackend | undefined,
 ): void => {
   backend = fake;
 };
 
-/** The accelerators currently held, keyed by their literal accelerator string. */
+/** Keyed by the LITERAL accelerator string, not the parsed form. */
 const registry = new Set<string>();
 
-/** Whether the accelerator string can be parsed for the host platform. */
 const isParseable = (accelerator: string): boolean =>
   parseAccelerator(accelerator, currentPlatform()) !== undefined;
 
@@ -77,9 +71,8 @@ export type GlobalShortcut = {
 };
 
 /**
- * Register `accelerator`. Returns `false` (without touching the backend) if the
- * accelerator is unparseable or already registered, or if the OS refuses the
- * grab; `true` once the grab succeeds. Matches Electron's contract.
+ * `false` — without touching the backend — when the accelerator is unparseable
+ * or already registered, and when the OS refuses the grab.
  */
 const register = (accelerator: string, callback: () => void): boolean => {
   if (!isParseable(accelerator) || registry.has(accelerator)) {
@@ -92,17 +85,15 @@ const register = (accelerator: string, callback: () => void): boolean => {
   return ok;
 };
 
-/** Register every accelerator with one shared `callback`. Unparseable ones are skipped. */
+/** One shared `callback`; unparseable accelerators are skipped silently. */
 const registerAll = (accelerators: string[], callback: () => void): void => {
   for (const accelerator of accelerators) {
     register(accelerator, callback);
   }
 };
 
-/** Whether `accelerator` is currently registered by this app. */
 const isRegistered = (accelerator: string): boolean => registry.has(accelerator);
 
-/** Release `accelerator` if it is registered. No-op otherwise. */
 const unregister = (accelerator: string): void => {
   if (!registry.has(accelerator)) {
     return;
@@ -111,7 +102,6 @@ const unregister = (accelerator: string): void => {
   getBackend().unregister(accelerator);
 };
 
-/** Release every accelerator this app registered. */
 const unregisterAll = (): void => {
   if (registry.size === 0) {
     return;

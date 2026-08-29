@@ -9,35 +9,27 @@ import { windowsScreenBackend } from '../platform/windows/windows-screen';
  * Display enumeration and geometry — the drop-in equivalent of Electron's
  * `screen` module.
  *
- * The public surface is pure TS that consumes a {@link ScreenBackend} (the raw
- * per-platform display data + cursor point). All derived logic —
- * `getPrimaryDisplay`, `getDisplayNearestPoint`, `getDisplayMatching`.
- *
  * Coordinate origin: Electron uses top-left screen coordinates, and every backend
  * already reports top-left-origin rects (CoreGraphics global display space,
- * GdkMonitor geometry, Win32 monitor rects), so no flip is applied here.
+ * GdkMonitor geometry, Win32 monitor rects), so NO flip is applied here.
  */
 
-/** A point in top-left screen coordinates. */
+/** Top-left screen coordinates. */
 export type Point = {
   readonly x: number;
   readonly y: number;
 };
 
-/** A display's pixel dimensions. */
 export type Size = {
   readonly width: number;
   readonly height: number;
 };
 
 /**
- * A connected display — mirrors the fields of Electron's `Display`.
- *
- * `bounds`/`workArea` are in top-left screen coordinates. `workArea` excludes
- * OS chrome (menu bar / dock) where the platform reports it; on Linux v1 it
- * equals `bounds` (GTK4 GdkMonitor has no work-area API). `scaleFactor` is the
- * device-pixel ratio (>= 1). `rotation` is degrees clockwise (0/90/180/270).
- * `internal` is true for a built-in panel (e.g. a laptop screen).
+ * `workArea` excludes OS chrome (menu bar / dock) where the platform reports it;
+ * on Linux v1 it EQUALS `bounds` — GTK4 GdkMonitor has no work-area API.
+ * `scaleFactor` is the device-pixel ratio (>= 1), `rotation` degrees clockwise
+ * (0/90/180/270), `internal` true for a built-in panel.
  */
 export type Display = {
   readonly id: number;
@@ -50,12 +42,7 @@ export type Display = {
   readonly internal: boolean;
 };
 
-/**
- * Raw display data straight from a platform backend, before the public
- * {@link Display} shape (with its derived `size`/`workAreaSize`) is built.
- * `primary` flags the OS's main display; the API resolves the public primary
- * from it.
- */
+/** Straight from a backend, before {@link Display}'s derived sizes are built. */
 export type RawDisplay = {
   readonly id: number;
   readonly bounds: Rect;
@@ -66,14 +53,10 @@ export type RawDisplay = {
   readonly primary: boolean;
 };
 
-/**
- * The native backend the public `screen` API delegates to. Injectable so the
- * pure dispatch/geometry logic is unit-testable without a real display.
- */
 export type ScreenBackend = {
-  /** Every connected display, raw. Must return at least one on a real host. */
+  /** Must return at least one display on a real host. */
   getDisplays(): readonly RawDisplay[];
-  /** The cursor position in top-left screen coordinates (best-effort). */
+  /** Top-left screen coordinates; best-effort. */
   getCursorScreenPoint(): Point;
 };
 
@@ -106,21 +89,21 @@ const getBackend = (): ScreenBackend => {
   throw new UnsupportedPlatformError(`screen is not supported on ${currentPlatform()} yet`);
 };
 
-/** Override the native screen backend. Test-only. */
+/** @internal */
 export const setScreenBackendForTesting = (fake: ScreenBackend | undefined): void => {
   backend = fake;
 };
 
 const rawDisplays = (): readonly RawDisplay[] => getBackend().getDisplays();
 
-/** Squared distance from a point to the nearest edge of a rect (0 if inside). */
+/** SQUARED distance to the nearest edge; 0 when the point is inside. */
 const distanceSqToRect = (point: Point, rect: Rect): number => {
   const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width));
   const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height));
   return dx * dx + dy * dy;
 };
 
-/** Area of the intersection of two rects (0 when they do not overlap). */
+/** 0 when the rects do not overlap. */
 const overlapArea = (a: Rect, b: Rect): number => {
   const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
   const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
@@ -145,10 +128,9 @@ const nearestRaw = (point: Point): RawDisplay => {
   return best;
 };
 
-/** Every connected display. */
 const getAllDisplays = (): Display[] => rawDisplays().map(toDisplay);
 
-/** The OS's primary display (origin-anchored on macOS, index 0 on Linux). */
+/** Origin-anchored on macOS, index 0 on Linux. */
 const getPrimaryDisplay = (): Display => {
   const displays = rawDisplays();
   const first = displays[0];
@@ -159,10 +141,10 @@ const getPrimaryDisplay = (): Display => {
   return toDisplay(primary);
 };
 
-/** The display whose bounds contain `point`, or the geometrically nearest one. */
+/** Falls back to the geometrically nearest display when no bounds contain `point`. */
 const getDisplayNearestPoint = (point: Point): Display => toDisplay(nearestRaw(point));
 
-/** The display the cursor is currently on (best-effort; may be {0,0}). */
+/** Best-effort; may be `{0, 0}`. */
 const getCursorScreenPoint = (): Point => getBackend().getCursorScreenPoint();
 
 /**
@@ -190,7 +172,7 @@ const getDisplayMatching = (rect: Rect): Display => {
   return toDisplay(nearestRaw(center));
 };
 
-/** The `screen` module — Electron-compatible display enumeration/geometry. */
+/** The `screen` module — Electron-compatible display enumeration and geometry. */
 export const screen = {
   getAllDisplays,
   getPrimaryDisplay,

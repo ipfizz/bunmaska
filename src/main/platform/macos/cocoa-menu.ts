@@ -18,8 +18,7 @@ import type { Handle } from './objc';
  * A single shared `BunmaskaMenuTarget` class (defined once at runtime, D026) holds
  * the `bunmaskaMenuAction:` selector that every clickable item points at. When an
  * item fires, AppKit sends `[target bunmaskaMenuAction:item]`; the IMP looks the
- * item handle up in a registry and invokes its JS click handler. This mirrors
- * the proven script-message-handler / navigation-delegate pattern.
+ * item handle up in a registry and invokes its JS click handler.
  */
 
 /** A backend-neutral description of one menu item. */

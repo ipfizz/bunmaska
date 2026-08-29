@@ -1,15 +1,12 @@
 /**
- * `bunmaska run <entry>` — launch a Bunmaska app by spawning `bun run <entry>`
- * with inherited stdio so the app owns the terminal. The spawner is injected
- * so tests can assert the command/args without launching a real GUI process.
+ * `bunmaska run <entry>`: spawns `bun run <entry>` with inherited stdio so the
+ * app owns the terminal.
  */
 
-/** Minimal shape of a spawned child we depend on: just its exit code. */
 export type SpawnedChild = {
   readonly exited: Promise<number>;
 };
 
-/** Spawn a command with the given stdio triple. */
 export type Spawner = (
   command: readonly string[],
   options: { readonly stdio: readonly ['inherit', 'inherit', 'inherit'] },
@@ -22,10 +19,7 @@ const defaultSpawner: Spawner = (command, options) =>
     stderr: options.stdio[2],
   });
 
-/**
- * Spawn `bun run <entry> [...args]` and resolve to the child's exit code.
- * The `spawn` dependency defaults to {@link Bun.spawn} with inherited stdio.
- */
+/** Resolves to the child's exit code. */
 export const runApp = async (
   entry: string,
   args: readonly string[],

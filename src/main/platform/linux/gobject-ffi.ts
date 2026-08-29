@@ -11,9 +11,6 @@ import { currentPlatform } from '../../../common/platform';
  * wherever `libgtk-4` is. Convention: `gboolean` is {@link FFIType.i32};
  * `gulong`/`GType` are {@link FFIType.u64} (BigInt); `GConnectFlags` is
  * {@link FFIType.u32}; all handles are real pointers.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBGOBJECT_PATH = 'libgobject-2.0.so.0';

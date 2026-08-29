@@ -48,7 +48,6 @@ export type ButtonsArray = {
   readonly buffers: ReadonlyArray<Uint8Array>;
 };
 
-/** Build the NULL-terminated `const char* const*` array of button labels. */
 export const buildButtonsArray = (labels: ReadonlyArray<string>): ButtonsArray => {
   const buffers = labels.map((label) => cstr(label));
   const array = new BigUint64Array(buffers.length + 1);
@@ -88,9 +87,8 @@ export type SettleChooseArgs = {
 };
 
 /**
- * Produce the message-box response from a `GAsyncResult`. Pure but for the
- * injected `finish`, so it is unit-testable without a real dialog. A thrown
- * `finish` (the `GError` dismissal path) maps to `cancelId`.
+ * Produce the message-box response from a `GAsyncResult`. A thrown `finish`
+ * (the `GError` dismissal path) maps to `cancelId`.
  */
 export const settleChoose = (args: SettleChooseArgs): number => {
   let index: number;
@@ -113,7 +111,7 @@ export type SettleFilePathArgs = {
 
 /**
  * Produce a file path from a `GAsyncResult`. A null `GFile*` (cancel) or a
- * thrown `finish` (dismissal) yields `''`. Pure but for the injected functions.
+ * thrown `finish` (dismissal) yields `''`.
  */
 export const settleFilePath = (args: SettleFilePathArgs): string => {
   let file: Pointer | null;

@@ -4,12 +4,9 @@ import { loadUser32 } from './win32-ffi';
 import { loadShcore, MDT_EFFECTIVE_DPI } from './win32-shcore-ffi';
 
 /**
- * Windows display enumeration + cursor for the `screen` module, the WinCairo peer
- * of `cocoa-screen.ts` / `gdk-screen.ts`. `EnumDisplayMonitors` walks the monitors
- * (a short-lived, synchronous JSCallback collects the `HMONITOR`s — safe, unlike a
- * long-lived WndProc), `GetMonitorInfoW` reads each monitor's bounds + work area +
- * primary flag, and shcore's `GetDpiForMonitor` gives the device-pixel scale.
- * `rotation` (0) and `internal` (false) are not yet derived — a documented v1 gap.
+ * `EnumDisplayMonitors` walks the monitors with a short-lived, synchronous JSCallback —
+ * safe, unlike a long-lived WndProc. `rotation` (0) and `internal` (false) are not yet
+ * derived — a documented v1 gap.
  */
 
 /** `sizeof(MONITORINFO)`: cbSize(4) + rcMonitor(16) + rcWork(16) + dwFlags(4). */
@@ -70,7 +67,6 @@ const enumerateMonitors = (): bigint[] => {
   return handles;
 };
 
-/** Build a {@link RawDisplay} from one monitor handle. */
 const describeMonitor = (hMonitor: bigint): RawDisplay => {
   const mi = new Uint8Array(MONITORINFO_SIZE);
   new DataView(mi.buffer).setUint32(0, MONITORINFO_SIZE, true); // cbSize

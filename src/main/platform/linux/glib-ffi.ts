@@ -15,14 +15,6 @@ import { currentPlatform } from '../../../common/platform';
  * reports whether any sources are ready, letting us drain to quiescence without
  * ever blocking Bun's thread. `g_free` releases the transfer-full `char*`
  * returned by `jsc_value_to_string` (NULL-safe no-op).
- *
- * `g_bytes_new(data, size)` copies `size` bytes into a refcounted `GBytes*` (so
- * the source buffer need only outlive the call); `g_bytes_unref(bytes)` drops a
- * ref. These back the GDK clipboard write path, where the content provider takes
- * its own ref on the `GBytes` and the caller unrefs the local one.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBGLIB_PATH = 'libglib-2.0.so.0';

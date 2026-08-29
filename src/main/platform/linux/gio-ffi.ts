@@ -3,27 +3,13 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 
 /**
- * Loads GIO's default-handler URI launcher — the Linux primitive behind
- * Bunmaska's `shell.openExternal`/`openPath`/`showItemInFolder`.
- *
- * `g_app_info_launch_default_for_uri(uri, context, error)` hands a URI to the
- * desktop's default handler (browser for `http(s):`, file manager for
- * `file:`) and returns a `gboolean`. Bunmaska passes `context = NULL` and
- * `error = NULL` and relies on the boolean return rather than `GError`
- * unwrapping. `libgio-2.0` is a hard dependency of GTK 4, so it is always
- * present wherever `libgtk-4` is.
- *
- * `g_file_get_path(file)` unwraps the `GFile*` returned by `GtkFileDialog` into
- * a transfer-full local-path `char*` (the dialog backend reads it then frees it
- * with `g_free`).
+ * Loads GIO's default-handler URI launcher plus the GFile / GListModel / stream
+ * helpers the Linux shell, dialog, and clipboard paths need.
  *
  * Convention (matches the existing Linux loaders): `gboolean` is modelled as
  * {@link FFIType.i32} (compare `=== 1`), NOT `bool`; the `GAppLaunchContext*`
  * and `GError**` args are real pointers passed as `null`; `cstring` args are
  * NUL-terminated UTF-8 strings.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBGIO_PATH = 'libgio-2.0.so.0';

@@ -3,12 +3,9 @@ import { wstr } from './win32';
 import { HKEY_CURRENT_USER, loadAdvapi32, RRF_RT_REG_DWORD } from './win32-registry-ffi';
 
 /**
- * Windows system-appearance reads for `nativeTheme`, the WinCairo peer of
- * `cocoa-native-theme.ts` / `gtk-native-theme.ts`. Windows exposes the user's
- * light/dark preference as the `AppsUseLightTheme` REG_DWORD under the per-user
- * `Themes\Personalize` key (`0` = dark, `1`/absent = light) — the same signal
- * Electron reads. Observing live theme changes (a `RegNotifyChangeKeyValue` /
- * `WM_SETTINGCHANGE` watcher) is a documented follow-up; this reads on demand.
+ * Windows exposes the user's light/dark preference as the `AppsUseLightTheme` REG_DWORD
+ * under the per-user `Themes\Personalize` key (`0` = dark, `1`/absent = light). Observing
+ * live theme changes (`RegNotifyChangeKeyValue`/`WM_SETTINGCHANGE`) is a follow-up.
  */
 
 const PERSONALIZE_KEY = 'Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize';

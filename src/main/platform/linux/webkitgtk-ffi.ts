@@ -7,17 +7,9 @@ import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine
  * Loads WebKitGTK 6.0 — the Linux system-WebKit web view (the role
  * `WebKit.framework` plays on macOS).
  *
- * `webkit_web_view_new()` returns a `GtkWidget*` set as a window's child via
- * `gtk_window_set_child`. URLs and inline HTML load through `load_uri` /
- * `load_html`; `get_uri` reads the current address back. JS evaluation and the
- * user-content-manager IPC bridge are wired here too.
- *
  * Convention: `gboolean` is {@link FFIType.i32} (compare `!== 0`); handles are
  * real pointers; nullable string args use {@link FFIType.pointer} (Bun's
  * `cstring` cannot encode NULL).
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBWEBKITGTK_PATH = 'libwebkitgtk-6.0.so.4';
@@ -31,10 +23,7 @@ export const WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES = 0;
 export const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START = 0;
 
 /**
- * The WebKitGTK 6.0 FFI symbol descriptor table.
- *
- * Declared separately from {@link loadWebKitGtkFFI} so unit tests can assert ABI
- * shapes without `dlopen` on a non-Linux host. Load-bearing details:
+ * The WebKitGTK 6.0 FFI symbol descriptor table. Load-bearing details:
  * - `load_html` base_uri is {@link FFIType.pointer} (nullable; was wrongly
  *   `cstring` in the scaffolding) — pass a pinned NUL-terminated Buffer or 0.
  * - `evaluate_javascript` is the 8-arg WK6.0 form; length is `i64` (-1 for

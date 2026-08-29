@@ -1,30 +1,23 @@
 import type { Platform } from '../../common/platform';
 
 /**
- * Shared, pure accelerator parsing for the `globalShortcut` module (and a richer
- * superset of what `menu.ts` needs).
- *
- * An accelerator is Electron's `'CmdOrCtrl+Shift+K'` string: zero or more
- * modifier tokens and exactly one final key, joined by `+`. Parsing is pure and
- * platform-parameterised so `CmdOrCtrl` resolves correctly without touching any
- * FFI: `CmdOrCtrl` = Command (meta) on macOS, Control everywhere else.
- *
- * Unparseable accelerators (empty, no key, two keys, unknown token) parse to
- * `undefined` so callers — notably `globalShortcut.register` — can reject them.
+ * Accelerator parsing: Electron's `'CmdOrCtrl+Shift+K'` — zero or more modifier
+ * tokens and EXACTLY ONE final key, joined by `+`. `CmdOrCtrl` resolves to
+ * Command (meta) on macOS, Control everywhere else. Empty, keyless, two-key and
+ * unknown-token accelerators parse to `undefined` so callers can reject them.
  */
 
-/** A parsed accelerator: its final key plus the modifier flags it requests. */
 export type ParsedAccelerator = {
-  /** The final, non-modifier key, normalised (single letters upper-cased). */
+  /** Normalised: single letters are upper-cased. */
   readonly key: string;
   /** Whether the original string used the platform-relative `CmdOrCtrl` token. */
   readonly cmdOrCtrl: boolean;
   readonly shift: boolean;
   readonly alt: boolean;
   readonly ctrl: boolean;
-  /** The Command key on macOS (Cmd/Command). */
+  /** The Command key on macOS — from a `Cmd`/`Command` token. */
   readonly meta: boolean;
-  /** The Super/Windows key (Super/Meta token). */
+  /** The Super/Windows key — from a `Super`/`Meta` token. */
   readonly super: boolean;
 };
 
@@ -37,7 +30,7 @@ type Modifiers = {
   super: boolean;
 };
 
-/** Named keys accepted as a final key (case-insensitive), normalised to a canonical label. */
+/** Case-insensitive, normalised to a canonical label. */
 const NAMED_KEYS = new Map<string, string>([
   ['space', 'Space'],
   ['tab', 'Tab'],
@@ -65,7 +58,6 @@ const normaliseKey = (token: string): string | undefined => {
     return undefined;
   }
   if (token.length === 1) {
-    // Single letter or digit (or punctuation) — upper-case letters for stability.
     return token.toUpperCase();
   }
   if (isFunctionKey(token)) {
@@ -74,7 +66,7 @@ const normaliseKey = (token: string): string | undefined => {
   return NAMED_KEYS.get(token.toLowerCase());
 };
 
-/** Apply a modifier token; returns false if the token is not a known modifier. */
+/** Returns false when the token is not a known modifier. */
 const applyModifier = (token: string, mods: Modifiers): boolean => {
   switch (token.toLowerCase()) {
     case 'cmdorctrl':
@@ -106,9 +98,8 @@ const applyModifier = (token: string, mods: Modifiers): boolean => {
 };
 
 /**
- * Parse an accelerator into its key and modifier flags for `platform`, or
- * `undefined` if it cannot be parsed. `CmdOrCtrl` is preserved as a flag AND
- * resolved into the concrete `meta`/`ctrl` flag for the platform.
+ * `undefined` when the accelerator cannot be parsed. `CmdOrCtrl` is preserved as
+ * a flag AND resolved into the concrete `meta`/`ctrl` flag for `platform`.
  */
 export const parseAccelerator = (
   accelerator: string,

@@ -1,10 +1,7 @@
 /**
- * Minimal leveled diagnostics for Bunmaska.
- *
- * Exists because Biome bans `console.*` in committed code and the FFI layer
- * needs a place to report which library failed to load or which selector did
- * not resolve. The default sink is a no-op so a quiet library stays quiet;
- * apps or tests opt in via {@link setLogSink} / {@link setLogLevel}.
+ * Minimal leveled diagnostics (Biome bans `console.*` in committed code). The
+ * default sink is a no-op so a quiet library stays quiet; apps and tests opt in
+ * via {@link setLogSink} / {@link setLogLevel}.
  */
 
 export type LogLevel = 'silent' | 'error' | 'warn' | 'info' | 'debug';

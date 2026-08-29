@@ -5,11 +5,8 @@ import { loadUser32 } from './win32-ffi';
 import { loadShell32, SHELL_EXECUTE_SUCCESS_THRESHOLD, SW_SHOWNORMAL } from './win32-shell-ffi';
 
 /**
- * Windows `shell` backend (pure `bun:ffi`), the WinCairo peer of `cocoa-shell.ts`
- * / `gtk-shell.ts`. URLs and paths open through `ShellExecuteW`'s `open` verb;
- * "reveal in folder" launches Explorer with `/select,<path>`; `beep` is
- * `MessageBeep`. A held reference to each wide-string buffer keeps it alive across
- * the FFI call.
+ * Windows `shell` backend. Each wide-string buffer is held in a local so it stays alive
+ * across the `ShellExecuteW` call.
  */
 
 /** Run `ShellExecuteW(NULL, "open", target, params)` and report success (HINSTANCE > 32). */

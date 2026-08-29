@@ -6,9 +6,7 @@ import { macOSLibraryAccessor } from './objc';
  *
  * The resize/crop redraw goes through an OFFSCREEN bitmap context
  * (`CGBitmapContextCreate(NULL, …)`) — a malloc-backed buffer with NO window
- * server, so it works headless (no `NSApplication`, no `lockFocus`). The source
- * `CGImageRef` comes from the rep's `[rep CGImage]`; the redrawn `CGImageRef` is
- * wrapped back into an `NSBitmapImageRep` via `initWithCGImage:`.
+ * server, so it works headless (no `NSApplication`, no `lockFocus`).
  *
  * Everything here is an opaque pointer (CGContextRef/CGImageRef/CGColorSpaceRef)
  * — no struct is ever returned (D030). The one struct ARG, the `CGRect` passed to

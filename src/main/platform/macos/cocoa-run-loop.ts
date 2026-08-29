@@ -6,13 +6,11 @@ import { bigIntOut, LIBOBJC_PATH, macOSLibraryAccessor, ptrIn } from './objc';
  * macOS native run-loop drain.
  *
  * Returns a function the {@link AdaptiveBlockingPump} calls each tick with a
- * timeout: it dispatches pending AppKit input events (via `pumpEvents`), then
- * sleeps in `CFRunLoopRunInMode(kCFRunLoopDefaultMode, timeout, true)` until a
- * native source is handled or the timeout elapses. A UI event returns it
- * immediately (returnAfterSourceHandled), so the thread sleeps when idle yet
- * wakes the instant input arrives. Returns whether a source was handled — the
- * pump stays responsive while that holds and backs off when it doesn't. Each
- * drain runs inside an autorelease pool so per-tick temporaries are released.
+ * timeout. A UI event returns it immediately (returnAfterSourceHandled), so the
+ * thread sleeps when idle yet wakes the instant input arrives. Returns whether a
+ * source was handled — the pump stays responsive while that holds and backs off
+ * when it doesn't. Each drain runs inside an autorelease pool so per-tick
+ * temporaries are released.
  */
 
 const CORE_FOUNDATION_PATH = '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation';

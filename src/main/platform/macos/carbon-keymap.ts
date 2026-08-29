@@ -7,7 +7,7 @@ import type { ParsedAccelerator } from '../../api/accelerator';
  * Carbon's `RegisterEventHotKey` wants a hardware virtual key code (US layout)
  * and a modifier mask, NOT a character. These tables map our parsed accelerator
  * key/modifiers onto those. Values are the canonical `kVK_*` constants from
- * `HIToolbox/Events.h`. No FFI lives here so the mapping is unit-testable.
+ * `HIToolbox/Events.h`.
  */
 
 /** Carbon modifier mask bits (Events.h `cmdKey`, `shiftKey`, `optionKey`, `controlKey`). */

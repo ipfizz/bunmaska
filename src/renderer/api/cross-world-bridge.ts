@@ -1,20 +1,11 @@
 /**
- * The cross-world DOM bridge that makes `contextBridge.exposeInMainWorld` work
- * after context isolation moved the preload (and `__bunmaska`) into a separate JS
- * world the page cannot see.
+ * The cross-world DOM bridge behind `contextBridge.exposeInMainWorld`.
  *
- * Page world ↔ isolated world share the same `document` but have separate
- * globals, so they communicate via `document` CustomEvents (the Chrome
- * content-script pattern). Two scripts cooperate over a per-window random
- * channel id:
- *  - the PAGE-world stub ({@link generatePageWorldStub}), injected into the page
- *    world, materialises `window[key]` whose async methods dispatch request
- *    events and return Promises;
- *  - the ISOLATED-world host ({@link generateIsolatedHostSource}), injected into
- *    the isolated world right after the bootstrap and BEFORE the user preload,
- *    installs `window.__bunmaska.exposeInMainWorld` (and a `contextBridge` shape).
- *    When the user preload calls it, the host holds the real `api`, answers
- *    request events, and announces each exposed surface to the page stub.
+ * Page world and isolated world share one `document` but have separate globals, so
+ * they talk over `document` CustomEvents on a per-window random channel id: the
+ * page-world stub ({@link generatePageWorldStub}) materialises `window[key]` with
+ * async proxy methods; the isolated-world host ({@link generateIsolatedHostSource})
+ * holds the real `api` and answers those request events.
  *
  * SINGLE SOURCE OF TRUTH: the protocol is authored once, as the baked plain-JS
  * strings below. {@link installCrossWorldHost} (the typed, importable surface
@@ -43,17 +34,15 @@ export const CHANNEL_GLOBAL_KEY = '__bunmaskaBridgeChannel';
 export const CROSS_WORLD_CALL_TIMEOUT_MS = 30_000;
 
 /**
- * Generate a per-window random channel id. Used to name the cross-world DOM
- * events so distinct windows (and accidental page listeners) do not collide.
- * Not a security boundary — the page can still observe the events.
+ * A per-window random channel id naming the cross-world DOM events. Not a security
+ * boundary — the page can still observe them; it only prevents collisions.
  */
 export const generateChannelId = (): string =>
   `__bunmaska_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 
 /**
- * The isolated-world snippet that records the channel id on the isolated global
- * so the host can read it. Injected into the isolated world BEFORE the bridge
- * bootstrap. Plain JS (no TS syntax).
+ * The isolated-world snippet recording the channel id on the isolated global.
+ * Injected into the isolated world BEFORE the bridge bootstrap.
  */
 export const generateIsolatedChannelSetup = (channelId: string): string =>
   `globalThis[${JSON.stringify(CHANNEL_GLOBAL_KEY)}] = ${JSON.stringify(channelId)};`;
@@ -68,19 +57,14 @@ export const readyChannel = (channelId: string): string => `${channelId}:ready`;
 export const announceChannel = (channelId: string): string => `${channelId}:announce`;
 
 /**
- * Generate the page-world user-script source that installs the cross-world
- * receiver. It listens for `announce` events (a key, its method names, and its
- * deep-cloned data values) and materialises a deep-frozen `window[key]` whose
- * methods are async proxies over the DOM channel.
+ * The page-world script that materialises a deep-frozen `window[key]` from an
+ * `announce` event, its methods async proxies over the DOM channel.
  *
- * Resilience: it re-emits `ready` on the next microtask AND a later macrotask so
- * the host (re)announces regardless of which script's listener attached first;
- * the host also retains its surfaces and replies to EVERY `ready`. The target is
- * built with `Object.create(null)` and `Object.defineProperty` to neutralise
- * `__proto__`/`constructor` traps, and a per-call timeout rejects stalled calls.
- *
- * `channelId` is baked in at inject time and must match the isolated host's id.
- * Authored as plain JS (no TS syntax) so it reaches the page engine verbatim.
+ * It re-emits `ready` now, on a microtask, AND on a later macrotask, and the host
+ * replies to EVERY `ready`, so the surface materialises regardless of which
+ * script's listener attached first. The target is built with `Object.create(null)`
+ * + `Object.defineProperty` to neutralise `__proto__`/`constructor` traps, and a
+ * per-call timeout rejects stalled calls. `channelId` must match the host's.
  */
 export const generatePageWorldStub = (channelId: string): string => {
   const REQ = JSON.stringify(channelId);
@@ -196,20 +180,13 @@ export const generatePageWorldStub = (channelId: string): string => {
 };
 
 /**
- * Generate the ISOLATED-world host source. Injected into the isolated world
- * right after the bootstrap and BEFORE the user preload, so the user preload can
- * call `window.__bunmaska.exposeInMainWorld(key, api)` (also reachable as
- * `contextBridge.exposeInMainWorld`).
+ * The ISOLATED-world host, injected right after the bootstrap and BEFORE the user
+ * preload so the preload can call `window.__bunmaska.exposeInMainWorld(key, api)`.
+ * It RETAINS every announced surface and re-announces on every page `ready`, so the
+ * page materialises regardless of script ordering.
  *
- * For each exposed surface it: registers the real handlers, answers page-world
- * request events for `key`, and RETAINS the announced surface so it replies to
- * EVERY page `ready` (resilient handshake — the page materialises regardless of
- * script ordering). It announces both immediately and on every `ready`.
- *
- * This is the CANONICAL protocol implementation. {@link installCrossWorldHost}
- * runs this exact source via `new Function`, so there is one source of truth.
- *
- * Authored as plain JS (no TS syntax) so it reaches the isolated engine verbatim.
+ * This is the CANONICAL protocol implementation; {@link installCrossWorldHost} runs
+ * this exact source via `new Function`.
  */
 export const generateIsolatedHostSource = (channelId: string): string => {
   const REQ = JSON.stringify(channelId);
@@ -344,17 +321,11 @@ export type CustomEventCtor = new (
 type ExposeFn = (key: string, api: Record<string, unknown>) => void;
 
 /**
- * Install the ISOLATED-world host over an injected `scope` (the shared
- * `document`) + `CustomEventImpl` and return its `exposeInMainWorld`.
- *
- * This runs the CANONICAL {@link generateIsolatedHostSource} via `new Function`
- * against a synthetic global, so the typed/importable path executes byte-for-byte
- * the SAME protocol code that is baked and injected into the isolated world —
- * there is no second implementation to drift.
- *
- * The synthetic global proxies `document`/`CustomEvent` to the supplied
- * `scope`/`CustomEventImpl` and inherits `structuredClone`, `Map`, `Object`,
- * `Promise`, `Array`, `JSON`, `String` from the host realm.
+ * Install the ISOLATED-world host over an injected `scope` (the shared `document`)
+ * + `CustomEventImpl` and return its `exposeInMainWorld`. Runs the canonical
+ * {@link generateIsolatedHostSource} via `new Function` against a synthetic global
+ * that proxies `document`/`CustomEvent` and inherits `structuredClone`, `Map`,
+ * `Object`, `Promise`, `Array`, `JSON`, `String` from the host realm.
  */
 export const installCrossWorldHost = (
   channelId: string,

@@ -1,11 +1,7 @@
 /**
- * Backend-neutral contracts for the native platform layer.
- *
- * Everything above `platform/` (the public `api/` classes) depends only on
- * these interfaces, never on a concrete backend (`platform/macos`,
- * `platform/linux`, `platform/windows`). Platform-specific handles (`id`, `SEL`, `GtkWidget*`)
- * never appear here — the seam speaks only plain TS: numbers, strings, and
- * callbacks (D024).
+ * Backend-neutral contracts for the native platform layer: no platform-specific
+ * handle (`id`, `SEL`, `GtkWidget*`) ever appears here — the seam speaks only plain
+ * TS: numbers, strings, and callbacks (D024).
  */
 
 /** A rectangle in screen/content coordinates. */

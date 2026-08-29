@@ -15,34 +15,27 @@ import { type NativeImage, nativeImage } from './native-image';
 /**
  * Controls and observes the content rendered inside a {@link BrowserWindow} —
  * the drop-in equivalent of Electron's `webContents`. Content methods on
- * `BrowserWindow` delegate here (D025). Extends Node {@link EventEmitter}.
- *
- * On construction it bridges the native web view to the {@link ipcMain}
- * singleton: inbound renderer envelopes are routed to `ipcMain`, and any reply
- * is sent back to the renderer — so `ipcMain.handle` + `ipcRenderer.invoke`
- * work end-to-end with no per-window wiring.
+ * `BrowserWindow` delegate here (D025). Construction bridges the native web view
+ * to the {@link ipcMain} singleton, so there is no per-window IPC wiring.
  */
 
 const log = createLogger('web-contents');
 
-/** Electron-shaped options for {@link WebContents.loadFile}. */
 export type LoadFileOptions = {
-  /** URL fragment appended after `#` (e.g. a hash-router route). */
+  /** Appended after `#`, without the `#`. */
   readonly hash?: string;
-  /** Query params as an object, serialized to a query string. */
   readonly query?: Record<string, string>;
-  /** Raw query string (takes precedence over `query`). */
+  /** Raw query string; takes precedence over `query`. */
   readonly search?: string;
 };
 
 let nextId = 1;
 
-/** Reset the id counter. Test-only. */
+/** @internal */
 export const resetWebContentsIdsForTesting = (): void => {
   nextId = 1;
 };
 
-/** Build the page-world script that injects a keyed `<style>` for `insertCSS`. */
 const buildInsertCssScript = (key: string, css: string): string =>
   `(() => {
     const style = document.createElement('style');
@@ -51,7 +44,6 @@ const buildInsertCssScript = (key: string, css: string): string =>
     (document.head || document.documentElement).appendChild(style);
   })()`;
 
-/** Build the page-world script that removes the keyed `<style>` for `removeInsertedCSS`. */
 const buildRemoveCssScript = (key: string): string =>
   `(() => {
     for (const el of document.querySelectorAll('style[data-bunmaska-css-key]')) {
@@ -62,7 +54,7 @@ const buildRemoveCssScript = (key: string): string =>
   })()`;
 
 export class WebContents extends EventEmitter {
-  /** Process-unique id, matching Electron's `webContents.id`. */
+  /** Process-unique and never reused within a run. */
   readonly id: number;
   readonly #native: NativeWebContents;
   #cssCounter = 0;
@@ -100,16 +92,13 @@ export class WebContents extends EventEmitter {
     });
   }
 
-  /** Navigate to a URL. */
   loadURL(url: string): void {
     this.#native.loadURL(url);
   }
 
   /**
-   * Load a local file by path. `options` mirror Electron's: `hash` (fragment for
-   * hash-routed SPAs), `query` (object) or `search` (raw string) for the query.
-   * The path itself is percent-encoded, so spaces/`#`/`?` in the FILE NAME load
-   * correctly — pass a fragment via `options.hash`, not inside `filePath`.
+   * The path is percent-encoded, so spaces/`#`/`?` in the FILE NAME load
+   * correctly — pass a fragment via `options.hash`, never inside `filePath`.
    */
   loadFile(filePath: string, options?: LoadFileOptions): void {
     const absolute = isAbsolute(filePath) ? filePath : resolve(filePath);
@@ -131,60 +120,49 @@ export class WebContents extends EventEmitter {
     this.#native.loadURL(url.href);
   }
 
-  /** The current page URL, or `''` before the first navigation. */
+  /** `''` before the first navigation. */
   getURL(): string {
     return this.#native.getURL();
   }
 
-  /** The page's current title, or `''`. */
   getTitle(): string {
     return this.#native.getTitle();
   }
 
-  /** Whether a navigation is currently in progress. */
   isLoading(): boolean {
     return this.#isLoading;
   }
 
-  /** Reload the current page. */
   reload(): void {
     this.#native.reload();
   }
 
-  /** Reload the current page, bypassing the cache. */
   reloadIgnoringCache(): void {
     this.#native.reloadIgnoringCache();
   }
 
-  /** Stop any in-progress load. */
   stop(): void {
     this.#native.stop();
   }
 
-  /** Navigate back one entry in the session history, if possible. */
   goBack(): void {
     this.#native.goBack();
   }
 
-  /** Navigate forward one entry in the session history, if possible. */
   goForward(): void {
     this.#native.goForward();
   }
 
-  /** Whether there is a previous history entry to go back to. */
   canGoBack(): boolean {
     return this.#native.canGoBack();
   }
 
-  /** Whether there is a next history entry to go forward to. */
   canGoForward(): boolean {
     return this.#native.canGoForward();
   }
 
   /**
-   * Evaluate JavaScript in the page and resolve to the script's completion
-   * value (Electron semantics). A bare expression resolves to its value; a
-   * returned Promise resolves to its fulfilled value; a thrown error rejects.
+   * Resolves to the script's COMPLETION value; a returned Promise is awaited.
    * Only JSON-serializable results survive (`JSON.stringify` semantics).
    */
   executeJavaScript(code: string): Promise<unknown> {
@@ -192,27 +170,19 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * Render the current page to a PDF and resolve to its bytes (Electron's
-   * `printToPDF`). macOS only: neither WebKitGTK nor the WinCairo C API exposes
-   * a page-to-PDF-bytes call, so Linux and Windows reject.
+   * macOS only: neither WebKitGTK nor the WinCairo C API exposes a
+   * page-to-PDF-bytes call, so Linux and Windows reject.
    */
   async printToPDF(): Promise<Buffer> {
     return Buffer.from(await this.#native.printToPDF());
   }
 
-  /**
-   * Capture the page to a {@link NativeImage} (Electron's `capturePage`). macOS
-   * only; Linux and Windows reject until their snapshot paths are wired.
-   */
+  /** macOS only; Linux and Windows reject until their snapshot paths are wired. */
   async capturePage(): Promise<NativeImage> {
     return nativeImage.createFromBuffer(await this.#native.capturePage());
   }
 
-  /**
-   * Inject a `<style>` block into the page and resolve to a key that
-   * {@link removeInsertedCSS} can later use to remove it (Electron semantics).
-   * Works on every backend via the page-world exec channel — no native call.
-   */
+  /** Resolves to the key {@link removeInsertedCSS} needs to remove the block. */
   async insertCSS(css: string): Promise<string> {
     this.#cssCounter += 1;
     const key = `bunmaska-inserted-css-${this.id}-${this.#cssCounter}`;
@@ -220,48 +190,44 @@ export class WebContents extends EventEmitter {
     return key;
   }
 
-  /** Remove a stylesheet previously added with {@link insertCSS}. */
   async removeInsertedCSS(key: string): Promise<void> {
     await this.#native.executeJavaScript(buildRemoveCssScript(key));
   }
 
-  /** Set the page zoom factor (`1` = 100%) natively. */
+  /** `1` is 100%. */
   setZoomFactor(factor: number): void {
     this.#zoomFactor = factor;
     this.#native.setZoomFactor(factor);
   }
 
-  /** The current page zoom factor. */
   getZoomFactor(): number {
     return this.#zoomFactor;
   }
 
-  /** Set the page zoom by LEVEL (`0` = 100%); Electron's `zoomFactor = 1.2 ** zoomLevel`. */
+  /** `0` is 100%; Electron's `zoomFactor = 1.2 ** zoomLevel`. */
   setZoomLevel(level: number): void {
     this.setZoomFactor(1.2 ** level);
   }
 
-  /** The current zoom level (inverse of {@link setZoomLevel}). */
   getZoomLevel(): number {
     return Math.log(this.#zoomFactor) / Math.log(1.2);
   }
 
-  /** Override the User-Agent string for subsequent navigations on this view. */
+  /** Applies to SUBSEQUENT navigations on this view only. */
   setUserAgent(userAgent: string): void {
     this.#userAgent = userAgent;
     this.#native.setUserAgent(userAgent);
   }
 
-  /** The User-Agent override set via {@link setUserAgent}, or `''` if none (platform default). */
+  /** `''` when none is set, meaning the platform default. */
   getUserAgent(): string {
     return this.#userAgent;
   }
 
   /**
-   * Synthesize a trusted input event into the page (Electron's `sendInputEvent`).
-   * The page receives a real `isTrusted === true` event, which a script-dispatched
-   * event cannot fake — needed to drive sites that reject synthetic clicks.
-   * Implemented on Windows; other backends throw `UnsupportedPlatformError`.
+   * The page receives a real `isTrusted === true` event, which a
+   * script-dispatched event cannot fake. Implemented on Windows; other backends
+   * throw `UnsupportedPlatformError`.
    */
   sendInputEvent(event: NativeInputEvent): void {
     // Validate at the boundary (Electron throws on a bad event): an unknown type
@@ -285,10 +251,9 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * Set the handler consulted when the page requests a new window (`window.open`
-   * / `target=_blank`). The handler receives `{ url }` and returns `{ action }`.
-   * The native popup is always blocked (v1 — child-window creation isn't
-   * supported), so apps typically `shell.openExternal(url)` and return `deny`.
+   * The native popup is ALWAYS blocked in v1, `allow` included — child-window
+   * creation is unsupported, so apps typically `shell.openExternal(url)` and
+   * return `deny`.
    */
   setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void {
     this.#native.setWindowOpenHandler((url) => {
@@ -298,19 +263,18 @@ export class WebContents extends EventEmitter {
     });
   }
 
-  /** Open the developer tools (web inspector) for this view. Best-effort. */
+  /** Best-effort. */
   openDevTools(): void {
     this.#native.openDevTools();
     this.#devToolsOpen = true;
   }
 
-  /** Close the developer tools. Best-effort. */
+  /** Best-effort. */
   closeDevTools(): void {
     this.#native.closeDevTools();
     this.#devToolsOpen = false;
   }
 
-  /** Open the devtools if closed, close them if open. */
   toggleDevTools(): void {
     if (this.#devToolsOpen) {
       this.closeDevTools();
@@ -319,22 +283,21 @@ export class WebContents extends EventEmitter {
     }
   }
 
-  /** Whether the devtools were last opened (by Bunmaska) and not since closed. */
+  /** Tracks only Bunmaska's own open/close calls, not the user's. */
   isDevToolsOpened(): boolean {
     return this.#devToolsOpen;
   }
 
-  /** Whether the owning window has been closed/destroyed. */
   isDestroyed(): boolean {
     return this.#destroyed;
   }
 
-  /** Mark the contents destroyed — called when the owning window closes. @internal */
+  /** @internal Called when the owning window closes. */
   markDestroyed(): void {
     this.#destroyed = true;
   }
 
-  /** Send an event on a channel to the renderer (`ipcRenderer.on` receives it). */
+  /** Received by `ipcRenderer.on` in the renderer. */
   send(channel: string, ...args: readonly unknown[]): void {
     this.#native.sendEnvelopeToRenderer(encodeEnvelope({ kind: 'send', channel, args }));
   }

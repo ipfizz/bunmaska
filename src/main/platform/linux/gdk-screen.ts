@@ -15,9 +15,6 @@ import { loadGObjectFFI } from './gobject-ffi';
  * `[x, y, width, height]` buffer (allocated here as an `Int32Array(4)`), and
  * `gdk_monitor_get_scale_factor` gives the integer device-pixel scale.
  *
- * Unlike CoreGraphics on macOS, GdkMonitor geometry is a true OUT-param struct,
- * so all four geometry fields — including the multi-monitor ORIGIN — are exact.
- *
  * v1 LIMITATIONS (all documented):
  * - workArea == bounds: GTK4's GdkMonitor has no work-area / strut API, so the
  *   panel/dock inset is not excluded.

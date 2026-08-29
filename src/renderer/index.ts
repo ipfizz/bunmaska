@@ -13,11 +13,8 @@ export {
 } from './api/web-frame';
 export { generatePreloadBootstrap } from './preload-bootstrap';
 
-/** The `ipcRenderer` singleton. Drop-in equivalent of Electron's `ipcRenderer`. */
 export const ipcRenderer = createIpcRenderer();
 
-/** The `contextBridge` singleton. Drop-in equivalent of Electron's `contextBridge`. */
 export const contextBridge = createContextBridge();
 
-/** The `webFrame` singleton. Drop-in equivalent of Electron's `webFrame`. */
 export const webFrame = createWebFrame();

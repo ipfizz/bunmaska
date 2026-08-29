@@ -25,14 +25,6 @@ import type { Handle } from './objc';
  * though the FFI path is clean. Sending `deliverNotification:` to a nil center is
  * a safe Objective-C no-op (verified, no SIGSEGV).
  *
- * Consequently:
- * - {@link isSupported} returns `false` when the default center is nil (the
- *   un-bundled reality). It returns `true` only if a bundle ever makes the center
- *   non-nil.
- * - {@link present} is defensive best-effort: it builds the notification and, if
- *   a center exists, delivers it; if the center is nil it no-ops cleanly without
- *   throwing. We do NOT fake delivery.
- *
  * Reliable macOS delivery is a PACKAGING follow-up (ship Bunmaska as a code-signed
  * .app bundle with a bundle id, then migrate to `UNUserNotificationCenter`).
  *

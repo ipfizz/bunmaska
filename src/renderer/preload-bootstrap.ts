@@ -1,24 +1,8 @@
 /**
- * Generates the preload bootstrap — a self-contained JavaScript string injected
- * into every page before its own scripts run (via `WKUserScript` at
- * `documentStart` on macOS).
- *
- * The bootstrap installs `globalThis.__bunmaska`, the low-level bridge that
- * `ipcRenderer` / `contextBridge` build on:
- * - `send(channel, ...args)` posts a `send` envelope to main.
- * - `invoke(channel, ...args)` posts an `invoke` envelope and returns a Promise
- *   settled by the matching `reply` (correlated by a monotonic id).
- * - `on(channel, listener)` registers a handler for `send` envelopes from main.
- * - `_dispatch(rawJson)` is called by main (via `evaluateJavaScript`) to deliver
- *   inbound envelopes.
- *
- * Transport: renderer→main uses `window.webkit.messageHandlers.bunmaska.postMessage`
- * (the `WKScriptMessageHandler` registered by the backend); main→renderer calls
- * `__bunmaska._dispatch(...)` through `evaluateJavaScript`.
- *
- * Authored as a plain-JS string (not a stringified TS function) so the exact
- * text we wrote reaches the page's JS engine with no transpilation in between.
- * A test asserts the output contains no TypeScript syntax.
+ * The preload bootstrap: `globalThis.__bunmaska`, the low-level bridge injected
+ * into every page at document-start, that `ipcRenderer` / `contextBridge` build on.
+ * Authored as a plain-JS string (never a stringified TS function) so the exact text
+ * reaches the page's JS engine with no transpilation in between.
  */
 
 const BOOTSTRAP_SOURCE = `(function () {
@@ -122,5 +106,4 @@ const BOOTSTRAP_SOURCE = `(function () {
   g.__bunmaska = bunmaska;
 })();`;
 
-/** Return the preload bootstrap as an injectable plain-JavaScript string. */
 export const generatePreloadBootstrap = (): string => BOOTSTRAP_SOURCE;

@@ -1,6 +1,5 @@
 /**
- * Shared preload bundling — used by the runtime ({@link ../main/api/preload}) and
- * by `bunmaska build` ({@link ../cli/app-assets}).
+ * Shared preload bundling, used by the runtime and by `bunmaska build`.
  *
  * A preload is injected as a CLASSIC script (a `WKUserScript` and its WebKitGTK /
  * WinCairo equivalents have no module mode), so a top-level `import` throws a
@@ -24,10 +23,9 @@ export const readPreloadSource = (absolutePath: string): string => {
 };
 
 /**
- * Whether `source` uses top-level ES-module syntax that a classic script cannot
- * run (a leading `import`/`export` statement). Pure. Deliberately conservative: it
- * must never miss a real top-level `import` (the breaking case); an occasional
- * false positive only costs a redundant bundle pass.
+ * Whether `source` uses top-level ES-module syntax a classic script cannot run.
+ * Deliberately conservative: it must never miss a real top-level `import` (the
+ * breaking case); a false positive only costs a redundant bundle pass.
  */
 export const usesModuleSyntax = (source: string): boolean =>
   /^[ \t]*(?:import|export)\b/m.test(source);
@@ -41,10 +39,9 @@ export type PreloadBundler = {
 };
 
 /**
- * The Bun executable when we are running under the Bun CLI (`bunmaska dev` /
- * `bunmaska build` / `bun run`), where the bundler is reachable; `undefined`
- * inside a compiled app (whose `process.execPath` is the app binary, which must
- * never be re-spawned as a bundler).
+ * The Bun executable when running under the Bun CLI, where the bundler is
+ * reachable; `undefined` inside a compiled app, whose `process.execPath` is the
+ * app binary and must never be re-spawned as a bundler.
  */
 const bunCliPath = (): string | undefined => {
   const exe = process.execPath;

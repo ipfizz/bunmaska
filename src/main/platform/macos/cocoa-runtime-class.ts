@@ -4,12 +4,9 @@ import { cocoa } from './cocoa-runtime';
 import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
 /**
- * Define Objective-C classes at runtime with JS-backed methods.
- *
- * This is how Bunmaska provides the delegate/handler objects AppKit and WebKit
- * require (navigation delegates, `WKScriptMessageHandler`, the app delegate,
- * Phase-3 target/action): `objc_allocateClassPair` → `class_addMethod` with a
- * `JSCallback` as the IMP → `objc_registerClassPair` (D026).
+ * Define Objective-C classes at runtime with JS-backed methods:
+ * `objc_allocateClassPair` → `class_addMethod` with a `JSCallback` as the IMP →
+ * `objc_registerClassPair` (D026).
  *
  * Every Objective-C method's first two args are the implicit `self` (id) and
  * `_cmd` (SEL); declared args follow. All are modelled as `u64` handles (D029).

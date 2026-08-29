@@ -8,9 +8,6 @@ const LIBGTK_PATH = 'libgtk-4.so.1';
 /**
  * The GTK 4 FFI symbol descriptor table.
  *
- * Declared separately from {@link loadGtkFFI} so unit tests can assert ABI
- * shapes (arg arrays, return types) without `dlopen` on a non-Linux host.
- *
  * Convention (matches the existing Linux loaders): `gboolean` is modelled as
  * {@link FFIType.i32} (compare `!== 0`), NOT `bool`; all GObject/GTK handles are
  * real pointers ({@link FFIType.pointer}); `cstring` args are NUL-terminated
@@ -135,9 +132,6 @@ const cache: { ffi: ReturnType<typeof dlopen<typeof GTK_FFI_SYMBOLS>> | undefine
 
 /**
  * Open `libgtk-4.so.1` and expose the GTK 4 window/widget symbols Bunmaska needs.
- * Mirrors {@link loadCocoaFFI}'s shape: platform-guarded, lazy single-`dlopen`,
- * throws on non-Linux so the module is safely importable on macOS for unit
- * testing.
  *
  * GTK 3 -> GTK 4 changes reflected here: `gtk_init_check`/`gtk_window_new` take
  * no arguments; `gtk_window_set_child` replaces `gtk_container_add`;

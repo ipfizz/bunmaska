@@ -2,28 +2,19 @@
  * Builds the page-world wrapper script for `WebContents.executeJavaScript`.
  *
  * On every backend the completion handler cannot be passed to the native
- * `evaluateJavaScript` call (a real Objective-C block crashes Bun on macOS,
- * D022; a per-call `GAsyncReadyCallback` JSCallback is closed mid-invocation on
- * Linux, freeing its trampoline), so the result is returned out-of-band: the
- * wrapper runs the user code and posts the outcome to a page-world
- * `WKScriptMessageHandler` / `WebKitUserContentManager` handler named
- * `handlerName`.
+ * `evaluateJavaScript` call (a real Objective-C block crashes Bun on macOS, D022;
+ * a per-call `GAsyncReadyCallback` JSCallback is closed mid-invocation on Linux,
+ * freeing its trampoline), so the result comes back out-of-band: the wrapper posts
+ * `{ execId, ok, result?, error? }` as JSON to the `handlerName` message handler,
+ * and only JSON-serializable results survive.
  *
- * User code is evaluated via indirect `(0, eval)(code)` so a bare expression
- * resolves to its completion value — matching Electron, where the evaluated
- * string's last expression value is returned. The user code is JSON-encoded into
- * the wrapper, so any quotes/newlines/backslashes round-trip safely. The result
- * is wrapped in `Promise.resolve` so a thenable result resolves to its value.
- *
- * The posted payload is `{ execId, ok, result?, error? }` as a JSON string. Only
- * JSON-serializable results survive (`JSON.stringify` semantics, e.g. a function
- * result serializes to `undefined`).
+ * User code runs via indirect `(0, eval)` so a bare expression resolves to its
+ * completion value, matching Electron.
  */
 /**
  * How long `executeJavaScript` waits for its out-of-band result before rejecting.
- * Generous (2 min) and shared across all three backends so long in-page work — a
- * large XHR download, a slow server-rendered PDF — isn't cut off, and the contract
- * is identical per platform.
+ * Generous (2 min) and identical on every backend, so long in-page work is not
+ * cut off.
  */
 export const EXEC_TIMEOUT_MS = 120_000;
 

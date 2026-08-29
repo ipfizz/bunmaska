@@ -15,22 +15,9 @@ export type { Dock } from './app-desktop';
 /**
  * Application lifecycle controller — the drop-in equivalent of Electron's `app`.
  *
- * Extends Node's {@link EventEmitter} so the full listener API
- * (`on`/`once`/`addListener`/`removeListener`/`emit`/…) matches Electron's
- * contract (D023). Events: `ready`, `before-quit`, `will-quit`,
+ * Extends Node's {@link EventEmitter} so the full listener API matches
+ * Electron's contract (D023). Events: `ready`, `before-quit`, `will-quit`,
  * `window-all-closed`, `quit`.
- *
- * The class is kept free of any native (FFI) dependency so it unit-tests without
- * FFI: the native bootstrap is supplied as an injectable hook
- * ({@link setStartHook}) by the runtime barrel, and the host facts behind the
- * metadata/path/locale methods come from an injectable {@link AppEnvironment}
- * (the live one is built lazily from `os`/`process`/`fs`/`Intl`).
- *
- * This file intentionally exceeds the 300-line guideline: it is the public `app`
- * facade mirroring Electron's large `app` module. All non-trivial logic lives in
- * sibling modules (`app-paths`, `app-metadata`, `app-locale`, `app-environment`,
- * `app-desktop`, `single-instance`); the methods here are thin delegators kept
- * together for one coherent public surface.
  */
 export class App extends EventEmitter {
   #ready = false;
@@ -43,25 +30,21 @@ export class App extends EventEmitter {
   #userAgentFallback = '';
   readonly #pathOverrides = new Map<AppPathName, string>();
 
-  /** The resolved host environment, built lazily on first use. */
   #environment(): AppEnvironment {
     this.#env ??= defaultAppEnvironment();
     return this.#env;
   }
 
-  /**
-   * Replace the resolved environment with a fake.
-   * @internal Test-only seam; production builds the real environment lazily.
-   */
+  /** @internal */
   setEnvironmentForTesting(env: AppEnvironment): void {
     this.#env = env;
   }
 
   /**
-   * Reset mutable state and app-level window-event listeners back to defaults.
-   * Lifecycle listeners (`before-quit`/`will-quit`/`quit`) are left intact so the
-   * native bootstrap wiring survives.
-   * @internal Test-only seam for suites that exercise the shared `app` singleton.
+   * Reset mutable state and app-level window-event listeners. Lifecycle
+   * listeners (`before-quit`/`will-quit`/`quit`) are left intact so the native
+   * bootstrap wiring survives.
+   * @internal
    */
   resetForTesting(): void {
     this.#env = undefined;
@@ -84,16 +67,12 @@ export class App extends EventEmitter {
     }
   }
 
-  /** Whether the `ready` event has already fired. A method, matching Electron. */
+  /** A method, not a property, matching Electron. */
   isReady(): boolean {
     return this.#ready;
   }
 
-  /**
-   * Resolves once the app is ready to create windows. The first call triggers
-   * the native bootstrap (if a start hook is wired); resolves immediately if
-   * the app is already ready.
-   */
+  /** The first call triggers the native bootstrap, if a start hook is wired. */
   whenReady(): Promise<void> {
     if (!this.#ready) {
       this.#startHook?.();
@@ -108,7 +87,7 @@ export class App extends EventEmitter {
 
   /**
    * Mark the app ready and emit `ready`. Idempotent.
-   * @internal Invoked by the native bootstrap once the runtime is up.
+   * @internal Invoked by the native bootstrap.
    */
   markReady(): void {
     if (this.#ready) {
@@ -120,23 +99,22 @@ export class App extends EventEmitter {
 
   /**
    * Register the native bootstrap to run on the first {@link whenReady}.
-   * @internal Wired by the runtime barrel; never called by app code.
+   * @internal
    */
   setStartHook(hook: () => void): void {
     this.#startHook = hook;
   }
 
-  /** The application name: `setName` override, else `productName`/`name` from the app's `package.json`. */
+  /** `setName` override, else `productName`/`name` from the app's `package.json`. */
   getName(): string {
     return resolveAppName(this.#environment().manifest, this.#nameOverride);
   }
 
-  /** Override the application name (also changes the `userData` directory name). */
+  /** Also changes the `userData` directory name. */
   setName(name: string): void {
     this.#nameOverride = name;
   }
 
-  /** Accessor form of {@link getName}/{@link setName}. */
   get name(): string {
     return this.getName();
   }
@@ -145,7 +123,6 @@ export class App extends EventEmitter {
     this.setName(value);
   }
 
-  /** The application version from the app's `package.json`. */
   getVersion(): string {
     return resolveAppVersion(this.#environment().manifest);
   }
@@ -163,12 +140,11 @@ export class App extends EventEmitter {
     this.#userAgentFallback = value;
   }
 
-  /** The application root directory (the nearest `package.json`, or cwd). */
+  /** The nearest directory with a `package.json`, else cwd. */
   getAppPath(): string {
     return this.#environment().appPath;
   }
 
-  /** Resolve a special directory by name (Electron's `app.getPath`). */
   getPath(name: AppPathName): string {
     const override = this.#pathOverrides.get(name);
     if (override !== undefined) {
@@ -186,17 +162,15 @@ export class App extends EventEmitter {
     });
   }
 
-  /** Override the path returned by {@link getPath} for a given name. */
   setPath(name: AppPathName, path: string): void {
     this.#pathOverrides.set(name, path);
   }
 
-  /** Override the directory used for app logs (`getPath('logs')`). */
   setAppLogsPath(path?: string): void {
     this.#pathOverrides.set('logs', path ?? this.getPath('logs'));
   }
 
-  /** The current application locale as a normalized BCP-47 tag. */
+  /** A normalized BCP-47 tag. */
   getLocale(): string {
     return this.#environment().locale;
   }
@@ -206,22 +180,21 @@ export class App extends EventEmitter {
     return this.#environment().locale;
   }
 
-  /** The two-letter country/region code of the current locale, or `''`. */
+  /** Two-letter country/region code of the current locale, or `''`. */
   getLocaleCountryCode(): string {
     return localeCountryCode(this.#environment().locale);
   }
 
-  /** The user's preferred languages, most-preferred first. */
+  /** Most-preferred first. */
   getPreferredSystemLanguages(): string[] {
     return this.#environment().preferredLanguages;
   }
 
-  /** Whether the app is running from a packaged build (vs. the dev runner). */
+  /** `false` under the dev runner. */
   get isPackaged(): boolean {
     return this.#environment().isPackaged;
   }
 
-  /** The application menu bar (Electron's `app.applicationMenu`), or `null`. */
   get applicationMenu(): Menu | null {
     return Menu.getApplicationMenu();
   }
@@ -274,12 +247,10 @@ export class App extends EventEmitter {
     return desktop.displayBadgeCount(count);
   }
 
-  /** The last badge count set via {@link setBadgeCount}. */
   getBadgeCount(): number {
     return this.#badgeCount;
   }
 
-  /** Property form of {@link getBadgeCount} / {@link setBadgeCount}. */
   get badgeCount(): number {
     return this.#badgeCount;
   }
@@ -288,12 +259,12 @@ export class App extends EventEmitter {
     this.setBadgeCount(count);
   }
 
-  /** Exit immediately with `exitCode` (default 0), skipping the quit events. */
+  /** Exits immediately, skipping the quit events. */
   exit(exitCode = 0): void {
     this.#environment().exit(exitCode);
   }
 
-  /** Relaunch the app when the current instance exits (Electron's `relaunch`). */
+  /** Takes effect when the current instance exits. */
   relaunch(options?: { args?: string[]; execPath?: string }): void {
     const env = this.#environment();
     const execPath = options?.execPath ?? env.execPath;
@@ -301,7 +272,6 @@ export class App extends EventEmitter {
     env.relaunch(execPath, args);
   }
 
-  /** The single-instance lock manager, created lazily over the real backend. */
   #singleInstanceManager(): SingleInstanceManager {
     this.#singleInstance ??= new SingleInstanceManager(createLockBackend(), {
       lockPath: join(this.getPath('userData'), 'SingletonLock'),
@@ -311,10 +281,7 @@ export class App extends EventEmitter {
     return this.#singleInstance;
   }
 
-  /**
-   * Replace the single-instance manager with a fake.
-   * @internal Test-only seam.
-   */
+  /** @internal */
   setSingleInstanceForTesting(manager: SingleInstanceManager): void {
     this.#singleInstance = manager;
   }
@@ -332,12 +299,10 @@ export class App extends EventEmitter {
     });
   }
 
-  /** Whether this process holds the single-instance lock. */
   hasSingleInstanceLock(): boolean {
     return this.#singleInstanceManager().has();
   }
 
-  /** Release the single-instance lock held by this process. */
   releaseSingleInstanceLock(): void {
     this.#singleInstanceManager().release();
   }
@@ -374,5 +339,5 @@ export class App extends EventEmitter {
   }
 }
 
-/** The application lifecycle singleton. Drop-in equivalent of Electron's `app`. */
+/** The application lifecycle singleton — Electron's `app`. */
 export const app = new App();

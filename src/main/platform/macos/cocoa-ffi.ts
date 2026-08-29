@@ -24,12 +24,7 @@ let foundationLib: unknown;
 let appKitLib: unknown;
 
 /**
- * Open `libobjc.A.dylib` plus `Foundation.framework` and expose the three
- * foundational Objective-C runtime symbols Bunmaska relies on:
- *
- * - `sel_registerName(const char *name) -> SEL`
- * - `objc_getClass(const char *name) -> Class`
- * - `objc_msgSend(id receiver, SEL selector) -> id` — the zero-extra-arg variant
+ * Open `libobjc.A.dylib` plus `Foundation.framework` and `AppKit.framework`.
  *
  * `objc_msgSend` is variadic in C; Bun's FFI cannot express that directly, so
  * we declare the simplest two-arg form here and add typed variants in later
@@ -42,9 +37,8 @@ let appKitLib: unknown;
  * (`NSGetSizeAndAlignment`, `NSApplicationMain`) without invoking them. The
  * handles are kept at module scope to prevent GC from closing the libraries.
  *
- * Only callable on macOS — throws {@link BunmaskaError} on any other platform so
- * that this module remains safely *importable* on Linux/Windows (the failure
- * happens at call time, not at module load).
+ * Throws {@link BunmaskaError} on non-macOS at call time, not at module load, so
+ * this module stays safely *importable* on Linux/Windows.
  */
 export const loadCocoaFFI = () => {
   const platform = currentPlatform();

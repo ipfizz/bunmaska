@@ -1,12 +1,6 @@
 /**
- * Memoising wrapper around Objective-C's `sel_registerName`.
- *
- * Calling `sel_registerName("foo:")` once is cheap. Doing it on every message
- * send is wasteful. This cache guarantees one registrar call per distinct
+ * Memoising wrapper around `sel_registerName`: one registrar call per distinct
  * selector name for the lifetime of the cache instance.
- *
- * The registrar is injected via constructor so unit tests stay free of any
- * `bun:ffi` dependency.
  */
 
 /** Opaque pointer-width handle returned by `sel_registerName`. */

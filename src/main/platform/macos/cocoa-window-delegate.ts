@@ -6,11 +6,8 @@ import type { Handle } from './objc';
 /**
  * Bridges `NSWindowDelegate` notifications to JS.
  *
- * AppKit reports a window's lifecycle (key/resign, resize, miniaturize, close)
- * to its delegate. We define that class once at runtime (D026), allocate one
- * instance per window, and route each instance's callbacks to its registered JS
- * handlers by keying on the `self` handle delivered to the IMP — the same
- * mechanism proven for the navigation + script-message delegates.
+ * The class is defined once at runtime (D026) with one instance per window; each
+ * instance routes its callbacks by keying on the `self` handle given to the IMP.
  *
  * The IMP `JSCallback`s are retained for the process lifetime by
  * {@link defineObjcClass} (the runtime keeps the class forever), so they are
@@ -56,12 +53,7 @@ const ensureDelegateClass = (): Handle => {
     return delegateClass;
   }
   delegateClass = defineObjcClass('BunmaskaWindowDelegate', 'NSObject', [
-    // windowShouldClose: returns a BOOL — return 0 (NO) to veto, 1 (YES) to
-    // allow. The runtime-class IMP returns void, so the veto is routed through a
-    // dedicated u8-returning method registered below by overriding buildCallback;
-    // here we record the veto decision via the registry and the BOOL IMP reads
-    // it. To keep a single registration path, `windowShouldClose:` is added as a
-    // value-returning method by `defineObjcClass` via its `returns` extension.
+    // windowShouldClose: returns a BOOL — return 0 (NO) to veto, 1 (YES) to allow.
     {
       selector: 'windowShouldClose:',
       typeEncoding: 'c@:@',

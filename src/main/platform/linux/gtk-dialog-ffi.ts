@@ -8,32 +8,20 @@ import { currentPlatform } from '../../../common/platform';
  * added in GTK 4.10. CI runs on ubuntu-latest (24.04 → GTK 4.12+), so these are
  * always available there.
  *
- * Declared separately from {@link loadGtkDialogFFI} so unit tests can assert ABI
- * shapes (arg arrays, return types) without `dlopen` on a non-Linux host.
- *
  * Convention (matches the existing Linux loaders): `gboolean` is modelled as
  * {@link FFIType.i32}; all GObject/GTK handles are real pointers
  * ({@link FFIType.pointer}); `cstring` args are NUL-terminated UTF-8 strings;
  * `GType` is {@link FFIType.u64}.
  *
- * Notes on the async pattern:
- * - `gtk_alert_dialog_choose` / `gtk_file_dialog_open` / `..._save` are
- *   non-blocking — they kick off a modal dialog and invoke a
- *   `GAsyncReadyCallback (source, GAsyncResult*, user_data) -> void` when the
- *   user settles it. The matching `*_finish(self, result, error)` extracts the
- *   value. The `GError**` arg is always passed as `null` here (dismissal is
- *   reported via the return value / sentinel rather than unwrapping the error).
- * - `gtk_alert_dialog_choose_finish` returns the clicked button index, or `-1`
- *   on dismissal (and sets the error).
- * - `gtk_file_dialog_open_finish` / `..._save_finish` return a `GFile*` (or
- *   `NULL` on cancel) which {@link gio-ffi}'s `g_file_get_path` unwraps.
+ * The `*_choose`/`open`/`save` calls are non-blocking: they invoke a
+ * `GAsyncReadyCallback (source, GAsyncResult*, user_data) -> void` when the user
+ * settles the dialog, and the matching `*_finish(self, result, error)` extracts
+ * the value. The `GError**` arg is always passed as `null` (dismissal is
+ * reported via the return value / sentinel rather than unwrapping the error).
  *
  * The `GtkAlertDialog` is constructed via the 2-arity `g_object_new(type, NULL)`
  * (exposed by {@link loadGtkDialogGObjectFFI}) to avoid the C-varargs
  * `gtk_alert_dialog_new(format, ...)` constructor.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBGTK_PATH = 'libgtk-4.so.1';

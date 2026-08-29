@@ -7,15 +7,12 @@ import { currentPlatform } from '../../../common/platform';
  *
  * Every Bunmaska Objective-C handle (`id`, `SEL`, `Class`, `IMP`) flows through
  * the codebase as a `bigint` (D016); the only place the `Pointer ↔ bigint`
- * conversion happens is here and at each `objc_msgSend` boundary. Centralising
- * these helpers keeps the runtime, the message-send variants, and the FFI
- * loaders from re-deriving the same conversions and library path.
+ * conversion happens is here and at each `objc_msgSend` boundary.
  */
 
 /** Opaque pointer-width Objective-C handle (`id`/`SEL`/`Class`/`IMP`). */
 export type Handle = bigint;
 
-/** Dynamic library name for the Objective-C runtime. */
 export const LIBOBJC_PATH = 'libobjc.A.dylib';
 
 /** Convert a `bigint` handle to the branded `Pointer` Bun FFI expects. */

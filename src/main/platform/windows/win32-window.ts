@@ -4,17 +4,9 @@ import { wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
 
 /**
- * The engine-agnostic top-level Win32 window — a `GtkWindow`/`NSWindow` peer that
- * hosts nothing yet. The Windows backend (`windows-backend.ts`) composes one of
- * these with a web-view content child; this file owns only the HWND lifecycle.
- *
- * Message routing is single-process and pointer-free: one shared `WndProc`
- * (a retained {@link JSCallback}) looks each window up in {@link windowRegistry}
- * by its HWND and dispatches to that window's JS handlers — no `GWLP_USERDATA`
- * round-trip. The trampoline and the class-name buffer are retained for the
- * process lifetime because the registered window class references them forever
- * (never close a JSCallback that the OS may still call — the same lifetime rule
- * the macOS/Linux backends follow).
+ * The `WndProc` trampoline (a {@link JSCallback}) and the class-name buffer are retained
+ * for the process lifetime because the registered window class references them forever —
+ * never close a JSCallback that the OS may still call.
  */
 
 const WINDOW_CLASS_NAME = 'BunmaskaWindow';
@@ -63,12 +55,6 @@ let wndProcCallback: JSCallback | undefined;
 let classNameBuffer: Uint8Array | undefined;
 let classRegistered = false;
 
-/**
- * The shared window procedure. Routes the preventable close, the committed-close
- * teardown, and the non-preventable lifecycle notifications to the window's JS
- * handlers; everything else (and the notifications, after their handler) falls
- * through to `DefWindowProc`.
- */
 const wndProc = (hwndArg: bigint, msg: number, wParam: bigint, lParam: bigint): bigint => {
   const user32 = loadUser32();
   const hwnd = BigInt(hwndArg);
@@ -104,7 +90,6 @@ const wndProc = (hwndArg: bigint, msg: number, wParam: bigint, lParam: bigint): 
   return user32.symbols.DefWindowProcW(hwnd, msg, wParam, lParam);
 };
 
-/** Register the shared window class once and return the running `HINSTANCE`. */
 const ensureWindowClass = (): bigint => {
   const hInstance = loadKernel32().symbols.GetModuleHandleW(null);
   if (classRegistered) {
@@ -139,7 +124,6 @@ const ensureWindowClass = (): bigint => {
   return hInstance;
 };
 
-/** Win32 window-style word for the framed/resizable options. */
 const computeStyle = (frame: boolean | undefined, resizable: boolean | undefined): number => {
   let style = WS_CLIPCHILDREN; // never paint over the child web view
   if (frame === false) {
@@ -153,7 +137,6 @@ const computeStyle = (frame: boolean | undefined, resizable: boolean | undefined
   return style >>> 0; // CreateWindowExW wants an unsigned 32-bit style
 };
 
-/** Options for constructing a {@link Win32Window}. */
 export interface Win32WindowOptions {
   readonly title: string;
   readonly width: number;
@@ -203,7 +186,6 @@ export class Win32Window {
     }
   }
 
-  /** The native window handle. */
   hwnd(): bigint {
     return this.#hwnd;
   }

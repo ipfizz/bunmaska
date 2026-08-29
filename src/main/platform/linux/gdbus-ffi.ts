@@ -25,9 +25,6 @@ import { currentPlatform } from '../../../common/platform';
  * `GDBusSignalCallback`, and `GDestroyNotify` is a real pointer ({@link FFIType.pointer}),
  * with NULL passed for the unused ones; `cstring` args are NUL-terminated UTF-8 (or NULL
  * to match any value, e.g. a NULL `sender`/`arg0`).
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so the module
- * stays safely importable on macOS for unit testing.
  */
 
 const LIBGIO_PATH = 'libgio-2.0.so.0';

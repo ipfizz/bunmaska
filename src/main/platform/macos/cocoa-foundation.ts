@@ -3,13 +3,7 @@ import { msgSendCStr } from './cocoa-msgsend-variants';
 import { type Handle, ptrIn } from './objc';
 import { cocoa } from './cocoa-runtime';
 
-/**
- * Bridging helpers between JS strings and Foundation `NSString` objects.
- *
- * `NSString` is the currency type for nearly every AppKit/WebKit string
- * parameter (titles, URLs, HTML, script source), so these two helpers are used
- * throughout the macOS backend.
- */
+/** Bridging helpers between JS strings and Foundation `NSString` objects. */
 
 /** Create an autoreleased `NSString` from a JS string. Returns its handle. */
 export const nsString = (value: string): Handle => {

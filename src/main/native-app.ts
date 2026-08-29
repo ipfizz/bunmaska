@@ -2,11 +2,8 @@ import { createNativeApplication } from './platform/index';
 import type { NativeApplication } from './platform/native';
 
 /**
- * Process-wide lazy singleton for the native application backend.
- *
- * There is exactly one native application per process; `app`, `BrowserWindow`,
- * and friends all resolve their backend through here so they share one run-loop
- * pump and one window registry.
+ * Process-wide lazy singleton for the native application backend: exactly one per
+ * process, so everything shares one run-loop pump and one window registry.
  */
 
 let instance: NativeApplication | undefined;

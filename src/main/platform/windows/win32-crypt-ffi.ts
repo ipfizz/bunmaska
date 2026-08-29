@@ -2,9 +2,6 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * DPAPI FFI (crypt32.dll) for the Windows `safeStorage` backend — the engine for
- * sealing the AES key to the current Windows user account.
- *
  * `CryptProtectData`/`CryptUnprotectData` are flat-C exports (no COM). Each takes
  * and returns a `DATA_BLOB { DWORD cbData; BYTE* pbData; }` (16 bytes on x64:
  * `cbData` at offset 0, `pbData` at offset 8). The output blob's `pbData` is

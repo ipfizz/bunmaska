@@ -25,10 +25,6 @@ import { loadGMenuFFI } from './gtk-menu-ffi';
  * next click (a past SIGSEGV class). Every thunk is therefore retained in the
  * per-menu {@link MenuEntry} (held by {@link menuEntries}) and NEVER closed
  * synchronously inside its own invocation. In v1 they are not closed at all.
- *
- * The native GIO/GObject calls are funnelled through an injectable
- * {@link Bindings} so the realizer's tree-walking, action-naming, and
- * click-routing logic is unit-testable on a non-Linux host without `dlopen`.
  */
 
 /** ABI shape for `GSimpleAction::activate`: `(action, parameter, user_data) -> void`. */
@@ -46,10 +42,8 @@ export const actionName = (): string => `menu-${actionCounter++}`;
 export const detailedAction = (name: string): string => `${ACTION_GROUP_PREFIX}.${name}`;
 
 /**
- * The native operations the realizer needs. Real implementation wraps GIO +
- * GObject FFI and {@link JSCallback}; tests inject a recording fake. Handles are
- * `bigint` here (the fake uses tagged numbers); the real binding casts to/from
- * `Pointer`.
+ * The native operations the realizer needs. Handles are `bigint` here; the real
+ * binding casts to/from `Pointer`.
  */
 export type Bindings = {
   gMenuNew(): bigint;
@@ -167,7 +161,6 @@ type WalkContext = {
   readonly dispatchRole?: ((spec: NativeMenuItemSpec) => void) | undefined;
 };
 
-/** Append every spec in `items` to the `model`, wiring actions into the shared context. */
 const appendItems = (
   ctx: WalkContext,
   model: bigint,

@@ -1,18 +1,13 @@
 /**
- * Renderer-side `webFrame` — the drop-in equivalent of Electron's `webFrame`.
+ * Renderer-side `webFrame`, running in the page's isolated world (which shares the
+ * DOM, so `insertCSS`/zoom mutations affect the visible page).
  *
- * Pure renderer JS that runs inside the page's isolated world (which shares the
- * DOM with the page), so `insertCSS`/zoom mutations affect the visible page.
- *
- * LIMITATIONS / HONESTY:
- *  - Zoom is implemented via WebKit's non-standard CSS `zoom` on the document
- *    element — a close approximation of Electron's native page zoom, NOT the
- *    native WKWebView magnification (macOS) or WebKitGTK `zoom_level` (Linux).
- *    A native-backed zoom (driven over the main process) could be a later
- *    enhancement; this renderer-local version is layout-zoom only.
- *  - `executeJavaScript` evaluates in the renderer's CURRENT world only (the
- *    caller's world, matching Electron), via indirect global `eval`. It is NOT
- *    the main-side `WebContents.executeJavaScript`.
+ * LIMITATIONS:
+ *  - Zoom is WebKit's non-standard CSS `zoom` on the document element — layout
+ *    zoom only, NOT native WKWebView magnification or WebKitGTK `zoom_level`.
+ *  - `executeJavaScript` evaluates in the caller's CURRENT world via indirect
+ *    global `eval` (matching Electron). It is NOT the main-side
+ *    `WebContents.executeJavaScript`.
  */
 
 /** Minimal element surface webFrame touches (no DOM lib in this project). */
@@ -31,7 +26,6 @@ export type WebFrameDocument = {
   createElement(tagName: string): WebFrameElement;
 };
 
-/** Injectable scope, overridable in tests. Defaults to the real globals. */
 export type WebFrameScope = {
   readonly document?: WebFrameDocument;
   readonly globalThis?: object;
@@ -58,9 +52,8 @@ const resolveDocument = (override?: WebFrameDocument): WebFrameDocument | undefi
 const resolveGlobal = (override?: object): object => override ?? globalThis;
 
 /**
- * Create the `webFrame` object. Pass a {@link WebFrameScope} to drive it over a
- * mock `document`/`globalThis` in tests; in a real renderer it auto-resolves
- * the page's `document` and global `eval` from the current world's globals.
+ * Create the `webFrame` object, resolving the page's `document` and global `eval`
+ * from the current world unless a {@link WebFrameScope} overrides them.
  */
 export const createWebFrame = (scope?: WebFrameScope): WebFrame => {
   const inserted = new Map<string, WebFrameElement>();
@@ -107,7 +100,7 @@ export const createWebFrame = (scope?: WebFrameScope): WebFrame => {
     },
 
     setZoomFactor(factor) {
-      // Match Electron: a factor must be > 0. Ignore non-finite/<=0 values.
+      // Match Electron: a zoom factor must be > 0.
       if (!Number.isFinite(factor) || factor <= 0) {
         return;
       }

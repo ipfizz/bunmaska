@@ -1,12 +1,7 @@
 /**
- * The distributable artifact naming + update-manifest contract.
- *
- * This is the single source of truth shared by the `bunmaska build` packager
- * (which *writes* `version.json` next to each artifact) and the runtime
- * `autoUpdater` (which *reads* a channel feed's `update.json` to decide whether
- * a newer build is available). The flat `name-channel-os-arch` artifact naming
- * and the wyhash content hash mirror Electrobun's `naming.ts`, adapted to pure
- * Bun — no compiled code.
+ * The distributable artifact naming + update-manifest contract, shared by the
+ * `bunmaska build` packager (which writes `version.json` beside each artifact) and
+ * the runtime `autoUpdater` (which reads a channel feed's `update.json`).
  */
 
 import type { Arch } from './platform';
@@ -14,7 +9,6 @@ import type { Arch } from './platform';
 /** A release channel. `stable` and `canary` are conventional; any slug is valid. */
 export type Channel = string;
 
-/** The default release channel when a config or build omits one. */
 export const DEFAULT_CHANNEL: Channel = 'stable';
 
 /** The OS tag used in artifact names. */
@@ -29,9 +23,8 @@ export type ArtifactSpec = {
 };
 
 /**
- * The manifest written to `version.json` beside a build's artifact, and served
- * as a channel's `update.json` feed. The runtime updater compares its
- * `version` against the running app and downloads `artifact` when newer.
+ * The manifest written to `version.json` beside a build's artifact, and served as
+ * a channel's `update.json` feed.
  */
 export type UpdateManifest = {
   readonly name: string;
@@ -52,10 +45,9 @@ export const serializeUpdateManifest = (manifest: UpdateManifest): string =>
   `${JSON.stringify(manifest, null, 2)}\n`;
 
 /**
- * Parse + validate an {@link UpdateManifest} from a feed's JSON text. Throws a
- * descriptive `Error` if a required field is missing or the wrong type, so a
- * malformed/HTML response from a feed is rejected rather than treated as "no
- * update".
+ * Parse + validate an {@link UpdateManifest} from a feed's JSON text. Throws on a
+ * missing or mistyped field, so a malformed/HTML response from a feed is rejected
+ * rather than treated as "no update".
  */
 export const parseUpdateManifest = (json: string): UpdateManifest => {
   let raw: unknown;

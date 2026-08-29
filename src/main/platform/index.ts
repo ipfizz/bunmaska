@@ -6,13 +6,9 @@ import type { NativeApplication } from './native';
 import { createWindowsApplication } from './windows/windows-backend';
 
 /**
- * The single runtime platform-selection point. Everything above `platform/`
- * obtains its native backend here and never imports a concrete backend
- * directly (D024).
- *
- * Every backend's FFI loaders are lazy: importing a backend module never opens a
- * shared object, so importing the Windows backend on macOS (and vice versa) is a
- * no-op until the matching `createXApplication()` actually drives the platform.
+ * The single runtime platform-selection point; nothing above `platform/` imports a
+ * concrete backend directly (D024). Every backend's FFI loaders are lazy, so
+ * importing the Windows backend on macOS (and vice versa) opens no shared object.
  */
 export const createNativeApplication = (): NativeApplication => {
   const platform = currentPlatform();

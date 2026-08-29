@@ -4,7 +4,7 @@ import { BunmaskaError } from '../../../common/errors';
  * A Cocoa rectangle in user-space coordinates.
  *
  * Mirrors the C struct `CGRect = { CGPoint origin; CGSize size; }` where each
- * field is a `double`. Pure data — no FFI dependency.
+ * field is a `double`.
  */
 export type CGRect = {
   readonly x: number;

@@ -78,7 +78,7 @@ const readSleepBoolean = (parameters: Pointer): boolean => {
   }
 };
 
-/** The native operations the observer needs — injectable so the routing is unit-testable without FFI. */
+/** The native operations the observer needs. */
 export type PowerDbusDeps = {
   getSystemBus: () => Pointer | null;
   subscribeSignal: (conn: Pointer, match: SignalMatch, cb: (e: SignalEvent) => void) => number;

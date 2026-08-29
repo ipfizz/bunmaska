@@ -1,12 +1,7 @@
 /**
- * Remote engine install for `bunmaska engine install <url>`: fetch a published
- * `.tar.zst` + its `.json` manifest + its `.sig`, verify the Ed25519 signature
- * against the release public key, then hand the bytes to the store's
- * {@link installFromSource} (which re-checks the content hash, extracts, and
- * writes the marker last). Network + decompression are injectable seams so the
- * whole path is tested against a local fixture feed — no real CDN needed.
- *
- * Artifact layout at a feed: `<base>` (the `.tar.zst`), `<base>.json`, `<base>.sig`.
+ * The Ed25519 signature is verified against the release public key BEFORE the
+ * bytes reach the store. Artifact layout at a feed: `<base>` (the `.tar.zst`),
+ * `<base>.json`, `<base>.sig`.
  */
 
 import { BunmaskaError } from '../common/errors';
@@ -14,10 +9,8 @@ import { installFromSource, type InstallResult } from './engine-store';
 import { verifyArtifact } from './engine-signature';
 
 /**
- * The official Bunmaska engine feed. Engines are published at
- * `<base>/<engine-id>.tar.zst` (plus `.json` + `.sig`), so an engine-id maps to
- * a URL with no directory index needed. A self-hosted mirror overrides this via
- * `bunmaska.config` `engine.feed.url`.
+ * The official feed. A self-hosted mirror overrides it via `bunmaska.config`
+ * `engine.feed.url`.
  */
 export const DEFAULT_ENGINE_FEED_URL = 'https://engines.bunmaska.org';
 
@@ -58,7 +51,6 @@ export const parseRemoteManifest = (text: string): RemoteManifest => {
   };
 };
 
-/** Decompress a `.tar.zst` byte stream and extract its tree into `destDir`. */
 export const zstdTarExtract = async (bytes: Uint8Array, destDir: string): Promise<void> => {
   const tarBytes = Bun.zstdDecompressSync(bytes);
   // extract via cwd, not `-C <dir>` — Windows bsdtar mangles backslash paths
@@ -77,17 +69,14 @@ export const zstdTarExtract = async (bytes: Uint8Array, destDir: string): Promis
   }
 };
 
-/** Injectable side effects for {@link installFromUrl}. */
 export type RemoteInstallDeps = {
   readonly fetch: RemoteFetch;
   readonly extract?: (bytes: Uint8Array, destDir: string) => Promise<void>;
 };
 
 /**
- * Install an engine from a feed: fetch artifact + manifest + signature, verify
- * the signature against `publicKeyPem`, then install via the store (which
- * re-verifies the content hash and writes the marker last). Throws before any
- * extraction if the signature does not verify.
+ * Throws BEFORE any extraction if the signature does not verify against
+ * `publicKeyPem`; the store then re-verifies the content hash.
  */
 export const installFromUrl = async (
   root: string,
@@ -112,7 +101,6 @@ export const installFromUrl = async (
   );
 };
 
-/** Default network fetch returning raw bytes (used by the CLI; not in tests). */
 export const defaultRemoteFetch: RemoteFetch = async (url) => {
   const response = await fetch(url);
   if (!response.ok) {

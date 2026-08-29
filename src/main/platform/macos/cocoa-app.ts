@@ -5,8 +5,7 @@ import type { Handle } from './objc';
 
 /**
  * macOS application-level operations on `NSApplication` (D026/D029), backing the
- * macOS-only parts of Electron's `app`: activation policy, hide/show, dock badge,
- * dock bounce, and the standard about panel.
+ * macOS-only parts of Electron's `app`.
  *
  * `NSApp` is `[NSApplication sharedApplication]` — idempotent — so each call
  * re-fetches it rather than depending on the backend exposing its private handle
@@ -35,7 +34,6 @@ const dockTile = (): Handle => {
   return rt.msgSend(nsApp(), rt.selectors.get('dockTile'));
 };
 
-/** Set the app's activation policy (regular/accessory/prohibited). */
 export const setActivationPolicy = (policy: 'regular' | 'accessory' | 'prohibited'): void => {
   const rt = cocoa();
   msgSendI64(nsApp(), rt.selectors.get('setActivationPolicy:'), ACTIVATION_POLICY[policy] ?? 0n);
@@ -46,13 +44,11 @@ export const hide = (): void => {
   msgSendPtr(nsApp(), cocoa().selectors.get('hide:'), 0n);
 };
 
-/** Show application windows after a {@link hide}. */
 export const show = (): void => {
   const rt = cocoa();
   msgSendPtr(nsApp(), rt.selectors.get('unhide:'), 0n);
 };
 
-/** Whether the application is hidden. */
 export const isHidden = (): boolean =>
   msgSendReturnsU8(nsApp(), cocoa().selectors.get('isHidden')) === 1;
 
@@ -81,7 +77,6 @@ export const bounceDock = (critical: boolean): void => {
   );
 };
 
-/** Show the standard application about panel. */
 export const showAboutPanel = (): void => {
   msgSendPtr(nsApp(), cocoa().selectors.get('orderFrontStandardAboutPanel:'), 0n);
 };

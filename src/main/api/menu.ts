@@ -8,23 +8,17 @@ import type { BrowserWindow } from './browser-window';
 
 /**
  * Application and context menus — the drop-in equivalent of Electron's `Menu` /
- * `MenuItem`.
- *
- * The classes hold the menu tree in plain JS; turning it into a native menu is
- * delegated to an injectable realizer — `NSMenu` on macOS, `GMenu` on Linux,
- * `HMENU` on Windows.
+ * `MenuItem`. Realized as `NSMenu` on macOS, `GMenu` on Linux, `HMENU` on
+ * Windows.
  */
 
 export type MenuItemType = 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
 
 /**
- * A predefined item role (Electron's `MenuItem.role`). A role gives the item a
- * default label + accelerator + native behavior with no explicit `click`. On
- * macOS each role maps to a standard first-responder selector, routed up the
- * responder chain to the focused web view / window / app (exactly like the
- * native shortcut). Linux routes role items to a per-window dispatcher
- * (`gtk-menu.ts` `realizeForWindow`); their keyboard shortcuts also work
- * natively via WebKit.
+ * A predefined item role (Electron's `MenuItem.role`): default label +
+ * accelerator + native behavior with no explicit `click`. On macOS a role maps
+ * to a first-responder selector routed up the responder chain; on Linux to a
+ * per-window dispatcher in `gtk-menu.ts` `realizeForWindow`.
  */
 export type MenuRole =
   | 'undo'
@@ -46,10 +40,9 @@ export type MenuRole =
   | 'unhide';
 
 /**
- * A "macro" role that expands to a whole standard submenu (Electron's
- * `editMenu`/`windowMenu`). `appMenu`/`viewMenu` are deferred — `appMenu` needs
- * the app name (a menu→app import cycle) and `viewMenu` needs reload/zoom/
- * devtools menu roles Bunmaska doesn't expose yet.
+ * A role that expands to a whole standard submenu. `appMenu`/`viewMenu` are
+ * deferred — `appMenu` needs the app name (a menu→app import cycle) and
+ * `viewMenu` needs role items Bunmaska doesn't expose yet.
  */
 export type MenuMacroRole = 'editMenu' | 'windowMenu';
 
@@ -59,24 +52,22 @@ export type MenuItemOptions = {
   /** A stable id for {@link Menu.getMenuItemById}. */
   readonly id?: string;
   readonly enabled?: boolean;
-  /** Whether a `checkbox`/`radio` item is checked (renders a checkmark). */
+  /** Only meaningful for `checkbox`/`radio`. */
   readonly checked?: boolean;
-  /** A single-key accelerator like `'CmdOrCtrl+Q'`. */
+  /** The key must be a SINGLE character, e.g. `'CmdOrCtrl+Q'`. */
   readonly accelerator?: string;
-  /** A predefined role (item-level) or a macro role that expands to a submenu. */
   readonly role?: MenuRole | MenuMacroRole;
   readonly click?: () => void;
   readonly submenu?: Menu | ReadonlyArray<MenuItemOptions>;
 };
 
-/** A Linux GTK window action a role maps to (operated on the activating window). */
+/** Operated on the ACTIVATING window, not a fixed one. */
 export type MenuWindowAction = 'minimize' | 'close' | 'zoom' | 'togglefullscreen';
 
 /**
- * Per-role defaults: label, accelerator, the macOS first-responder selector, and the Linux
- * dispatch — `editingCommand` (a WebKitGTK editing command run on the focused web view) or
- * `windowAction` (a GTK window op). Roles with neither (quit/about/hide/…) have no Linux
- * menu-click wiring yet (their keyboard shortcuts still work natively); macOS wires them all.
+ * Linux dispatch is `editingCommand` (a WebKitGTK editing command on the focused
+ * web view) or `windowAction` (a GTK window op). Roles with neither
+ * (quit/about/hide/…) have no Linux menu-click wiring yet; macOS wires them all.
  */
 const ROLE_DEFAULTS: Record<
   MenuRole,
@@ -161,7 +152,7 @@ const ROLE_DEFAULTS: Record<
   unhide: { label: 'Show All', macSelector: 'unhideAllApplications:' },
 };
 
-/** Standard submenu each macro role expands into (Electron's defaults, minus deferred items). */
+/** Electron's defaults, minus the deferred items. */
 const MACRO_ROLE_SUBMENUS: Record<
   MenuMacroRole,
   { readonly label: string; readonly submenu: ReadonlyArray<MenuItemOptions> }
@@ -189,7 +180,7 @@ const MACRO_ROLE_SUBMENUS: Record<
 const isMacroRole = (role: MenuRole | MenuMacroRole): role is MenuMacroRole =>
   role === 'editMenu' || role === 'windowMenu';
 
-/** Extract the bare key character from an accelerator string (e.g. `'CmdOrCtrl+Q'` → `'q'`). */
+/** `'CmdOrCtrl+Q'` → `'q'`; `''` when the key is not a single character. */
 const acceleratorKey = (accelerator: string | undefined): string => {
   if (accelerator === undefined || accelerator.length === 0) {
     return '';
@@ -257,7 +248,6 @@ export class MenuItem {
     this.id = options.id;
     const role = options.role;
     if (role !== undefined && isMacroRole(role)) {
-      // A macro role expands into a labeled submenu of standard role items.
       const macro = MACRO_ROLE_SUBMENUS[role];
       this.role = undefined;
       this.label = options.label ?? macro.label;
@@ -287,7 +277,7 @@ export class MenuItem {
   }
 }
 
-/** Realizes a spec tree into a native menu handle (bigint) and installs it. */
+/** `realize` returns an opaque native menu handle. */
 export type MenuRealizer = {
   realize(items: ReadonlyArray<NativeMenuItemSpec>): bigint;
   setApplicationMenu(menu: bigint): void;
@@ -316,7 +306,7 @@ const getRealizer = (): MenuRealizer => {
   throw new UnsupportedPlatformError(`Menu is not supported on ${currentPlatform()} yet`);
 };
 
-/** Override the native realizer. Test-only. */
+/** @internal */
 export const setMenuRealizerForTesting = (fake: MenuRealizer | undefined): void => {
   realizer = fake;
 };
@@ -356,49 +346,45 @@ const toSpec = (item: MenuItem): NativeMenuItemSpec => {
   return base;
 };
 
-/** Options for {@link Menu.popup} (Electron's `PopupOptions`). */
 export type MenuPopupOptions = {
-  /** Window to anchor the popup to. Defaults to the focused, else most-recent, window. */
+  /** Defaults to the focused, else most-recent, window. */
   readonly window?: BrowserWindow;
-  /** X coordinate (content-relative). Defaults to 0 in v1 (NOT the mouse position). */
+  /** Content-relative. Defaults to 0 in v1 — NOT the mouse position. */
   readonly x?: number;
-  /** Y coordinate (content-relative). Defaults to 0 in v1 (NOT the mouse position). */
+  /** Content-relative. Defaults to 0 in v1 — NOT the mouse position. */
   readonly y?: number;
 };
 
-/** The popup-capable subset of a native window the menu seam drives. */
 export type PopupTarget = {
   popupMenu(menuHandle: bigint, x: number, y: number): void;
   closePopupMenu(): void;
 };
 
 /**
- * How {@link Menu.popup} finds its target window. Injected by the BrowserWindow module at
- * load (which alone can see the window registry), so `menu.ts` needs no runtime import of
- * `browser-window` — avoiding an import cycle. Replaceable for tests.
+ * Injected by the BrowserWindow module at load, which alone can see the window
+ * registry, so `menu.ts` needs no runtime import of `browser-window` — that
+ * would be an import cycle.
  */
 export type WindowResolver = {
-  /** The focused window's popup target, or undefined. */
   focused(): PopupTarget | undefined;
-  /** The most-recently-created window's popup target, or undefined. */
   mostRecent(): PopupTarget | undefined;
-  /** Resolve an explicit window object to its popup target, or undefined if not a known window. */
+  /** `undefined` when `window` is not a known open window. */
   resolve(window: unknown): PopupTarget | undefined;
 };
 
 let windowResolver: WindowResolver | undefined;
 
-/** Wire the window resolver. Called once at bootstrap by the BrowserWindow module. */
+/** Called once at load by the BrowserWindow module. */
 export const installWindowResolver = (resolver: WindowResolver): void => {
   windowResolver = resolver;
 };
 
-/** Override the window resolver. Test-only. */
+/** @internal */
 export const setWindowResolverForTesting = (fake: WindowResolver | undefined): void => {
   windowResolver = fake;
 };
 
-/** Resolve the popup target per the v1 policy (explicit → focused → most-recent → throw). @internal */
+/** Explicit → focused → most-recent → throw. @internal */
 export const resolvePopupTarget = (
   options: MenuPopupOptions | undefined,
   resolver: WindowResolver,
@@ -420,21 +406,19 @@ export const resolvePopupTarget = (
 };
 
 export class Menu {
-  /** The items in this menu, in order. */
   readonly items: MenuItem[] = [];
   #popupTarget: PopupTarget | undefined;
 
-  /** Append an item to the end of the menu. */
   append(item: MenuItem): void {
     this.items.push(item);
   }
 
-  /** Insert `item` at position `pos` (clamped to the menu's bounds). */
+  /** `pos` is clamped to the menu's bounds. */
   insert(pos: number, item: MenuItem): void {
     this.items.splice(Math.max(0, Math.min(pos, this.items.length)), 0, item);
   }
 
-  /** Find an item by its `id`, searching submenus depth-first; `null` if not found. */
+  /** Searches submenus depth-first; `null` if not found. */
   getMenuItemById(id: string): MenuItem | null {
     for (const item of this.items) {
       if (item.id === id) {
@@ -448,7 +432,6 @@ export class Menu {
     return null;
   }
 
-  /** Build a menu from a template of plain option objects. */
   static buildFromTemplate(template: ReadonlyArray<MenuItemOptions | MenuItem>): Menu {
     const menu = new Menu();
     for (const entry of template) {
@@ -457,12 +440,12 @@ export class Menu {
     return menu;
   }
 
-  /** Realize this menu to a native handle. @internal */
+  /** @internal */
   realize(): bigint {
     return getRealizer().realize(this.items.map(toSpec));
   }
 
-  /** Set `menu` as the application menu bar, or clear it with `null`. */
+  /** `null` clears the stored menu but leaves the installed native menu bar in place. */
   static setApplicationMenu(menu: Menu | null): void {
     applicationMenu = menu;
     if (menu !== null) {
@@ -470,19 +453,14 @@ export class Menu {
     }
   }
 
-  /** The current application menu, or `null` if none is set. */
   static getApplicationMenu(): Menu | null {
     return applicationMenu;
   }
 
   /**
-   * Show this menu as a context/popup menu — Electron's `menu.popup({ window?, x?, y? })`.
-   * Realizes the menu and shows it anchored to the target window (the `window` option, else
-   * the focused window, else the most-recently-created window). `x`/`y` are content-relative
-   * and default to the top-left in v1 (not the mouse position).
-   *
-   * macOS BLOCKS (AppKit runs a nested tracking loop until dismissed — the same nested-loop
-   * class as a modal dialog's `runModal`, D020-safe); Linux is non-blocking.
+   * macOS BLOCKS — AppKit runs a nested tracking loop until dismissed, the same
+   * nested-loop class as a modal dialog's `runModal` (D020-safe). Linux is
+   * non-blocking.
    */
   popup(options?: MenuPopupOptions): void {
     if (windowResolver === undefined) {
@@ -494,9 +472,8 @@ export class Menu {
   }
 
   /**
-   * Close this popup menu — Electron's `menu.closePopup(window?)`. macOS cancels menu
-   * tracking (meaningful only re-entrantly, e.g. from an item's own click, since `popup`
-   * blocks until dismissal); Linux pops the popover down.
+   * On macOS this is meaningful only RE-ENTRANTLY, e.g. from an item's own
+   * click, since `popup` blocks until dismissal.
    */
   closePopup(window?: BrowserWindow): void {
     const target =
@@ -509,7 +486,7 @@ export class Menu {
 
 let applicationMenu: Menu | null = null;
 
-/** Reset the stored application menu. Test-only. */
+/** @internal */
 export const resetApplicationMenuForTesting = (): void => {
   applicationMenu = null;
 };

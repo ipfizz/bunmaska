@@ -4,7 +4,7 @@ import type { ParsedAccelerator } from '../../api/accelerator';
  * Pure X11 keysym-name + modifier-mask mapping for the Linux global-shortcut
  * backend. No FFI here — these map a parsed accelerator onto the X keysym NAME
  * (resolved to a real keysym via `XStringToKeysym` at registration time) and the
- * X modifier mask. Unit-tested directly.
+ * X modifier mask.
  */
 
 /** X11 modifier mask bits (`X.h`). */

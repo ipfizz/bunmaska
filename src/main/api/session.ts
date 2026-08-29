@@ -1,18 +1,10 @@
 /**
  * Session — a drop-in subset of Electron's `session` / `Session`.
  *
- * Covers the default session's User-Agent override and website-data clearing.
- * `setUserAgent(ua)` stores a process-wide default that every
- * {@link BrowserWindow} created AFTERWARD applies to its web contents at
- * construction (before the first navigation). Existing views keep their current
- * UA — change a live one with `webContents.setUserAgent(ua)`. `getUserAgent()`
- * returns the override, or `''` when none is set (the platform WebKit default is
- * then used). `clearStorageData()` clears the default data store (macOS and
- * Windows; Linux is a follow-up).
- *
- * Kept free of a `BrowserWindow` import (so it can be read at window
- * construction without a cycle). Cookies / cache / proxy / partitions are a
- * follow-up.
+ * `setUserAgent(ua)` applies only to windows created AFTERWARD, at construction
+ * (before their first navigation); change a live one with
+ * `webContents.setUserAgent(ua)`. Kept free of a `BrowserWindow` import so it
+ * can be read at window construction without a cycle.
  */
 
 import { UnsupportedPlatformError } from '../../common/errors';
@@ -20,7 +12,6 @@ import { currentPlatform } from '../../common/platform';
 import * as macosWebsiteData from '../platform/macos/cocoa-website-data';
 import { windowsSessionBackend } from '../platform/windows/windows-session';
 
-/** The native data-store operations the session delegates to. */
 export type SessionBackend = {
   clearStorageData(): Promise<void>;
 };
@@ -68,15 +59,12 @@ export class Session {
     return this.#userAgent;
   }
 
-  /** Set the default User-Agent applied to web contents created after this call. */
+  /** Applies to web contents created after this call, not to existing ones. */
   setUserAgent(userAgent: string): void {
     this.#userAgent = userAgent;
   }
 
-  /**
-   * Clear all of the session's website data (cache, cookies, local/session
-   * storage, IndexedDB, …). Wired on macOS and Windows; rejects on Linux.
-   */
+  /** Clears cache, cookies, local/session storage, IndexedDB, … Rejects on Linux. */
   clearStorageData(): Promise<void> {
     return getBackend().clearStorageData();
   }
@@ -87,7 +75,7 @@ export class Session {
   }
 }
 
-/** The `session` module — exposes the default session (Electron's `session.defaultSession`). */
+/** The `session` module — Electron's `session.defaultSession`. */
 export const session: { readonly defaultSession: Session } = {
   defaultSession: new Session(),
 };

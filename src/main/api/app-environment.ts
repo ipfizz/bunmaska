@@ -6,13 +6,10 @@ import { findManifest, type Manifest, type ManifestReader } from './app-metadata
 import { normalizeLocale, parsePreferredLanguages } from './app-locale';
 
 /**
- * Assembles the host facts the `app` module needs (paths, manifest, locale,
- * packaged-state) from injected primitives, so the assembly logic unit-tests
- * without touching the real OS. {@link defaultAppEnvironment} wires the live
- * `os`/`process`/`fs`/`Intl` values; tests pass synthetic {@link EnvironmentDeps}.
+ * Assembles the host facts the `app` module needs — paths, manifest, locale,
+ * packaged-state — from injected primitives.
  */
 
-/** Raw, injectable inputs used to build an {@link AppEnvironment}. */
 export type EnvironmentDeps = {
   readonly platform: Platform;
   readonly home: string;
@@ -30,13 +27,12 @@ export type EnvironmentDeps = {
   readonly relaunch: (execPath: string, args: string[]) => void;
 };
 
-/** Resolved environment consumed by the `app` module. */
 export type AppEnvironment = {
   readonly platform: Platform;
   readonly home: string;
   readonly temp: string;
   readonly execPath: string;
-  /** The application root directory (dir of the nearest `package.json`, or cwd). */
+  /** Directory of the nearest `package.json`, else cwd. */
   readonly appPath: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly manifest: Manifest | undefined;
@@ -65,7 +61,6 @@ const computePreferredLanguages = (
   return normalizedLocale.length > 0 ? [normalizedLocale] : [];
 };
 
-/** Build a resolved {@link AppEnvironment} from injected primitives. */
 export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
   const startDir = deps.mainScript.length > 0 ? dirname(deps.mainScript) : deps.cwd;
   const found = findManifest(startDir, deps.readFile);
@@ -86,7 +81,6 @@ export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
   };
 };
 
-/** Read a file as UTF-8, returning `undefined` if it does not exist. */
 const safeRead: ManifestReader = (path) => {
   try {
     return readFileSync(path, 'utf8');
@@ -95,7 +89,7 @@ const safeRead: ManifestReader = (path) => {
   }
 };
 
-/** Build the environment from the live host (`os`/`process`/`fs`/`Intl`). */
+/** Built from the live host: `os`/`process`/`fs`/`Intl`. */
 export const defaultAppEnvironment = (): AppEnvironment =>
   buildAppEnvironment({
     platform: currentPlatform(),
@@ -108,7 +102,6 @@ export const defaultAppEnvironment = (): AppEnvironment =>
     locale: new Intl.DateTimeFormat().resolvedOptions().locale,
     readFile: safeRead,
     exit: (code) => process.exit(code),
-    // Spawn a detached copy as this process exits (Electron's relaunch-on-exit).
     relaunch: (execPath, args) => {
       process.once('exit', () => {
         try {

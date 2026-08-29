@@ -21,9 +21,6 @@ import {
  * jumps into freed memory. The {@link SignalRegistry}, owned by each long-lived
  * `NativeWindow`/`NativeWebContents`, retains every callback to prevent that.
  *
- * Mirrors the macOS `cocoa-runtime-class.ts` / `cocoa-navigation-delegate.ts`
- * JSCallback retain-to-avoid-GC pattern.
- *
  * Bun's {@link JSCallback} does not expose its `{ args, returns }` definition at
  * runtime, so each handler's ABI shape is declared as an exported `*_CB_DEF`
  * constant (unit-testable in pure JS) and reused by the factory below.
@@ -52,8 +49,7 @@ export const NOTIFY_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as
  *
  * INVERTED GTK semantics: return 1 (TRUE) to VETO (stop the default handler, so
  * the window stays open); return 0 (FALSE) to ALLOW GTK's default handler to
- * destroy the window. `onCloseRequest` returns `true` to veto. Pure (no FFI) so
- * the veto logic is unit-tested without a display.
+ * destroy the window. `onCloseRequest` returns `true` to veto.
  */
 export const closeRequestDecision = (onCloseRequest: () => boolean): number =>
   onCloseRequest() ? 1 : 0;
@@ -92,11 +88,6 @@ export const makeDestroyCallback = (onClosed: () => void): JSCallback =>
     onClosed();
   }, DESTROY_CB_DEF);
 
-/**
- * `WebKitWebView::load-changed` handler. Maps the GTK load phases to navigation
- * events: STARTED → `did-start-loading`, COMMITTED → `did-navigate`, FINISHED →
- * `did-finish-load` then `did-stop-loading`.
- */
 export const makeLoadChangedCallback = (
   onNavigation: (event: NativeNavigationEvent) => void,
 ): JSCallback =>

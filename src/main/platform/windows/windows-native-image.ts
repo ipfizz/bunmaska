@@ -13,17 +13,9 @@ import {
 } from './win32-gdiplus-ffi';
 
 /**
- * Windows `nativeImage` backend via GDI+, the WinCairo peer of the `NSImage`
- * (macOS) and GdkPixbuf (Linux) backends. Decoding takes a file path
- * (`GdipLoadImageFromFile`) or PNG/JPEG bytes (an `SHCreateMemStream` `IStream`,
- * then clone so the image owns no stream ref); encoding writes to an HGLOBAL-backed
- * stream and reads the bytes out via `GlobalLock` (avoiding `IStream::Read`).
- *
- * COM POLICY: GDI+ is a flat-C API and the streams are managed with flat ole32
- * (`CreateStreamOnHGlobal`/`GetHGlobalFromStream`), so the ONLY COM call is a
- * single `IUnknown::Release` — invoked here by walking the object's vtable
- * (`{@link releaseStream}`), the codebase's one, contained, documented COM vtable call.
- * JPEG quality is GDI+'s default in v1 (an `EncoderParameters` follow-up).
+ * Windows `nativeImage` backend via GDI+. Encoding writes to an HGLOBAL-backed stream and
+ * reads the bytes out via `GlobalLock`, avoiding `IStream::Read`. JPEG quality is GDI+'s
+ * default in v1 (an `EncoderParameters` follow-up).
  */
 
 const HANDLE_SIZE = 8;

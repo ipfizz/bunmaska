@@ -20,24 +20,12 @@ import { app } from './app';
  *
  * An {@link EventEmitter} (D023) emitting Electron's event names:
  * `checking-for-update`, `update-available`, `update-not-available`,
- * `update-downloaded` and `error`. The flow is explicit (electron-updater
- * style): {@link AutoUpdaterImpl.checkForUpdates} fetches the channel's
- * `update.json`, checks it targets this os/arch/channel, and compares versions;
- * {@link AutoUpdaterImpl.downloadUpdate} fetches the artifact, verifies its
- * Ed25519 `.sig` against the publisher's key (authenticity) plus size + wyhash
- * (corruption), and stages the decompressed tar; {@link
- * AutoUpdaterImpl.quitAndInstall} delegates the irreversible bundle swap +
- * relaunch to the installer seam. The feed must be https.
- *
- * Every side effect (network, decompression, disk, install) is an injectable
- * dependency, so the check/download/verify/stage engine is fully unit-tested.
- * The default installer performs a best-effort, platform-specific swap and is
- * marked EXPERIMENTAL — it is the one step not exercised by the test suite.
+ * `update-downloaded` and `error`. The feed must be https. The default installer
+ * is EXPERIMENTAL — it is the one step not exercised by the test suite.
  */
 
 const log = createLogger('auto-updater');
 
-/** Options accepted by {@link AutoUpdaterImpl.setFeedURL}. */
 export type FeedURLOptions = {
   readonly url: string;
   /**
@@ -58,7 +46,7 @@ export type FeedURLOptions = {
 export const MAX_COMPRESSED_ARTIFACT_BYTES = 512 * 1024 * 1024;
 export const MAX_DECOMPRESSED_TAR_BYTES = 2 * 1024 * 1024 * 1024;
 
-/** Throw if a byte length exceeds `max`. The zip-bomb guard; allocation-free to test. */
+/** The zip-bomb guard: throws if a byte length exceeds `max`. */
 export const assertSizeWithin = (length: number, max: number, what: string): void => {
   if (length > max) {
     throw new Error(`autoUpdater: ${what} exceeds the ${max}-byte limit (got ${length})`);
@@ -68,31 +56,28 @@ export const assertSizeWithin = (length: number, max: number, what: string): voi
 /** http is refused for any host but these — dev feeds served from localhost. */
 const LOCAL_FEED_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
 
-/** Whether a feed URL is transport-secure: https anywhere, http only on localhost. */
+/** Transport-secure: https anywhere, http only on localhost. */
 const isSecureFeedUrl = (parsed: URL): boolean =>
   parsed.protocol === 'https:' ||
   (parsed.protocol === 'http:' && LOCAL_FEED_HOSTS.has(parsed.hostname));
 
-/** The Electron-shaped update descriptor carried by `update-*` events. */
+/** Carried by the `update-*` events. */
 export type UpdateInfo = {
   readonly version: string;
   readonly releaseName: string;
 };
 
-/** A downloaded + verified update staged on disk, ready to install. */
 export type StagedUpdate = {
   readonly manifest: UpdateManifest;
   /** Path to the decompressed `.tar` on disk. */
   readonly tarPath: string;
 };
 
-/** The result of a successful {@link AutoUpdaterImpl.checkForUpdates}. */
 export type UpdateCheckResult = {
   readonly updateInfo: UpdateInfo;
   readonly manifest: UpdateManifest;
 };
 
-/** Injectable side effects, so the engine is testable without real I/O. */
 export type AutoUpdaterDeps = {
   readonly fetchText: (url: string) => Promise<string>;
   readonly fetchBytes: (url: string) => Promise<Uint8Array>;
@@ -169,16 +154,15 @@ export class AutoUpdaterImpl extends EventEmitter {
     this.#deps = { ...productionDeps(), ...deps };
   }
 
-  /** Replace the injected dependencies. Test-only. */
+  /** @internal */
   setDepsForTesting(deps: Partial<AutoUpdaterDeps>): void {
     this.#deps = { ...this.#deps, ...deps };
   }
 
   /**
-   * Set the base URL of the channel feed (where `update.json` + artifacts live),
-   * and optionally the release `publicKey` that downloaded artifacts must verify
-   * against. The URL must be https (http is allowed only for localhost) so a
-   * plaintext MITM cannot serve a malicious feed.
+   * Base URL of the channel feed, where `update.json` + artifacts live. Must be
+   * https (http only for localhost) so a plaintext MITM cannot serve a malicious
+   * feed.
    */
   setFeedURL(options: FeedURLOptions | string): void {
     const opts = typeof options === 'string' ? { url: options } : options;
@@ -205,7 +189,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     }
   }
 
-  /** The configured feed URL, or `''` if none is set. */
+  /** `''` if none is set. */
   getFeedURL(): string {
     return this.#feedURL ?? '';
   }
@@ -226,7 +210,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     return this.#publicKey;
   }
 
-  /** Emit `error` (only if a listener is attached) and return the normalized Error. */
+  /** Emits `error` only when a listener is attached, so an un-listened emit cannot throw. */
   #emitError(cause: unknown): Error {
     const error = cause instanceof Error ? cause : new Error(String(cause));
     if (this.listenerCount('error') > 0) {
@@ -235,12 +219,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     return error;
   }
 
-  /**
-   * Fetch the feed's `update.json` and compare it to the running version. Emits
-   * `checking-for-update`, then `update-available` or `update-not-available`.
-   * Returns the result when an update is available, else `null`. Rejects (and
-   * emits `error`) on a network or manifest failure.
-   */
+  /** Returns `null` when no newer version is offered. Rejects on network/manifest failure. */
   async checkForUpdates(): Promise<UpdateCheckResult | null> {
     const feedURL = this.#requireFeedURL();
     this.emit('checking-for-update');
@@ -278,14 +257,12 @@ export class AutoUpdaterImpl extends EventEmitter {
   }
 
   /**
-   * Download the artifact for the update found by the most recent
-   * {@link checkForUpdates}, verify its length + wyhash (corruption) AND its
-   * detached Ed25519 `.sig` against the configured `publicKey` (authenticity),
-   * decompress it, and stage the tar on disk. Emits `update-downloaded`. Rejects
-   * (and emits `error`) if no update is pending, no public key is configured, or
-   * any check fails. The signature — not the wyhash — is what makes an update
-   * trustworthy: a feed/MITM controls the manifest, so its size + hash are
-   * self-referential; only the publisher's key can produce a valid `.sig`.
+   * Download, verify and stage the update found by the most recent
+   * {@link checkForUpdates}.
+   *
+   * The signature — not the wyhash — is what makes an update trustworthy: a
+   * feed/MITM controls the manifest, so its size + hash are self-referential;
+   * only the publisher's key can produce a valid `.sig`.
    */
   async downloadUpdate(): Promise<StagedUpdate> {
     const feedURL = this.#requireFeedURL();
@@ -328,10 +305,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     }
   }
 
-  /**
-   * Install the staged update and relaunch via the installer seam. Throws if no
-   * update has been downloaded. The default installer is EXPERIMENTAL.
-   */
+  /** Throws if no update has been downloaded. The default installer is EXPERIMENTAL. */
   quitAndInstall(): void {
     if (this.#staged === undefined) {
       throw new Error(
@@ -342,6 +316,6 @@ export class AutoUpdaterImpl extends EventEmitter {
   }
 }
 
-/** The application updater singleton. Drop-in equivalent of Electron's `autoUpdater`. */
+/** The application updater singleton — Electron's `autoUpdater`. */
 export const autoUpdater = new AutoUpdaterImpl();
 export type AutoUpdater = AutoUpdaterImpl;

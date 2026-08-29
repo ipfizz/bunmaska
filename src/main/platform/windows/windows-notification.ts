@@ -10,16 +10,10 @@ import { loadShell32 } from './win32-shell-ffi';
 import { createMessageWindow } from './windows-message-window';
 
 /**
- * Windows desktop notifications, the WinCairo peer of the libnotify (Linux) and
- * `NSUserNotification` (macOS) backends. A notification is shown as a tray-icon
- * balloon (`Shell_NotifyIcon` with `NIF_INFO`), which Windows 10/11 surfaces as a
- * real toast in the Action Center — a FLAT-C path with NO COM (the modern WinRT
- * toast API is heavily COM-bound; this honours the minimal-COM policy).
- *
- * v1 covers title + body + the silent flag, and `close` (when the balloon is
- * dismissed) via the icon's callback message; rich toasts (buttons, images,
- * inline replies) and a registered AppUserModelID are a follow-up — the app
- * identity shown is the executable's.
+ * A notification is shown as a tray-icon balloon (`Shell_NotifyIcon` with `NIF_INFO`),
+ * which Windows 10/11 surfaces as a real toast in the Action Center — a FLAT-C path with
+ * NO COM (the modern WinRT toast API is heavily COM-bound; this honours the minimal-COM
+ * policy). Rich toasts and a registered AppUserModelID are a follow-up.
  */
 
 /** Custom callback message the notification icon posts (WM_APP range). */

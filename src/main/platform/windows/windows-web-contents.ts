@@ -14,19 +14,11 @@ import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
 
 /**
- * Windows {@link NativeWebContents} on WinCairo WebKit — the mirror of
- * `linux/linux-backend.ts`'s `LinuxWebContents` and `linux/webkit-ipc.ts`.
- *
- * The renderer posts envelopes via `window.webkit.messageHandlers.bunmaska`
- * (native WebKit, so the shared bridge JS works unmodified); the main process
- * pushes envelopes back by evaluating `window.__bunmaska._dispatch(...)`
- * fire-and-forget (D022). `executeJavaScript` returns out-of-band through a
- * `bunmaskaExec` page-world handler (a per-call native completion callback would
- * be freed mid-invocation — the same hazard as macOS/Linux).
- *
- * WinCairo's public C API exposes no named content world, so every script runs in
- * the PAGE world (the cross-world bridge tolerates a shared document); the
- * `BunmaskaPreload` isolation used on macOS/Linux is a follow-up (SPI).
+ * The renderer posts envelopes via `window.webkit.messageHandlers.bunmaska`; the main
+ * process pushes envelopes back by evaluating `window.__bunmaska._dispatch(...)`
+ * fire-and-forget (D022). `executeJavaScript` returns out-of-band through a `bunmaskaExec`
+ * page-world handler — a per-call native completion callback would be freed
+ * mid-invocation. The `BunmaskaPreload` isolation used on macOS/Linux is a follow-up.
  */
 
 /** The script-message handler name the preload bridge posts envelopes to. */
@@ -44,10 +36,10 @@ interface PendingExec {
 }
 
 /**
- * Out-of-band `executeJavaScript` channel — the Windows mirror of
- * `linux/eval-js.ts`. Injects a wrapper that posts `{ execId, ok, result?, error? }`
- * to the `bunmaskaExec` handler (registered once, torn down with the window), and
- * settles the matching Promise here. No per-call native callback to free.
+ * Out-of-band `executeJavaScript` channel. Injects a wrapper that posts
+ * `{ execId, ok, result?, error? }` to the `bunmaskaExec` handler (registered once, torn
+ * down with the window), and settles the matching Promise here. No per-call native
+ * callback to free.
  */
 class WindowsExecResultChannel {
   readonly #evalInPage: (wrapped: string) => void;

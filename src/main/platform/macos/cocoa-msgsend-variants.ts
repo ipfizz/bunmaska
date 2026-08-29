@@ -15,6 +15,9 @@ import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
  * tagged-pointer objects survive the FFI boundary as full-precision bigints
  * (D029). Non-handle args keep their natural type (`f64`, `u8`, `i64`,
  * `cstring`).
+ *
+ * Every export here is macOS-only: each throws {@link UnsupportedPlatformError}
+ * on other platforms.
  */
 
 const INIT_WITH_CONTENT_RECT_VARIANT = {
@@ -182,8 +185,6 @@ export type CGRectArgs = readonly [x: number, y: number, width: number, height: 
  * `double`s) is passed in exactly the same registers as four separate `double`
  * args, so this variant declares raw f64×4 in place of the CGRect struct — no
  * C shim required (D018).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendInitWithContentRect = (
   receiver: Handle,
@@ -205,70 +206,27 @@ export const msgSendInitWithContentRect = (
     defer ? 1 : 0,
   );
 
-/**
- * Send a message with one extra pointer-sized arg, e.g.
- * `[receiver setTitle:nsstring]`, `[receiver makeKeyAndOrderFront:nil]`,
- * `[receiver performSelector:sel]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
 export const msgSendPtr = (receiver: Handle, selector: Handle, arg: Handle): Handle =>
   getPtrLib().symbols.objc_msgSend(receiver, selector, arg);
 
-/**
- * Send a message with one extra `u8` arg, e.g.
- * `[NSApp activateIgnoringOtherApps:YES]`, `[window setReleasedWhenClosed:NO]`,
- * `[NSNumber numberWithBool:YES]`. Pass `0` or `1` for the boolean.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
+/** Send a message with one extra `BOOL` arg: pass `0` (NO) or `1` (YES). */
 export const msgSendU8 = (receiver: Handle, selector: Handle, arg: number): Handle =>
   getU8Lib().symbols.objc_msgSend(receiver, selector, arg);
 
-/**
- * Send a message with one extra `double` arg, e.g.
- * `[NSDate dateWithTimeIntervalSinceNow:0.5]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
 export const msgSendF64 = (receiver: Handle, selector: Handle, arg: number): Handle =>
   getF64Lib().symbols.objc_msgSend(receiver, selector, arg);
 
-/**
- * Send a message with one extra `int64_t` (signed) arg — used for `NSInteger`
- * params on 64-bit macOS, e.g. `[NSApp setActivationPolicy:0]`,
- * `[NSNumber numberWithInteger:n]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
 export const msgSendI64 = (receiver: Handle, selector: Handle, arg: bigint): Handle =>
   getI64Lib().symbols.objc_msgSend(receiver, selector, arg);
 
-/**
- * Send a zero-extra-arg message that returns a `BOOL`, e.g. `[obj isProxy]`,
- * `[window isVisible]`, `[NSApp isActive]`. Returns 0 (NO) or 1 (YES).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
+/** Send a zero-extra-arg message returning `BOOL`: 0 (NO) or 1 (YES). */
 export const msgSendReturnsU8 = (receiver: Handle, selector: Handle): number =>
   getReturnsU8Lib().symbols.objc_msgSend(receiver, selector);
 
-/**
- * Send a message with one extra C-string arg, e.g.
- * `[NSString stringWithUTF8String:"..."]`. The text is encoded null-terminated.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
+/** Send a message with one extra C-string arg; the text is encoded null-terminated. */
 export const msgSendCStr = (receiver: Handle, selector: Handle, text: string): Handle =>
   getCStrLib().symbols.objc_msgSend(receiver, selector, cstr(text));
 
-/**
- * Send a message with two extra pointer-sized args, e.g.
- * `[webView loadHTMLString:html baseURL:url]`,
- * `[userContentController addScriptMessageHandler:handler name:nsstring]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
 export const msgSendPtrPtr = (
   receiver: Handle,
   selector: Handle,
@@ -280,8 +238,6 @@ export const msgSendPtrPtr = (
  * Send `initWithFrame:configuration:` to a WKWebView receiver: a `CGRect`
  * (four `double`s via the struct-as-doubles trick, D018) plus a trailing
  * configuration pointer.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendInitWithFrameConfig = (
   receiver: Handle,
@@ -299,12 +255,6 @@ export const msgSendInitWithFrameConfig = (
     configuration,
   );
 
-/**
- * Send a message with three extra pointer-sized args, e.g.
- * `[NSMenuItem initWithTitle:action:keyEquivalent:]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
 export const msgSendPtr3 = (
   receiver: Handle,
   selector: Handle,
@@ -313,29 +263,16 @@ export const msgSendPtr3 = (
   arg2: Handle,
 ): Handle => getPtr3Lib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2);
 
-/**
- * Send a zero-extra-arg message that returns an `NSInteger`, e.g.
- * `[menu numberOfItems]`, `[alert runModal]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
 export const msgSendReturnsI64 = (receiver: Handle, selector: Handle): bigint =>
   getReturnsI64Lib().symbols.objc_msgSend(receiver, selector);
 
-/**
- * Send a message with one extra pointer-sized arg that returns a `BOOL`, e.g.
- * `[[NSWorkspace sharedWorkspace] openURL:nsurl]`. Returns 0 (NO) or 1 (YES).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
- */
+/** Send a message with one extra pointer arg, returning `BOOL`: 0 (NO) or 1 (YES). */
 export const msgSendPtrReturnsU8 = (receiver: Handle, selector: Handle, arg: Handle): number =>
   getPtrReturnsU8Lib().symbols.objc_msgSend(receiver, selector, arg);
 
 /**
  * Send a message with an `NSSize`/`CGSize` arg (two `double`s by value), e.g.
  * `[window setContentSize:(NSSize){w, h}]`.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendSize = (
   receiver: Handle,
@@ -378,8 +315,6 @@ const getPtr4Lib = macOSLibraryAccessor('msgSendPtr4', () => dlopen(LIBOBJC_PATH
  * `[WKWebView evaluateJavaScript:inFrame:inContentWorld:completionHandler:]`
  * (macOS 11+). Pass `frame = 0n` (main frame) and `completionHandler = 0n`
  * (`_Nullable`, fire-and-forget — no block thunk, no D022 hazard).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendPtr4 = (
   receiver: Handle,
@@ -405,10 +340,7 @@ const getPtrI64U8PtrLib = macOSLibraryAccessor('msgSendPtrI64U8Ptr', () =>
  * Send a message with a pointer arg, an `NSInteger` arg, a `BOOL` arg, and a
  * trailing pointer arg — specifically
  * `[WKUserScript initWithSource:injectionTime:forMainFrameOnly:inContentWorld:]`
- * (macOS 11+). The world handle is carried by the script object; `addUserScript:`
- * is unchanged.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
+ * (macOS 11+).
  */
 export const msgSendPtrI64U8Ptr = (
   receiver: Handle,
@@ -434,8 +366,6 @@ const getPtrI64Lib = macOSLibraryAccessor('msgSendPtrI64', () =>
  * Send a message with a pointer arg and an `NSInteger`/`NSUInteger` arg —
  * specifically `[NSData dataWithBytes:(const void*)ptr length:(NSUInteger)len]`,
  * where the byte pointer is a pinned buffer and the length is its size.
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendPtrI64 = (
   receiver: Handle,
@@ -460,8 +390,6 @@ const getI64PtrLib = macOSLibraryAccessor('msgSendI64Ptr', () =>
  * specifically `[NSBitmapImageRep representationUsingType:(NSBitmapImageFileType)
  * properties:(NSDictionary*)]` (the file-type enum then a nullable properties
  * dictionary).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendI64Ptr = (
   receiver: Handle,
@@ -485,8 +413,6 @@ const getPtrI64PtrLib = macOSLibraryAccessor('msgSendPtrI64Ptr', () =>
  * Send a message with a pointer arg, an `NSInteger` arg, and a trailing pointer
  * arg — specifically `[NSError errorWithDomain:code:userInfo:]` (domain string,
  * integer code, nullable userInfo dictionary).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendPtrI64Ptr = (
   receiver: Handle,
@@ -512,8 +438,6 @@ const getPtrPtrI64PtrLib = macOSLibraryAccessor('msgSendPtrPtrI64Ptr', () =>
  * pointer arg — specifically `[[NSURLResponse alloc]
  * initWithURL:MIMEType:expectedContentLength:textEncodingName:]` (URL pointer,
  * MIME-type NSString pointer, content length, text-encoding NSString or 0).
- *
- * Only callable on macOS — throws {@link UnsupportedPlatformError} otherwise.
  */
 export const msgSendPtrPtrI64Ptr = (
   receiver: Handle,

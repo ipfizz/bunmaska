@@ -12,12 +12,9 @@ import {
 import { ensureGdiplus, windowsNativeImageBackend } from './windows-native-image';
 
 /**
- * Windows clipboard backend (pure `bun:ffi`), the WinCairo peer of
- * `cocoa-clipboard.ts` / `gtk-clipboard.ts`. Text and HTML round-trip through the
- * flat Win32 clipboard API (`OpenClipboard`/`SetClipboardData`/... on user32 with
- * `GlobalAlloc`-backed transfer buffers on kernel32). Images round-trip through the
- * `CF_DIB` clipboard format, converted to/from PNG with the GDI+ codec the
- * `nativeImage` backend already uses (a packed-DIB bridge in pure FFI).
+ * Windows clipboard backend. Text and HTML round-trip through the flat Win32 clipboard
+ * API with `GlobalAlloc`-backed transfer buffers; images round-trip through the `CF_DIB`
+ * format, converted to/from PNG with the GDI+ codec the `nativeImage` backend uses.
  */
 
 /** `CF_UNICODETEXT` — UTF-16LE text, the modern text clipboard format. */

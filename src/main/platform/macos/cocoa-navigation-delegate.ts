@@ -6,14 +6,8 @@ import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
 /**
- * Bridges `WKNavigationDelegate` callbacks to JS (D026).
- *
- * The class is defined once at runtime and one instance is allocated per web
- * view; each instance routes its callbacks to the registered JS handler by
- * keying on the `self` handle delivered to the IMP — the mechanism proven for
- * the script-message handler. Each delegate selector maps to a
- * {@link NativeNavigationEvent}; `did(FailProvisional)Navigation:withError:`
- * reads the `NSError` code + localized description.
+ * Bridges `WKNavigationDelegate` callbacks to JS (D026), one instance per web
+ * view, routed by the `self` handle delivered to the IMP.
  */
 
 const registry = new Map<Handle, (event: NativeNavigationEvent) => void>();

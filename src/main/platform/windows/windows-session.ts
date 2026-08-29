@@ -3,16 +3,9 @@ import type { SessionBackend } from '../../api/session';
 import { loadWebKit2 } from './webkit2-ffi';
 
 /**
- * Windows `session` backend, the WinCairo peer of the macOS `WKWebsiteDataStore`
- * backend. `clearStorageData` clears the process-wide default data store: all
- * cookies (`WKHTTPCookieStore`) and the fetch caches (`WKWebsiteDataStore`). Both
- * WebKit operations are asynchronous and signal completion via a callback, which
- * fires on the cooperative pump (the same JSCallback pattern as the navigation
- * client) — so the returned Promise settles once the engine reports done.
- *
- * v1 covers cookies + fetch caches (the raw WK2 C API on this build exposes no
- * general "remove all website data" entry point — only these typed removers);
- * local/IndexedDB storage clearing is a follow-up.
+ * `clearStorageData` clears the process-wide default data store: cookies and fetch caches.
+ * The raw WK2 C API on this build exposes no general "remove all website data" entry
+ * point — only these typed removers — so local/IndexedDB clearing is a follow-up.
  */
 
 /** Completion trampolines kept alive until they fire; closed after each clear. */

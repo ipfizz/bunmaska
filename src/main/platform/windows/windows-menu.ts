@@ -5,22 +5,10 @@ import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 
 /**
- * Windows menu realizer, the WinCairo peer of the `NSMenu` (macOS) and GTK
- * (Linux) menu backends. A menu tree is built into a Win32 `HMENU` with
- * `CreatePopupMenu` + `AppendMenuW`; clickable items get a unique command id whose
- * `onClick` is stored here so {@link WindowsMenuRealizer.dispatchMenuCommand} (called
- * by the window after `TrackPopupMenu` returns the chosen id) can fire it. The
- * HMENU build is non-modal (so it is integration-tested); the popup itself is the
- * window's `TrackPopupMenu`, which is modal like macOS menu tracking.
- *
- * `setApplicationMenu` installs a per-window menu BAR (Windows has no global menu;
- * Electron mirrors the application menu onto every window). The bar is built with
- * `CreateMenu` (vs `CreatePopupMenu` for context menus) and applied to each
- * registered window via its `setMenuBar`; a fresh HMENU is built PER window (an
- * HMENU can only belong to one window). Menu clicks reach us as `WM_COMMAND` on the
- * window's JSCallback frame proc, which routes them to {@link WindowsMenuRealizer.dispatchMenuCommand}.
- * Role items render as plain labels (their keyboard shortcuts work natively via
- * WebKit / `globalShortcut`); accelerator text in the menu is a follow-up.
+ * Windows has no global menu, so `setApplicationMenu` installs a per-window menu BAR,
+ * built with `CreateMenu` (vs `CreatePopupMenu` for context menus); a fresh HMENU is built
+ * PER window, because an HMENU can only belong to one window. Menu clicks reach us as
+ * `WM_COMMAND` on the window's JSCallback frame proc.
  */
 
 // AppendMenuW flags.

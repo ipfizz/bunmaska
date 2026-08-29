@@ -1,18 +1,12 @@
 /**
- * Pure argument parser for the `bunmaska` CLI.
- *
  * Maps a raw argv tail (no node/bun/script prefix) to a {@link Command}
- * discriminated union. {@link parseArgs} does no I/O and never reads `process`,
- * so every branch is unit-testable. The lone exception is {@link resolveTarget},
- * which folds in the host platform default and is kept here beside its type.
+ * discriminated union.
  */
 
 import { currentPlatform } from '../common/platform';
 
-/** Build targets `bunmaska build` can produce. */
 export type BuildTarget = 'macos' | 'linux' | 'windows';
 
-/** Options accepted by `bunmaska build`. All optional; the bundler fills defaults. */
 export type BuildOptions = {
   readonly name?: string;
   readonly id?: string;
@@ -33,7 +27,6 @@ export type BuildOptions = {
   readonly embedEngine?: string;
 };
 
-/** Subcommands of `bunmaska engine`, for managing the pinned-WebKit store. */
 export type EngineSubcommand =
   | { readonly action: 'list' }
   | { readonly action: 'available' }
@@ -54,7 +47,6 @@ export type Command =
   | { readonly kind: 'doctor'; readonly target?: string }
   | { readonly kind: 'error'; readonly message: string };
 
-/** `bunmaska build` flags that take a string value, keyed by argv token. */
 const BUILD_STRING_FLAGS = new Map<
   string,
   'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine'
@@ -68,7 +60,6 @@ const BUILD_STRING_FLAGS = new Map<
   ['--embed-engine', 'embedEngine'],
 ]);
 
-/** `bunmaska build` boolean flags that take no value, by argv token. */
 const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>([
   '--notarize',
   '--dmg',
@@ -162,7 +153,6 @@ const parseBuild = (rest: readonly string[]): Command => {
   return entry === undefined ? { kind: 'build', options } : { kind: 'build', entry, options };
 };
 
-/** Parse the `bunmaska engine <action> …` tail into a {@link Command}. */
 const parseEngine = (rest: readonly string[]): Command => {
   const [action, ...args] = rest;
   if (action === undefined) {
@@ -264,10 +254,8 @@ export const parseArgs = (argv: readonly string[]): Command => {
 };
 
 /**
- * Resolve the effective build target: an explicit `--target` when given,
- * otherwise the host platform (each host builds its own OS by default). The
- * platform tags and build-target tags coincide, so the host maps straight
- * through; explicit `--target` still allows cross-builds (e.g. macOS → linux).
+ * `--target` when given, else the host platform. The platform tags and the
+ * build-target tags coincide, so the host maps straight through.
  */
 export const resolveTarget = (target: BuildTarget | undefined): BuildTarget =>
   target ?? currentPlatform();

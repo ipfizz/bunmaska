@@ -1,10 +1,4 @@
 /**
- * Shared Win32 FFI primitives for the Windows backend.
- *
- * Mirrors `platform/macos/objc.ts` (D024): the place where the handle/string
- * conversions and the import-safe library loader live, so the window, message
- * pump, and per-subsystem FFI loaders never re-derive them.
- *
  * Every Win32 handle (`HWND`, `HMENU`, `HINSTANCE`, `HICON`, ...) flows through
  * the codebase as a `bigint` and crosses the FFI boundary as `u64`, NOT as a
  * Bun `Pointer`. A `HANDLE` is an opaque kernel value, not a virtual address, so
@@ -19,7 +13,6 @@ import { currentPlatform } from '../../../common/platform';
 /** Opaque pointer-width Win32 handle (`HWND`/`HMENU`/`HINSTANCE`/...). */
 export type WinHandle = bigint;
 
-/** The null Win32 handle (`NULL`). */
 export const NULL_HANDLE: WinHandle = 0n;
 
 /**

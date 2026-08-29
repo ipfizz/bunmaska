@@ -7,23 +7,9 @@ import { winLibraryAccessor, wstr } from './win32';
 import { loadKernel32 } from './win32-ffi';
 
 /**
- * WinCairo WebKit2 C API FFI for the Windows backend — the engine half.
- *
- * Windows ships no system WebKit, so the engine is brought in via the engine
- * store and loaded from its own directory. WebKit2 exposes a flat-C API
- * (`WK*`-prefixed, `extern "C"`, `WK_EXPORT`'d from `WebKit2.dll`) — NOT COM — so
- * every entry point binds directly with `dlopen`/`JSCallback`, the same idiom the
- * GTK/Cocoa backends use. Opaque `WK*Ref` handles are plain pointers (`ptr`);
- * `size_t` is `u64` on x64; the win-only `WKViewCreate` takes a 16-byte `RECT` by
- * value, which the Windows x64 ABI passes by hidden pointer, so it binds as `ptr`.
- *
- * Engine resolution reuses the cross-platform {@link resolveEngineWith} (the same
- * resolver the Linux loaders use): `BUNMASKA_WEBKIT_PATH` (explicit dir) >
- * `BUNMASKA_WEBKIT_ID` (env id) > the baked `engine.id` next to the executable >
- * the content-addressed store. Unlike Linux there is NO system-WebKit fallback —
- * Windows ships none — so any `system` outcome means "no engine" here. The chosen
- * dir is put on the DLL search path so `WebKit2.dll`'s dependency closure (ICU,
- * libcurl, ANGLE, ...) resolves beside it.
+ * WinCairo WebKit2 C API FFI. Opaque `WK*Ref` handles are plain pointers (`ptr`) and
+ * `size_t` is `u64` on x64. Unlike Linux there is NO system-WebKit fallback — Windows
+ * ships none — so any `system` resolution outcome means "no engine" here.
  */
 
 const WEBKIT2_SYMBOLS = {

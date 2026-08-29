@@ -1,17 +1,12 @@
 /**
  * The canonical map of Electron's main-process module names and which ones
  * Bunmaska implements today (D028).
- *
- * This is the single source of truth for drop-in parity: the Phase-5 compat
- * suite checks against {@link KNOWN_ELECTRON_MODULES}, and consumers reaching
- * for an unimplemented name get the actionable {@link notImplementedMessage}
- * rather than a silent `undefined`.
  */
 
 /**
  * Every main-process module `require('electron')` exposes, from Electron's
- * `lib/browser/api/module-list.ts`. Kept in sync deliberately, not generated,
- * so adding a name is a conscious parity decision.
+ * `lib/browser/api/module-list.ts`. Kept in sync by hand, not generated, so adding
+ * a name is a conscious parity decision.
  */
 export const KNOWN_ELECTRON_MODULES = [
   'app',

@@ -2,22 +2,11 @@ import type { MouseButton, NativeInputEvent } from '../native';
 import { loadUser32 } from './win32-ffi';
 
 /**
- * Trusted input synthesis for the Windows backend — the WinCairo peer of CDP's
- * `Input.dispatchMouseEvent`/`dispatchKeyEvent`.
- *
- * WinCairo WebKit's WKView hosts itself in an HWND whose window procedure turns
- * native Win32 input messages into engine-level `PlatformMouseEvent`s, so the page
- * sees `isTrusted === true` — exactly what a script-dispatched `element.click()`
- * (which is `isTrusted === false`) cannot produce. We POST (not send) the message
- * to the view's specific HWND: a posted message targets that window without
- * requiring it to be focused or foregrounded, so input lands on a HIDDEN window
- * and never steals the user's focus.
- *
- * The event→message mapping is a pure function ({@link inputEventToMessage}) so it
- * unit-tests with no FFI; {@link postWindowsInputEvent} is the thin side-effecting
- * wrapper. Coordinates are client pixels relative to the view's top-left (low word
- * x, high word y of LPARAM); per-monitor DPI scaling is a follow-up — at 100% scale
- * logical and client pixels coincide.
+ * WinCairo WebKit's WKView hosts itself in an HWND whose window procedure turns native
+ * Win32 input messages into engine-level `PlatformMouseEvent`s, so the page sees
+ * `isTrusted === true` — exactly what a script-dispatched `element.click()` cannot
+ * produce. Coordinates are client pixels relative to the view's top-left; per-monitor DPI
+ * scaling is a follow-up — at 100% scale logical and client pixels coincide.
  */
 
 const WM_MOUSEMOVE = 0x0200;
@@ -122,7 +111,7 @@ const virtualKey = (keyCode: string): number | undefined => {
 /**
  * Map a synthesized {@link NativeInputEvent} to the single Win32 window message
  * that delivers it, or `undefined` for a key we do not map (a lenient no-op,
- * matching Electron). Pure — the unit-testable core of the input path.
+ * matching Electron). Pure.
  */
 export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | undefined => {
   switch (event.type) {

@@ -1,14 +1,6 @@
 /**
- * `bunmaska dev` — run the app and react to source changes.
- *
- * The entry is taken from the argument or `bunmaska.config.ts`. A recursive watch
- * over the project CLASSIFIES each change: a TypeScript source is compiled into
- * the main process, so it triggers a (debounced) restart of the `bun run <entry>`
- * child; any other watched file is a renderer asset (the page, styles, the
- * preload), so it triggers a live RELOAD of the open windows instead — no restart,
- * no window reopening. `node_modules`, VCS, build output and dotfiles are ignored.
- * The supervisor takes injectable spawn/watch/timer seams so its behaviour is
- * unit-testable without real processes or the filesystem.
+ * `bunmaska dev`: a TypeScript change restarts the `bun run <entry>` child; any
+ * other watched file is a renderer asset and live-reloads the open windows.
  */
 
 import { watch as fsWatch } from 'node:fs';
@@ -16,15 +8,14 @@ import { extname, resolve } from 'node:path';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 
-/** The entry used when neither an argument nor a config entry is given. */
 export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 
 /** Default debounce window (ms) collapsing a burst of file changes into one action. */
 export const DEV_DEBOUNCE_MS = 120;
 
 /**
- * Resolve the dev entry: the explicit argument wins, then the config's `entry`,
- * then {@link DEV_DEFAULT_ENTRY}. Pure.
+ * Precedence: the explicit argument, then the config's `entry`, then
+ * {@link DEV_DEFAULT_ENTRY}.
  */
 export const resolveDevEntry = (config: BunmaskaConfig, explicit?: string): string =>
   explicit ?? config.entry ?? DEV_DEFAULT_ENTRY;
@@ -34,14 +25,11 @@ const IGNORED_SEGMENTS: ReadonlySet<string> = new Set(['node_modules', '.git', '
 /** TypeScript is compiled into the main process, so a change there restarts it. */
 const MAIN_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.mts', '.cts']);
 
-/** What a watched change should trigger: a full restart, a live reload, or nothing. */
 export type ChangeAction = 'restart' | 'reload' | 'ignore';
 
 /**
- * Classify a changed path (relative to the watched root). Dependency/VCS/build
- * directories and dotfiles (which catch editor swap files) are ignored; a
- * TypeScript source restarts the main process; anything else is a renderer asset
- * (page, styles, preload) and live-reloads the open windows. Pure.
+ * Classify a changed path, relative to the watched root. Dotfiles are ignored
+ * because they catch editor swap files.
  */
 export const classifyChange = (relPath: string): ChangeAction => {
   const parts = relPath.split(/[\\/]/).filter((p) => p.length > 0);
@@ -55,22 +43,18 @@ export const classifyChange = (relPath: string): ChangeAction => {
   return MAIN_SOURCE_EXTENSIONS.has(extname(base).toLowerCase()) ? 'restart' : 'reload';
 };
 
-/** A running child app process. */
 export type DevChild = {
-  /** Terminate the child. */
   readonly kill: () => void;
   /** Ask the running child to live-reload its open windows (a renderer-only change). */
   readonly reload: () => void;
 };
-/** A filesystem watcher that can be torn down. */
 export type DevWatcher = { readonly close: () => void };
-/** Minimal timer seam (defaults to global setTimeout/clearTimeout). */
+/** Timers; defaults to the global setTimeout/clearTimeout. */
 export type DevTimers = {
   readonly set: (fn: () => void, ms: number) => unknown;
   readonly clear: (handle: unknown) => void;
 };
 
-/** Injectable seams backing {@link DevSupervisor}. */
 export type DevDeps = {
   readonly spawn: (entry: string) => DevChild;
   readonly watch: (dir: string, onChange: (relPath: string) => void) => DevWatcher;
@@ -79,12 +63,6 @@ export type DevDeps = {
   readonly debounceMs?: number;
 };
 
-/**
- * Supervises a `bun run <entry>` child: spawns it on construction, then on a
- * relevant file change either restarts it (a main-process source) or asks it to
- * live-reload (a renderer asset), debounced; tears everything down on
- * {@link stop}. A restart supersedes a reload coalesced into the same window.
- */
 export class DevSupervisor {
   readonly #entry: string;
   readonly #deps: DevDeps;
@@ -96,7 +74,6 @@ export class DevSupervisor {
   #stopped = false;
   /** Number of times the child has been (re)started, including the first spawn. */
   starts = 1;
-  /** Number of live reloads requested. */
   reloads = 0;
 
   constructor(dir: string, entry: string, deps: DevDeps) {
@@ -169,7 +146,6 @@ const defaultTimers: DevTimers = {
   },
 };
 
-/** Production seams: real `bun run` children and a recursive filesystem watch. */
 export const defaultDevDeps = (cwd: string, log: (message: string) => void): DevDeps => ({
   spawn: (entry) => {
     // `BUNMASKA_DEV` switches on the app's stdin reload listener; a piped stdin is
@@ -212,9 +188,8 @@ export const defaultDevDeps = (cwd: string, log: (message: string) => void): Dev
 });
 
 /**
- * Start a dev supervisor for `targetDir`/`entry` and resolve only once `stop`
- * is signalled (e.g. SIGINT). `awaitStop` lets the CLI block until the user
- * quits; tests pass their own to resolve deterministically.
+ * Resolves only once `awaitStop` signals stop (e.g. SIGINT); the supervisor is
+ * torn down either way.
  */
 export const runDev = async (
   targetDir: string,

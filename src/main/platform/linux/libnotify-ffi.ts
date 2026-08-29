@@ -12,17 +12,11 @@ import { currentPlatform } from '../../../common/platform';
  * symbols resolve, `notify_init` runs, and construct/show/close do not throw; it
  * does NOT assert a banner appeared.
  *
- * Declared separately from {@link loadLibnotifyFFI} so unit tests can assert ABI
- * shapes (arg arrays, return types) without `dlopen` on a non-Linux host.
- *
  * Convention (matches the existing Linux loaders): `gboolean` is modelled as
  * {@link FFIType.i32} (compare `!== 0`); the `NotifyNotification*` handle and the
  * `GError**` out-param are real pointers ({@link FFIType.pointer}); `cstring`
  * args are NUL-terminated UTF-8 strings. The `GError**` arg is always passed as
  * `null` (failures are reported via the gboolean return, not unwrapped).
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBNOTIFY_PATH = 'libnotify.so.4';

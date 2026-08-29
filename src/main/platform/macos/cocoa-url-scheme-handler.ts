@@ -15,22 +15,13 @@ import type { Handle } from './objc';
 /**
  * Bridges `WKURLSchemeHandler` callbacks to the `protocol` module on macOS.
  *
- * A `WKWebView` configured (via `setURLSchemeHandler:forURLScheme:` on its
- * `WKWebViewConfiguration`) to route a custom scheme delivers each request to
- * this delegate's `webView:startURLSchemeTask:`. We read the task's request URL,
- * ask {@link protocol.dispatch} for the bytes + MIME type to serve, build an
- * `NSData` + `NSURLResponse`, and drive the task through
- * `didReceiveResponse:` → `didReceiveData:` → `didFinish`. We serve
- * synchronously, so `webView:stopURLSchemeTask:` is a no-op (it MUST still exist
- * — WebKit requires both selectors of the protocol).
+ * A `WKWebView` routes a custom scheme here (via `setURLSchemeHandler:forURLScheme:`
+ * on its `WKWebViewConfiguration`) and we serve the task synchronously.
  *
  * The class is defined once at runtime via {@link defineObjcClass} (D026); its
  * IMP `JSCallback`s are retained for the process lifetime by the runtime-class
  * helper's `retainedCallbacks`, so they are NEVER freed inside their own
  * invocation (the JSCallback-lifecycle discipline that prevents the SIGSEGV).
- *
- * `NSData dataWithBytes:length:` COPIES the source bytes, so the pinned buffer
- * need only outlive that one call — no long-lived pinning across the task.
  */
 
 const log = createLogger('macos-url-scheme-handler');
@@ -40,11 +31,7 @@ const ERROR_DOMAIN = 'BunmaskaProtocol';
 /** `NSURLErrorResourceUnavailable`-ish code for an unhandled/declined request. */
 const ERROR_CODE_NO_HANDLER = -1100n;
 
-/**
- * The dispatcher the IMP calls to serve a URL. Defaults to the live
- * {@link protocol.dispatch}; overridable for unit tests so the build/serve path
- * can be exercised without a real `WKURLSchemeTask`.
- */
+/** The dispatcher the IMP calls to serve a URL; defaults to {@link protocol.dispatch}. */
 let dispatcher: (url: string) => BuiltProtocolResponse | undefined = protocol.dispatch;
 
 /** Override the URL dispatcher. Test-only. */
@@ -129,10 +116,8 @@ const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): voi
 };
 
 /**
- * @internal The body of `webView:startURLSchemeTask:`, factored out so the
- * serve/fail decision is exercised directly by integration tests. Reads the
- * request URL, dispatches it, and either serves the bytes or fails the task.
- * Never throws out into the IMP (any error fails the task instead).
+ * @internal The body of `webView:startURLSchemeTask:`. Never throws out into the
+ * IMP (any error fails the task instead).
  */
 export const handleStartTask = (task: Handle): void => {
   try {

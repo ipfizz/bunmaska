@@ -1,10 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * The `bunmaska` command-line interface: `run`, `build`, `--help`, `--version`.
- *
- * This is the user-facing build/launch tool, not a runtime module — it uses
- * Bun/Node filesystem and process APIs only. Output goes through
+ * The `bunmaska` command-line interface. Output goes through
  * `process.stdout`/`process.stderr` because Biome bans `console.*`.
  */
 
@@ -98,7 +95,6 @@ build options:
 Windows portable dir + .zip. --target cross-builds (e.g. a macOS host can build
 Linux or Windows). --sign and --notarize are macOS-only (codesign/notarytool).`;
 
-/** Derive a default app name from the entry path's base file name. */
 const deriveName = (entry: string): string => {
   const base = entry.split(/[\\/]/).pop() ?? entry;
   const stem = base.replace(/\.[^.]+$/, '');
@@ -108,7 +104,6 @@ const deriveName = (entry: string): string => {
 /** Argv builder + runner for the `xcrun notarytool submit` release hook. */
 type NotarizeHook = (appPath: string) => Promise<void>;
 
-/** Injectable seams so `dispatch` is unit-testable without shelling out. */
 export type DispatchDeps = {
   readonly buildMac?: (opts: BuildMacAppOptions) => Promise<string>;
   readonly signApp?: SignApp;
@@ -153,9 +148,8 @@ const maybeEmitUpdate = async (
 };
 
 /**
- * Resolve the per-app engine-id to bake (and whether it's embedded) from the
- * project's `engine.webkit` pin, warning when a bare upstream version cannot yet
- * resolve to a full id. Shared by the Linux and Windows build branches.
+ * Warns when a bare upstream version cannot yet resolve to a full id. Shared by
+ * the Linux and Windows build branches.
  */
 const resolveProjectEngine = async (): Promise<{ engineId: string; embed: boolean }> => {
   const { config } = await loadConfig(process.cwd());
@@ -292,7 +286,6 @@ const notarizeCredentials = ():
   return { appleId, teamId, password };
 };
 
-/** Scaffold a new project and print next steps. Returns the exit code. */
 const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => {
   let result: ReturnType<typeof runInit>;
   try {
@@ -315,7 +308,6 @@ const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => 
   return 0;
 };
 
-/** Shared dependencies for the `engine`/`doctor` commands (real store + config). */
 const engineCommandDeps = (): Parameters<typeof runEngine>[1] => ({
   root: enginesPath(),
   env: process.env,
@@ -335,7 +327,6 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
     process.once('SIGTERM', onSignal);
   });
 
-/** Run the app with file-watch restarts until interrupted. Returns the exit code. */
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
   let entry: string;
   try {

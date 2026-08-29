@@ -65,11 +65,7 @@ const cache: { ffi: ReturnType<typeof dlopen<typeof X11_FFI_SYMBOLS>> | undefine
   ffi: undefined,
 };
 
-/**
- * Open `libX11.so.6` and return the Xlib symbol table. Memoised; throws
- * {@link UnsupportedPlatformError} off Linux so the module stays importable on
- * macOS for unit testing.
- */
+/** Open `libX11.so.6` and return the Xlib symbol table. Memoised. */
 export const loadX11FFI = () => {
   const platform = currentPlatform();
   if (platform !== 'linux') {

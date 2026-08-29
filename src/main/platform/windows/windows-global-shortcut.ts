@@ -3,13 +3,9 @@ import type { GlobalShortcutBackend } from '../../api/global-shortcut';
 import { loadUser32 } from './win32-ffi';
 
 /**
- * Windows `globalShortcut` backend (pure `bun:ffi`), the WinCairo peer of the
- * Carbon (macOS) and X11 (Linux) backends. `RegisterHotKey(NULL, id, …)` claims a
- * system-wide hot key and posts `WM_HOTKEY` to the calling (Bun main) thread's
- * queue; the cooperative pump's message inspector routes that message back here
- * via {@link WindowsGlobalShortcutBackend.dispatchHotkeyMessage}, which fires the
- * registered callback. Accelerator → virtual-key/modifier translation is a pure
- * function so it unit-tests with no FFI.
+ * `RegisterHotKey(NULL, id, …)` claims a system-wide hot key and posts `WM_HOTKEY` to the
+ * calling (Bun main) thread's queue; the cooperative pump's message inspector routes that
+ * message back here via {@link WindowsGlobalShortcutBackend.dispatchHotkeyMessage}.
  */
 
 /** `WM_HOTKEY` — posted when a registered hot key fires; `wParam` is the hot-key id. */

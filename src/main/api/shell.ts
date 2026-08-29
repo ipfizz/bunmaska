@@ -6,10 +6,7 @@ import { windowsShellBackend } from '../platform/windows/windows-shell';
 
 /**
  * Desktop integration — the drop-in equivalent of Electron's `shell`.
- *
- * `openExternal` returns a Promise (matching Electron); the rest are
- * synchronous. The native backend is injectable so the surface is unit-testable
- * without launching real applications.
+ * `openExternal` returns a Promise, matching Electron; the rest are synchronous.
  */
 
 export type ShellBackend = {
@@ -51,19 +48,17 @@ const getBackend = (): ShellBackend => {
   throw new UnsupportedPlatformError(`shell is not supported on ${currentPlatform()} yet`);
 };
 
-/** Override the native shell backend. Test-only. */
+/** @internal */
 export const setShellBackendForTesting = (fake: ShellBackend | undefined): void => {
   backend = fake;
 };
 
 export type Shell = {
-  /** Open a URL in the default application. Resolves with whether it succeeded. */
+  /** Resolves with whether the launch succeeded. */
   openExternal(url: string): Promise<boolean>;
-  /** Open a file or folder with its default application. Returns `''` on success or an error string. */
+  /** Resolves `''` on success, else an error string. */
   openPath(path: string): Promise<string>;
-  /** Reveal a file or folder in the OS file manager. */
   showItemInFolder(path: string): void;
-  /** Play the system beep. */
   beep(): void;
 };
 

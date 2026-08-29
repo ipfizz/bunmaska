@@ -7,15 +7,9 @@ import { loadShell32 } from './win32-shell-ffi';
 import { createMessageWindow } from './windows-message-window';
 
 /**
- * Windows system-tray backend (pure `bun:ffi`), the WinCairo peer of the
- * `NSStatusItem` (macOS) and StatusNotifierItem (Linux) backends. `Shell_NotifyIcon`
- * adds/updates/removes the icon; the icon comes from a `.ico` path via `LoadImage`
- * (falling back to the default application icon, so a bad path never leaves a blank
- * slot). The icon's callback message is delivered to a hidden, non-WebKit window
- * (see `windows-message-window.ts`), where a left click fires `onClick`. As on
- * Linux v1, the context menu is accepted but DEFERRED (a Win32 `HMENU`/`TrackPopupMenu`
- * follow-up once the menu backend lands), and `setTitle` is a no-op (the Windows
- * tray shows no inline text).
+ * `Shell_NotifyIcon` adds/updates/removes the icon; its callback message is delivered to a
+ * hidden, non-WebKit window (see `windows-message-window.ts`), where a left click fires
+ * `onClick`.
  */
 
 /** Custom callback message the tray icon posts to its owner window (WM_APP range). */

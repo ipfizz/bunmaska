@@ -8,20 +8,11 @@ import { postWindowsInputEvent } from './windows-input';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
 /**
- * A `WKView` hosted in a Win32 HWND, wired for document-start script injection
- * and the renderer->main script-message bridge — the WinCairo peer of
- * `linux/webkit-ipc.ts` (WebKitUserContentManager) and the macOS WKWebView setup.
- *
  * The view is parented into a dedicated NATIVE-WndProc child window
- * ({@link createNativeChildHost}); WebKit floods its host with re-entrant messages
- * during a load, which a `bun:ffi` `JSCallback` WndProc cannot survive (see
- * `windows-native-window.ts`). COM is initialised on the thread first
- * ({@link ensureOleInitialized}), exactly as WinCairo's MiniBrowser does.
- *
- * Note on worlds: the public WebKit2 C API exposes no named content world, so the
- * injected scripts and the `window.webkit.messageHandlers.<name>` bridge run in
- * the PAGE world. Each script-message JSCallback is retained for the view's life
- * and closed only on {@link WindowsWebView.dispose} — never mid-call.
+ * ({@link createNativeChildHost}); WebKit floods its host with re-entrant messages during
+ * a load, which a `bun:ffi` `JSCallback` WndProc cannot survive. The public WebKit2 C API
+ * exposes no named content world, so the injected scripts and the
+ * `window.webkit.messageHandlers.<name>` bridge run in the PAGE world.
  */
 
 /** `SetWindowPos` flags for an in-place resize (keep position, z-order, focus). */
@@ -164,13 +155,11 @@ const setupNavigationClient = (
   return callbacks;
 };
 
-/** A script-message handler name and the JS callback that receives its bodies. */
 export interface ScriptMessageHandler {
   readonly name: string;
   readonly onMessage: (body: string) => void;
 }
 
-/** Options for {@link WindowsWebView.create}. */
 export interface WebViewOptions {
   /** Parent window handle (the owning native window) to host the view inside. */
   readonly hwnd: bigint;
@@ -399,7 +388,7 @@ export class WindowsWebView {
     }
   }
 
-  /** Release the view, destroy the host child, and close every callback. Idempotent. */
+  /** Idempotent. */
   dispose(): void {
     if (this.#disposed) {
       return;

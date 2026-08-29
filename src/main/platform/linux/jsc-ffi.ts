@@ -12,9 +12,6 @@ import { currentPlatform } from '../../../common/platform';
  * transfer-full native string can be captured via `CString`, read, then freed
  * with `g_free` — declaring `cstring` would leak the string on every IPC
  * message.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBJSC_PATH = 'libjavascriptcoregtk-6.0.so.1';

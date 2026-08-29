@@ -11,8 +11,7 @@ import type { Handle } from './objc';
  * a dedicated named world (`BunmaskaPreload`) keeps them invisible to page scripts
  * (Electron `contextIsolation: true`).
  *
- * The class resolves through the normal Objective-C class cache via
- * `objc_getClass('WKContentWorld')` once `WebKit.framework` is loaded (call
+ * `WKContentWorld` resolves only once `WebKit.framework` is loaded (call
  * `loadWebKit()` first). Worlds are interned by WebKit — `+worldWithName:` with
  * the same name returns the same world — and we additionally memoise the handle
  * per process so repeated injections reuse one bigint.

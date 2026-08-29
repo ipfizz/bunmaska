@@ -3,12 +3,9 @@ import { loadWtsapi32, NOTIFY_FOR_THIS_SESSION } from './win32-wts-ffi';
 import { createMessageWindow, type MessageWindow } from './windows-message-window';
 
 /**
- * Windows `powerMonitor` events, the WinCairo peer of the NSWorkspace (macOS) and
- * logind (Linux) backends. Suspend/resume arrive as `WM_POWERBROADCAST` (broadcast
- * to top-level windows); lock/unlock as `WM_WTSSESSION_CHANGE` after
- * `WTSRegisterSessionNotification`. Both are delivered to a hidden, non-WebKit
- * window (see `windows-message-window.ts`) and translated to the handlers here.
- * The message → handler mapping is a pure function so it unit-tests with no window.
+ * Suspend/resume arrive as `WM_POWERBROADCAST` (broadcast to top-level windows);
+ * lock/unlock as `WM_WTSSESSION_CHANGE` after `WTSRegisterSessionNotification`. Both are
+ * delivered to a hidden, non-WebKit window (see `windows-message-window.ts`).
  */
 
 /** `WM_POWERBROADCAST` — system power-state change. */

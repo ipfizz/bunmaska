@@ -6,11 +6,8 @@ import { nativeApp } from './native-app';
 
 /**
  * Wires the platform-agnostic {@link app} singleton to the native backend.
- *
- * Imported for its side effects by the public barrel: it registers the native
- * start hook so `app.whenReady()` boots the runtime, and stops the run loop on
- * `will-quit`. Kept separate from both `app` (which must stay native-free for
- * unit tests) and `BrowserWindow` to avoid an import cycle.
+ * Imported for its side effects by the public barrel, and kept separate from both
+ * `app` and `BrowserWindow` to avoid an import cycle.
  */
 
 let started = false;

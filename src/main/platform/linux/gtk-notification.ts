@@ -11,17 +11,6 @@ import { loadLibnotifyFFI } from './libnotify-ffi';
 /**
  * Linux notifications via libnotify — the Linux half of Bunmaska's `Notification`.
  *
- * libnotify forwards to the session's notification daemon over D-Bus.
- * `notify_init('Bunmaska')` is called once per process before the first
- * notification. `notify_notification_new(title, body, NULL)` builds the
- * notification; `notify_notification_show(n, NULL)` displays it (returns FALSE if
- * there is no daemon — e.g. headless CI — which is expected and not an error);
- * `notify_notification_close(n, NULL)` dismisses it.
- *
- * The `NotifyNotification::closed` signal is wired via the existing
- * {@link connectSignal} (`g_signal_connect_data`) so the `Notification`'s `close`
- * event fires when the daemon/user dismisses it.
- *
  * JSCallback lifecycle (a past SIGSEGV class): the `closed` handler thunk MUST
  * stay reachable for the life of the connection — Bun GCs an unreferenced
  * {@link JSCallback}, and the daemon would then call into freed memory. Each live

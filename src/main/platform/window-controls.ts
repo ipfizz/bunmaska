@@ -1,35 +1,27 @@
 /**
- * The built-in page-world script for custom (frameless) title bars — Bunmaska's
- * cross-platform answer to Electron's `-webkit-app-region`. Every platform backend
- * injects it into the page world. It does up to two things:
+ * The built-in page-world script for custom (frameless) title bars. It does up to
+ * two things:
  *
- *  1. (Native-op-channel platforms only — see `nativeOpChannel`.) Exposes
- *     `window.__bunmaska.window` controls (minimize / maximize / close / …) that
- *     post `{ op }` to the native `bunmaskaWindow` message handler, plus a
- *     left-mousedown drag over a `--app-region: drag` region. This is GATED: on a
- *     platform with a real isolated world (macOS/Linux) the page world must NOT
- *     carry a `__bunmaska` handle — that would defeat context isolation — so the
- *     controls belong on the isolated-world bridge (a follow-up), not here. Only
+ *  1. (Native-op-channel platforms only.) Exposes `window.__bunmaska.window`
+ *     controls that post `{ op }` to the `bunmaskaWindow` message handler. GATED:
+ *     on a platform with a real isolated world (macOS/Linux) the page world must
+ *     NOT carry a `__bunmaska` handle — that would defeat context isolation. Only
  *     Windows, whose bridge already lives in the page world, opts in.
- *  2. MIRRORS `--app-region` onto the native `-webkit-app-region`, which macOS
- *     WKWebView honors for window dragging out of the box. Custom properties
- *     inherit, so `--app-region: drag` on a bar + `--app-region: no-drag` on its
- *     buttons gives exactly Electron's app-region cascade. On engines that ignore
- *     `-webkit-app-region` (WinCairo, WebKitGTK) the mirror is a harmless no-op and
- *     the drag goes through the native window-op handler (1) instead.
+ *  2. MIRRORS `--app-region` onto `-webkit-app-region`, which macOS WKWebView
+ *     honors for window dragging; custom properties inherit, giving Electron's
+ *     app-region cascade. Engines that ignore it (WinCairo, WebKitGTK) fall back
+ *     to the native window-op handler in (1).
  *
- * The mirror re-runs on DOM mutations (debounced to one pass per frame). It only
- * observes structural changes, not the `style` attribute it writes, so it can't loop.
+ * The mirror observes structural changes only, not the `style` attribute it writes,
+ * so it cannot loop.
  */
 export const WINDOW_HANDLER_NAME = 'bunmaskaWindow';
 
 /**
  * Build the page-world title-bar script. Pass `nativeOpChannel: true` ONLY where the
- * page world IS the bridge world (Windows, which has no separate isolated world), so
- * `window.__bunmaska.window` extends the real bridge and the JS drag fallback can post
- * to the `bunmaskaWindow` handler. Leave it false on isolated-world platforms
- * (macOS/Linux) to keep the page world free of any `__bunmaska` handle — there only the
- * `--app-region` mirror runs, and macOS drags natively off it.
+ * page world IS the bridge world (Windows, which has no separate isolated world);
+ * on macOS/Linux it must stay false so the page world carries no `__bunmaska`
+ * handle, leaving only the `--app-region` mirror macOS drags natively off.
  */
 export function windowControlsScript(options: { nativeOpChannel?: boolean } = {}): string {
   const ops = options.nativeOpChannel

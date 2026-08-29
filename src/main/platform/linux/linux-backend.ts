@@ -800,5 +800,4 @@ export class LinuxApplication implements NativeApplication {
   }
 }
 
-/** Construct the Linux {@link NativeApplication}. */
 export const createLinuxApplication = (): NativeApplication => new LinuxApplication();

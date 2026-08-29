@@ -2,10 +2,9 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * wtsapi32.dll session-change notifications for `powerMonitor`'s lock/unlock
- * events. `WTSRegisterSessionNotification` makes a window receive
- * `WM_WTSSESSION_CHANGE` (with `WTS_SESSION_LOCK` / `WTS_SESSION_UNLOCK` in
- * `wParam`). Flat-C exports — no COM.
+ * wtsapi32.dll session-change notifications for `powerMonitor`'s lock/unlock events.
+ * `WTSRegisterSessionNotification` makes a window receive `WM_WTSSESSION_CHANGE` (with
+ * `WTS_SESSION_LOCK` / `WTS_SESSION_UNLOCK` in `wParam`).
  */
 const WTSAPI32_SYMBOLS = {
   // (HWND, DWORD dwFlags) -> BOOL — deliver WM_WTSSESSION_CHANGE to the window.

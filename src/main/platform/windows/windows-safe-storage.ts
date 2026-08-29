@@ -9,12 +9,9 @@ import { CRYPTPROTECT_UI_FORBIDDEN, loadCrypt32 } from './win32-crypt-ffi';
 import { loadKernel32 } from './win32-ffi';
 
 /**
- * Windows `safeStorage` keyring backend — the WinCairo peer of the macOS Keychain
- * and Linux libsecret backends. Windows has no secret-service daemon, so the
- * 32-byte AES key is sealed with DPAPI (`CryptProtectData`, bound to the current
- * Windows user) and the sealed blob is persisted under the per-user Bunmaska home;
- * the key itself never touches disk in the clear. DPAPI is always present, so
- * `isAvailable` is unconditionally true (matching Electron's Windows behaviour).
+ * Windows has no secret-service daemon, so the 32-byte AES key is sealed with DPAPI
+ * (`CryptProtectData`, bound to the current Windows user) and only the sealed blob is
+ * persisted under the per-user Bunmaska home; the key never touches disk in the clear.
  */
 
 const KEY_LENGTH = 32;

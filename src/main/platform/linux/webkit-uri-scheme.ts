@@ -8,24 +8,14 @@ import { loadGObjectFFI } from './gobject-ffi';
 import { loadWebKitGtkFFI } from './webkitgtk-ffi';
 
 /**
- * Bridges WebKitGTK custom URI-scheme requests to the `protocol` module on
- * Linux — the mirror of `cocoa-url-scheme-handler.ts`.
- *
- * `webkit_web_context_register_uri_scheme(context, scheme, callback, …)` routes
- * every request to a custom scheme (e.g. `app`) to a
- * `WebKitURISchemeRequestCallback`. The callback reads the request URI, asks
- * {@link protocol.dispatch} for the bytes + MIME type, wraps the bytes in a
- * `GBytes` → `GMemoryInputStream`, and completes the request with
- * `webkit_uri_scheme_request_finish` (or `…finish_error` when there is no
- * handler / the handler declined).
+ * Bridges WebKitGTK custom URI-scheme requests to the `protocol` module.
  *
  * JSCallback lifecycle: each scheme's callback is a {@link JSCallback} retained
- * in a module-level Set for the process lifetime (the libnotify / gtk-clipboard
- * pattern). It is NEVER closed inside its own invocation — closing the thunk
- * mid-callback frees the native trampoline GObject still points at (SIGSEGV).
- * Schemes are registered once per process on the default context; a second
- * registration of the same scheme is a guarded no-op (WebKit aborts on a
- * duplicate registration).
+ * in a module-level Set for the process lifetime. It is NEVER closed inside its
+ * own invocation — closing the thunk mid-callback frees the native trampoline
+ * GObject still points at (SIGSEGV). Schemes are registered once per process on
+ * the default context; a second registration of the same scheme is a guarded
+ * no-op (WebKit aborts on a duplicate registration).
  */
 
 const log = createLogger('linux-uri-scheme');
@@ -131,10 +121,8 @@ const finishWithBytes = (request: Pointer, built: BuiltProtocolResponse): void =
 };
 
 /**
- * @internal The body of the URI-scheme callback, factored out so the serve/fail
- * decision is exercised directly. Reads the URI, dispatches it, and either
- * serves the bytes or finishes with an error. Never throws out into the
- * callback (any error completes with an error instead).
+ * @internal The body of the URI-scheme callback. Never throws out into the
+ * callback — any error completes the request with an error instead.
  */
 export const handleUriSchemeRequest = (request: Pointer): void => {
   try {

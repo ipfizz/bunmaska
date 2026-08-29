@@ -6,23 +6,12 @@ import { wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
 /**
- * The top-level + web-host windows for the Windows backend — the WinCairo peer of
- * `NSWindow`/`GtkWindow`.
- *
- * The window that DIRECTLY hosts the WebKit view MUST use a native window
- * procedure: WebKit floods its immediate host with re-entrant messages during a
- * load, which a `bun:ffi` `JSCallback` WndProc cannot survive. So the WebKit view
- * lives in a native-`DefWindowProcW` CHILD ({@link createNativeChildHost}).
- *
- * The TOP-LEVEL frame, by contrast, uses a JSCallback "frame" WndProc — proven
- * safe because the flood stops at the immediate child host and does not propagate
- * up to the parent (see `menu-frame-spike.ts`). The frame proc is what lets a
- * native menu BAR work: menu clicks arrive as `WM_COMMAND` SENT straight to the
- * window proc (never posted to the queue), so they are unreachable from the pump —
- * the frame proc dispatches them to the per-window `menuCommand` handler. Other
- * lifecycle is still routed from the cooperative PUMP: `dispatchPostedWindowMessage`
- * turns the posted `WM_SYSCOMMAND`/`SC_CLOSE` into the preventable `onClose`, and
- * sent-only state (resize/focus/…) is polled by {@link pollWindows}.
+ * The window that DIRECTLY hosts the WebKit view MUST use a native window procedure:
+ * WebKit floods its immediate host with re-entrant messages during a load, which a
+ * `bun:ffi` `JSCallback` WndProc cannot survive. So the WebKit view lives in a
+ * native-`DefWindowProcW` CHILD ({@link createNativeChildHost}), while the TOP-LEVEL
+ * frame uses a JSCallback proc — safe because the flood stops at the immediate child host
+ * and does not propagate up to the parent (see `menu-frame-spike.ts`).
  */
 
 const NATIVE_WINDOW_CLASS_NAME = 'BunmaskaNativeWindow';
@@ -70,7 +59,6 @@ export const ensureOleInitialized = (): void => {
   oleInitialized = true;
 };
 
-/** Register the shared native-WndProc window class once; return the `HINSTANCE`. */
 const ensureNativeWindowClass = (): bigint => {
   const kernel32 = loadKernel32();
   const hInstance = kernel32.symbols.GetModuleHandleW(null);
@@ -157,7 +145,6 @@ const ensureFrameWindowClass = (): bigint => {
   return hInstance;
 };
 
-/** Create the native child window that hosts a WebKit view inside `parentHwnd`. */
 export const createNativeChildHost = (
   parentHwnd: bigint,
   width: number,
@@ -196,7 +183,6 @@ interface NativeWindowHandlers {
   onClose?: () => boolean;
   /** Fired once after the window is destroyed. */
   onClosed?: () => void;
-  /** Non-preventable lifecycle handlers, keyed by event type. */
   readonly events: Map<WindowEventType, () => void>;
   /** Internal resize sink (resizes the hosted view) — fired before the `resize` event. */
   resizeHook?: (width: number, height: number) => void;
@@ -214,7 +200,6 @@ interface NativeWindowHandlers {
   minimized: boolean;
 }
 
-/** A fresh handlers record with zeroed state. */
 const newHandlers = (destroyOnClose: boolean): NativeWindowHandlers => ({
   closed: false,
   events: new Map(),
@@ -258,8 +243,7 @@ const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
 /**
  * Route a POSTED message to its window's lifecycle handlers. Called by the pump
  * for every message before it is dispatched; returns `true` when it fully handled
- * the message (the pump then skips the default dispatch). Today it turns the
- * title-bar close (`WM_SYSCOMMAND`/`SC_CLOSE`) into the preventable `onClose`.
+ * the message (the pump then skips the default dispatch).
  */
 export const dispatchPostedWindowMessage = (
   hwnd: bigint,
@@ -326,7 +310,6 @@ export const pollWindows = (): void => {
   }
 };
 
-/** Win32 window-style word for the framed/resizable options. */
 const computeStyle = (frame: boolean | undefined, resizable: boolean | undefined): number => {
   let style = WS_CLIPCHILDREN;
   if (frame === false) {
@@ -340,7 +323,6 @@ const computeStyle = (frame: boolean | undefined, resizable: boolean | undefined
   return style >>> 0;
 };
 
-/** Options for constructing a {@link NativeWin32Window}. */
 export interface NativeWin32WindowOptions {
   readonly title: string;
   readonly width: number;
@@ -404,7 +386,6 @@ export class NativeWin32Window {
     this.#handlers.minimized = user32.symbols.IsIconic(this.#hwnd) !== 0;
   }
 
-  /** The native window handle. */
   hwnd(): bigint {
     return this.#hwnd;
   }
@@ -427,7 +408,6 @@ export class NativeWin32Window {
     this.#handlers.events.get(type)?.();
   }
 
-  /** Register the internal sink that keeps the hosted view sized to the client area. */
   setResizeHook(hook: (width: number, height: number) => void): void {
     this.#handlers.resizeHook = hook;
   }

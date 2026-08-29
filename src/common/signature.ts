@@ -1,10 +1,8 @@
 /**
- * Detached Ed25519 signatures over artifact bytes — the shared trust primitive
- * for BOTH the engine feed (`cli/engine-signature.ts`) and the app auto-updater
- * (`main/api/auto-updater.ts`). Plain `node:crypto` Ed25519, dependency-free and
- * trivially testable: a `.sig` is the base64 signature over the raw bytes, and
- * the corresponding public key is a baked/configured trust anchor. This is what
- * makes an update authentic — a content hash (wyhash) is only a corruption check.
+ * Detached Ed25519 signatures over artifact bytes — the shared trust primitive for
+ * both the engine feed and the app auto-updater, verified against a baked/configured
+ * public key. The signature is what makes an artifact authentic; the content hash
+ * (wyhash) is only a corruption check.
  */
 
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';

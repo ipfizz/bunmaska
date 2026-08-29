@@ -9,13 +9,9 @@ import type { Handle } from './objc';
  *
  * One shared `BunmaskaNotificationObserver` class (defined once at runtime, D026)
  * carries a single `bunmaskaNotify:` selector; each registration owns an instance
- * whose JS handler is looked up by the instance handle (the same registry trick
- * as `cocoa-menu`'s click routing). It works against ANY `NSNotificationCenter`:
- * `nativeTheme` uses the distributed center (system appearance), `powerMonitor`
- * uses the NSWorkspace center (sleep/wake) and the distributed center (screen
- * lock/unlock). The instance is retained for the process lifetime — notification
- * centers do NOT retain their observers. Notifications are delivered on the
- * pumped main run loop (D020/D021).
+ * whose JS handler is looked up by the instance handle. The instance is retained
+ * for the process lifetime — notification centers do NOT retain their observers.
+ * Notifications are delivered on the pumped main run loop (D020/D021).
  */
 
 const registry = new Map<Handle, () => void>();
