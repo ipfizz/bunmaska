@@ -249,13 +249,17 @@ const defaultTimers: DevTimers = {
   },
 };
 
-export const defaultDevDeps = (cwd: string, log: (message: string) => void): DevDeps => ({
+export const defaultDevDeps = (
+  cwd: string,
+  log: (message: string) => void,
+  extraEnv: Readonly<Record<string, string>> = {},
+): DevDeps => ({
   spawn: (entry) => {
     // `BUNMASKA_DEV` switches on the app's stdin reload listener; a piped stdin is
     // how the supervisor delivers reload requests to it.
     const proc = Bun.spawn(['bun', 'run', entry], {
       cwd,
-      env: { ...process.env, BUNMASKA_DEV: '1' },
+      env: { ...process.env, ...extraEnv, BUNMASKA_DEV: '1' },
       stdin: 'pipe',
       stdout: 'inherit',
       stderr: 'inherit',
@@ -313,13 +317,14 @@ export const runDev = async (
   entry: string,
   awaitStop: (stop: () => void) => Promise<void>,
   deps?: DevDeps,
+  extraEnv: Readonly<Record<string, string>> = {},
 ): Promise<void> => {
   const dir = resolve(targetDir);
   if (entry.trim().length === 0) {
     throw new InvalidArgumentError('bunmaska dev: entry must not be empty');
   }
   const effectiveDeps =
-    deps ?? defaultDevDeps(dir, (message) => process.stdout.write(`${message}\n`));
+    deps ?? defaultDevDeps(dir, (message) => process.stdout.write(`${message}\n`), extraEnv);
   const supervisor = new DevSupervisor(dir, entry, effectiveDeps);
   try {
     await awaitStop(() => {

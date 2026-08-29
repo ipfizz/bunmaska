@@ -327,6 +327,22 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
     process.once('SIGTERM', onSignal);
   });
 
+/**
+ * The engine env a launched app needs to resolve its `engine.webkit` pin. Only
+ * `build`/`doctor` used to read the pin, so `dev` and `run` silently launched on
+ * the system WebKit — which on Windows means no engine at all.
+ */
+const launchEngineEnv = async (): Promise<Record<string, string>> => {
+  try {
+    const { config } = await loadConfig(process.cwd());
+    const engineId = resolveBuildEngineId(config.engine?.webkit);
+    return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
+  } catch {
+    // A missing or invalid config is the caller's problem to report, not ours.
+    return {};
+  }
+};
+
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
   let entry: string;
   try {
@@ -337,7 +353,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
     return 1;
   }
   out(`bunmaska dev: running ${entry} (Ctrl-C to stop)`);
-  await runDev(process.cwd(), entry, awaitInterrupt);
+  await runDev(process.cwd(), entry, awaitInterrupt, undefined, await launchEngineEnv());
   return 0;
 };
 
@@ -355,7 +371,7 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
     case 'dev':
       return await runDevCommand(command);
     case 'run':
-      return await runApp(command.entry, command.args);
+      return await runApp(command.entry, command.args, { extraEnv: await launchEngineEnv() });
     case 'build':
       return await runBuild(command, deps);
     case 'engine':
