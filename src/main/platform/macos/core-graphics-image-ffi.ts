@@ -11,7 +11,7 @@ import { macOSLibraryAccessor } from './objc';
  * wrapped back into an `NSBitmapImageRep` via `initWithCGImage:`.
  *
  * Everything here is an opaque pointer (CGContextRef/CGImageRef/CGColorSpaceRef)
- * — no struct is ever returned (D30). The one struct ARG, the `CGRect` passed to
+ * — no struct is ever returned (D030). The one struct ARG, the `CGRect` passed to
  * `CGContextDrawImage`, is supplied as four `double`s (D018 struct-as-doubles);
  * on arm64 a 4-double homogeneous-FP struct occupies d0–d3 identically.
  */

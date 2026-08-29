@@ -29,6 +29,8 @@ export type TrayImage = string | NativeImage;
  *   icon + tooltip + left-click; the context menu (a `com.canonical.dbusmenu`
  *   service) is DEFERRED, so {@link setContextMenu} is accepted but not yet shown
  *   on Linux.
+ * - Windows: a `Shell_NotifyIcon` tray icon. Icon + tooltip + click; the context
+ *   menu (`TrackPopupMenu`) is DEFERRED there too.
  *
  * IMAGE: the constructor and {@link setImage} accept a filesystem path string to an
  * icon file. A bad/unreadable path does not crash; the icon is simply not set.

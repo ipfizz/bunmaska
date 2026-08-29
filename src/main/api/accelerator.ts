@@ -7,7 +7,7 @@ import type { Platform } from '../../common/platform';
  * An accelerator is Electron's `'CmdOrCtrl+Shift+K'` string: zero or more
  * modifier tokens and exactly one final key, joined by `+`. Parsing is pure and
  * platform-parameterised so `CmdOrCtrl` resolves correctly without touching any
- * FFI: `CmdOrCtrl` = Command (meta) on macOS, Control on Linux.
+ * FFI: `CmdOrCtrl` = Command (meta) on macOS, Control everywhere else.
  *
  * Unparseable accelerators (empty, no key, two keys, unknown token) parse to
  * `undefined` so callers — notably `globalShortcut.register` — can reject them.

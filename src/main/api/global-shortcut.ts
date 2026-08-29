@@ -7,21 +7,11 @@ import { parseAccelerator } from './accelerator';
 
 /**
  * System-wide keyboard shortcuts — the drop-in equivalent of Electron's
- * `globalShortcut`.
+ * `globalShortcut`. Backends: Carbon (macOS), X11 `XGrabKey` (Linux),
+ * `RegisterHotKey` (Windows).
  *
- * The public surface mirrors Electron exactly:
- * `register` / `registerAll` / `isRegistered` / `unregister` / `unregisterAll`.
- *
- * This module is the platform-neutral core: it parses + validates accelerators
- * (rejecting unparseable ones so `register` returns `false`), tracks which
- * accelerators are live for `isRegistered`, and delegates the actual native
- * grab/handler wiring to an injectable {@link GlobalShortcutBackend}. That keeps
- * all bookkeeping unit-testable with a fake — no FFI required — and lets each
- * platform supply its own backend (Carbon on macOS, X11 `XGrabKey` on Linux).
- *
- * HONEST platform note: macOS registration works un-bundled via Carbon. Linux is
- * best-effort under X11 only — Wayland is not supported in v1 (it needs the
- * `org.freedesktop.portal.GlobalShortcuts` desktop portal). See each backend.
+ * Linux is X11-only. Wayland is unsupported in v1 — it needs the
+ * `org.freedesktop.portal.GlobalShortcuts` desktop portal.
  */
 
 /**

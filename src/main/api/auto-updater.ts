@@ -135,10 +135,9 @@ const stageToTmp = async (tarBytes: Uint8Array, manifest: UpdateManifest): Promi
 };
 
 /**
- * EXPERIMENTAL default installer. Hands the staged tar to a detached helper
- * that, once this process exits, replaces the app and relaunches. The bundle
- * layout is platform-specific and this step is not covered by the test suite;
- * apps that need deterministic installs should inject their own.
+ * Default installer: stages the tar and quits. It does NOT swap the bundle or
+ * relaunch — the atomic swap is platform-specific and unimplemented, so an app
+ * that needs a real install must inject its own `install`.
  */
 const defaultInstall = (staged: StagedUpdate): void => {
   log.warn('autoUpdater.quitAndInstall: using the experimental default installer');

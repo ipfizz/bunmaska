@@ -261,9 +261,9 @@ export const readEngineManifest = (dir: string): EngineManifest => {
 
 /**
  * Install an engine from a local, already-extracted engine DIRECTORY (a `lib/` +
- * `engine.json` tree the developer built or fetched deliberately — the trusted
- * local source for Phase 1; remote hash-verified installs are the follow-up).
- * Copies the tree in atomically and writes the marker last. Idempotent.
+ * `engine.json` tree the developer built or fetched deliberately). Copies the
+ * tree in atomically and writes the marker last. Idempotent. Signed remote
+ * installs go through {@link ../cli/engine-remote installFromUrl} instead.
  */
 export const installFromDir = async (
   root: string,

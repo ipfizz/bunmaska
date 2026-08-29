@@ -3,7 +3,7 @@
  *
  * Everything above `platform/` (the public `api/` classes) depends only on
  * these interfaces, never on a concrete backend (`platform/macos`,
- * `platform/linux`). Platform-specific handles (`id`, `SEL`, `GtkWidget*`)
+ * `platform/linux`, `platform/windows`). Platform-specific handles (`id`, `SEL`, `GtkWidget*`)
  * never appear here — the seam speaks only plain TS: numbers, strings, and
  * callbacks (D024).
  */
@@ -121,12 +121,12 @@ export interface NativeWebContents {
   executeJavaScript(code: string): Promise<unknown>;
   /**
    * Render the page to a PDF and resolve to its bytes (Electron's `printToPDF`).
-   * Rejects on platforms without a page-to-PDF API (Linux/WebKitGTK).
+   * Rejects on platforms without a page-to-PDF API (WebKitGTK, WinCairo).
    */
   printToPDF(): Promise<Uint8Array>;
   /**
    * Capture the page to a PNG image and resolve to its bytes (Electron's
-   * `capturePage`). Rejects on platforms where it is not yet wired (Linux).
+   * `capturePage`). Rejects where it is not yet wired (Linux, Windows).
    */
   capturePage(): Promise<Uint8Array>;
   /** Open the native web inspector (devtools) for this view. Best-effort. */

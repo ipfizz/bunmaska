@@ -193,8 +193,8 @@ export class WebContents extends EventEmitter {
 
   /**
    * Render the current page to a PDF and resolve to its bytes (Electron's
-   * `printToPDF`). macOS only for now; rejects on Linux (WebKitGTK has no
-   * page-to-PDF-bytes API).
+   * `printToPDF`). macOS only: neither WebKitGTK nor the WinCairo C API exposes
+   * a page-to-PDF-bytes call, so Linux and Windows reject.
    */
   async printToPDF(): Promise<Buffer> {
     return Buffer.from(await this.#native.printToPDF());
@@ -202,7 +202,7 @@ export class WebContents extends EventEmitter {
 
   /**
    * Capture the page to a {@link NativeImage} (Electron's `capturePage`). macOS
-   * only for now; rejects on Linux.
+   * only; Linux and Windows reject until their snapshot paths are wired.
    */
   async capturePage(): Promise<NativeImage> {
     return nativeImage.createFromBuffer(await this.#native.capturePage());
@@ -211,7 +211,7 @@ export class WebContents extends EventEmitter {
   /**
    * Inject a `<style>` block into the page and resolve to a key that
    * {@link removeInsertedCSS} can later use to remove it (Electron semantics).
-   * Works on both backends via the page-world exec channel — no native call.
+   * Works on every backend via the page-world exec channel — no native call.
    */
   async insertCSS(css: string): Promise<string> {
     this.#cssCounter += 1;

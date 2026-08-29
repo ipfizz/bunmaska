@@ -7,14 +7,9 @@ import { windowsDialogBackend } from '../platform/windows/windows-dialog';
 /**
  * Native system dialogs — the drop-in equivalent of Electron's `dialog`.
  *
- * Methods return Promises to match Electron's async API. The macOS backend runs
- * the panels modally (synchronously) under the hood; the Linux backend is truly
- * async (GTK's `GtkAlertDialog`/`GtkFileDialog` resolve via a
- * `GAsyncReadyCallback`). The `DialogBackend` methods therefore allow either a
- * value or a Promise, and the API layer wraps each in `Promise.resolve(...)`
- * which flattens a returned Promise transparently. The native backend is
- * injectable so the option-mapping and result-shaping logic is unit-testable
- * without showing a real dialog.
+ * Methods return Promises to match Electron. macOS and Windows run their panels
+ * modally under the hood while Linux is truly async (`GAsyncReadyCallback`), so
+ * {@link DialogBackend} may return either a value or a Promise.
  */
 
 export type MessageBoxOptions = {

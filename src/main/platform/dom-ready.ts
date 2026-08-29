@@ -4,7 +4,7 @@
  * No native delegate reports DOMContentLoaded, so a tiny page-world script posts
  * to a dedicated script-message handler when the document is ready; the backend
  * routes that to a `dom-ready` navigation event. Platform-neutral (just a JS
- * string + the shared handler name) so both backends inject the same script.
+ * string + the shared handler name) so every backend injects the same script.
  */
 
 /** The page-world script-message handler name the dom-ready script posts to. */

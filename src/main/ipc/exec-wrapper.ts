@@ -1,7 +1,7 @@
 /**
  * Builds the page-world wrapper script for `WebContents.executeJavaScript`.
  *
- * On both backends the completion handler cannot be passed to the native
+ * On every backend the completion handler cannot be passed to the native
  * `evaluateJavaScript` call (a real Objective-C block crashes Bun on macOS,
  * D022; a per-call `GAsyncReadyCallback` JSCallback is closed mid-invocation on
  * Linux, freeing its trampoline), so the result is returned out-of-band: the

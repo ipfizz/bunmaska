@@ -14,7 +14,8 @@ import { windowsNotificationBackend } from '../platform/windows/windows-notifica
  * - `show` — emitted synchronously from {@link Notification.show}.
  * - `close` — emitted when the OS reports the notification was dismissed/closed,
  *   IF the platform backend can wire it (Linux libnotify exposes a `closed`
- *   signal; macOS un-bundled cannot, so it is best-effort there).
+ *   signal; macOS un-bundled cannot, so it is best-effort there). Windows uses
+ *   a Shell_NotifyIcon balloon, which reports dismissal.
  *
  * `click` (and other user-action events) are DEFERRED in v1: they require an OS
  * delegate/action wiring that is not yet implemented. They are intentionally not

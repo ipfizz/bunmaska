@@ -8,15 +8,9 @@ import { type NativeImage, nativeImage } from './native-image';
 /**
  * System clipboard access — the drop-in equivalent of Electron's `clipboard`.
  *
- * A process-wide singleton (not tied to a window), mirroring Electron. Covers
- * plain text on macOS and Linux (GTK 4). Methods throw
- * {@link UnsupportedPlatformError} on platforms without a backend rather than
- * silently no-op'ing.
- *
- * `readText` is asynchronous on BOTH platforms (returns a `Promise<string>`): a
- * deliberate uniform contract, since GDK 4's clipboard read is async-only. The
- * macOS backend reads synchronously under the hood and resolves the value.
- * `writeText`/`clear` stay synchronous on both platforms.
+ * Reads are async on every platform (`Promise<string>`) even though only GDK 4's
+ * clipboard read is async-only: a deliberate uniform contract, so app code does
+ * not branch per OS. Writes and `clear` stay synchronous everywhere.
  */
 
 export type Clipboard = {

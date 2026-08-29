@@ -10,10 +10,9 @@ import type { BrowserWindow } from './browser-window';
  * Application and context menus — the drop-in equivalent of Electron's `Menu` /
  * `MenuItem`.
  *
- * The classes hold the menu tree in plain JS; turning it into native `NSMenu`
- * objects is delegated to an injectable realizer (defaulting to the macOS
- * backend) so the tree logic is unit-testable without any FFI, and Linux can
- * supply its own realizer later.
+ * The classes hold the menu tree in plain JS; turning it into a native menu is
+ * delegated to an injectable realizer — `NSMenu` on macOS, `GMenu` on Linux,
+ * `HMENU` on Windows.
  */
 
 export type MenuItemType = 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
@@ -23,8 +22,8 @@ export type MenuItemType = 'normal' | 'separator' | 'submenu' | 'checkbox' | 'ra
  * default label + accelerator + native behavior with no explicit `click`. On
  * macOS each role maps to a standard first-responder selector, routed up the
  * responder chain to the focused web view / window / app (exactly like the
- * native shortcut). Linux wiring (per-window editing commands) is a follow-up —
- * role items render as labels there today, and their keyboard shortcuts work
+ * native shortcut). Linux routes role items to a per-window dispatcher
+ * (`gtk-menu.ts` `realizeForWindow`); their keyboard shortcuts also work
  * natively via WebKit.
  */
 export type MenuRole =

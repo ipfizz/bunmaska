@@ -12,27 +12,21 @@ import { windowsNativeImageBackend } from '../platform/windows/windows-native-im
  * image's dimensions, emptiness, and an opaque native handle, and derives
  * `toDataURL` from the backend's `toPNG` bytes. All native work (decoding a
  * file/buffer, reading pixel dimensions, encoding PNG) lives behind an
- * injectable {@link NativeImageBackend}, so the class plumbing is unit-testable
- * on any host with a fake and the FFI is confined to the per-platform backends.
+ * injectable {@link NativeImageBackend}.
  *
  * SIZE — bun:ffi cannot return a struct by value, so Electron's `NSImage.size`
  * (an `NSSize` struct) is unreadable across the FFI boundary. Instead each
  * backend reports `width`/`height` via SCALAR getters at decode time (macOS
  * `NSBitmapImageRep` `pixelsWide`/`pixelsHigh`, both `NSInteger`; Linux
- * `gdk_pixbuf_get_width`/`get_height`, both `int`), which `getSize` returns
- * directly. No struct ever crosses FFI.
+ * `gdk_pixbuf_get_width`/`get_height`, both `int`; Windows GDI+), which `getSize`
+ * returns directly. No struct ever crosses FFI.
  *
- * V1 surface: `createFromPath`, `createFromBuffer` (PNG/JPEG bytes),
- * `createFromDataURL`, `createEmpty`; instance `getSize`, `isEmpty`, `toPNG`,
- * `toJPEG`, `toDataURL`, `setTemplateImage`/`isTemplateImage`. `toJPEG`'s quality
- * is honored on macOS; Linux v1 uses GdkPixbuf's default quality (option-key
- * arrays are a follow-up). The template flag is plain JS metadata (Electron's own
- * model): it marks an image as a monochrome template so menu-bar/tray rendering
- * can recolor it for light/dark — the macOS `NSImage setTemplate:` is applied
- * when the image is realized for a `Tray`/menu, not on the decoded rep here.
- * `resize`/`crop` redraw into a new image (macOS CoreGraphics offscreen bitmap; Linux
- * GdkPixbuf scale/subpixbuf). DEFERRED (documented, not stubbed as fake no-ops):
- * `getScaleFactors`/`getAspectRatio`, `{ scaleFactor }`.
+ * The template flag is plain JS metadata (Electron's own model): it marks an image
+ * as a monochrome template so menu-bar/tray rendering can recolor it for
+ * light/dark — the macOS `NSImage setTemplate:` is applied when the image is
+ * realized for a `Tray`/menu, not on the decoded rep here. `toJPEG`'s quality is
+ * honored on macOS; Linux uses GdkPixbuf's default. DEFERRED (documented, not
+ * stubbed as fake no-ops): `getScaleFactors`, `{ scaleFactor }`.
  */
 
 /** An opaque native image handle, carried as a `bigint` (macOS) or `Pointer` bigint (Linux). */

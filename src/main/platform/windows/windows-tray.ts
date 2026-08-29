@@ -130,7 +130,8 @@ export const windowsTrayBackend: TrayBackend = {
         destroyIconSafely(previous);
       },
       setContextMenu(_menu: Menu | null): void {
-        // Deferred (v1): a Win32 HMENU + TrackPopupMenu lands with the menu backend.
+        // ponytail: deferred — needs TrackPopupMenu on the tray's message window;
+        // windows-menu.ts already realizes the HMENU.
       },
       onClick(callback: () => void): void {
         clickCallback = callback;

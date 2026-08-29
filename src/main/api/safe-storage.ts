@@ -10,8 +10,8 @@ import { windowsDpapiBackend } from '../platform/windows/windows-safe-storage';
  * Electron's `safeStorage`.
  *
  * The key is a random 32-byte secret kept in the OS keyring (macOS Keychain,
- * Linux libsecret) and never written to disk by Bunmaska. Strings are sealed with
- * AES-256-GCM (authenticated — tampering throws on decrypt).
+ * Linux libsecret, Windows DPAPI) and never written to disk by Bunmaska. Strings
+ * are sealed with AES-256-GCM (authenticated — tampering throws on decrypt).
  *
  * DIVERGENCE FROM ELECTRON (deliberate): Electron falls back to a `basic_text`
  * scheme (an obfuscated, effectively-plaintext key) when no OS keyring exists.

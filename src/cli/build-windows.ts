@@ -3,7 +3,7 @@
  *
  * The app is cross/native compiled to a single self-contained `.exe` with Bun's
  * `--compile --target=bun-windows-x64`, which embeds the Bun runtime and the
- * app's JS into a Windows PE (this works from a macOS or Linux host too). No
+ * app's JS into a Windows PE (this works from a macOS or Linux host too).
  * Windows ships no system WebKit, so at launch Bunmaska `dlopen`s a WinCairo
  * `WebKit2.dll`. With `--embed-engine`, that engine's whole directory is copied
  * into the bundle's `webkit/` folder so the built `.exe` runs with NO environment

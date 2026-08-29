@@ -1,7 +1,7 @@
 /**
  * The built-in page-world script for custom (frameless) title bars — Bunmaska's
  * cross-platform answer to Electron's `-webkit-app-region`. Every platform backend
- * injects it into the page world. It does up to three things:
+ * injects it into the page world. It does up to two things:
  *
  *  1. (Native-op-channel platforms only — see `nativeOpChannel`.) Exposes
  *     `window.__bunmaska.window` controls (minimize / maximize / close / …) that

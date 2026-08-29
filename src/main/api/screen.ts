@@ -11,13 +11,11 @@ import { windowsScreenBackend } from '../platform/windows/windows-screen';
  *
  * The public surface is pure TS that consumes a {@link ScreenBackend} (the raw
  * per-platform display data + cursor point). All derived logic —
- * `getPrimaryDisplay`, `getDisplayNearestPoint`, `getDisplayMatching` — lives
- * here and is unit-testable with a fake backend on any host (D024), so the
- * geometry math is exercised without a real display.
+ * `getPrimaryDisplay`, `getDisplayNearestPoint`, `getDisplayMatching`.
  *
- * Coordinate origin: Electron uses top-left screen coordinates. Both backends
- * report top-left-origin rects (CoreGraphics global display space is already
- * top-left; GdkMonitor geometry is top-left), so no flip is applied here.
+ * Coordinate origin: Electron uses top-left screen coordinates, and every backend
+ * already reports top-left-origin rects (CoreGraphics global display space,
+ * GdkMonitor geometry, Win32 monitor rects), so no flip is applied here.
  */
 
 /** A point in top-left screen coordinates. */

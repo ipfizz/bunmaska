@@ -49,8 +49,8 @@ export const linuxLayout = (out: string, name: string): LinuxLayout => {
 /**
  * The engine-id to bake from a project's `engine.webkit` pin: a full id verbatim,
  * else the `system` sentinel. A bare upstream version (e.g. `2.52.4`) downgrades
- * to `system` for now — resolving it to a full id needs the engine catalog (a
- * follow-up); the caller should surface that.
+ * to `system`: the engine catalog (`engine-index.ts`) exists but this path does
+ * not consult it yet, so the caller should surface the downgrade.
  */
 export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
   if (webkitPin === undefined || isSystemEngine(webkitPin)) {
