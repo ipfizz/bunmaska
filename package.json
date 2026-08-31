@@ -93,7 +93,8 @@
     "validate:windows": "bun run format:check && bun run lint && bun run type-check && bun test tests/unit/main/platform/windows tests/integration/windows --timeout 60000",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "bun run validate",
-    "setup:hooks": "git config core.hooksPath .githooks"
+    "setup:hooks": "git config core.hooksPath .githooks",
+    "validate:linux": "sh scripts/validate-linux.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

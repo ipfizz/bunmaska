@@ -40,9 +40,7 @@ export default defineConfig({
   name: ${JSON.stringify(vars.name)},
   id: ${JSON.stringify(vars.id)},
   entry: 'src/main.ts',
-  // Enable when you add a bundled renderer (e.g. React): dev then rebuilds and
-  // live-reloads it, and \`bunmaska build\` ships the output beside the executable.
-  // renderer: { entry: 'src/renderer/main.tsx', copy: ['src/renderer/index.html'] },
+  // renderer: { entry: 'src/renderer/main.tsx' }, // bunmaska.org/docs/building
 });
 `;
 

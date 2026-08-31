@@ -1,0 +1,15 @@
+#!/bin/sh
+# Run the full validate gate before every push, so a red gate never reaches CI.
+# The two-platform gap stays real: this runs the HOST leg only. For the Linux
+# leg from a macOS box, run `bun run validate:linux` (containerized) before
+# pushing platform/linux changes. Bypass in an emergency: git push --no-verify.
+#
+# Enable once per clone: bun run setup:hooks
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "pre-push: bun not found on PATH; refusing to push unvalidated" >&2
+  exit 1
+fi
+
+echo "pre-push: bun run validate"
+bun run validate
