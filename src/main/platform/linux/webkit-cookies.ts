@@ -137,12 +137,16 @@ export const setCookie = (cookie: Cookie): Promise<void> => {
   );
 };
 
-/** Delete one cookie by name+domain+path (the manager's match key; value is irrelevant). */
+/**
+ * Delete one stored cookie. The match goes through soup_cookie_equal, which
+ * compares the VALUE too - blanking it made every delete a silent no-op (a CI
+ * catch), so the cookie is rebuilt verbatim from the read-back fields.
+ */
 const deleteOne = (target: Cookie): Promise<void> => {
   const wk = loadWebKitGtkFFI().symbols;
   const soup = loadSoupFFI().symbols;
   const manager = cookieManager();
-  const soupCookie = buildSoupCookie({ ...target, value: '' });
+  const soupCookie = buildSoupCookie(target);
   return runAsyncReady(
     (cb) => wk.webkit_cookie_manager_delete_cookie(manager, soupCookie, null, cb, null),
     (result) => {
