@@ -33,7 +33,7 @@
 
 ---
 
-**bunmaska** is a **drop-in Electron replacement** built on [Bun](https://bun.sh) and your operating system's own WebKit - an **Electron alternative without bundled Chromium**. You keep writing against the APIs you already know - `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard`, `webContents` - and we swap the heavy parts underneath: the runtime becomes Bun instead of Node, and the renderer becomes whatever WebKit your OS already ships. All of it is pure `bun:ffi` with **zero compiled native code** in the framework.
+**Bunmaska** is a **drop-in Electron replacement** built on [Bun](https://bun.sh) and your operating system's own WebKit - an **Electron alternative without bundled Chromium**. You keep writing against the APIs you already know - `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard`, `webContents` - and we swap the heavy parts underneath: the runtime becomes Bun instead of Node, and the renderer becomes whatever WebKit your OS already ships. All of it is pure `bun:ffi` with **zero compiled native code** in the framework.
 
 ## Before / after
 
@@ -56,7 +56,7 @@ That's the whole migration for most apps. The difference is what you *don't* shi
 
 ## How it works
 
-Most "lighter Electron" projects are just better at gzipping. Anyone can gzip a binary. bunmaska does something structurally different:
+Most "lighter Electron" projects are just better at gzipping. Anyone can gzip a binary. Bunmaska does something structurally different:
 
 1. **The runtime is Bun**, not Node - millisecond startup, TypeScript runs natively, no transpile step.
 2. **The renderer is the system's WebKit** - `WKWebView` on macOS, WebKitGTK on Linux - not a second browser bundled into every app.
@@ -106,7 +106,7 @@ The README won't try to be the API reference, because that list only grows. The 
 
 Two things that aren't "Electron but smaller" - they're structurally different.
 
-**A native module is a `.ts` file.** Need a serial port, a USB device, the system keychain, IOKit? In Electron that's `node-gyp`, N-API, `electron-rebuild`, and a per-arch prebuild matrix that detonates every time you bump Electron. In bunmaska you write a small TypeScript file that `dlopen`s the OS and calls it directly. No compiler. No build step. No ABI compatibility matrix. No Python summoning ritual when you upgrade. Nothing to rebuild, because there was never anything to build. → [Native modules](https://bunmaska.org/docs/native-modules/overview)
+**A native module is a `.ts` file.** Need a serial port, a USB device, the system keychain, IOKit? In Electron that's `node-gyp`, N-API, `electron-rebuild`, and a per-arch prebuild matrix that detonates every time you bump Electron. In Bunmaska you write a small TypeScript file that `dlopen`s the OS and calls it directly. No compiler. No build step. No ABI compatibility matrix. No Python summoning ritual when you upgrade. Nothing to rebuild, because there was never anything to build. → [Native modules](https://bunmaska.org/docs/native-modules/overview)
 
 **Pin the exact WebKit you tested.** By default your app renders on the system's WebKit - that's what keeps it tiny. When byte-for-byte rendering consistency matters, pin a specific, signature-verified build from a shared engine store - installed once, used by every app that pins it. Tested equals shipped, without Electron's per-app browser. → [The engine store](https://bunmaska.org/docs/concepts/engine)
 
@@ -136,7 +136,7 @@ The docs site lives in [`website/`](./website); the framework is this repo's roo
 
 ## Status
 
-**Alpha** - `0.1.0-alpha.5`. It genuinely works on macOS, Linux, and Windows (x64), it's on npm, and everything deeper lives at **[bunmaska.org](https://bunmaska.org)**. If it's still 2027 and this file still opens with "alpha," feel free to open an issue titled *"are you OK."*
+**Alpha** - `0.1.0-alpha.7`. It genuinely works on macOS, Linux, and Windows (x64), it's on npm, and everything deeper lives at **[bunmaska.org](https://bunmaska.org)**. If it's still 2027 and this file still opens with "alpha," feel free to open an issue titled *"are you OK."*
 
 ## License
 
