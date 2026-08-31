@@ -4,7 +4,7 @@
  * live-reloads the open windows in place.
  */
 
-import { readFileSync, watch as fsWatch } from 'node:fs';
+import { type Dirent, readdirSync, readFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
@@ -52,13 +52,16 @@ const MAIN_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.mt
  */
 const PRELOAD_BASENAME = /^preload\.(?:js|mjs|cjs|ts)$/i;
 
-export type ChangeAction = 'restart' | 'reload' | 'ignore';
+export type ChangeAction = 'restart' | 'rebuild' | 'reload' | 'ignore';
 
 /**
  * Classify a changed path, relative to the watched root. Dotfiles are ignored
- * because they catch editor swap files.
+ * because they catch editor swap files. With `rendererRoot` set (the directory
+ * of `config.renderer.entry`), a change under it is `rebuild`: the renderer is
+ * re-bundled and the resulting output writes live-reload the window, so a
+ * React component edit no longer restarts the whole app.
  */
-export const classifyChange = (relPath: string): ChangeAction => {
+export const classifyChange = (relPath: string, rendererRoot?: string): ChangeAction => {
   const parts = relPath.split(/[\\/]/).filter((p) => p.length > 0);
   const ignored = (p: string): boolean =>
     IGNORED_SEGMENTS.has(p) || IGNORED_SEGMENT_SUFFIXES.some((suffix) => p.endsWith(suffix));
@@ -72,36 +75,144 @@ export const classifyChange = (relPath: string): ChangeAction => {
   if (PRELOAD_BASENAME.test(base)) {
     return 'restart';
   }
+  if (rendererRoot !== undefined) {
+    const rootParts = rendererRoot.split(/[\\/]/).filter((p) => p.length > 0);
+    const underRoot =
+      rootParts.length > 0 &&
+      rootParts.length < parts.length &&
+      rootParts.every((part, i) => parts[i] === part);
+    if (underRoot) {
+      return 'rebuild';
+    }
+  }
   return MAIN_SOURCE_EXTENSIONS.has(extname(base).toLowerCase()) ? 'restart' : 'reload';
+};
+
+/** Debounce-window precedence: a restart beats a rebuild beats a reload. */
+const ACTION_RANK: Record<Exclude<ChangeAction, 'ignore'>, number> = {
+  restart: 3,
+  rebuild: 2,
+  reload: 1,
+};
+
+/** The two content-comparison modes the watcher needs. Same seen-map underneath. */
+export type ContentFilter = {
+  /**
+   * First sight passes (a newly created file is a real change); thereafter only
+   * a byte change passes. A vanished file always passes (a deletion is real).
+   */
+  changed(relPath: string): boolean;
+  /**
+   * Strict: passes only for a path already seen whose bytes changed; an unseen
+   * path is silently seeded. Used when rescanning a directory on an editor
+   * temp-file event, where first-sight-passes would fire every untouched
+   * sibling.
+   */
+  changedIfSeen(relPath: string): boolean;
 };
 
 /**
  * Drop events whose file content did not actually change. `fs.watch` fires on a
- * metadata-only touch, and a formatter that rewrites identical bytes fires too —
- * both would otherwise restart the app.
- *
- * The FIRST event for a path has no baseline to compare against, so it always
- * passes: the filter earns its keep from the second save onward, which is most
- * of a session. A vanished file always passes through (a deletion is real).
- * `readFile` is a seam so this tests without the filesystem.
+ * metadata-only touch, and a formatter that rewrites identical bytes fires too;
+ * both would otherwise restart the app. `readFile` is a seam so this tests
+ * without the filesystem.
  */
 export const makeContentFilter = (
   readFile: (relPath: string) => string | undefined,
-): ((relPath: string) => boolean) => {
+): ContentFilter => {
   const seen = new Map<string, string>();
-  return (relPath) => {
+  const hashOf = (relPath: string): string | undefined => {
     const contents = readFile(relPath);
-    if (contents === undefined) {
-      seen.delete(relPath);
-      return true;
-    }
-    const hash = String(Bun.hash(contents));
-    if (seen.get(relPath) === hash) {
-      return false;
-    }
-    seen.set(relPath, hash);
-    return true;
+    return contents === undefined ? undefined : String(Bun.hash(contents));
   };
+  return {
+    changed(relPath) {
+      const hash = hashOf(relPath);
+      if (hash === undefined) {
+        seen.delete(relPath);
+        return true;
+      }
+      if (seen.get(relPath) === hash) {
+        return false;
+      }
+      seen.set(relPath, hash);
+      return true;
+    },
+    changedIfSeen(relPath) {
+      const hash = hashOf(relPath);
+      if (hash === undefined) {
+        seen.delete(relPath);
+        return false;
+      }
+      const previous = seen.get(relPath);
+      seen.set(relPath, hash);
+      return previous !== undefined && previous !== hash;
+    },
+  };
+};
+
+/**
+ * The parent directory of an editor temp-file event, or `undefined` when the
+ * event is not one. An atomic save (write temp + rename) can coalesce under
+ * FSEvents into a SINGLE event for the dot-named temp file (`.!1234!main.ts`
+ * from BSD sed, swap files, etc.), so ignoring dot basenames outright loses the
+ * save; the caller rescans this directory instead. Pure.
+ */
+export const editorTempDir = (relPath: string): string | undefined => {
+  const parts = relPath.split(/[\\/]/).filter((p) => p.length > 0);
+  const ignored = (p: string): boolean =>
+    IGNORED_SEGMENTS.has(p) || IGNORED_SEGMENT_SUFFIXES.some((suffix) => p.endsWith(suffix));
+  if (parts.length === 0 || parts.some(ignored)) {
+    return undefined;
+  }
+  const base = parts[parts.length - 1] ?? '';
+  if (!base.startsWith('.')) {
+    return undefined;
+  }
+  return parts.slice(0, -1).join('/');
+};
+
+/** Files bigger than this are not hashed at seed time (first-sight then applies). */
+const SEED_MAX_BYTES = 5_000_000;
+
+/**
+ * Hash every watchable file up front so the strict rescan mode has a baseline
+ * from the first save of the session, not the second.
+ */
+const seedContentFilter = (root: string, filter: ContentFilter, relDir = ''): void => {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(resolve(root, relDir), { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const name = entry.name;
+    if (name.startsWith('.')) {
+      continue;
+    }
+    const rel = relDir === '' ? name : `${relDir}/${name}`;
+    if (entry.isDirectory()) {
+      if (
+        !IGNORED_SEGMENTS.has(name) &&
+        !IGNORED_SEGMENT_SUFFIXES.some((suffix) => name.endsWith(suffix))
+      ) {
+        seedContentFilter(root, filter, rel);
+      }
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+    try {
+      if (statSync(resolve(root, rel)).size > SEED_MAX_BYTES) {
+        continue;
+      }
+    } catch {
+      continue;
+    }
+    filter.changedIfSeen(rel);
+  }
 };
 
 export type DevChild = {
@@ -128,6 +239,13 @@ export type DevDeps = {
   readonly timers: DevTimers;
   readonly log: (message: string) => void;
   readonly debounceMs?: number;
+  /** Overrides {@link classifyChange} (e.g. bound to a renderer root). */
+  readonly classify?: (relPath: string) => ChangeAction;
+  /**
+   * Rebuild the configured renderer. Must not throw: a broken renderer edit
+   * must never take the dev loop down with it.
+   */
+  readonly rebuild?: () => void | Promise<void>;
 };
 
 export class DevSupervisor {
@@ -137,7 +255,7 @@ export class DevSupervisor {
   #child: DevChild;
   readonly #watcher: DevWatcher;
   #pending: unknown;
-  #pendingAction: 'restart' | 'reload' | undefined;
+  #pendingAction: Exclude<ChangeAction, 'ignore'> | undefined;
   #stopped = false;
   #restarting = false;
   #alive = true;
@@ -159,13 +277,15 @@ export class DevSupervisor {
     if (this.#stopped) {
       return;
     }
-    const action = classifyChange(relPath);
+    const action = (this.#deps.classify ?? classifyChange)(relPath);
     if (action === 'ignore') {
       return;
     }
-    // A restart subsumes a reload coalesced into the same debounce window.
+    // The strongest action coalesced into the debounce window wins.
     this.#pendingAction =
-      this.#pendingAction === 'restart' || action === 'restart' ? 'restart' : 'reload';
+      this.#pendingAction !== undefined && ACTION_RANK[this.#pendingAction] >= ACTION_RANK[action]
+        ? this.#pendingAction
+        : action;
     if (this.#pending !== undefined) {
       this.#deps.timers.clear(this.#pending);
     }
@@ -183,6 +303,12 @@ export class DevSupervisor {
     this.#pendingAction = undefined;
     if (action === 'restart') {
       void this.#restart();
+      return;
+    }
+    if (action === 'rebuild') {
+      // The rebuild's own output writes come back through the watcher as
+      // 'reload', so the window refreshes only once the new bundle exists.
+      void this.#deps.rebuild?.();
       return;
     }
     // Reloading a child that already quit silently does nothing, and logging
@@ -280,20 +406,45 @@ export const defaultDevDeps = (
     };
   },
   watch: (dir, onChange) => {
-    const changed = makeContentFilter((relPath) => {
+    const filter = makeContentFilter((relPath) => {
       try {
         return readFileSync(resolve(dir, relPath), 'utf8');
       } catch {
         return undefined;
       }
     });
+    seedContentFilter(dir, filter);
+    // An atomic save may surface only as its temp-file event; find what really
+    // changed in that directory instead of dropping the save.
+    const rescan = (relDir: string): void => {
+      let entries: Dirent[];
+      try {
+        entries = readdirSync(resolve(dir, relDir), { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (!entry.isFile() || entry.name.startsWith('.')) {
+          continue;
+        }
+        const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
+        if (classifyChange(rel) !== 'ignore' && filter.changedIfSeen(rel)) {
+          onChange(rel);
+        }
+      }
+    };
     const watcher = fsWatch(dir, { recursive: true }, (_event, filename) => {
       if (filename === null) {
         return;
       }
       const relPath = filename.toString();
+      const tempDir = editorTempDir(relPath);
+      if (tempDir !== undefined) {
+        rescan(tempDir);
+        return;
+      }
       // Classify before hashing so node_modules churn never costs a file read.
-      if (classifyChange(relPath) === 'ignore' || !changed(relPath)) {
+      if (classifyChange(relPath) === 'ignore' || !filter.changed(relPath)) {
         return;
       }
       onChange(relPath);

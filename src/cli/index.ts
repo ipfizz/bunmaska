@@ -7,6 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { BunmaskaConfig } from '../common/config-schema';
 import { DEFAULT_CHANNEL } from '../common/manifest';
 import { currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -20,7 +21,8 @@ import {
 } from './build-macos';
 import { buildWindowsApp } from './build-windows';
 import { loadConfig } from './config';
-import { resolveDevEntry, runDev } from './dev';
+import { classifyChange, defaultDevDeps, resolveDevEntry, runDev } from './dev';
+import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
 import { enginesPath } from './engine-store';
 import { runInit } from './init';
@@ -204,6 +206,17 @@ const runBuild = async (
   }
 
   const name = command.options.name ?? deriveName(entry);
+
+  // A configured renderer builds first and ships as `renderer/` beside the
+  // executable; nothing else in the build copies it (assets are entry siblings).
+  let rendererDir: string | undefined;
+  const rendererConfig = (await loadConfig(process.cwd())).config.renderer;
+  if (rendererConfig !== undefined) {
+    const rendererResult = await buildRenderer(process.cwd(), rendererConfig);
+    rendererDir = rendererResult.outDir;
+    out(`renderer built (${rendererResult.written.join(', ')})`);
+  }
+
   if (target === 'linux') {
     const { engineId, embed } = await resolveProjectEngine();
     const result = await buildLinuxApp({
@@ -214,6 +227,7 @@ const runBuild = async (
       ...(command.options.id !== undefined ? { id: command.options.id } : {}),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
+      ...(rendererDir !== undefined ? { rendererDir } : {}),
     });
     out(result.appDir);
     out(result.tarball);
@@ -233,6 +247,7 @@ const runBuild = async (
       ...(command.options.embedEngine !== undefined
         ? { embedEngine: command.options.embedEngine }
         : {}),
+      ...(rendererDir !== undefined ? { rendererDir } : {}),
     });
     out(result.appDir);
     out(result.exePath);
@@ -253,6 +268,7 @@ const runBuild = async (
     ...(deps.signApp !== undefined ? { signApp: deps.signApp } : {}),
     ...(deps.convertIcon !== undefined ? { convertIcon: deps.convertIcon } : {}),
     ...(deps.buildDmg !== undefined ? { buildDmg: deps.buildDmg } : {}),
+    ...(rendererDir !== undefined ? { rendererDir } : {}),
   });
   out(appPath);
 
@@ -345,15 +361,41 @@ const launchEngineEnv = async (): Promise<Record<string, string>> => {
 
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
   let entry: string;
+  let renderer: BunmaskaConfig['renderer'];
   try {
     const { config } = await loadConfig(process.cwd());
     entry = resolveDevEntry(config, command.entry);
+    renderer = config.renderer;
   } catch (error) {
     err(error instanceof Error ? error.message : String(error));
     return 1;
   }
+  const dir = process.cwd();
+  const log = (message: string): void => out(message);
+  const baseDeps = defaultDevDeps(dir, log, await launchEngineEnv());
+  let deps = baseDeps;
+  if (renderer !== undefined) {
+    const rendererConfig = renderer;
+    const rendererRoot = dirname(rendererConfig.entry);
+    const rebuild = async (): Promise<void> => {
+      // A broken renderer edit must never take the dev loop down with it.
+      try {
+        const result = await buildRenderer(dir, rendererConfig);
+        log(`renderer rebuilt (${result.written.join(', ')})`);
+      } catch (error) {
+        err(error instanceof Error ? error.message : String(error));
+      }
+    };
+    // Build once up front so the first launch shows current code.
+    await rebuild();
+    deps = {
+      ...baseDeps,
+      classify: (relPath) => classifyChange(relPath, rendererRoot),
+      rebuild,
+    };
+  }
   out(`bunmaska dev: running ${entry} (Ctrl-C to stop)`);
-  await runDev(process.cwd(), entry, awaitInterrupt, undefined, await launchEngineEnv());
+  await runDev(dir, entry, awaitInterrupt, deps);
   return 0;
 };
 

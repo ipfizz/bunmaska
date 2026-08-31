@@ -44,6 +44,25 @@ export type BunmaskaEngineConfig = {
   readonly feed?: BunmaskaEngineFeedConfig;
 };
 
+/**
+ * The renderer build Bunmaska owns. When set, `bunmaska dev` rebuilds on a
+ * renderer change and live-reloads (no restart), and `bunmaska build` ships the
+ * output beside the executable. The defaults bake the only recipe that works
+ * under `loadFile`: a classic IIFE bundle (`file://` blocks ES modules) built
+ * with development JSX (Bun emits `jsxDEV` regardless of tsconfig).
+ */
+export type BunmaskaRendererConfig = {
+  /** The renderer entry (e.g. `src/renderer/main.tsx`), relative to the project root. */
+  readonly entry: string;
+  /** Output directory, relative to the project root. Defaults to `dist/renderer`. */
+  readonly outDir?: string;
+  /**
+   * Static files copied into `outDir` verbatim (e.g. `src/renderer/index.html`),
+   * relative to the project root.
+   */
+  readonly copy?: readonly string[];
+};
+
 /** A project's `bunmaska.config` shape. Every field is optional. */
 export type BunmaskaConfig = {
   readonly name?: string;
@@ -56,6 +75,8 @@ export type BunmaskaConfig = {
   readonly updates?: BunmaskaUpdatesConfig;
   /** Pinned-WebKit engine configuration (defaults to the system WebView). */
   readonly engine?: BunmaskaEngineConfig;
+  /** The renderer build Bunmaska owns (optional; apps with their own bundler skip it). */
+  readonly renderer?: BunmaskaRendererConfig;
 };
 
 /** The config file names searched for, in priority order. */
@@ -174,8 +195,40 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
     };
   }
 
+  const renderer = record['renderer'];
+  if (renderer !== undefined) {
+    if (renderer === null || typeof renderer !== 'object') {
+      throw new InvalidArgumentError(`${source}: "renderer" must be an object`);
+    }
+    const rendererRecord = renderer as Record<string, unknown>;
+    const entry = assertOptionalString(rendererRecord['entry'], 'renderer.entry', source);
+    if (entry === undefined) {
+      throw new InvalidArgumentError(
+        `${source}: "renderer.entry" is required when "renderer" is set`,
+      );
+    }
+    const outDir = assertOptionalString(rendererRecord['outDir'], 'renderer.outDir', source);
+    const copyRaw = rendererRecord['copy'];
+    let copy: readonly string[] | undefined;
+    if (copyRaw !== undefined) {
+      if (!Array.isArray(copyRaw) || copyRaw.some((entryPath) => typeof entryPath !== 'string')) {
+        throw new InvalidArgumentError(`${source}: "renderer.copy" must be an array of strings`);
+      }
+      copy = copyRaw as string[];
+    }
+    config.renderer = {
+      entry,
+      ...(outDir !== undefined ? { outDir } : {}),
+      ...(copy !== undefined ? { copy } : {}),
+    };
+  }
+
   return config;
 };
+
+/** The renderer output directory a config selects, or the default. */
+export const rendererOutDir = (renderer: BunmaskaRendererConfig): string =>
+  renderer.outDir ?? 'dist/renderer';
 
 /** The release channel a config selects, falling back to the default. */
 export const configChannel = (config: BunmaskaConfig): Channel =>

@@ -139,6 +139,8 @@ const collectZipEntries = (rootDir: string, topPrefix: string): ZipEntry[] => {
 };
 
 export type BuildWindowsAppOptions = {
+  /** A built renderer directory to ship as `renderer/` beside the executable. */
+  readonly rendererDir?: string;
   readonly entry: string;
   readonly name: string;
   readonly out?: string;
@@ -192,6 +194,9 @@ export const buildWindowsApp = async (
 
   // Bundle a module-using preload so it runs as a classic script in the packaged app.
   bundlePreloadAssets(layout.appDir, copyAppAssets(opts.entry, layout.appDir));
+  if (opts.rendererDir !== undefined) {
+    cpSync(opts.rendererDir, join(layout.appDir, 'renderer'), { recursive: true });
+  }
 
   // Bake the engine-id the app pins, read at launch by the engine resolver.
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);

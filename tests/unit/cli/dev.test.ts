@@ -4,6 +4,7 @@ import {
   DEV_DEFAULT_ENTRY,
   type DevDeps,
   DevSupervisor,
+  editorTempDir,
   makeContentFilter,
   resolveDevEntry,
 } from '../../../src/cli/dev';
@@ -195,6 +196,115 @@ describe('DevSupervisor', () => {
   });
 });
 
+describe('classifyChange with a renderer root', () => {
+  test('a source change under the renderer root rebuilds instead of restarting', () => {
+    // This is the React fix: a component edit re-bundles and reloads, it no
+    // longer tears the window down.
+    expect(classifyChange('src/renderer/App.tsx', 'src/renderer')).toBe('rebuild');
+    expect(classifyChange('src/renderer/styles.css', 'src/renderer')).toBe('rebuild');
+  });
+
+  test('a main-process source outside the renderer root still restarts', () => {
+    expect(classifyChange('src/main.ts', 'src/renderer')).toBe('restart');
+    expect(classifyChange('bunmaska.config.ts', 'src/renderer')).toBe('restart');
+  });
+
+  test('the renderer output under dist still plain-reloads', () => {
+    expect(classifyChange('dist/renderer/main.js', 'src/renderer')).toBe('reload');
+  });
+
+  test('a preload under the renderer root still restarts', () => {
+    expect(classifyChange('src/renderer/preload.js', 'src/renderer')).toBe('restart');
+  });
+});
+
+describe('DevSupervisor rebuild action', () => {
+  const makeRebuildHarness = () => {
+    let rebuilds = 0;
+    let reloads = 0;
+    const spawns: string[] = [];
+    let timerFn: (() => void) | undefined;
+    let onChange: ((relPath: string) => void) | undefined;
+    const deps: DevDeps = {
+      classify: (relPath) => classifyChange(relPath, 'src/renderer'),
+      rebuild: () => {
+        rebuilds += 1;
+      },
+      spawn: (entry) => {
+        spawns.push(entry);
+        return {
+          kill: () => undefined,
+          reload: () => {
+            reloads += 1;
+          },
+          exited: new Promise(() => undefined),
+        };
+      },
+      watch: (_dir, cb) => {
+        onChange = cb;
+        return { close: () => undefined };
+      },
+      timers: {
+        set: (fn) => {
+          timerFn = fn;
+          return 1;
+        },
+        clear: () => {
+          timerFn = undefined;
+        },
+      },
+      log: () => undefined,
+    };
+    return {
+      deps,
+      spawns,
+      get rebuilds() {
+        return rebuilds;
+      },
+      get reloads() {
+        return reloads;
+      },
+      fire: (p: string) => onChange?.(p),
+      tick: async () => {
+        timerFn?.();
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    };
+  };
+
+  test('a renderer change rebuilds without restarting or reloading directly', async () => {
+    const h = makeRebuildHarness();
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    expect(h.rebuilds).toBe(1);
+    expect(h.spawns).toHaveLength(1); // no restart
+    expect(h.reloads).toBe(0); // the reload arrives later, from the output write
+  });
+
+  test('a restart coalesced with a rebuild wins', async () => {
+    const h = makeRebuildHarness();
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/renderer/App.tsx');
+    h.fire('src/main.ts');
+    await h.tick();
+    expect(h.rebuilds).toBe(0);
+    // kill fired; respawn is parked on the never-settling exited, which is the
+    // await-exit behaviour, so no second spawn yet.
+    expect(h.spawns).toHaveLength(1);
+  });
+
+  test('a rebuild coalesced with a reload wins', async () => {
+    const h = makeRebuildHarness();
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('dist/renderer/main.js');
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    expect(h.rebuilds).toBe(1);
+    expect(h.reloads).toBe(0);
+  });
+});
+
 describe('DevSupervisor child lifecycle', () => {
   /** A harness whose children expose a controllable `exited`. */
   const makeLifecycle = () => {
@@ -281,33 +391,67 @@ describe('DevSupervisor child lifecycle', () => {
 
 describe('makeContentFilter', () => {
   test('drops a save that did not change the bytes', () => {
-    const changed = makeContentFilter(() => 'same');
-    expect(changed('src/main.ts')).toBe(true);
-    expect(changed('src/main.ts')).toBe(false);
+    const filter = makeContentFilter(() => 'same');
+    expect(filter.changed('src/main.ts')).toBe(true);
+    expect(filter.changed('src/main.ts')).toBe(false);
   });
 
   test('passes a real edit through', () => {
     const files = new Map([['src/main.ts', 'v1']]);
-    const changed = makeContentFilter((p) => files.get(p));
-    expect(changed('src/main.ts')).toBe(true);
+    const filter = makeContentFilter((p) => files.get(p));
+    expect(filter.changed('src/main.ts')).toBe(true);
     files.set('src/main.ts', 'v2');
-    expect(changed('src/main.ts')).toBe(true);
+    expect(filter.changed('src/main.ts')).toBe(true);
   });
 
   test('tracks each path independently', () => {
-    const changed = makeContentFilter(() => 'same');
-    expect(changed('a.ts')).toBe(true);
-    expect(changed('b.ts')).toBe(true);
-    expect(changed('a.ts')).toBe(false);
+    const filter = makeContentFilter(() => 'same');
+    expect(filter.changed('a.ts')).toBe(true);
+    expect(filter.changed('b.ts')).toBe(true);
+    expect(filter.changed('a.ts')).toBe(false);
   });
 
   test('always passes a vanished file through, and re-arms it', () => {
     const files = new Map([['a.ts', 'v1']]);
-    const changed = makeContentFilter((p) => files.get(p));
-    expect(changed('a.ts')).toBe(true);
+    const filter = makeContentFilter((p) => files.get(p));
+    expect(filter.changed('a.ts')).toBe(true);
     files.delete('a.ts');
-    expect(changed('a.ts')).toBe(true);
+    expect(filter.changed('a.ts')).toBe(true);
     files.set('a.ts', 'v1');
-    expect(changed('a.ts')).toBe(true);
+    expect(filter.changed('a.ts')).toBe(true);
+  });
+
+  test('changedIfSeen seeds an unseen path silently and fires only on a later change', () => {
+    // The rescan mode: firing on first sight would restart the app for every
+    // untouched sibling of an editor temp file.
+    const files = new Map([['a.ts', 'v1']]);
+    const filter = makeContentFilter((p) => files.get(p));
+    expect(filter.changedIfSeen('a.ts')).toBe(false); // seeded, not fired
+    files.set('a.ts', 'v2');
+    expect(filter.changedIfSeen('a.ts')).toBe(true);
+    expect(filter.changedIfSeen('a.ts')).toBe(false);
+  });
+
+  test('changed and changedIfSeen share one baseline', () => {
+    const files = new Map([['a.ts', 'v1']]);
+    const filter = makeContentFilter((p) => files.get(p));
+    expect(filter.changed('a.ts')).toBe(true); // seeds via the normal path
+    expect(filter.changedIfSeen('a.ts')).toBe(false); // same bytes, no fire
+    files.set('a.ts', 'v2');
+    expect(filter.changedIfSeen('a.ts')).toBe(true);
+  });
+});
+
+describe('editorTempDir', () => {
+  test('recognises a dot-named temp file and returns its directory', () => {
+    // BSD sed renames through .!<pid>!<name>; FSEvents can deliver ONLY this.
+    expect(editorTempDir('src/renderer/.!1234!main.ts')).toBe('src/renderer');
+    expect(editorTempDir('.main.ts.swp')).toBe('');
+  });
+
+  test('is not fooled by regular files or ignored trees', () => {
+    expect(editorTempDir('src/main.ts')).toBeUndefined();
+    expect(editorTempDir('node_modules/.cache/x')).toBeUndefined();
+    expect(editorTempDir('MyApp.app/.hidden')).toBeUndefined();
   });
 });

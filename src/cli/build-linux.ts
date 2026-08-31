@@ -4,7 +4,7 @@
  * packaged as a `.tar.gz` plus a `.deb`.
  */
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -177,6 +177,8 @@ const compileLinuxBinary = async (entry: string, outfile: string): Promise<void>
 };
 
 export type BuildLinuxAppOptions = {
+  /** A built renderer directory to ship as `renderer/` beside the executable. */
+  readonly rendererDir?: string;
   readonly entry: string;
   readonly name: string;
   readonly id?: string;
@@ -209,6 +211,9 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   // Bundle a module-using preload so it runs as a classic script in the packaged app.
   const assetsDir = dirname(layout.binPath);
   bundlePreloadAssets(assetsDir, copyAppAssets(opts.entry, assetsDir));
+  if (opts.rendererDir !== undefined) {
+    cpSync(opts.rendererDir, join(assetsDir, 'renderer'), { recursive: true });
+  }
 
   writeFileSync(
     layout.desktopPath,
