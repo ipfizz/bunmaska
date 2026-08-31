@@ -86,7 +86,10 @@ jobs:
       # older WebKit train can pin the clang it was contemporary with.
       - name: Install LLVM (clang-cl)
         run: |
-          curl.exe -L -o "$env:TEMP\llvm.tar.xz" `
+          # -f fails on HTTP errors; the timeout caps a stalled connection, which
+          # once hung this step for 5h50m until the job limit killed the run.
+          curl.exe -fL --retry 3 --retry-delay 10 --connect-timeout 30 --max-time 900 `
+            -o "$env:TEMP\llvm.tar.xz" `
             "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VER/clang%2Bllvm-$env:LLVM_VER-x86_64-pc-windows-msvc.tar.xz"
           New-Item -ItemType Directory -Force -Path C:\llvm | Out-Null
           tar.exe -xf "$env:TEMP\llvm.tar.xz" -C C:\llvm
