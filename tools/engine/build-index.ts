@@ -13,7 +13,9 @@ import { parseRemoteManifest } from '../../src/cli/engine-remote';
 
 const [out, ...manifests] = process.argv.slice(2);
 if (!out || manifests.length === 0) {
-  process.stderr.write('usage: bun tools/engine/build-index.ts <out/index.json> <manifest.json...>\n');
+  process.stderr.write(
+    'usage: bun tools/engine/build-index.ts <out/index.json> <manifest.json...>\n',
+  );
   process.exit(2);
 }
 

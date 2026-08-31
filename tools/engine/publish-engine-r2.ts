@@ -62,7 +62,9 @@ const work = mkdtempSync(join(tmpdir(), 'bunmaska-index-'));
 const current = join(work, 'index-current.json');
 const merged = join(work, 'index.json');
 const hadIndex = wrangler('get', `${bucket}/index.json`, '--file', current) === 0;
-const manifest = parseRemoteManifest(readFileSync(join(feedDir, `${engineId}.tar.zst.json`), 'utf8'));
+const manifest = parseRemoteManifest(
+  readFileSync(join(feedDir, `${engineId}.tar.zst.json`), 'utf8'),
+);
 writeFileSync(
   merged,
   mergeEngineIndex(hadIndex ? readFileSync(current, 'utf8') : undefined, manifest),
@@ -73,4 +75,6 @@ if (wrangler('put', `${bucket}/index.json`, '--file', merged) !== 0) {
   process.exit(1);
 }
 
-process.stdout.write(`PUBLISHED ${engineId} (${files.length} objects + index.json) to r2://${bucket}\n`);
+process.stdout.write(
+  `PUBLISHED ${engineId} (${files.length} objects + index.json) to r2://${bucket}\n`,
+);
