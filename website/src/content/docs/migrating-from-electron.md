@@ -41,4 +41,4 @@ Windows, web contents, IPC, context isolation, menus, dialogs, clipboard (incl. 
 
 The upside: device access in the main process via [Bunmaska's buildless native modules](/docs/native-modules/overview) is arguably *cleaner* than `node-serialport` - no `node-gyp`, no `electron-rebuild`, no per-arch prebuilds. An Electron app that already does serial in the main process maps over almost unchanged.
 
-> The honest framing: Bunmaska is "drop-in if you live inside the core module set." If you lean on `session.cookies`, `BrowserView`, sync IPC, Web Serial, or an N-API addon, expect an *architecture change*, not a recompile.
+> The honest framing: Bunmaska is "drop-in if you live inside the core module set." If you lean on `BrowserView`, sync IPC, `webRequest`, Web Serial, or an N-API addon, expect an *architecture change*, not a recompile.

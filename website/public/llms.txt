@@ -20,7 +20,8 @@ electron-rebuild / N-API build step for native modules.
 - [Installation](https://bunmaska.org/docs/installation): `npm i bunmaska` / `bun add bunmaska` and prerequisites.
 - [Quickstart](https://bunmaska.org/docs/quickstart): from zero to a native window.
 - [Platform support](https://bunmaska.org/docs/platforms): the honest per-platform status (macOS + Linux full, Windows x64 beta).
-- [The CLI](https://bunmaska.org/docs/cli): `init` / `dev` / `build` and the engine-store subcommands.
+- [The CLI](https://bunmaska.org/docs/cli): `init` / `dev` / `build` / `keygen` and the engine-store subcommands.
+- [Building & Distribution](https://bunmaska.org/docs/building): packaging per OS, the renderer build Bunmaska owns, and Ed25519-signed auto-updates.
 
 ## Concepts
 

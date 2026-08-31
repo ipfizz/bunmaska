@@ -16,10 +16,10 @@ Support is not uniform across platforms, and we won't pretend it is. The table b
 | Module | macOS | Linux | Windows | Notes |
 | --- | :---: | :---: | :---: | --- |
 | `app` | ✅ | ✅ | ✅ | Lifecycle, paths, single-instance, locale. Dock/badge/about-panel are macOS-only and no-op elsewhere (as in Electron). |
-| `BrowserWindow` | ✅ | ◐ | ◐ | `setPosition`/`setBounds` move + size the window on Windows; macOS placement is best-effort (bottom-left origin) and Linux leaves placement to the compositor (GTK4), so `setPosition` is size-only there. Windows `setMinimumSize` is a no-op (needs `WM_GETMINMAXINFO`). |
+| `BrowserWindow` | ✅ | ◐ | ◐ | `getBounds`/`setBounds`/`setPosition` are real frame geometry in global top-left coordinates on macOS (read from the window server; a `move` event fires on drags) and Windows. Linux leaves placement to the compositor (GTK4/Wayland): `setPosition` is a no-op, `setBounds` applies size only, `getBounds` reports `x`/`y` as `0`. Windows `setMinimumSize` is a no-op (needs `WM_GETMINMAXINFO`). |
 | `webContents` (core) | ✅ | ✅ | ✅ | load/navigation/`executeJavaScript`/zoom/`insertCSS`/IPC `send` everywhere. `setWindowOpenHandler({action:'allow'})` is unimplemented on all three (`window.open` is blocked by default). |
 | `webContents.printToPDF` | ✅ | ✕ | ⚙️ | macOS via `createPDFWithConfiguration`. Linux: not yet wired. Windows: engine-blocked (no PDF sink in the WinCairo C API). |
-| `webContents.capturePage` | ✅ | ✕ | ⚙️ | macOS via snapshot. Linux: planned (`webkit_web_view_get_snapshot`). Windows: engine-blocked (no UI-process snapshot). |
+| `webContents.capturePage` | ✅ | ✅ | ⚙️ | macOS via WKWebView snapshot, Linux via `webkit_web_view_get_snapshot` (visible viewport, PNG). Windows: engine-blocked (no UI-process snapshot). |
 | `webContents.sendInputEvent` | ✕ | ✕ | ◐ | Trusted input synthesis - the page sees `isTrusted === true`, which a script-dispatched event can't. Windows only (WinCairo, via posted/sent Win32 messages); macOS + Linux throw `UnsupportedPlatformError`. Windows follow-ups: no keyboard modifiers, synthesized drags don't carry button state, `KeyboardEvent.code`/scan-codes and F1-F24 aren't wired, and coordinates are correct at 100% display scale only (per-monitor DPI pending). |
 | `ipcMain` / `ipcRenderer` | ✅ | ✅ | ✅ | `handle`/`on`/`invoke`/`send`. |
 | `contextBridge` | ✅ | ✅ | ◐ | Real isolated content world on macOS/Linux. Windows runs in the page world (WinCairo exposes no named world) - the bridge works, but the isolation guarantee is weaker. |
@@ -37,8 +37,8 @@ Support is not uniform across platforms, and we won't pretend it is. The table b
 | `powerMonitor` | ◐ | ◐ | ✅ | suspend/resume + lock/unlock on all three. `getSystemIdleTime`/`isOnBatteryPower` not implemented on any. Linux is gated behind `BUNMASKA_ENABLE_LINUX_POWER`. |
 | `powerSaveBlocker` | ✅ | ◐ | ✅ | Linux: gated, and both blocker types map to screensaver inhibition. |
 | `safeStorage` | ✅ | ◐ | ✅ | macOS Keychain, Windows DPAPI. Linux: libsecret, gated behind `BUNMASKA_ENABLE_LINUX_KEYRING` (no plaintext fallback - encrypt/decrypt throw when unavailable). |
-| `session` | ◐ | ◐ | ◐ | `getUserAgent`/`setUserAgent` everywhere. `clearStorageData`: macOS clears all website data; Windows clears cookies + fetch caches; Linux not yet wired. No `session.cookies` object yet. |
-| `autoUpdater` | ◐ | ◐ | ◐ | The check/download/verify/stage pipeline is real and cross-platform. The final **install** step is an experimental stub on every OS - apps supply their own for now. |
+| `session` | ◐ | ◐ | ◐ | `getUserAgent`/`setUserAgent` everywhere. `cookies` (`get`/`set`/`remove`) on macOS + Linux; macOS cannot persist `httpOnly` (no public NSHTTPCookie key); Windows is engine-blocked (the WinCairo C API exposes no cookie read/write). `clearStorageData`: macOS clears all website data; Windows clears cookies + fetch caches; Linux not yet wired. |
+| `autoUpdater` | ◐ | ◐ | ◐ | Signed updates end to end: check/download, Ed25519 signature + hash verification (unsigned feeds refused), stage, and a real detached swap-and-relaunch installer on all three OSes. Honest residue: the live swap is the one step CI doesn't exercise end to end, it refuses non-installed layouts (dev runs), and the installer stays injectable. |
 | `accelerator` · `app-paths` · `requestSingleInstanceLock` | ✅ | ✅ | ✅ | Pure or fully-wired on all three. |
 
 ## Engine-blocked (⚙️) - why these can't ship on a given OS
@@ -49,7 +49,7 @@ These aren't laziness; the OS's WebKit simply doesn't expose the API:
 
 ## Pending (inside shipped modules)
 
-Real gaps we're actively filling: `session.cookies` (get/set/remove) and `session.clearStorageData` on Linux; Linux `capturePage` via `webkit_web_view_get_snapshot`; richer `webContents` events; live `nativeTheme` observation on Windows; tray context menus on Linux/Windows; `BrowserWindow.setMinimumSize` on Windows; the isolated content world on Windows.
+Real gaps we're actively filling: `session.clearStorageData` on Linux; `session.cookies` `httpOnly` persistence on macOS; richer `webContents` events; live `nativeTheme` observation on Windows; tray context menus on Linux/Windows; `BrowserWindow.setMinimumSize` and the `move` event off macOS; the isolated content world on Windows.
 
 ## Out of scope by design
 

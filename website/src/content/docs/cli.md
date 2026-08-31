@@ -17,7 +17,15 @@ bunmaska init my-app
 
 ## `bunmaska dev`
 
-Runs your app and restarts it on file changes (debounced). This is what you'll have open all day.
+Runs your app and reacts to file changes (debounced). This is what you'll have open all day, so it is built to not waste your time:
+
+- **Main-process edits restart** the app; the restart waits for the old process to actually exit first, so you never get two windows or a lost single-instance lock.
+- **Renderer asset edits live-reload** the open windows in place - no restart. With a [`renderer` block](/docs/building#bundling-your-renderer) in your config, edits under the renderer entry's directory **rebuild the bundle first**, then the new output triggers the reload; a broken edit prints the bundler error and keeps the loop alive.
+- **Preload edits restart** (the preload is bundled and injected at window construction, so a reload would re-inject the stale script - restarting is the honest action).
+- **No-op saves do nothing.** Changes are content-hashed, so a formatter rewriting identical bytes or a metadata-only touch doesn't restart anything. Atomic editor saves (write-temp-then-rename) are handled too.
+- **Window position survives restarts.** The first window's bounds are saved to `.bunmaska-dev-state.json` (add it to `.gitignore`; the scaffold already does) and restored on the next start, instead of reopening at the OS default. Packaged apps never touch this.
+- If the app has quit and you touch a renderer file, it says so ("app is not running") instead of pretending to reload a corpse.
+- A project's [engine pin](/docs/concepts/engine) (`engine.webkit` in the config) is respected - `dev` and `run` launch on the pinned engine, same as `build`.
 
 ```sh
 bunmaska dev
@@ -46,13 +54,21 @@ The entry defaults to the `entry` in your `bunmaska.config.ts` (the `init` scaff
 
 ## `bunmaska build --update`
 
-Everything `build` does, plus it emits the auto-update feed (`update.json` + a content-hashed `.tar.zst`) that the runtime `autoUpdater` consumes. Because there's no 150 MB engine to re-download, updates are tiny.
+Everything `build` does, plus it emits the auto-update feed the runtime `autoUpdater` consumes: an `update.json` manifest, a content-hashed `.tar.zst`, and - with `--update-key` - a detached Ed25519 `.sig` beside the artifact. Because there's no 150 MB engine to re-download, updates are tiny.
 
 ```sh
-bunmaska build --update --channel stable
+bunmaska build --update --update-key update-signing-key.pem --channel stable
 ```
 
-> `quitAndInstall`'s final atomic swap-and-relaunch is still experimental. The check > download > verify > stage engine is solid; the very last step is the alpha part.
+Without `--update-key` the build prints a loud warning and the feed is **unsigned - the runtime autoUpdater refuses unsigned updates**, so sign anything you intend to ship. The full flow (keygen, hosting, wiring `setFeedURL`) is in [Building & Distribution](/docs/building#auto-updates).
+
+## `bunmaska keygen`
+
+Generates the Ed25519 update-signing key pair: `update-signing-key.pem` (private - passes to `build --update-key`, never ships in your app) and `update-public-key.pem` (baked into your app via `autoUpdater.setFeedURL({ url, publicKey })`). Refuses to overwrite existing key files; `--out <dir>` picks the destination.
+
+```sh
+bunmaska keygen
+```
 
 ## `bunmaska engine <subcommand>`
 

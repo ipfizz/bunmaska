@@ -30,7 +30,7 @@ app.on('will-quit', () => {
 });
 ```
 
-Accelerator strings are the familiar Electron shape - zero or more modifier tokens and exactly one final key, joined by `+`. Supported modifiers include `CmdOrCtrl` (Command on macOS, Control on Linux), `Shift`, `Alt`, `Ctrl`, `Command`/`Cmd`, and `Super`. An unparseable accelerator does not throw; `register` simply returns `false`.
+Accelerator strings are the familiar Electron shape - zero or more modifier tokens and exactly one final key, joined by `+`. Supported modifiers include `CmdOrCtrl` (Command on macOS, Control on Linux), `Shift`, `Alt`, `Ctrl`, `Command`/`Cmd`, and `Super`/`Meta` (which maps to the Command key on macOS, matching Electron). On X11, shortcuts fire with the exact registered modifiers regardless of NumLock/CapsLock state. An unparseable accelerator does not throw; `register` simply returns `false`.
 
 > Platform reality check. macOS registration works even for an un-bundled process via Carbon. Linux is **best-effort under X11 only**: `XGrabKey` governs the X server, so under a Wayland compositor (even via XWayland) a global grab does not see keys routed to native Wayland clients. On Wayland the backend reports unsupported and `register` returns `false` rather than pretending. True Wayland global shortcuts need the `org.freedesktop.portal.GlobalShortcuts` portal, which is deferred.
 

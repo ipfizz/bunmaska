@@ -73,6 +73,10 @@ describe('initTemplateFiles', () => {
     expect(config).toContain("from 'bunmaska/config'");
   });
 
+  test('gitignore covers the dev window-state scratch file', () => {
+    expect(byPath.get('.gitignore') ?? '').toContain('.bunmaska-dev-state.json');
+  });
+
   test('main.ts wires the preload and ipc handler', () => {
     const main = byPath.get('src/main.ts') ?? '';
     expect(main).toContain("ipcMain.handle('ping'");

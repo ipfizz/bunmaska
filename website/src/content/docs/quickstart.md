@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld("api", {
 });
 ```
 
-Now `window.api.add(20, 22)` resolves to `42`, round-tripped through real WebKit in a dedicated isolated world - the way `contextIsolation: true` works in Electron. More in [IPC & Context Bridge](/docs/concepts/ipc).
+Now `window.api.add(20, 22)` resolves to `42`, round-tripped through real WebKit in a dedicated isolated world on macOS and Linux - Electron's `contextIsolation: true` shape. The honest per-platform fine print lives in [IPC & Context Bridge](/docs/concepts/ipc).
 
 ## Ship it
 
