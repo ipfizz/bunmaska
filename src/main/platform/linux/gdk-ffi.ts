@@ -93,6 +93,11 @@ export const GDK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
+  // (GdkTexture*) -> GBytes* (+1, g_bytes_unref) of PNG data. GDK 4.6+.
+  gdk_texture_save_to_png_bytes: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopen<typeof GDK_FFI_SYMBOLS>> | undefined } = {

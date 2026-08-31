@@ -1,9 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { Pointer } from 'bun:ffi';
-import { cstr } from '../cstr';
-import { loadCairoFFI } from './cairo-ffi';
+import { toArrayBuffer } from 'bun:ffi';
+import { loadGdkFFI } from './gdk-ffi';
+import { loadGlibFFI } from './glib-ffi';
+import { loadGObjectFFI } from './gobject-ffi';
 import { runAsyncReady, withDeadline } from './gasync';
 import {
   WEBKIT_SNAPSHOT_OPTIONS_NONE,
@@ -12,10 +11,10 @@ import {
 } from './webkitgtk-ffi';
 
 /**
- * `webContents.capturePage` on Linux: snapshot the visible viewport to a cairo
- * surface, PNG-encode it through a temp file (cairo has no to-memory PNG API
- * without a write-func callback - a temp file avoids another JSCallback
- * lifetime hazard), and resolve the bytes.
+ * `webContents.capturePage` on Linux. WebKitGTK 6.0's snapshot returns a
+ * `GdkTexture*`, NOT the 4.x `cairo_surface_t*` - treating it as a surface
+ * corrupts the refcount and aborts in `cairo_surface_destroy` (a real CI
+ * crash). PNG-encode via `gdk_texture_save_to_png_bytes` instead; no cairo.
  */
 
 const RENDER_TIMEOUT_MS = 30_000;
@@ -34,22 +33,30 @@ export const capturePage = (view: Pointer): Promise<Uint8Array> => {
           null,
         ),
       (result) => {
-        const surface = wk.webkit_web_view_get_snapshot_finish(view, result, null);
-        if (surface === null) {
-          throw new Error('capturePage failed (webkit_web_view_get_snapshot returned no surface)');
+        const texture = wk.webkit_web_view_get_snapshot_finish(view, result, null);
+        if (texture === null) {
+          throw new Error('capturePage failed (webkit_web_view_get_snapshot returned no texture)');
         }
-        const cairo = loadCairoFFI().symbols;
-        const dir = mkdtempSync(join(tmpdir(), 'bunmaska-capture-'));
-        const file = join(dir, 'capture.png');
+        const gobject = loadGObjectFFI().symbols;
         try {
-          const status = cairo.cairo_surface_write_to_png(surface, cstr(file));
-          if (status !== 0) {
-            throw new Error(`capturePage failed (cairo status ${status})`);
+          const bytes = loadGdkFFI().symbols.gdk_texture_save_to_png_bytes(texture);
+          if (bytes === null) {
+            throw new Error('capturePage failed (gdk_texture_save_to_png_bytes returned NULL)');
           }
-          return new Uint8Array(readFileSync(file));
+          const glib = loadGlibFFI().symbols;
+          try {
+            const size = Number(glib.g_bytes_get_size(bytes));
+            const data = glib.g_bytes_get_data(bytes, null);
+            if (data === null || size === 0) {
+              throw new Error('capturePage failed (empty PNG bytes)');
+            }
+            // Copy out before the GBytes is unreffed; toArrayBuffer BORROWS.
+            return new Uint8Array(toArrayBuffer(data, 0, size)).slice();
+          } finally {
+            glib.g_bytes_unref(bytes);
+          }
         } finally {
-          cairo.cairo_surface_destroy(surface);
-          rmSync(dir, { recursive: true, force: true });
+          gobject.g_object_unref(texture);
         }
       },
     ),

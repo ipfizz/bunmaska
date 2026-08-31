@@ -30,7 +30,6 @@ import {
   LIBNOTIFY_FFI_SYMBOLS,
   loadLibnotifyFFI,
 } from '../../../../../src/main/platform/linux/libnotify-ffi';
-import { loadCairoFFI } from '../../../../../src/main/platform/linux/cairo-ffi';
 import { loadSoupFFI, SOUP_FFI_SYMBOLS } from '../../../../../src/main/platform/linux/soup-ffi';
 import {
   loadWebKitGtkFFI,
@@ -216,7 +215,6 @@ const LOADERS: ReadonlyArray<readonly [string, () => unknown]> = [
   ['loadLibnotifyFFI', loadLibnotifyFFI],
   ['loadWebKitGtkFFI', loadWebKitGtkFFI],
   ['loadSoupFFI', loadSoupFFI],
-  ['loadCairoFFI', loadCairoFFI],
 ];
 
 test.skipIf(currentPlatform() === 'linux')(
