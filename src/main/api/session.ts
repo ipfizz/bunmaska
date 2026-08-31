@@ -8,6 +8,7 @@
  */
 
 import { InvalidArgumentError, UnsupportedPlatformError } from '../../common/errors';
+import { ensureNativeStarted } from '../bootstrap';
 import { currentPlatform } from '../../common/platform';
 import {
   type Cookie,
@@ -76,8 +77,21 @@ export const setSessionBackendForTesting = (fake: SessionBackend | undefined): v
  * rejects on Windows (the WinCairo WebKit C API gap - see windows-session.ts).
  */
 export class Cookies {
+  /**
+   * Start the native app first: cookie completion handlers are delivered by the
+   * run-loop pump, so a call before start would hang to its timeout instead.
+   */
+  #ensureStarted(): void {
+    // With a fake backend installed there is no pump to start, and unit tests
+    // must never require a display.
+    if (backend === undefined) {
+      ensureNativeStarted();
+    }
+  }
+
   /** Resolve the cookies matching `filter` (all cookies when omitted). */
   get(filter: CookieFilter = {}): Promise<Cookie[]> {
+    this.#ensureStarted();
     return getBackend().getCookies(filter);
   }
 
@@ -90,6 +104,7 @@ export class Cookies {
     if (typeof details.url !== 'string' || details.url === '') {
       throw new InvalidArgumentError('cookies.set requires a url');
     }
+    this.#ensureStarted();
     return getBackend().setCookie(cookieFromSetDetails(details));
   }
 
@@ -101,6 +116,7 @@ export class Cookies {
     if (typeof name !== 'string' || name === '') {
       throw new InvalidArgumentError('cookies.remove requires a cookie name');
     }
+    this.#ensureStarted();
     return getBackend().removeCookie(url, name);
   }
 }

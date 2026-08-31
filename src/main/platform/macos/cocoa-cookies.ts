@@ -17,6 +17,7 @@ import {
   msgSendReturnsU8,
 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
+import { loadWebKit } from './cocoa-webkit';
 import type { Handle } from './objc';
 
 /**
@@ -28,6 +29,9 @@ const COOKIE_TIMEOUT_MS = 15_000;
 
 /** The default data store's `WKHTTPCookieStore`. */
 const cookieStore = (): Handle => {
+  // WKWebsiteDataStore registers only once WebKit.framework is loaded; without
+  // this, cookies called before any window exists fail with class-not-found.
+  loadWebKit();
   const rt = cocoa();
   const store = rt.msgSend(
     rt.classes.get('WKWebsiteDataStore'),
