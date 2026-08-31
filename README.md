@@ -2,10 +2,8 @@
   <img src="assets/logo.png" width="140" alt="bunmaska - Electron, minus the Chromium">
 </p>
 
-<h1 align="center">bunmaska</h1>
-
 <p align="center">
-  <em>Electron, minus the Chromium.</em>
+  <em>bunmaska - Electron, minus the Chromium.</em>
 </p>
 
 <p align="center">
