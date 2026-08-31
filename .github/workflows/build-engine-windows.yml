@@ -34,7 +34,10 @@ on:
 jobs:
   build:
     name: build WinCairo from source (windows)
-    runs-on: windows-latest
+    # Pinned: windows-latest moved to VS 18 / MSVC 14.51, where clang-cl 20.x
+    # fails WebKit's atomics configure probe. windows-2022 is the image the
+    # whole pipeline was proven end-to-end on (2026-07).
+    runs-on: windows-2022
     timeout-minutes: 350
     env:
       # Hosted engines track the STABLE WPE train only (even minor; WSAs land
