@@ -83,7 +83,8 @@
   --maska-700: #99680a;
 
   /* One definition per token; light-dark() flips with color-scheme, which
-     [data-theme] pins below (system preference is the default). */
+     [data-theme] pins below. The bootstrap always stamps data-theme (dark when
+     nothing is stored); system preference applies only with JS disabled. */
   --bg: light-dark(#fcfcfb, #0c0c0b);
   --bg-subtle: light-dark(#f6f5f2, #141413);
   --bg-muted: light-dark(#efeeea, #1b1b19);

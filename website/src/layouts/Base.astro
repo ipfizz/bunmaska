@@ -81,8 +81,7 @@ const graphs = [website, ...(isHome ? [organization, softwareApp] : []), ...extr
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0c0c0b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0c0c0b" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
     <title>{fullTitle}</title>
@@ -103,15 +102,22 @@ const graphs = [website, ...(isHome ? [organization, softwareApp] : []), ...extr
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
     {graphs.map((g) => <script is:inline type="application/ld+json" set:html={JSON.stringify(g)} />)}
-    {/* No-flash theme bootstrap - runs before paint */}
+    {/* No-flash theme bootstrap - runs before paint. Dark is the default; the
+        system preference only matters once the visitor has picked light. */}
     <script is:inline>
       (function () {
+        var t = "dark";
         try {
-          var t = localStorage.getItem("theme");
-          if (t === "dark" || t === "light") {
-            document.documentElement.setAttribute("data-theme", t);
+          var stored = localStorage.getItem("theme");
+          if (stored === "dark" || stored === "light") {
+            t = stored;
           }
         } catch (e) {}
+        document.documentElement.setAttribute("data-theme", t);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute("content", t === "dark" ? "#0c0c0b" : "#fcfcfb");
+        }
       })();
     </script>
   </head>

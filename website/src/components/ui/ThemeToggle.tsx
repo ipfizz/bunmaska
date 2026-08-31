@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 type Theme = 'light' | 'dark';
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -11,7 +11,7 @@ export default function ThemeToggle() {
     if (attr === 'dark' || attr === 'light') {
       setTheme(attr);
     } else {
-      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      setTheme('dark'); // the bootstrap defaults unset visitors to dark
     }
     setMounted(true);
   }, []);
@@ -20,6 +20,9 @@ export default function ThemeToggle() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
     document.documentElement.setAttribute('data-theme', next);
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', next === 'dark' ? '#0c0c0b' : '#fcfcfb');
     try {
       localStorage.setItem('theme', next);
     } catch {

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" width="240" alt="bunmaska - Electron, minus the Chromium">
+  <img src="assets/logo.png" width="140" alt="bunmaska - Electron, minus the Chromium">
 </p>
 
 <h1 align="center">bunmaska</h1>
