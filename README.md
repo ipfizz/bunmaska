@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
-    <img src="assets/logo.png" width="240" alt="bunmaska - Electron, minus the Chromium">
-  </picture>
+  <img src="assets/logo.png" width="240" alt="bunmaska - Electron, minus the Chromium">
 </p>
 
 <h1 align="center">bunmaska</h1>
