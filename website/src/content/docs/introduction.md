@@ -1,9 +1,13 @@
 ---
 title: Introduction
-description: "bunmaska is a drop-in Electron replacement built on Bun and system WebKit. Same app, BrowserWindow and ipcMain APIs - no bundled Chromium. Alpha."
+description: "Bunmaska is a drop-in Electron replacement built on Bun and system WebKit. Same app, BrowserWindow and ipcMain APIs - no bundled Chromium. Alpha."
 seoTitle: "Introduction - a drop-in Electron replacement on Bun"
 order: 1
 ---
+
+<p align="center">
+  <img src="/logo.png" alt="The Bunmaska logo - a bun with macOS traffic lights and a kaomoji butter slab" width="220" height="220" loading="eager" />
+</p>
 
 You already know how to use Bunmaska, because it looks exactly like Electron. You write against `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard` - the names you've been typing for years. The difference is everything underneath:
 
