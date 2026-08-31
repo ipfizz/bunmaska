@@ -16,7 +16,9 @@ import { packEngineDir } from '../../src/cli/engine-pack';
 
 const [engineDir, outDir, keyFile] = process.argv.slice(2);
 if (!engineDir || !outDir || !keyFile) {
-  process.stderr.write('usage: bun tools/engine/pack-engine.ts <engineDir> <outDir> <privateKeyPemFile>\n');
+  process.stderr.write(
+    'usage: bun tools/engine/pack-engine.ts <engineDir> <outDir> <privateKeyPemFile>\n',
+  );
   process.exit(2);
 }
 

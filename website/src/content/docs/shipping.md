@@ -21,7 +21,8 @@ This is the normal native-app deal: you ship a binary, they run a binary.
 bunmaska build                 # the host platform's distributable
 bunmaska build --target linux  # cross-build a Linux AppDir + .deb from macOS
 bunmaska build --sign … --dmg  # macOS: code-sign + a .dmg disk image
-bunmaska build --update        # also emit the auto-update feed (update.json + .tar.zst)
+bunmaska build --update --update-key <pem>  # also emit the signed auto-update feed
+                               # (update.json + .tar.zst + .sig; key from `bunmaska keygen`)
 ```
 
 - **macOS** - a `.app` bundle (icon converted from your PNG), optional code-signing/notarization, and an optional `.dmg`.

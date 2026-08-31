@@ -15,16 +15,10 @@ import { currentPlatform } from '../../../common/platform';
  * model; the action group is inserted into the window under the `"bunmaska"`
  * prefix with `gtk_widget_insert_action_group`.
  *
- * Declared separately from the loaders so unit tests can assert ABI shapes (arg
- * arrays, return types) without `dlopen` on a non-Linux host.
- *
  * Convention (matches the existing Linux loaders): `gboolean` is modelled as
  * {@link FFIType.i32}; all GObject/GTK handles are real pointers
  * ({@link FFIType.pointer}); `cstring` args are NUL-terminated UTF-8 strings;
  * nullable pointer args (`param_type`, `param`) are passed as `null`.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBGIO_PATH = 'libgio-2.0.so.0';

@@ -1,68 +1,40 @@
 import { describe, expect, test } from 'bun:test';
 import * as bunmaskaMain from '../../src/main';
+import { IMPLEMENTED_MODULES } from '../../src/main/module-list';
 import * as bunmaska from '../../src';
 
-describe('bunmaska/main entry barrel', () => {
-  test('exports the app singleton', () => {
-    expect(bunmaskaMain.app).toBeDefined();
+/**
+ * The barrels are the drop-in-Electron promise, so this file guards the two things
+ * tsc cannot: that importing them actually works (src/main/index.ts opens with
+ * `import './bootstrap'`, so a cycle or a throwing side effect fails at import time,
+ * before any assertion runs), and that what `IMPLEMENTED_MODULES` claims is really
+ * there — src/electron.ts throws for a KNOWN module that is not implemented, so a
+ * module claimed-but-not-exported silently degrades to `electron.foo === undefined`.
+ */
+
+const mainExports = new Set(Object.keys(bunmaskaMain));
+const rootExports = new Set(Object.keys(bunmaska));
+
+describe('entry barrels', () => {
+  test('both entry points import cleanly and expose the same surface', () => {
+    expect(mainExports.size).toBeGreaterThan(0);
+    expect([...rootExports].sort()).toEqual([...mainExports].sort());
   });
 
-  test('exports the App class', () => {
-    expect(bunmaskaMain.App).toBeDefined();
-    expect(bunmaskaMain.app).toBeInstanceOf(bunmaskaMain.App);
-  });
-
-  test('exports BunmaskaError', () => {
-    expect(bunmaskaMain.BunmaskaError).toBeDefined();
-    expect(new bunmaskaMain.BunmaskaError('x')).toBeInstanceOf(bunmaskaMain.BunmaskaError);
-  });
-
-  test('exports currentPlatform', () => {
-    expect(typeof bunmaskaMain.currentPlatform).toBe('function');
-  });
-
-  test('exports the Notification class', () => {
-    expect(bunmaskaMain.Notification).toBeDefined();
-    expect(typeof bunmaskaMain.Notification.isSupported).toBe('function');
-  });
-
-  test('exports the screen module', () => {
-    expect(bunmaskaMain.screen).toBeDefined();
-    expect(typeof bunmaskaMain.screen.getAllDisplays).toBe('function');
-    expect(typeof bunmaskaMain.screen.getPrimaryDisplay).toBe('function');
-  });
-
-  test('exports the Tray class', () => {
-    expect(bunmaskaMain.Tray).toBeDefined();
-    expect(typeof bunmaskaMain.Tray).toBe('function');
-  });
-
-  test('exports the protocol module', () => {
-    expect(bunmaskaMain.protocol).toBeDefined();
-    expect(typeof bunmaskaMain.protocol.handle).toBe('function');
-    expect(typeof bunmaskaMain.protocol.isProtocolHandled).toBe('function');
-    expect(typeof bunmaskaMain.protocol.getRegisteredSchemes).toBe('function');
-  });
-
-  test('exports the nativeImage module and class', () => {
-    expect(bunmaskaMain.nativeImage).toBeDefined();
-    expect(typeof bunmaskaMain.nativeImage.createFromPath).toBe('function');
-    expect(typeof bunmaskaMain.nativeImage.createFromBuffer).toBe('function');
-    expect(typeof bunmaskaMain.nativeImage.createEmpty).toBe('function');
-    expect(typeof bunmaskaMain.NativeImage).toBe('function');
-  });
-});
-
-describe('bunmaska (root) entry barrel', () => {
-  test('re-exports the same app singleton as bunmaska/main', () => {
+  test("the root barrel's `export *` keeps the live bindings identical", () => {
     expect(bunmaska.app).toBe(bunmaskaMain.app);
-  });
-
-  test('re-exports the App class', () => {
     expect(bunmaska.App).toBe(bunmaskaMain.App);
+    expect(bunmaska.BunmaskaError).toBe(bunmaskaMain.BunmaskaError);
   });
 
-  test('re-exports BunmaskaError', () => {
-    expect(bunmaska.BunmaskaError).toBe(bunmaskaMain.BunmaskaError);
+  test('AutoUpdaterImpl is exported so apps can construct a custom-installer updater', () => {
+    expect(typeof bunmaskaMain.AutoUpdaterImpl).toBe('function');
+    expect(rootExports.has('AutoUpdaterImpl')).toBe(true);
+  });
+
+  test.each([...IMPLEMENTED_MODULES])('IMPLEMENTED_MODULES claim is exported: %s', (name) => {
+    expect(mainExports.has(name)).toBe(true);
+    expect(rootExports.has(name)).toBe(true);
+    expect((bunmaskaMain as Record<string, unknown>)[name]).toBeDefined();
   });
 });

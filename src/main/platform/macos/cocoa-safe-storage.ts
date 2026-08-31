@@ -16,9 +16,6 @@ import { loadSecurityFFI, secConstants } from './security-ffi';
  * keys by pointer identity). The item is created with
  * `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` so the key is device-bound and
  * never syncs to iCloud Keychain.
- *
- * The service/account are injectable so the integration test exercises a PROBE
- * item rather than the production key.
  */
 
 const ERR_SEC_SUCCESS = 0;

@@ -4,10 +4,8 @@ import { cstr } from '../cstr';
 import { loadWebKit2 } from './webkit2-ffi';
 
 /**
- * `WKStringRef`/`WKURLRef` <-> JS string marshalling for the Windows backend,
- * the WinCairo peer of `cocoa-foundation.ts` (NSString) and the WebKitGTK JSC
- * value helpers. WK string objects are reference-counted: every `wk*` creator
- * here returns a +1 reference the caller must hand to {@link wkRelease}.
+ * WK string objects are reference-counted: every `wk*` creator here returns a +1
+ * reference the caller must hand to {@link wkRelease}.
  */
 
 /** Create a `WKStringRef` from a JS string. Caller releases it with {@link wkRelease}. */

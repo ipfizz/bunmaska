@@ -44,9 +44,7 @@ Menu.setApplicationMenu(menu);
 
 `static setApplicationMenu(menu: Menu | null): void`
 
-Sets `menu` as the application menu. On macOS this becomes the system menu bar; on Linux it is installed via the GTK realizer. Passing `null` clears the stored application menu.
-
-Note: in the current source, passing `null` updates the stored reference (so `getApplicationMenu()` returns `null`) but does not push an empty/cleared menu down to the native layer - only a non-null menu is realized and installed.
+Sets `menu` as the application menu. On macOS this becomes the system menu bar; on Linux it is installed via the GTK realizer. Passing `null` clears it - both the stored reference (`getApplicationMenu()` returns `null`) and the native side: the menu bar is removed on Windows/Linux (Electron semantics), and the main menu is emptied on macOS.
 
 ```ts
 import { Menu } from 'bunmaska';

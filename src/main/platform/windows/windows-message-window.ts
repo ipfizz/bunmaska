@@ -5,16 +5,8 @@ import { loadKernel32, loadUser32 } from './win32-ffi';
 
 /**
  * A hidden, non-WebKit Win32 window that receives system notifications
- * (`WM_POWERBROADCAST`, `WM_WTSSESSION_CHANGE`, a tray icon's callback) for the
- * backends that need a window-procedure but must NOT touch WebKit.
- *
- * The WebKit-hosting window deliberately uses the system `DefWindowProc` (a
- * JSCallback WndProc there crashes under WebKit's re-entrant message flood — see
- * `windows-native-window.ts`). THIS window hosts no WebKit, so a JSCallback WndProc
- * is safe: it receives only the low-frequency system messages above. One class +
- * one shared WndProc dispatches to per-window handlers keyed by `HWND`; the
- * callback is retained for process life. The cooperative pump (`PeekMessage` /
- * `DispatchMessage`) delivers messages here like any other window.
+ * (`WM_POWERBROADCAST`, `WM_WTSSESSION_CHANGE`, a tray icon's callback). It hosts no
+ * WebKit, so a JSCallback WndProc is safe here (unlike `windows-native-window.ts`).
  */
 
 const WNDCLASSEXW_SIZE = 80;

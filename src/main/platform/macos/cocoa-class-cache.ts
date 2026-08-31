@@ -8,8 +8,6 @@ import { FFIError } from '../../../common/errors';
  * error and throw {@link BunmaskaError}, but we deliberately do NOT cache NULL
  * results — a dynamically loaded framework may register the class later, and
  * a retry should succeed.
- *
- * The resolver is injected so unit tests stay free of any `bun:ffi` dependency.
  */
 
 /** Opaque pointer-width handle returned by `objc_getClass`. */
@@ -39,15 +37,7 @@ export class ClassCache {
     return fresh;
   }
 
-  has(name: string): boolean {
-    return this.#cache.has(name);
-  }
-
   get size(): number {
     return this.#cache.size;
-  }
-
-  clear(): void {
-    this.#cache.clear();
   }
 }

@@ -13,15 +13,9 @@ import {
 import { windowsShouldUseDarkColors } from '../platform/windows/windows-native-theme';
 
 /**
- * System appearance — a drop-in equivalent of Electron's `nativeTheme`.
- *
- * Extends {@link EventEmitter} for the `updated` event (D023). `shouldUseDarkColors`
- * honors the `themeSource` override ('light'/'dark'), falling back to the OS
- * appearance for 'system'. Setting `themeSource` applies an app-wide appearance
- * (so web views re-theme) and emits `updated`. `shouldUseDarkColors` reads the
- * real OS appearance on every platform (macOS `AppleInterfaceStyle`, Linux
- * `GtkSettings`, Windows `Themes\Personalize\AppsUseLightTheme`).
- * {@link NativeThemeImpl.startObserving} (wired once at startup) makes `updated`
+ * System appearance — a drop-in equivalent of Electron's `nativeTheme`. Extends
+ * {@link EventEmitter} for the `updated` event (D023).
+ * {@link NativeThemeImpl.startObserving}, wired once at startup, makes `updated`
  * also fire when the OS appearance changes underneath the app (macOS/Linux; a
  * Windows appearance watcher is a follow-up).
  */
@@ -48,11 +42,9 @@ const applyThemeSource = (source: ThemeSource): void => {
   }
 };
 
-/** Whether the OS requests reduced transparency. macOS-only; `false` elsewhere. */
 const osPrefersReducedTransparency = (): boolean =>
   currentPlatform() === 'macos' ? macosPrefersReducedTransparency() : false;
 
-/** Register the platform's OS-appearance-change observer, firing `onChange` on a flip. */
 const observeOsAppearance = (onChange: () => void): void => {
   const platform = currentPlatform();
   if (platform === 'macos') {
@@ -66,7 +58,7 @@ export class NativeThemeImpl extends EventEmitter {
   #themeSource: ThemeSource = 'system';
   #observing = false;
 
-  /** Whether a dark appearance should be used, honoring {@link themeSource}. */
+  /** Honors {@link themeSource}; falls back to the OS appearance for `'system'`. */
   get shouldUseDarkColors(): boolean {
     if (this.#themeSource === 'dark') {
       return true;
@@ -77,15 +69,12 @@ export class NativeThemeImpl extends EventEmitter {
     return osShouldUseDark();
   }
 
-  /**
-   * Whether the OS requests reduced transparency (macOS Accessibility "Reduce
-   * transparency"). Always `false` on Linux, which has no equivalent setting.
-   */
+  /** macOS Accessibility "Reduce transparency"; always `false` on Linux. */
   get prefersReducedTransparency(): boolean {
     return osPrefersReducedTransparency();
   }
 
-  /** The appearance override: `'system'` follows the OS, else forces light/dark. */
+  /** `'system'` follows the OS; setting this re-themes web views and emits `updated`. */
   get themeSource(): ThemeSource {
     return this.#themeSource;
   }
@@ -96,12 +85,7 @@ export class NativeThemeImpl extends EventEmitter {
     this.emit('updated');
   }
 
-  /**
-   * Begin emitting `updated` when the OS appearance changes (idempotent — only
-   * the first call registers an observer). Wired once at startup by the
-   * bootstrap. `observe` is injectable so the wiring is unit-testable without
-   * touching native APIs.
-   */
+  /** Idempotent: only the first call registers an observer. */
   startObserving(observe: (onChange: () => void) => void = observeOsAppearance): void {
     if (this.#observing) {
       return;
@@ -110,12 +94,12 @@ export class NativeThemeImpl extends EventEmitter {
     observe(() => this.emit('updated'));
   }
 
-  /** Reset the observe-once guard. Test-only. */
+  /** @internal */
   resetObservingForTesting(): void {
     this.#observing = false;
   }
 }
 
-/** The application appearance singleton. Drop-in equivalent of Electron's `nativeTheme`. */
+/** The application appearance singleton — Electron's `nativeTheme`. */
 export const nativeTheme = new NativeThemeImpl();
 export type NativeTheme = NativeThemeImpl;

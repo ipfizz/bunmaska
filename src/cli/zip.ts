@@ -1,13 +1,7 @@
 /**
- * A minimal, dependency-free ZIP archive writer (DEFLATE) in pure TypeScript.
- *
- * Windows has no dependable `tar`-makes-a-zip tool: the modern system `bsdtar`
- * can, but a dev box's PATH routinely shadows it with Git's GNU tar, which
- * cannot. So — exactly as `build-linux.ts` hand-rolls the Debian `ar` container
- * rather than shell out — the Windows packager emits its `.zip` here using the
- * runtime's own `node:zlib` DEFLATE and `Bun.hash.crc32`, spawning no external
- * process. The output is a standard PKZIP 2.0 (method 8) archive that Explorer,
- * PowerShell `Expand-Archive`, and `unzip` all open.
+ * Windows has no dependable zip tool: the system `bsdtar` can, but a dev box's
+ * PATH routinely shadows it with Git's GNU tar, which cannot. The output is a
+ * standard PKZIP 2.0 (method 8) archive.
  */
 
 import { deflateRawSync } from 'node:zlib';
@@ -34,7 +28,6 @@ const LOCAL_HEADER_FIXED = 30;
 const CENTRAL_HEADER_FIXED = 46;
 const EOCD_FIXED = 22;
 
-/** Everything needed to emit both headers for one entry, computed once. */
 type PreparedEntry = {
   readonly nameBytes: Uint8Array;
   readonly stored: Uint8Array;
@@ -45,7 +38,6 @@ type PreparedEntry = {
   readonly localOffset: number;
 };
 
-/** Compress (or store) one entry's payload and capture its CRC + sizes. */
 const prepareEntry = (entry: ZipEntry, localOffset: number): PreparedEntry => {
   const nameBytes = new TextEncoder().encode(entry.name);
   const crc = Bun.hash.crc32(entry.content) >>> 0;
@@ -118,7 +110,6 @@ const centralHeader = (entry: PreparedEntry): Uint8Array => {
   return header;
 };
 
-/** The end-of-central-directory record that closes the archive. */
 const endOfCentralDir = (count: number, cdSize: number, cdOffset: number): Uint8Array => {
   const eocd = new Uint8Array(EOCD_FIXED);
   const view = new DataView(eocd.buffer);
@@ -133,7 +124,6 @@ const endOfCentralDir = (count: number, cdSize: number, cdOffset: number): Uint8
   return eocd;
 };
 
-/** Concatenate byte chunks into one contiguous archive buffer. */
 const concat = (chunks: readonly Uint8Array[]): Uint8Array => {
   const total = chunks.reduce((n, chunk) => n + chunk.length, 0);
   const out = new Uint8Array(total);
@@ -146,9 +136,8 @@ const concat = (chunks: readonly Uint8Array[]): Uint8Array => {
 };
 
 /**
- * Build a complete ZIP archive from `entries` (paths use `/` separators). Each
- * payload is DEFLATE-compressed (empty files are stored), then the local headers
- * + data, the central directory, and the EOCD are assembled in spec order. Pure.
+ * Entry paths use `/` separators. Local headers + data, then the central
+ * directory, then the EOCD, in spec order.
  */
 export const buildZipArchive = (entries: readonly ZipEntry[]): Uint8Array => {
   const localChunks: Uint8Array[] = [];

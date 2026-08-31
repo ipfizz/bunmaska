@@ -1,12 +1,8 @@
 /**
- * Error taxonomy for Bunmaska.
- *
- * Consumers use `instanceof BunmaskaError` to distinguish Bunmaska-originated
- * failures from user or third-party errors, and the stable `code` field to
- * branch on a specific failure without matching on message text.
+ * Error taxonomy: consumers branch on `instanceof BunmaskaError` and on the
+ * stable `code` field, never on message text.
  */
 
-/** Options accepted by every Bunmaska error, extending the standard `ErrorOptions`. */
 export type BunmaskaErrorOptions = ErrorOptions & {
   /** Stable machine-readable code, e.g. `ERR_FFI`. */
   readonly code?: string;

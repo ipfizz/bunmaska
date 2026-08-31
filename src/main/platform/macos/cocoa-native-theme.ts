@@ -7,8 +7,7 @@ import { cocoa } from './cocoa-runtime';
  * macOS appearance query + change observer.
  *
  * Reads the `AppleInterfaceStyle` user default, which is the string `"Dark"`
- * when the system is in dark mode and absent (nil → `''`) otherwise. This is a
- * pure read with no UI or run-loop interaction.
+ * when the system is in dark mode and absent (nil → `''`) otherwise.
  *
  * {@link observeAppearanceChange} subscribes to `AppleInterfaceThemeChangedNotification`
  * on `NSDistributedNotificationCenter` (via the shared notification observer,

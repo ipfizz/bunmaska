@@ -15,7 +15,7 @@ import { cstr } from '../cstr';
  * entirely.
  *
  * These calls are SYNCHRONOUS (blocking D-Bus). They are gated off in CI and
- * never run from unit tests (see `libsecret-keyring.ts`). Only callable on Linux.
+ * never run from unit tests (see `libsecret-keyring.ts`).
  */
 
 const LIBSECRET_PATH = 'libsecret-1.so.0';

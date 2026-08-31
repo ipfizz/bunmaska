@@ -1,11 +1,6 @@
 /**
- * `bunmaska init` — scaffold a new Bunmaska project from an embedded template.
- *
- * The template is a minimal but real app: a `BrowserWindow` that loads a local
- * page, an isolated `preload` exposing a typed `window.api` over IPC, a matching
- * `ipcMain.handle`, and a `bunmaska.config.ts`. The file contents are produced
- * purely (so they are unit-testable), and the disk writes go through injectable
- * seams that refuse to overwrite an existing file.
+ * `bunmaska init`: scaffolds a minimal but real app — a `BrowserWindow`, an
+ * isolated preload, a matching `ipcMain.handle`, and a `bunmaska.config.ts`.
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -16,7 +11,6 @@ import { BUNMASKA_VERSION } from '../common/version';
 /** A single file the scaffold writes, addressed relative to the project root. */
 export type ScaffoldFile = { readonly path: string; readonly contents: string };
 
-/** Substituted values the template needs. */
 export type TemplateVars = { readonly name: string; readonly id: string };
 
 const packageJson = (vars: TemplateVars): string =>
@@ -46,6 +40,9 @@ export default defineConfig({
   name: ${JSON.stringify(vars.name)},
   id: ${JSON.stringify(vars.id)},
   entry: 'src/main.ts',
+  // Enable when you add a bundled renderer (e.g. React): dev then rebuilds and
+  // live-reloads it, and \`bunmaska build\` ships the output beside the executable.
+  // renderer: { entry: 'src/renderer/main.tsx', copy: ['src/renderer/index.html'] },
 });
 `;
 
@@ -155,6 +152,7 @@ dist/
 *.tar.zst
 *.deb
 *.log
+.bunmaska-dev-state.json
 `;
 
 const readme = (vars: TemplateVars): string =>
@@ -179,7 +177,6 @@ bun run build    # bunmaska build: a macOS .app or a Linux AppDir/.deb
 The app's name, bundle id and entry are declared in \`bunmaska.config.ts\`.
 `;
 
-/** Produce the full set of template files with `vars` substituted. Pure. */
 export const initTemplateFiles = (vars: TemplateVars): readonly ScaffoldFile[] => [
   { path: 'package.json', contents: packageJson(vars) },
   { path: 'bunmaska.config.ts', contents: configTs(vars) },
@@ -190,7 +187,6 @@ export const initTemplateFiles = (vars: TemplateVars): readonly ScaffoldFile[] =
   { path: 'README.md', contents: readme(vars) },
 ];
 
-/** Injectable filesystem seams so scaffolding is unit-testable without real I/O. */
 export type ScaffoldDeps = {
   readonly exists: (path: string) => boolean;
   readonly mkdir: (path: string) => void;
@@ -208,9 +204,8 @@ const defaultDeps: ScaffoldDeps = {
 };
 
 /**
- * Write `files` under `dir`, refusing to clobber: if ANY target already exists,
- * nothing is written and an error naming the file is thrown. Returns the
- * absolute paths written, in order.
+ * All-or-nothing: if ANY target already exists, nothing is written and an error
+ * naming that file is thrown. Returns the absolute paths written, in order.
  */
 export const scaffoldProject = (
   dir: string,
@@ -234,13 +229,12 @@ export const scaffoldProject = (
   return written;
 };
 
-/** Derive a project name from a target directory's base name. */
+/** The directory's base name, or `bunmaska-app` for `.` and empty names. */
 export const deriveProjectName = (dir: string): string => {
   const base = basename(resolve(dir));
   return base.length > 0 && base !== '.' ? base : 'bunmaska-app';
 };
 
-/** The result of a successful {@link runInit}. */
 export type InitResult = {
   readonly dir: string;
   readonly name: string;
@@ -248,9 +242,8 @@ export type InitResult = {
 };
 
 /**
- * Scaffold a project at `targetDir`. Derives the app name from the directory,
- * the bundle id as `com.example.<slug>`, writes the template, and returns what
- * was created. Throws if any target file already exists.
+ * The bundle id defaults to `com.example.<slug>`. Throws if any target file
+ * already exists.
  */
 export const runInit = (targetDir: string, deps: ScaffoldDeps = defaultDeps): InitResult => {
   const dir = resolve(targetDir);

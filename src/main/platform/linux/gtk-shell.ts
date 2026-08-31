@@ -5,13 +5,6 @@ import { loadGioFFI } from './gio-ffi';
 
 /**
  * Desktop integration via GIO + GDK — the Linux half of Electron's `shell`.
- *
- * `openExternal`/`openPath` hand a URI to `g_app_info_launch_default_for_uri`,
- * which the desktop routes to the default handler (browser, file manager, …)
- * and reports whether it accepted the request via a `gboolean`. `beep` rings
- * the GDK system bell. These have real side effects (launching apps), so
- * automated tests assert they run without crashing rather than that something
- * actually opened.
  */
 
 /**

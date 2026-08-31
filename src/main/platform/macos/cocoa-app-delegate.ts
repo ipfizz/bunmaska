@@ -7,11 +7,6 @@ import type { Handle } from './objc';
 /**
  * Bridges `NSApplicationDelegate` callbacks to JS (D026).
  *
- * AppKit reports app-level activation to the application's delegate. We define
- * the delegate class once at runtime, instantiate one, and route its callbacks
- * to the registered JS handlers — the same mechanism proven for the window and
- * navigation delegates.
- *
  * `applicationShouldHandleReopen:hasVisibleWindows:` is AppKit's Dock-reopen
  * hook and the source of Electron's `activate` event. The delegate object is
  * created with `alloc`/`init` (retain count +1) and never released, so it

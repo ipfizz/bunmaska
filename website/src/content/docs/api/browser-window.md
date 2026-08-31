@@ -113,7 +113,7 @@ console.log(win.getTitle());
 
 `setSize(width: number, height: number): void`
 
-Resizes the window to `width` by `height`. There is no `animate` argument.
+Resizes the window to `width` by `height` - the outer window (frame) size, as in Electron. On macOS the top-left corner stays anchored. There is no `animate` argument.
 
 ```ts
 win.setSize(1280, 720);
@@ -133,10 +133,40 @@ const [w, h] = win.getSize();
 
 `getBounds(): { x: number; y: number; width: number; height: number }`
 
-Returns the window's bounds as a rectangle. _Linux_ reports `x`/`y` as `0` (GTK4/Wayland forbid introspecting global window coordinates), so treat position as best-effort there.
+Returns the window's bounds as a rectangle - Electron's contract: the real on-screen **frame**, with `x`/`y` in global **top-left** screen coordinates. On macOS this is read from the window server (via the CGWindowList), so it reflects where the user actually dragged the window, not just where you last placed it. _Linux_ reports `x`/`y` as `0` (GTK4/Wayland forbid introspecting global window coordinates), so treat position as size-only there.
 
 ```ts
 const { x, y, width, height } = win.getBounds();
+```
+
+### `win.setBounds(bounds)`
+
+`setBounds(bounds: { x: number; y: number; width: number; height: number }): void`
+
+Moves and resizes the window to the given frame rectangle, in global top-left coordinates. Full on macOS and Windows. On _Linux_ only the size is applied - GTK4 removed programmatic positioning and Wayland forbids clients moving themselves, so position stays with the compositor.
+
+```ts
+win.setBounds({ x: 100, y: 80, width: 1280, height: 720 });
+```
+
+### `win.setPosition(x, y)`
+
+`setPosition(x: number, y: number): void`
+
+Moves the window so its top-left corner sits at `(x, y)` in screen pixels, keeping its size. Full on macOS and Windows; a deliberate no-op on _Linux_ (compositor-owned placement, as above). No `animate` argument.
+
+```ts
+win.setPosition(100, 80);
+```
+
+### `win.getPosition()`
+
+`getPosition(): [number, number]`
+
+Returns the window's `[x, y]` top-left position (derived from `getBounds()`, so the Linux caveat applies).
+
+```ts
+const [x, y] = win.getPosition();
 ```
 
 ### `win.setResizable(resizable)`
@@ -466,6 +496,10 @@ Emitted when the window is hidden.
 
 Emitted after the window has been resized.
 
+### Event: 'move'
+
+Emitted after the window has been moved - a user drag or a programmatic `setPosition`/`setBounds`. _macOS only_ today: Linux never emits it (window position is compositor-owned under GTK4/Wayland), and Windows does not wire it yet.
+
 ### Event: 'maximize'
 
 Emitted when the window is maximized.
@@ -518,7 +552,7 @@ win.webContents.on('did-finish-load', () => {
 
 Bunmaska implements the window-management core but omits large swaths of Electron's `BrowserWindow` surface. Notable gaps:
 
-- **`setContentBounds` / `getContentBounds` / `getNormalBounds`** - the content-bounds variants. (`setPosition`/`getPosition`/`setBounds` exist since alpha.5: full on Windows, best-effort placement on macOS, size-only on Linux where GTK4/Wayland leaves placement to the compositor - see the parity page.)
+- **`setContentBounds` / `getContentBounds` / `getNormalBounds`** - the content-bounds variants. (`setPosition`/`getPosition`/`setBounds`/`getBounds` are documented above: real frame geometry on macOS and Windows, size-only on Linux where GTK4/Wayland leaves placement to the compositor.)
 - **`setContentSize` / `getContentSize` / `getMaximumSize` / `setMaximumSize`** - only the minimum-size pair and `setSize` are wired.
 - **`setMovable` / `setMinimizable` / `setMaximizable` / `setClosable` / `setFocusable`** and their getters - the constraint setters beyond `setResizable` are absent.
 - **`setBackgroundColor` / `getBackgroundColor`, `setHasShadow` / `hasShadow`, `setVibrancy`** - no appearance/material APIs.
@@ -527,7 +561,7 @@ Bunmaska implements the window-management core but omits large swaths of Electro
 - **Parent/child & modal windows** - no `parent`/`modal` constructor options, and no `setParentWindow` / `getParentWindow` / `getChildWindows`. Child and modal windows don't exist yet.
 - **macOS tabbing, Touch Bar, simple-fullscreen, represented file, traffic-light positioning, content protection** - none of the macOS-only flair (`setSimpleFullScreen`, `addTabbedWindow`, `setTouchBar`, `setRepresentedFilename`, `setWindowButtonVisibility`, `setContentProtection`, …) is wired.
 - **`BrowserWindow.getFocusedWindow` / `fromWebContents`** - only `getAllWindows` and `fromId` are exposed as statics.
-- **Events** - `page-title-updated`, `enter-full-screen` / `leave-full-screen`, `move` / `moved`, `will-resize` / `resized`, `always-on-top-changed`, and the various platform-specific gesture events (`swipe`, `rotate-gesture`, `app-command`, …) are not emitted. The implemented set is the lifecycle list above.
+- **Events** - `page-title-updated`, `enter-full-screen` / `leave-full-screen`, `moved` (the throttled variant; plain `move` is emitted, macOS only), `will-resize` / `resized`, `always-on-top-changed`, and the various platform-specific gesture events (`swipe`, `rotate-gesture`, `app-command`, …) are not emitted. The implemented set is the lifecycle list above.
 - **Constructor options** - beyond the seven documented keys (plus `webPreferences.preload`), the rest of `BrowserWindowConstructorOptions` (e.g. `backgroundColor`, `transparent`, `alwaysOnTop`, `parent`, `modal`, `minWidth`/`minHeight`, `titleBarStyle`, the full `webPreferences` bag) is ignored.
 
 If you need one of these, it's genuinely not there - not hidden behind a flag.

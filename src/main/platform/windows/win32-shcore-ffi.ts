@@ -2,11 +2,9 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * shcore.dll per-monitor DPI for the screen backend. `GetDpiForMonitor` (Windows
- * 8.1+) yields a monitor's effective DPI, from which the device-pixel
- * `scaleFactor` is `dpi / 96`. It is a flat-C export — no COM. Loaded separately
- * from user32 because shcore is a distinct DLL and DPI is best-effort: callers
- * fall back to a 1.0 scale if the call fails.
+ * shcore.dll per-monitor DPI for the screen backend. `GetDpiForMonitor` (Windows 8.1+)
+ * yields a monitor's effective DPI, from which the device-pixel `scaleFactor` is
+ * `dpi / 96`; shcore is absent before Windows 8.1, so callers fall back to a 1.0 scale.
  */
 const SHCORE_SYMBOLS = {
   // (HMONITOR, MONITOR_DPI_TYPE, UINT* dpiX, UINT* dpiY) -> HRESULT (0 = S_OK)

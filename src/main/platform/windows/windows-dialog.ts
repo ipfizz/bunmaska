@@ -8,15 +8,9 @@ import { loadOle32, loadUser32 } from './win32-ffi';
 import { loadShell32 } from './win32-shell-ffi';
 
 /**
- * Windows `dialog` backend, the WinCairo peer of the `NSAlert`/`NSOpenPanel`
- * (macOS) and GTK (Linux) backends. Message boxes use `MessageBoxW`; file pickers
- * use the flat-C `GetOpenFileNameW`/`GetSaveFileNameW` (`OPENFILENAMEW` struct);
- * the folder picker uses `SHBrowseForFolderW`. ALL of these are MODAL — they spin
- * their own message loop and block until the user dismisses them — so, exactly as
- * the macOS `runModal` path, the native calls cannot run on CI; only the pure
- * option→native mapping helpers below are unit-tested. (`MessageBoxW` shows a
- * fixed button set, not Electron's arbitrary labels — faithful custom buttons need
- * `TaskDialogIndirect`/comctl6, a follow-up.)
+ * Windows `dialog` backend. Every dialog here is MODAL — it spins its own message loop and
+ * blocks until the user dismisses it — so, exactly as the macOS `runModal` path, the
+ * native calls cannot run on CI.
  */
 
 // MessageBoxW button sets + icons.

@@ -2,10 +2,6 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * advapi32.dll registry reads for the Windows backend (e.g. the native-theme dark
- * mode preference). `RegGetValueW` is a flat-C export — no COM — that opens the
- * key, reads one value, and closes it in a single call.
- *
  * Predefined `HKEY` roots are pointer-width handles whose 32-bit constants are
  * sign-extended to 64 bits (the same handle discipline as `win32.ts`): e.g.
  * `HKEY_CURRENT_USER` is `((HKEY)(LONG)0x80000001)` -> `0xFFFFFFFF80000001`.

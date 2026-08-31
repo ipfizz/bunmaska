@@ -30,10 +30,6 @@ import { type Handle, ptrIn } from './objc';
  * BUFFER DECODE — `[[NSData alloc] initWithBytes:length:]` COPIES the source
  * bytes, so the pinned `Uint8Array` need only outlive that one call.
  *
- * ENCODE — `[rep representationUsingType:(NSBitmapImageFileTypePNG = 4)
- * properties:nil]` returns an `NSData`; we read its `bytes` pointer (scalar) and
- * `length` (NSUInteger scalar) and copy them out with `toArrayBuffer`.
- *
  * EMPTY — a nil rep (bad path / undecodable bytes) is reported as empty with a
  * `0n` handle and zero dimensions; no fake placeholder image is fabricated.
  */
@@ -187,7 +183,6 @@ const crop = (
   return redraw(handle, width, height, -x, -(srcH - y - height), srcW, srcH);
 };
 
-/** macOS implementation of {@link NativeImageBackend}. */
 export const cocoaNativeImageBackend: NativeImageBackend = {
   decode: (source) => (typeof source === 'string' ? decodePath(source) : decodeBuffer(source)),
   encodePng: (handle: NativeImageHandle): Uint8Array => {

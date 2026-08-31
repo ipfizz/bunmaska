@@ -1,21 +1,16 @@
 import type { InvokeEnvelope, ReplyEnvelope, SendEnvelope } from '../ipc/ipc-protocol';
 
 /**
- * Main-process IPC — the drop-in equivalent of Electron's `ipcMain`.
- *
- * `on`/`once`/`removeListener` register fire-and-forget channel listeners;
- * `handle`/`removeHandler` register request/response handlers (one per channel)
- * for `ipcRenderer.invoke`. The transport (WKScriptMessageHandler inbound,
- * `evaluateJavaScript` outbound) calls {@link IpcMainImpl.dispatch}; the router
- * itself is transport-agnostic and unit-tested without any FFI.
+ * Main-process IPC — the drop-in equivalent of Electron's `ipcMain`. At most one
+ * `handle` handler per channel; the transport calls
+ * {@link IpcMainImpl.dispatch}.
  */
 
-/** Event passed to `on` listeners. `sender` is the originating `WebContents`. */
+/** `sender` is the originating `WebContents`. */
 export type IpcMainEvent = {
   readonly sender: unknown;
 };
 
-/** Event passed to `handle` handlers. */
 export type IpcMainInvokeEvent = {
   readonly sender: unknown;
 };
@@ -73,8 +68,8 @@ export class IpcMainImpl {
   }
 
   /**
-   * Route an inbound envelope from a renderer. Returns a reply envelope for
-   * `invoke` (success or error), or `undefined` for `send`.
+   * Returns a reply envelope for `invoke` (success or error), `undefined` for
+   * `send`.
    * @internal Called by the IPC transport.
    */
   async dispatch(
@@ -113,5 +108,5 @@ export class IpcMainImpl {
   }
 }
 
-/** The main-process IPC singleton. Drop-in equivalent of Electron's `ipcMain`. */
+/** The main-process IPC singleton — Electron's `ipcMain`. */
 export const ipcMain = new IpcMainImpl();

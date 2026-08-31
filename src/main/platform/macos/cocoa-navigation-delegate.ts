@@ -6,14 +6,8 @@ import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
 /**
- * Bridges `WKNavigationDelegate` callbacks to JS (D026).
- *
- * The class is defined once at runtime and one instance is allocated per web
- * view; each instance routes its callbacks to the registered JS handler by
- * keying on the `self` handle delivered to the IMP — the mechanism proven for
- * the script-message handler. Each delegate selector maps to a
- * {@link NativeNavigationEvent}; `did(FailProvisional)Navigation:withError:`
- * reads the `NSError` code + localized description.
+ * Bridges `WKNavigationDelegate` callbacks to JS (D026), one instance per web
+ * view, routed by the `self` handle delivered to the IMP.
  */
 
 const registry = new Map<Handle, (event: NativeNavigationEvent) => void>();
@@ -83,6 +77,8 @@ const ensureDelegateClass = (): Handle => {
 export type NavigationDelegate = {
   /** The Objective-C delegate instance to pass to `setNavigationDelegate:`. */
   readonly handle: Handle;
+  /** Unregister and release the delegate instance (window teardown). */
+  readonly destroy: () => void;
 };
 
 /** Create a `WKNavigationDelegate` routing its callbacks to `onNavigation`. */
@@ -93,5 +89,11 @@ export const createNavigationDelegate = (
   const cls = ensureDelegateClass();
   const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
   registry.set(handle, onNavigation);
-  return { handle };
+  return {
+    handle,
+    destroy: () => {
+      registry.delete(handle);
+      rt.msgSend(handle, rt.selectors.get('release'));
+    },
+  };
 };

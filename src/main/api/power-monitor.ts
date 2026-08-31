@@ -9,17 +9,10 @@ import { observePowerEvents as windowsObservePowerEvents } from '../platform/win
 
 /**
  * System power + screen-lock events — a drop-in subset of Electron's
- * `powerMonitor`.
- *
- * An {@link EventEmitter} (D023) emitting `suspend`, `resume`, `lock-screen` and
- * `unlock-screen`. {@link PowerMonitorImpl.startObserving} (wired once at startup
- * by the bootstrap) attaches the native hooks: on macOS, NSWorkspace sleep/wake +
- * the distributed screen-lock notifications (via the shared observer, D034); on
- * Linux, systemd-logind's `PrepareForSleep` + session `Lock`/`Unlock` D-Bus signals
- * over the deadlock-safe GDBus subscription primitive (gated behind
- * `BUNMASKA_ENABLE_LINUX_POWER`; a clean no-op when there is no system bus).
- *
- * Idle-time / on-battery queries (IOKit / UPower) are a separate follow-up.
+ * `powerMonitor`. An {@link EventEmitter} (D023) emitting `suspend`, `resume`,
+ * `lock-screen` and `unlock-screen`. macOS screen-lock rides the shared
+ * distributed observer (D034); the Linux logind leg is gated behind
+ * `BUNMASKA_ENABLE_LINUX_POWER` and no-ops without a system bus.
  */
 
 const observePower = (handlers: PowerEventHandlers): void => {
@@ -36,11 +29,7 @@ const observePower = (handlers: PowerEventHandlers): void => {
 export class PowerMonitorImpl extends EventEmitter {
   #observing = false;
 
-  /**
-   * Begin emitting power events (idempotent — only the first call attaches the
-   * native observers). `observe` is injectable so the wiring is unit-testable
-   * without touching native APIs.
-   */
+  /** Idempotent: only the first call attaches the native observers. */
   startObserving(observe: (handlers: PowerEventHandlers) => void = observePower): void {
     if (this.#observing) {
       return;
@@ -62,12 +51,12 @@ export class PowerMonitorImpl extends EventEmitter {
     });
   }
 
-  /** Reset the observe-once guard. Test-only. */
+  /** @internal */
   resetObservingForTesting(): void {
     this.#observing = false;
   }
 }
 
-/** The system power monitor singleton. Drop-in equivalent of Electron's `powerMonitor`. */
+/** The system power monitor singleton — Electron's `powerMonitor`. */
 export const powerMonitor = new PowerMonitorImpl();
 export type PowerMonitor = PowerMonitorImpl;

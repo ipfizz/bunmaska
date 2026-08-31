@@ -1,14 +1,10 @@
 /**
- * macOS `.app` bundler for the `bunmaska` CLI.
- *
- * The app is compiled to a single self-contained executable with Bun's
- * `--compile`, which embeds the Bun runtime and the app's JS. No WebKit/AppKit
- * framework is bundled: Bunmaska dlopens the SYSTEM WebKit/AppKit at runtime via
- * bun:ffi, and those frameworks are always present on the user's Mac. The pure
- * parts (plist text, slug, bundle layout) are factored out for unit testing.
+ * No WebKit/AppKit framework is bundled: Bunmaska dlopens the SYSTEM
+ * frameworks at runtime via bun:ffi.
  */
 
 import {
+  cpSync,
   chmodSync,
   copyFileSync,
   existsSync,
@@ -22,10 +18,8 @@ import { join, posix } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 
-/** Minimum macOS the bundle declares it supports. */
 const MINIMUM_SYSTEM_VERSION = '11.0';
 
-/** Escape the five XML-special characters for safe inclusion in plist text. */
 const escapeXml = (value: string): string =>
   value
     .replace(/&/g, '&amp;')
@@ -34,11 +28,7 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-/**
- * Reduce a display name to a DNS-label-ish slug for a default bundle id:
- * lowercase, non-alphanumeric runs collapsed to single hyphens, edges trimmed.
- * Falls back to `app` when nothing survives.
- */
+/** Lowercase DNS-label-ish slug; falls back to `app` when nothing survives. */
 export const bundleIdSlug = (name: string): string => {
   const slug = name
     .toLowerCase()
@@ -47,7 +37,6 @@ export const bundleIdSlug = (name: string): string => {
   return slug.length > 0 ? slug : 'app';
 };
 
-/** The default `com.bunmaska.<slug>` bundle identifier for a given app name. */
 export const defaultBundleId = (name: string): string => `com.bunmaska.${bundleIdSlug(name)}`;
 
 export type InfoPlistOptions = {
@@ -60,7 +49,6 @@ export type InfoPlistOptions = {
 const plistString = (key: string, value: string): string =>
   `  <key>${key}</key>\n  <string>${escapeXml(value)}</string>`;
 
-/** Build the `Info.plist` XML for a bundle. Pure; the icon key is omitted when absent. */
 export const buildInfoPlist = (opts: InfoPlistOptions): string => {
   const entries = [
     plistString('CFBundleName', opts.name),
@@ -101,9 +89,8 @@ export type AppBundleLayout = {
 };
 
 /**
- * Compute every on-disk path of an `<out>/<Name>.app` bundle. Pure. Joins with
- * POSIX separators — a `.app` is an inherently macOS (POSIX) layout — so the
- * structure is identical whether computed on macOS or a cross-building host.
+ * Compute every on-disk path of an `<out>/<Name>.app` bundle. POSIX joins keep
+ * the layout identical when computed on a cross-building host.
  */
 export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
   const { join } = posix;
@@ -146,13 +133,8 @@ export const codesignEntitlements = (): string =>
 `;
 
 /**
- * Build the `codesign` argv that signs an `.app` bundle in place. Pure.
- *
- * Uses `--force --deep` so an existing signature is replaced and nested code is
- * signed, `--options runtime` to opt into the macOS Hardened Runtime (required
- * for notarization), and `--entitlements` to grant the JIT/FFI exceptions Bun
- * needs. `identity` is passed verbatim after `--sign`: a real `Developer ID
- * Application: …` identity, or `-` for an ad-hoc signature.
+ * `--options runtime` is required for notarization. `identity` is a real
+ * `Developer ID Application: …` identity, or `-` for an ad-hoc signature.
  */
 export const buildCodesignArgs = (
   identity: string,
@@ -170,7 +152,6 @@ export const buildCodesignArgs = (
   appPath,
 ];
 
-/** Build the `codesign --verify --strict` argv for an `.app` bundle. Pure. */
 export const buildCodesignVerifyArgs = (appPath: string): string[] => [
   '--verify',
   '--strict',
@@ -185,11 +166,12 @@ export type NotarizeOptions = {
 };
 
 /**
- * Build the `xcrun notarytool submit …` argv for an `.app` bundle. Pure.
+ * Build the `xcrun notarytool submit …` argv. Pure.
  *
- * This is a documented HOOK for a real release: it is NOT invoked by the build
- * (it needs Apple credentials and network). `password` is an app-specific
- * password for the Apple ID. `--wait` blocks until Apple finishes processing.
+ * The default `--notarize` hook submits the ditto ZIP of the bundle (notarytool
+ * refuses a bare `.app`), so `appPath` is the submit target, not always an app.
+ * `password` is an app-specific password for the Apple ID. `--wait` blocks
+ * until Apple finishes processing.
  */
 export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
   'xcrun',
@@ -208,8 +190,8 @@ export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
 /**
  * Build the `xcrun stapler staple …` argv for an `.app` bundle. Pure.
  *
- * Also a documented HOOK: stapling attaches the notarization ticket to the
- * bundle and is only meaningful after a successful notarytool submission.
+ * Stapling attaches the notarization ticket to the bundle and is only
+ * meaningful after a successful notarytool submission.
  */
 export const buildStapleArgs = (appPath: string): string[] => [
   'xcrun',
@@ -224,11 +206,7 @@ export type IconsetEntry = {
   readonly size: number;
 };
 
-/**
- * The ten standard `.iconset` members macOS expects, in ascending order. Each
- * `@2x` retina variant is exactly double its non-retina sibling. Pure. Used to
- * drive the `sips` resizes that feed `iconutil`.
- */
+/** The ten `.iconset` members macOS requires; each `@2x` is double its sibling. */
 export const iconsetSpec = (): readonly IconsetEntry[] => [
   { name: 'icon_16x16.png', size: 16 },
   { name: 'icon_16x16@2x.png', size: 32 },
@@ -242,7 +220,6 @@ export const iconsetSpec = (): readonly IconsetEntry[] => [
   { name: 'icon_512x512@2x.png', size: 1024 },
 ];
 
-/** Build the `sips` argv that resizes `src` to a `size`×`size` square at `dest`. Pure. */
 export const buildSipsArgs = (size: number, src: string, dest: string): string[] => [
   '-z',
   String(size),
@@ -252,7 +229,6 @@ export const buildSipsArgs = (size: number, src: string, dest: string): string[]
   dest,
 ];
 
-/** Build the `iconutil` argv that converts an `.iconset` directory into `outIcns`. Pure. */
 export const buildIconutilArgs = (iconsetDir: string, outIcns: string): string[] => [
   '-c',
   'icns',
@@ -267,10 +243,7 @@ export type HdiutilOptions = {
   readonly outDmg: string;
 };
 
-/**
- * Build the `hdiutil create` argv for a compressed (`UDZO`) disk image. Pure.
- * `-ov` overwrites an existing image so repeat builds are idempotent.
- */
+/** `-ov` overwrites an existing image so repeat builds are idempotent. */
 export const buildHdiutilArgs = (opts: HdiutilOptions): string[] => [
   'create',
   '-volname',
@@ -283,8 +256,8 @@ export const buildHdiutilArgs = (opts: HdiutilOptions): string[] => [
   opts.outDmg,
 ];
 
-/** Spawn a tool, await it, and throw with its stderr on a non-zero exit. */
-const runTool = async (label: string, argv: string[]): Promise<void> => {
+/** Spawn a build tool and throw (with its stderr) on a non-zero exit. */
+export const runTool = async (label: string, argv: string[]): Promise<void> => {
   const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' });
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
@@ -293,11 +266,6 @@ const runTool = async (label: string, argv: string[]): Promise<void> => {
   }
 };
 
-/**
- * Convert a PNG at `pngPath` to an `.icns` at `outIcns` via `sips` + `iconutil`.
- * Builds a temporary `.iconset` with the ten {@link iconsetSpec} sizes, then
- * folds it into a single `.icns`. Cleans the temp iconset on success or failure.
- */
 export const convertPngToIcns = async (pngPath: string, outIcns: string): Promise<void> => {
   const work = mkdtempSync(join(tmpdir(), 'bunmaska-iconset-'));
   // iconutil only accepts a directory whose name ends in `.iconset`.
@@ -313,7 +281,6 @@ export const convertPngToIcns = async (pngPath: string, outIcns: string): Promis
   }
 };
 
-/** Converts a PNG icon to `.icns`. Injectable so unit tests need not shell out. */
 export type ConvertIcon = (pngPath: string, outIcns: string) => Promise<void>;
 
 export type BuildDmgOptions = {
@@ -322,12 +289,7 @@ export type BuildDmgOptions = {
   readonly outDmg: string;
 };
 
-/**
- * Produce a compressed `.dmg` at `outDmg` containing the `.app` at `appDir`.
- * Stages the bundle plus a `/Applications` symlink (for drag-install) in a temp
- * folder, runs `hdiutil create`, and cleans the staging dir afterward. Throws
- * with the tool's stderr on a non-zero exit.
- */
+/** Stages the bundle plus an `/Applications` symlink so the `.dmg` drag-installs. */
 export const buildDmg = async (opts: BuildDmgOptions): Promise<void> => {
   const staging = mkdtempSync(join(tmpdir(), 'bunmaska-dmg-'));
   try {
@@ -343,14 +305,8 @@ export const buildDmg = async (opts: BuildDmgOptions): Promise<void> => {
   }
 };
 
-/** Builds a `.dmg` from a finished `.app`. Injectable so unit tests need not shell out. */
 export type BuildDmg = (opts: BuildDmgOptions) => Promise<void>;
 
-/**
- * Code-sign an `.app` at `appPath` with `identity` (a real `Developer ID
- * Application: …` identity, or `-` for ad-hoc) and verify the result. Throws
- * with the tool's stderr on a non-zero exit from either step.
- */
 export const codesignApp = async (identity: string, appPath: string): Promise<void> => {
   const entitlementsDir = mkdtempSync(join(tmpdir(), 'bunmaska-entitlements-'));
   const entitlementsPath = join(entitlementsDir, 'app.entitlements');
@@ -384,10 +340,11 @@ export const codesignApp = async (identity: string, appPath: string): Promise<vo
   }
 };
 
-/** Signs an `.app` bundle in place. Injectable so unit tests need not shell out. */
 export type SignApp = (identity: string, appPath: string) => Promise<void>;
 
 export type BuildMacAppOptions = {
+  /** A built renderer directory to ship as `renderer/` beside the executable. */
+  readonly rendererDir?: string;
   readonly entry: string;
   readonly name: string;
   readonly id?: string;
@@ -398,15 +355,11 @@ export type BuildMacAppOptions = {
   readonly sign?: string;
   /** When true, also produce an `<out>/<Name>.dmg` containing the signed bundle. */
   readonly dmg?: boolean;
-  /** Seam for the signer; defaults to {@link codesignApp}. Stub it in tests. */
   readonly signApp?: SignApp;
-  /** Seam for PNG→.icns conversion; defaults to {@link convertPngToIcns}. Stub it in tests. */
   readonly convertIcon?: ConvertIcon;
-  /** Seam for `.dmg` creation; defaults to {@link buildDmg}. Stub it in tests. */
   readonly buildDmg?: BuildDmg;
 };
 
-/** Compile `entry` to a standalone binary at `outfile`. Throws on a non-zero exit. */
 const compileBinary = async (entry: string, outfile: string): Promise<void> => {
   const proc = Bun.spawn(['bun', 'build', entry, '--compile', '--outfile', outfile], {
     stdout: 'pipe',
@@ -419,11 +372,6 @@ const compileBinary = async (entry: string, outfile: string): Promise<void> => {
   }
 };
 
-/**
- * Produce a macOS `.app` bundle for `entry` and return the bundle's path.
- * Compiles the entry with Bun, lays out `Contents/`, writes `Info.plist`,
- * installs the binary as the executable, and copies the icon when given.
- */
 export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => {
   const out = opts.out ?? process.cwd();
   const bundleId = opts.id ?? defaultBundleId(opts.name);
@@ -432,13 +380,14 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   mkdirSync(layout.macosDir, { recursive: true });
   mkdirSync(layout.resourcesDir, { recursive: true });
 
-  // Compile straight into the bundle's executable slot.
   await compileBinary(opts.entry, layout.executablePath);
   chmodSync(layout.executablePath, 0o755);
 
-  // Ship the entry's runtime assets (the page, the preload) beside the binary, then
-  // bundle a module-using preload so it runs as a classic script in the packaged app.
+  // Bundle a module-using preload so it runs as a classic script in the packaged app.
   bundlePreloadAssets(layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
+  if (opts.rendererDir !== undefined) {
+    cpSync(opts.rendererDir, join(layout.macosDir, 'renderer'), { recursive: true });
+  }
 
   let iconFile: string | undefined;
   if (opts.icon !== undefined) {
@@ -446,11 +395,9 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
       throw new Error(`bunmaska build: icon not found: ${opts.icon}`);
     }
     if (opts.icon.toLowerCase().endsWith('.png')) {
-      // Convert the PNG to a multi-resolution .icns inside the bundle.
       const convertIcon = opts.convertIcon ?? convertPngToIcns;
       await convertIcon(opts.icon, layout.iconPath);
     } else {
-      // Already an .icns (or another container iconutil produced): copy as-is.
       copyFileSync(opts.icon, layout.iconPath);
     }
     // CFBundleIconFile is the base name WITHOUT extension, per macOS convention.
@@ -471,8 +418,7 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
     await signApp(opts.sign, layout.appDir);
   }
 
-  // The .dmg packages the finished (and signed, if requested) bundle, so it is
-  // produced after signing.
+  // The .dmg packages the signed bundle, so it is produced after signing.
   if (opts.dmg === true) {
     const dmg = opts.buildDmg ?? buildDmg;
     await dmg({ appDir: layout.appDir, name: opts.name, outDmg: join(out, `${opts.name}.dmg`) });

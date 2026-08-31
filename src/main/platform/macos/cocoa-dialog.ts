@@ -6,11 +6,9 @@ import type { Handle } from './objc';
 /**
  * Native modal dialogs via `NSAlert`, `NSOpenPanel`, and `NSSavePanel`.
  *
- * Each dialog is split into a non-blocking *build* step (alloc + configure the
- * panel — fully testable) and a *run* step that calls the blocking `runModal`.
- * `runModal` spins a nested AppKit modal loop and cannot run on a headless CI
- * display, so only the build steps are covered by automated tests; the run
- * steps are exercised in real apps (mirroring the D019/D022 testing approach).
+ * Each dialog is split into a non-blocking *build* step and a *run* step that
+ * calls the blocking `runModal`, which spins a nested AppKit modal loop and
+ * cannot run on a headless CI display.
  */
 
 /** `NSModalResponseOK` for save/open panels. */
@@ -33,7 +31,7 @@ export type MessageBoxSpec = {
 /**
  * Map an Electron message-box `type` to an `NSAlertStyle` value
  * (warning = 0, informational = 1, critical = 2), or `undefined` to leave the
- * `NSAlert` default. Pure.
+ * `NSAlert` default.
  */
 export const alertStyleForType = (type: MessageBoxType | undefined): bigint | undefined => {
   switch (type) {

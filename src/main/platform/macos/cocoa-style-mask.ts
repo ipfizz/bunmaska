@@ -1,11 +1,6 @@
 /**
  * Compose a Cocoa `NSWindowStyleMask` value from a high-level style description.
- *
- * Pure bit-packing helper — no FFI, no side effects. Lives in `platform/macos/`
- * because the bit positions are part of the Cocoa ABI; consumers should not
- * import this directly except from the macOS native binding layer.
- *
- * See AppKit/NSWindow.h for the canonical enum values.
+ * The bit positions are Cocoa ABI; see AppKit/NSWindow.h for the canonical values.
  */
 
 export type CocoaWindowStyle = {

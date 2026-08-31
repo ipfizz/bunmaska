@@ -17,14 +17,9 @@ import {
 export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 
 /**
- * WebKitGTK 6.0 IPC bridge — the Linux mirror of `cocoa-script-message-handler`.
- *
- * Builds a fully-wired `WebKitUserContentManager` BEFORE the view is
- * constructed, then constructs the view with that manager as a construct-only
- * property. The renderer posts envelopes via
- * `window.webkit.messageHandlers.bunmaska.postMessage(json)`; the main process
- * pushes envelopes back via `evaluate_javascript` calling
- * `window.__bunmaska._dispatch(...)` (fire-and-forget, D022).
+ * WebKitGTK 6.0 IPC bridge. The `WebKitUserContentManager` must be fully wired
+ * BEFORE the view is constructed (it is a construct-only property); envelopes go
+ * back to the renderer fire-and-forget via `evaluate_javascript` (D022).
  */
 
 /** The script-message handler name the preload bridge posts to. */
@@ -48,31 +43,12 @@ export type WiredWebView = {
   readonly registry: SignalRegistry;
 };
 
-/** Options for {@link createWebViewWithIpc}. */
 export type WebViewIpcOptions = {
   /** The preload bridge source injected at document-start in the isolated world. */
   readonly preloadSource: string;
-  /**
-   * Optional user preload source injected at document-start in the isolated
-   * world AFTER the bridge + contextBridge host, so `window.__bunmaska` and
-   * `exposeInMainWorld` exist when it runs.
-   */
   readonly userPreloadSource?: string;
-  /**
-   * Source injected into the ISOLATED world BEFORE the bridge (e.g. the
-   * contextBridge channel-id setup). Optional.
-   */
   readonly isolatedSetupSource?: string;
-  /**
-   * The contextBridge host source injected into the ISOLATED world AFTER the
-   * bridge and BEFORE the user preload — it installs
-   * `window.__bunmaska.exposeInMainWorld`. Optional.
-   */
   readonly isolatedHostSource?: string;
-  /**
-   * Source injected into the PAGE/main world (world_name = NULL) — the
-   * cross-world contextBridge stub (Phase B). Optional.
-   */
   readonly pageWorldSource?: string;
   /** Called with each JSON envelope the renderer posts. */
   readonly onMessage: (json: string) => void;
@@ -85,7 +61,6 @@ export type WebViewIpcOptions = {
   readonly onDomReady?: () => void;
 };
 
-/** Assert a native call returned a real (non-NULL) pointer. */
 const requirePointer = (ptr: Pointer | null, what: string): Pointer => {
   if (ptr === null) {
     throw new Error(`WebKitGTK returned a NULL pointer for ${what}`);
@@ -111,11 +86,6 @@ const addUserScript = (ucm: Pointer, source: string): void => {
   webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script'));
 };
 
-/**
- * Build a `WebKitUserScript` from `source` for the PAGE/main world (world_name =
- * NULL) and add it at document-start in all frames — the Phase B cross-world
- * stub injection path.
- */
 const addPageWorldScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
   const script = webkit.symbols.webkit_user_script_new(
@@ -129,15 +99,10 @@ const addPageWorldScript = (ucm: Pointer, source: string): void => {
 };
 
 /**
- * Create a `WebKitWebView` with a pre-wired user-content-manager:
- * 1. `webkit_user_content_manager_new()`
- * 2. connect `script-message-received::bunmaska` BEFORE register (documented race)
- * 3. `register_script_message_handler(ucm, 'bunmaska', 'BunmaskaPreload')` (isolated world)
- * 4. add the preload user-script at document-start in all frames (isolated world)
- * 5. construct the view via `g_object_new(webkit_web_view_get_type(),
- *    'user-content-manager', ucm, NULL)` — the manager is construct-only.
- *
- * The trailing `g_object_new` arg MUST be a true null terminator (0).
+ * Create a `WebKitWebView` with a pre-wired user-content-manager. Connect each
+ * `script-message-received::` signal BEFORE registering its handler (documented
+ * race), then pass the manager to `g_object_new` as a construct-only property —
+ * its trailing arg MUST be a true null terminator (0).
  */
 export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView => {
   const webkit = loadWebKitGtkFFI();

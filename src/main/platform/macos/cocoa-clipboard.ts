@@ -6,7 +6,6 @@ import { cocoa } from './cocoa-runtime';
 /**
  * macOS clipboard access via `NSPasteboard`.
  *
- * Plain-text and HTML read/write against the general pasteboard.
  * `NSPasteboardTypeString` is the UTI `public.utf8-plain-text` and
  * `NSPasteboardTypeHTML` is `public.html`; we pass them by value rather than
  * reading the exported constants, which is simpler and stable across macOS
@@ -121,7 +120,6 @@ export const availableFormats = (): string[] => {
   return formats;
 };
 
-/** Clear the clipboard. */
 export const clear = (): void => {
   cocoa().msgSend(generalPasteboard(), cocoa().selectors.get('clearContents'));
 };

@@ -9,28 +9,19 @@ import type { Handle } from './objc';
 /**
  * macOS status-bar items via `NSStatusItem` — the macOS half of Bunmaska's `Tray`.
  *
- * A status item is created from the system status bar and configured through its
- * `NSStatusBarButton` (the `-[NSStatusItem button]`): the icon (`NSImage` loaded
- * from a file path), the tooltip, and the title text shown next to the icon.
- *
  * RETAIN: `[NSStatusBar systemStatusBar] statusItemWithLength:` returns an
  * autoreleased item that AppKit otherwise owns; Bunmaska retains it on creation so
  * the bigint handle stays valid for the tray's whole lifetime, and releases it in
  * {@link TrayInstance.destroy} after `removeStatusItem:`.
  *
- * CONTEXT MENU: a tray context menu is an `NSMenu` set on the status item via
- * `setMenu:`. We reuse the exact `cocoa-menu` realizer (`realizeMenu`) that the
- * `Menu` API uses, so item click routing flows through the shared
- * `BunmaskaMenuTarget` registry. When a menu is set, AppKit shows it on click.
- *
  * CLICK: the status button's target/action is wired to a retained
- * `BunmaskaTrayTarget` (mirroring `BunmaskaMenuTarget`) whose IMP looks the button up
- * in a registry and fires the JS `click` callback. The target object and its
- * `JSCallback` are retained for the runtime's lifetime (the class is registered
- * once and never torn down), so the IMP is never freed inside its own
- * invocation — avoiding the lifecycle SIGSEGV class. NOTE: when a context menu is
- * set, AppKit consumes the click to show the menu, so `click` fires only when no
- * menu is set (this matches Electron's "menu shows on click" behaviour).
+ * `BunmaskaTrayTarget` whose IMP looks the button up in a registry and fires the
+ * JS `click` callback. The target object and its `JSCallback` are retained for the
+ * runtime's lifetime (the class is registered once and never torn down), so the
+ * IMP is never freed inside its own invocation — avoiding the lifecycle SIGSEGV
+ * class. NOTE: when a context menu is set, AppKit consumes the click to show the
+ * menu, so `click` fires only when no menu is set (this matches Electron's
+ * "menu shows on click" behaviour).
  */
 
 /** `NSVariableStatusItemLength` — a variable-width status item. */
@@ -153,7 +144,6 @@ const create = (image: string): TrayInstance => {
   };
 };
 
-/** The macOS native tray backend (NSStatusItem). */
 export const macosTrayBackend: TrayBackend = {
   create,
 };

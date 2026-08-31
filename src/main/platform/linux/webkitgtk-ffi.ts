@@ -7,17 +7,9 @@ import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine
  * Loads WebKitGTK 6.0 — the Linux system-WebKit web view (the role
  * `WebKit.framework` plays on macOS).
  *
- * `webkit_web_view_new()` returns a `GtkWidget*` set as a window's child via
- * `gtk_window_set_child`. URLs and inline HTML load through `load_uri` /
- * `load_html`; `get_uri` reads the current address back. JS evaluation and the
- * user-content-manager IPC bridge are wired here too.
- *
  * Convention: `gboolean` is {@link FFIType.i32} (compare `!== 0`); handles are
  * real pointers; nullable string args use {@link FFIType.pointer} (Bun's
  * `cstring` cannot encode NULL).
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBWEBKITGTK_PATH = 'libwebkitgtk-6.0.so.4';
@@ -29,12 +21,13 @@ export const WEBKIT_LOAD_FINISHED = 3;
 export const WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES = 0;
 /** `WebKitUserScriptInjectionTime`: inject the preload at document start. */
 export const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START = 0;
+/** `WebKitSnapshotRegion`: the visible viewport (Electron `capturePage` semantics), not FULL_DOCUMENT (1). */
+export const WEBKIT_SNAPSHOT_REGION_VISIBLE = 0;
+/** `WebKitSnapshotOptions`: no selection highlight, opaque background. */
+export const WEBKIT_SNAPSHOT_OPTIONS_NONE = 0;
 
 /**
- * The WebKitGTK 6.0 FFI symbol descriptor table.
- *
- * Declared separately from {@link loadWebKitGtkFFI} so unit tests can assert ABI
- * shapes without `dlopen` on a non-Linux host. Load-bearing details:
+ * The WebKitGTK 6.0 FFI symbol descriptor table. Load-bearing details:
  * - `load_html` base_uri is {@link FFIType.pointer} (nullable; was wrongly
  *   `cstring` in the scaffolding) — pass a pinned NUL-terminated Buffer or 0.
  * - `evaluate_javascript` is the 8-arg WK6.0 form; length is `i64` (-1 for
@@ -222,6 +215,66 @@ export const WEBKITGTK_FFI_SYMBOLS = {
   webkit_uri_scheme_request_finish_error: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
+  },
+  // () -> WebKitNetworkSession* (the process-default session; transfer-none).
+  webkit_network_session_get_default: {
+    args: [],
+    returns: FFIType.pointer,
+  },
+  // (WebKitNetworkSession*) -> WebKitCookieManager* (transfer-none).
+  webkit_network_session_get_cookie_manager: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (manager, cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  webkit_cookie_manager_get_all_cookies: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (manager, GAsyncResult*, GError** /*null ok*/) -> GList* of SoupCookie*
+  // (transfer-FULL: soup_cookie_free each node's data, then g_list_free the list).
+  webkit_cookie_manager_get_all_cookies_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (manager, SoupCookie* /*NOT consumed — caller frees after the finish*/,
+  //  cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  webkit_cookie_manager_add_cookie: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (manager, GAsyncResult*, GError** /*null ok*/) -> gboolean (i32).
+  webkit_cookie_manager_add_cookie_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
+  // Same shape as add_cookie; matches on the cookie's name+domain+path.
+  webkit_cookie_manager_delete_cookie: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  webkit_cookie_manager_delete_cookie_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
+  // (view, region:WebKitSnapshotRegion /*i32 enum, VISIBLE=0*/, options /*i32 flags, NONE=0*/,
+  //  cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  webkit_web_view_get_snapshot: {
+    args: [
+      FFIType.pointer,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.void,
+  },
+  // (view, GAsyncResult*, GError** /*null ok*/) -> cairo_surface_t*
+  // (transfer-FULL: cairo_surface_destroy when done; NULL on error).
+  webkit_web_view_get_snapshot_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
   },
 } as const;
 

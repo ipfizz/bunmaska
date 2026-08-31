@@ -22,10 +22,15 @@ const finish = (line: string, code: number): never => {
 // bundled dir). Compare separator-agnostically — the resolver returns Windows
 // backslash paths regardless of how the env var was written.
 const slash = (s: string): string => s.replaceAll('\\', '/');
-const store = slash(process.env.BUNMASKA_ENGINES_PATH ?? '');
-const id = process.env.BUNMASKA_WEBKIT_ID ?? '';
+const store = slash(process.env['BUNMASKA_ENGINES_PATH'] ?? '');
+const id = process.env['BUNMASKA_WEBKIT_ID'] ?? '';
 const resolved = resolveWindowsEngineDir();
-if (resolved === undefined || store === '' || !slash(resolved).startsWith(store) || !resolved.includes(id)) {
+if (
+  resolved === undefined ||
+  store === '' ||
+  !slash(resolved).startsWith(store) ||
+  !resolved.includes(id)
+) {
   finish(`STORE_ENGINE_FAIL engine did not resolve into the store (resolved=${resolved})`, 1);
 }
 

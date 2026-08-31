@@ -1,10 +1,7 @@
 /**
- * The engine-feed trust layer for `bunmaska engine install <url>`: a published
- * engine ships a `.sig` (base64 Ed25519 signature over the artifact bytes) that
- * the CLI verifies against a public key baked into the release before extracting
- * anything. The signature primitive itself lives in `common/signature.ts` (it is
- * shared with the auto-updater); this module owns only how the ENGINE public key
- * is resolved. Same spirit as Tauri's minisign; the exact wire format can follow.
+ * The engine-feed trust layer: the signature primitive lives in
+ * `common/signature.ts` (shared with the auto-updater), so this module owns only
+ * how the ENGINE public key is resolved.
  */
 
 export {

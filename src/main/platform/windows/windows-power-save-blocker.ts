@@ -6,13 +6,9 @@ import type {
 import { loadKernel32 } from './win32-ffi';
 
 /**
- * Windows `powerSaveBlocker` backend (pure `bun:ffi`), the WinCairo peer of the
- * IOKit (macOS) and ScreenSaver-inhibit (Linux) backends. Windows exposes a
- * single per-thread execution state via `SetThreadExecutionState`, NOT a stack of
- * independent assertions — so this tracks every live blocker and re-applies the
- * COMBINED flags on each acquire/release: `ES_SYSTEM_REQUIRED` whenever any
- * blocker is held, plus `ES_DISPLAY_REQUIRED` when any of them is
- * `prevent-display-sleep`. `ES_CONTINUOUS` makes the state persist until changed.
+ * Windows exposes a single per-thread execution state via `SetThreadExecutionState`, NOT a
+ * stack of independent assertions — so this tracks every live blocker and re-applies the
+ * COMBINED flags on each acquire/release. `ES_CONTINUOUS` makes the state persist.
  */
 
 const ES_CONTINUOUS = 0x80000000;
@@ -24,7 +20,6 @@ type Entry = { readonly type: PowerSaveBlockerType };
 
 const active = new Set<Entry>();
 
-/** Re-apply the execution state for the current set of live blockers. */
 const applyExecutionState = (): void => {
   let flags = ES_CONTINUOUS;
   if (active.size > 0) {

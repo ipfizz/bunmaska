@@ -170,10 +170,10 @@ await writeFile('out.pdf', pdf);
 
 ### `contents.capturePage()`
 
-Returns `Promise<NativeImage>` - captures the page to a [`NativeImage`](native-image.md). _macOS only._ Rejects on Linux. On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no UI-process snapshot entry point (confirmed by parsing the DLL exports), so it rejects there too. No `rect` / `opts` arguments.
+Returns `Promise<NativeImage>` - captures the visible page to a [`NativeImage`](native-image.md). _macOS, Linux._ On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no UI-process snapshot entry point (confirmed by parsing the DLL exports), so it rejects there. No `rect` / `opts` arguments.
 
 ```ts
-const image = await win.webContents.capturePage(); // macOS only
+const image = await win.webContents.capturePage(); // macOS + Linux
 await writeFile('shot.png', image.toPNG());
 ```
 
@@ -307,7 +307,7 @@ if (!win.webContents.isDestroyed()) {
 * `channel` string
 * `...args` any[]
 
-Sends an event on `channel` to the renderer, where `ipcRenderer.on(channel, ...)` receives it. Arguments are structured-clone serialized through the IPC envelope.
+Sends an event on `channel` to the renderer, where `ipcRenderer.on(channel, ...)` receives it. Arguments are structured-clone serialized through the IPC envelope. A `send` before the page's first load finishes is queued and delivered once it does (macOS and Linux), so a message fired right after `loadFile` is not lost.
 
 ```ts
 win.webContents.send('update-available', { version: '1.2.0' });
@@ -416,5 +416,5 @@ Electron's `webContents` is huge; Bunmaska implements the navigation + scripting
 - **Editing & clipboard commands** - `undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`/`replace`, `cut`-style menu wiring, `replaceMisspelling`.
 - **Media / audio** - `isAudioMuted` / `setAudioMuted`, `setBackgroundThrottling`, `getOSProcessId`, `getProcessId`.
 - **`setWindowOpenHandler` with `allow`** - child-window creation is unsupported, so `{ action: 'allow' }` is logged and ignored; there is no `did-create-window`, and the handler return type omits `overrideBrowserWindowOptions`.
-- **`capturePage` / `printToPDF` off macOS** - present in the API but reject elsewhere: `UnsupportedPlatformError` on Linux, and **engine-blocked on Windows** (the WinCairo WebKit2 C API exposes neither a PDF sink nor a UI-process snapshot). Both are _macOS only_ for now.
+- **`capturePage` on Windows / `printToPDF` off macOS** - `capturePage` works on macOS and Linux but is **engine-blocked on Windows**; `printToPDF` is _macOS only_ (not yet wired on Linux, engine-blocked on Windows - the WinCairo WebKit2 C API exposes neither a PDF sink nor a UI-process snapshot).
 - **Session / zoom plumbing** - no `session` property, no `setVisualZoomLevelLimits`, no `zoomLevel` persistence across reloads (zoom is stored in-memory and reapplied per `setZoomFactor`).

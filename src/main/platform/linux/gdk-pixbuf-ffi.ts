@@ -11,28 +11,9 @@ import { currentPlatform } from '../../../common/platform';
  * shared object (`libgdk_pixbuf-2.0.so.0`) rather than living inside
  * `libgtk-4.so.1`, so it gets its own loader.
  *
- * LOAD — `gdk_pixbuf_new_from_file(path, &error)` returns a transfer-full
- * `GdkPixbuf*` (NULL on a bad/unreadable/undecodable path). `gdk_pixbuf_new_from_stream
- * (stream, cancellable, &error)` decodes from a `GInputStream` (NULL on failure);
- * the buffer path wraps the bytes in a `GMemoryInputStream` via
- * `g_memory_input_stream_new_from_bytes` (gio).
- *
- * SIZE — `gdk_pixbuf_get_width` / `gdk_pixbuf_get_height` are plain `int`
- * SCALARS (no struct crosses FFI), mirroring the macOS `pixelsWide`/`pixelsHigh`
- * scalar path.
- *
- * ENCODE — `gdk_pixbuf_save_to_bufferv(pixbuf, &buffer, &size, "png", NULL,
- * NULL, &error)` allocates a `guint8*` PNG buffer (out-param) and writes its
- * `gsize` length (out-param); the caller `g_free`s the buffer after copying it
- * out. The optionless `…v` variant is used so the trailing key/value `char**`
- * arrays are simply NULL.
- *
  * Convention (matches the existing Linux loaders): `gboolean` is {@link FFIType.i32}
  * (compare `=== 1`); `GError**`, `GCancellable*`, and the out-pointer args are
  * real pointers; `cstring` args are NUL-terminated UTF-8.
- *
- * Only callable on Linux — throws {@link UnsupportedPlatformError} otherwise so
- * the module stays safely importable on macOS for unit testing.
  */
 
 const LIBGDK_PIXBUF_PATH = 'libgdk_pixbuf-2.0.so.0';

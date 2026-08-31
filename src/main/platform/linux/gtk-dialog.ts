@@ -1,6 +1,7 @@
-import { CString, JSCallback, type Pointer, ptr } from 'bun:ffi';
+import { CString, type Pointer, ptr } from 'bun:ffi';
 import type { DialogBackend } from '../../api/dialog';
 import { cstr } from '../cstr';
+import { runAsyncReady } from './gasync';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGtkDialogFFI, loadGtkDialogGObjectFFI } from './gtk-dialog-ffi';
@@ -15,21 +16,8 @@ import { loadGtkDialogFFI, loadGtkDialogGObjectFFI } from './gtk-dialog-ffi';
  * `gtk_*_choose/open/save` call kicks off the modal dialog and invokes a
  * `GAsyncReadyCallback` when the user settles it; the matching `*_finish` reads
  * the value. The backend methods therefore return Promises (the `dialog` API's
- * `await` flattens them).
- *
- * JSCallback lifecycle safety (a past SIGSEGV regression): the
- * `GAsyncReadyCallback` thunk MUST stay reachable until GTK fires it, and it
- * MUST NOT be `close()`d synchronously inside its own invocation (that frees the
- * native trampoline the GTK caller is about to return into). Each in-flight
- * callback is therefore retained in the module-level {@link inFlight} set and
- * its `close()` is deferred to a later tick via `setTimeout(..., 0)`.
+ * `await` flattens them). Callback lifetime rules live in gasync.ts.
  */
-
-/** ABI shape for `GAsyncReadyCallback`: `(source, result, user_data) -> void`. */
-export const ALERT_CHOOSE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
-
-/** Every JSCallback awaiting a GTK async settle. Retained so Bun can't GC it. */
-const inFlight = new Set<JSCallback>();
 
 /**
  * The NULL-terminated `const char* const*` button-label array for
@@ -48,7 +36,6 @@ export type ButtonsArray = {
   readonly buffers: ReadonlyArray<Uint8Array>;
 };
 
-/** Build the NULL-terminated `const char* const*` array of button labels. */
 export const buildButtonsArray = (labels: ReadonlyArray<string>): ButtonsArray => {
   const buffers = labels.map((label) => cstr(label));
   const array = new BigUint64Array(buffers.length + 1);
@@ -88,9 +75,8 @@ export type SettleChooseArgs = {
 };
 
 /**
- * Produce the message-box response from a `GAsyncResult`. Pure but for the
- * injected `finish`, so it is unit-testable without a real dialog. A thrown
- * `finish` (the `GError` dismissal path) maps to `cancelId`.
+ * Produce the message-box response from a `GAsyncResult`. A thrown `finish`
+ * (the `GError` dismissal path) maps to `cancelId`.
  */
 export const settleChoose = (args: SettleChooseArgs): number => {
   let index: number;
@@ -113,7 +99,7 @@ export type SettleFilePathArgs = {
 
 /**
  * Produce a file path from a `GAsyncResult`. A null `GFile*` (cancel) or a
- * thrown `finish` (dismissal) yields `''`. Pure but for the injected functions.
+ * thrown `finish` (dismissal) yields `''`.
  */
 export const settleFilePath = (args: SettleFilePathArgs): string => {
   let file: Pointer | null;
@@ -138,34 +124,6 @@ const readGFilePath = (file: Pointer): string => {
   return path;
 };
 
-/**
- * Run a one-shot GTK async dialog: register a retained `GAsyncReadyCallback`,
- * invoke `start` to kick off the dialog, and resolve the returned Promise from
- * the callback. The callback is removed from {@link inFlight} and closed on a
- * later tick (NEVER synchronously inside its own invocation).
- */
-const runAsyncDialog = <T>(
-  start: (callbackPtr: Pointer) => void,
-  settle: (result: Pointer) => T,
-): Promise<T> =>
-  new Promise<T>((resolve) => {
-    const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
-      const value = settle(result);
-      resolve(value);
-      setTimeout(() => {
-        inFlight.delete(callback);
-        callback.close();
-      }, 0);
-    }, ALERT_CHOOSE_CB_DEF);
-    inFlight.add(callback);
-    const cbPtr = callback.ptr;
-    if (cbPtr === null) {
-      inFlight.delete(callback);
-      throw new Error('Failed to allocate a GAsyncReadyCallback thunk for the GTK dialog');
-    }
-    start(cbPtr);
-  });
-
 const showMessageBox = (spec: {
   readonly message: string;
   readonly detail: string;
@@ -188,7 +146,7 @@ const showMessageBox = (spec: {
   const buttons = buildButtonsArray(labels);
   gtk.symbols.gtk_alert_dialog_set_buttons(dialog, ptr(buttons.array.buffer));
   const cancelId = cancelIdForButtons(labels);
-  return runAsyncDialog<number>(
+  return runAsyncReady<number>(
     (cbPtr) => gtk.symbols.gtk_alert_dialog_choose(dialog, null, null, cbPtr, null),
     (result) =>
       settleChoose({
@@ -237,7 +195,7 @@ const showOpenDialog = (spec: {
   gtk.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Open'));
   gtk.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
   applyExtensionFilter(gtk, fileDialog, spec.extensions);
-  return runAsyncDialog<string[]>(
+  return runAsyncReady<string[]>(
     (cbPtr) => gtk.symbols.gtk_file_dialog_open(fileDialog, null, null, cbPtr, null),
     (result) => {
       const path = settleFilePath({
@@ -265,7 +223,7 @@ const showSaveDialog = (spec: {
     gtk.symbols.gtk_file_dialog_set_initial_name(fileDialog, cstr(spec.defaultName));
   }
   applyExtensionFilter(gtk, fileDialog, spec.extensions);
-  return runAsyncDialog<string>(
+  return runAsyncReady<string>(
     (cbPtr) => gtk.symbols.gtk_file_dialog_save(fileDialog, null, null, cbPtr, null),
     (result) =>
       settleFilePath({

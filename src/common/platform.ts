@@ -1,9 +1,7 @@
 /**
- * Platform identification for Bunmaska.
- *
- * This is the *only* module that is allowed to read `process.platform` and
- * `process.arch`. All other code calls {@link currentPlatform},
- * {@link currentArch} or {@link isSupported}.
+ * The *only* module allowed to read `process.platform` and `process.arch`. All
+ * other code calls {@link currentPlatform}, {@link currentArch} or
+ * {@link isSupported}.
  */
 
 import { UnsupportedPlatformError } from './errors';
@@ -26,10 +24,7 @@ const RAW_TO_ARCH = new Map<string, Arch>([
 
 const SUPPORTED: ReadonlySet<Platform> = new Set<Platform>(['macos', 'linux', 'windows']);
 
-/**
- * Map a Node-style platform tag (`'darwin'`, `'linux'`, `'win32'`) to Bunmaska's
- * canonical platform tag. Throws on anything unrecognised.
- */
+/** Map a Node platform tag (`'darwin'`, `'win32'`, …) to ours. Throws if unrecognised. */
 export const mapPlatform = (raw: string): Platform => {
   const mapped = RAW_TO_PLATFORM.get(raw);
   if (mapped === undefined) {
@@ -38,23 +33,13 @@ export const mapPlatform = (raw: string): Platform => {
   return mapped;
 };
 
-/**
- * Whether Bunmaska currently ships a working backend for this platform.
- * macOS (AppKit + WKWebView), Linux (GTK + WebKitGTK), and Windows (Win32 +
- * WinCairo WebKit from the engine store) are all supported.
- */
+/** Whether Bunmaska currently ships a working backend for this platform. */
 export const isSupported = (platform: Platform): boolean => SUPPORTED.has(platform);
 
-/**
- * The canonical platform tag of the host this code is running on.
- * Throws if the host OS is not one Bunmaska knows how to recognise at all.
- */
+/** The host's platform tag. Throws if the OS is not one Bunmaska recognises. */
 export const currentPlatform = (): Platform => mapPlatform(process.platform);
 
-/**
- * Map a Node-style architecture tag (`'x64'`, `'arm64'`) to Bunmaska's canonical
- * arch tag. Throws on anything Bunmaska does not build distributables for.
- */
+/** Map a Node arch tag to ours. Throws on an arch we build no distributables for. */
 export const mapArch = (raw: string): Arch => {
   const mapped = RAW_TO_ARCH.get(raw);
   if (mapped === undefined) {
@@ -63,8 +48,5 @@ export const mapArch = (raw: string): Arch => {
   return mapped;
 };
 
-/**
- * The canonical architecture tag of the host this code is running on.
- * Throws if the host CPU is not one Bunmaska builds distributables for.
- */
+/** The host's arch tag. Throws on a CPU we build no distributables for. */
 export const currentArch = (): Arch => mapArch(process.arch);

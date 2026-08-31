@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import * as electronShim from '../../src/electron';
 import { createElectronShim } from '../../src/electron';
 import { notImplementedMessage } from '../../src/main/module-list';
 
@@ -24,5 +25,21 @@ describe('createElectronShim', () => {
     const shim = createElectronShim({ clipboard: 'CB' });
     expect(() => shim['clipboard']).not.toThrow();
     expect(shim['clipboard']).toBe('CB');
+  });
+});
+
+describe('bunmaska/electron named exports', () => {
+  test('exposes the modules the migration guide tells people to import', () => {
+    // `import { app, BrowserWindow } from 'bunmaska/electron'` is the documented
+    // drop-in path; it used to throw because only a default export existed.
+    expect(electronShim.app).toBeDefined();
+    expect(typeof electronShim.BrowserWindow).toBe('function');
+    expect(typeof electronShim.ipcMain).toBe('object');
+  });
+
+  test('still ships the Proxy default whose property access is actionable', () => {
+    const surface = electronShim.default as Record<string, unknown>;
+    expect(surface['app']).toBe(electronShim.app);
+    expect(() => surface['netLog']).toThrow(/not yet implemented/);
   });
 });

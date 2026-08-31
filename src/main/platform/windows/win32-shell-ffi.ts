@@ -2,10 +2,8 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * shell32.dll desktop-integration FFI for the Windows `shell` backend.
- * `ShellExecuteW` is the flat-C verb-dispatcher (open a URL/file, reveal an item
- * in Explorer) — no COM. It returns an `HINSTANCE`-typed status: a value GREATER
- * than 32 means success; 0–32 is an `SE_ERR_*` failure code.
+ * shell32.dll desktop-integration FFI. `ShellExecuteW` returns an `HINSTANCE`-typed
+ * status: a value GREATER than 32 means success; 0–32 is an `SE_ERR_*` failure code.
  */
 const SHELL32_SYMBOLS = {
   // (HWND, LPCWSTR verb, LPCWSTR file, LPCWSTR params, LPCWSTR dir, INT show)

@@ -1,10 +1,6 @@
 /**
- * Launch-time WebKit engine resolution — the runtime half of "tested ==
- * shipped". Decides, for THIS process, whether to load the OS WebView (the
- * default) or a pinned engine from the shared store, by reading the engine-id
- * the app was built against. Pure decision logic over injected seams (env, fs,
- * the baked-id reader) so it unit-tests on any host; the actual `dlopen` of the
- * resolved path happens in the Linux loaders.
+ * Launch-time WebKit engine resolution: whether THIS process loads the OS WebView
+ * (the default) or a pinned engine from the shared store.
  *
  * Precedence: `BUNMASKA_WEBKIT_PATH` (explicit dir) > `BUNMASKA_WEBKIT_ID` (env
  * id) > the baked `engine.id` next to the executable > the `system` sentinel.
@@ -51,7 +47,7 @@ export type ResolveDeps = {
 /**
  * Candidate paths for the baked `engine.id`, in priority order: the explicit env
  * override, then the install layout `usr/share/<slug>/engine.id` (relative to the
- * executable at `usr/bin/<slug>`), then a flat sibling fallback. Pure + testable.
+ * executable at `usr/bin/<slug>`), then a flat sibling fallback.
  */
 export const bakedIdCandidates = (execPath: string, env: StoreEnv): string[] => {
   const explicit = env['BUNMASKA_ENGINE_ID_FILE'];
@@ -79,7 +75,7 @@ const defaultReadBakedId = (env: StoreEnv): string | null => {
   return null;
 };
 
-/** Resolve the engine decision from explicit deps. Pure (no ambient globals besides defaults). */
+/** Resolve the engine decision from explicit deps. */
 export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
   const env = deps.env ?? process.env;
   const exists = deps.exists ?? existsSync;
@@ -140,22 +136,17 @@ export const resetEngineResolution = (): void => {
   cache.value = undefined;
 };
 
-/**
- * The path to pass `dlopen` for one library given a resolution: an absolute path
- * into the pinned engine's `lib/`, or the bare soname for the system loader path.
- */
+/** The `dlopen` path for a library: absolute into a pinned `lib/`, else the bare soname. */
 export const engineLibPath = (resolution: EngineResolution, soname: string): string =>
   resolution.mode === 'pinned' && resolution.libDir !== undefined
     ? join(resolution.libDir, soname)
     : soname;
 
 /**
- * The environment overrides needed for a pinned engine: prepend its `lib/` to
- * `LD_LIBRARY_PATH` so its bundled GTK/libsoup/ICU/GStreamer win over the
- * distro's, point `GIO_EXTRA_MODULES` at its gio modules, and point
- * `WEBKIT_EXEC_PATH` at its `libexec/` so WebKit spawns the engine's OWN helper
+ * Environment overrides for a pinned engine: `LD_LIBRARY_PATH` prepended so its
+ * bundled GTK/libsoup/ICU/GStreamer win over the distro's, `GIO_EXTRA_MODULES` for
+ * its gio modules, and `WEBKIT_EXEC_PATH` so WebKit spawns the engine's OWN helper
  * processes (WebKitNetworkProcess/WebProcess/GPUProcess) rather than the system's.
- * Empty in system mode.
  */
 export const engineEnv = (
   resolution: EngineResolution,
@@ -184,13 +175,11 @@ export type PrepareDeps = {
 };
 
 /**
- * Apply a resolution to the process before the first `dlopen`: print any
- * fallback warnings, export `LD_LIBRARY_PATH` / `GIO_EXTRA_MODULES` for a pinned
- * engine's bundled deps, and — for a STORE pin — register this app in the store's
- * refcount (`.links`) so GC/prune know the engine is needed. Runs once per
- * process: both Linux loaders call it, only the first takes effect, keeping them
- * on a single shared engine. The link write is best-effort (a read-only store
- * must not stop the app from launching).
+ * Apply a resolution before the first `dlopen`: print fallback warnings, export the
+ * pinned engine's env, and — for a STORE pin — register this app in the store's
+ * `.links` refcount so GC/prune know the engine is needed. Runs once per process:
+ * both Linux loaders call it, only the first takes effect, keeping them on a single
+ * shared engine.
  */
 export const prepareEngineForLoad = (
   resolution: EngineResolution,

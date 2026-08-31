@@ -2,9 +2,6 @@ import { ptr, read } from 'bun:ffi';
 import { loadUser32 } from './win32-ffi';
 
 /**
- * Windows drain for the shared {@link CooperativePump} (mirrors
- * `macos/cocoa-run-loop.ts` and `linux/gtk-run-loop.ts`).
- *
  * Each tick removes and dispatches up to {@link DRAIN_BUDGET} queued messages
  * with a NON-BLOCKING `PeekMessage`/`TranslateMessage`/`DispatchMessage` loop.
  * It must NEVER call `GetMessage` (which blocks until a message arrives) nor a

@@ -7,7 +7,7 @@ import type { ParsedAccelerator } from '../../api/accelerator';
  * Carbon's `RegisterEventHotKey` wants a hardware virtual key code (US layout)
  * and a modifier mask, NOT a character. These tables map our parsed accelerator
  * key/modifiers onto those. Values are the canonical `kVK_*` constants from
- * `HIToolbox/Events.h`. No FFI lives here so the mapping is unit-testable.
+ * `HIToolbox/Events.h`.
  */
 
 /** Carbon modifier mask bits (Events.h `cmdKey`, `shiftKey`, `optionKey`, `controlKey`). */
@@ -106,7 +106,9 @@ export const macVirtualKeyCode = (key: string): number | undefined =>
 /** Build the Carbon modifier mask for a parsed accelerator (CmdOrCtrl already resolved). */
 export const carbonModifierMask = (parsed: ParsedAccelerator): number => {
   let mask = 0;
-  if (parsed.meta) {
+  // Electron: Super/Meta is Cmd on macOS. Ignoring parsed.super registered
+  // 'Super+K' as a bare-K global grab.
+  if (parsed.meta || parsed.super) {
     mask |= CMD_KEY;
   }
   if (parsed.shift) {

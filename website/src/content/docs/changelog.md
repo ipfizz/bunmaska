@@ -4,7 +4,37 @@ description: Every published release gets an entry here - what shipped, what bro
 order: 2
 ---
 
-The current version is **`0.1.0-alpha.6`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
+The current version is **`0.1.0-alpha.7`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
+
+## `0.1.0-alpha.7`
+
+The dev loop, rebuilt - and updates you can actually ship. Plus the API cells the parity page had been admitting to: `session.cookies`, Linux `capturePage`, and real macOS window geometry.
+
+**Highlights**
+
+- **Bunmaska owns the renderer build.** A `renderer` block in `bunmaska.config.ts` (`entry` / `outDir` / `copy`) makes `bunmaska dev` rebuild and **live-reload** on a renderer change instead of restarting the app, and `bunmaska build` ships the output as `renderer/` beside the executable on all three platforms. The output is deliberately one recipe - a classic IIFE bundle (`file://` blocks ES modules) with `NODE_ENV=development` defined (Bun emits `jsxDEV` regardless of tsconfig; the production React runtime stubs it out). See [Building & Distribution](/docs/building#bundling-your-renderer).
+- **A dev loop that doesn't waste saves.** Changes are content-hashed, so a no-op save or metadata touch no longer restarts anything; atomic editor saves are never lost (directory rescan with a seeded content baseline); restarts await the old process's exit (no double windows, no lost single-instance lock); preload edits restart instead of re-injecting the stale script; `dist/` is watched so your own bundler's output live-reloads; a reload after the app quit says "app is not running" instead of pretending. `dev` and `run` now respect the [engine pin](/docs/concepts/engine) too.
+- **Window position survives dev restarts.** The first window's bounds persist to `.bunmaska-dev-state.json` (the scaffold's `.gitignore` covers it) and are restored on the next start. Strictly dev-only - a packaged app never touches it.
+- **Updates you can actually ship.** `bunmaska keygen` mints an Ed25519 key pair; `build --update --update-key` writes a detached `.sig` beside the artifact (skipping the key warns loudly - the runtime **refuses unsigned updates**); `setFeedURL` takes `{ url, publicKey, channel }`, requires https, and rejects cross-channel or cross-platform manifests; and `quitAndInstall` performs a **real swap** - a detached helper waits for exit, extracts to a temp sibling, rename-swaps, and relaunches. Zip-bomb size caps guard the decompression. `AutoUpdaterImpl` is exported (the docs said so; now it's true), and the installer stays injectable. [The full flow](/docs/building#auto-updates).
+- **`session.cookies` on macOS and Linux.** `get`/`set`/`remove` with Electron's filter semantics. Windows rejects honestly (the WinCairo C API has no cookie read/write entry points), and macOS cannot persist `httpOnly` (no public NSHTTPCookie key). See [session](/docs/api/session).
+- **`capturePage` on Linux** via `webkit_web_view_get_snapshot` - the visible viewport as a PNG-backed `NativeImage`.
+- **Real macOS window geometry.** `getBounds` now reads the actual on-screen frame from the window server, in global top-left coordinates (Electron's contract - beating the `bun:ffi` no-struct-return wall via `CGWindowListCopyWindowInfo`); `setBounds`/`setPosition`/`setSize` set the frame in the same space, and a `move` event fires on drags.
+- **`--notarize` is real.** With `APPLE_ID`, `TEAM_ID`, and `BUNMASKA_NOTARIZE_PASSWORD` set it zips the signed `.app`, submits via `xcrun notarytool --wait`, and staples the ticket; missing credentials skip with guidance instead of failing the build.
+
+**Fixes**
+
+- `import { app } from 'bunmaska/electron'` works - the shim now has named exports, as the migration guide always claimed.
+- `webContents.send` before the first load finishes is queued and delivered on `did-finish-load` on macOS, matching Linux.
+- `Menu.setApplicationMenu(null)` actually clears the native menu bar (it used to only null the stored reference).
+- `Super`/`Meta` in accelerators maps to Cmd on macOS (it used to register the bare key).
+- X11 global shortcuts match their exact modifiers and survive NumLock/CapsLock (all four lock-bit grab variants are registered).
+- Windows `getClientSize` reads the RECT via the pointer, not the stale JS view of the buffer.
+- Registering a duplicate ObjC runtime class name throws instead of silently corrupting (nil `objc_allocateClassPair` + `class_addMethod`).
+
+**Housekeeping**
+
+- `tools/` and `scripts/` are under the same lint + type-check gates as `src/`.
+- A comment-accuracy and test-suite pass: stale claims corrected, change-detector tests pruned, and the per-OS test budgets ratcheted to each CI leg's measured numbers.
 
 ## `0.1.0-alpha.6`
 

@@ -1,11 +1,7 @@
 /**
- * Backend-neutral contracts for the native platform layer.
- *
- * Everything above `platform/` (the public `api/` classes) depends only on
- * these interfaces, never on a concrete backend (`platform/macos`,
- * `platform/linux`). Platform-specific handles (`id`, `SEL`, `GtkWidget*`)
- * never appear here — the seam speaks only plain TS: numbers, strings, and
- * callbacks (D024).
+ * Backend-neutral contracts for the native platform layer: no platform-specific
+ * handle (`id`, `SEL`, `GtkWidget*`) ever appears here — the seam speaks only plain
+ * TS: numbers, strings, and callbacks (D024).
  */
 
 /** A rectangle in screen/content coordinates. */
@@ -121,12 +117,12 @@ export interface NativeWebContents {
   executeJavaScript(code: string): Promise<unknown>;
   /**
    * Render the page to a PDF and resolve to its bytes (Electron's `printToPDF`).
-   * Rejects on platforms without a page-to-PDF API (Linux/WebKitGTK).
+   * Rejects on platforms without a page-to-PDF API (WebKitGTK, WinCairo).
    */
   printToPDF(): Promise<Uint8Array>;
   /**
    * Capture the page to a PNG image and resolve to its bytes (Electron's
-   * `capturePage`). Rejects on platforms where it is not yet wired (Linux).
+   * `capturePage`). Rejects where it is not yet wired (Windows).
    */
   capturePage(): Promise<Uint8Array>;
   /** Open the native web inspector (devtools) for this view. Best-effort. */
@@ -172,6 +168,7 @@ export type WindowEventType =
   | 'show'
   | 'hide'
   | 'resize'
+  | 'move'
   | 'maximize'
   | 'unmaximize'
   | 'minimize'

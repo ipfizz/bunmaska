@@ -45,7 +45,6 @@ export const copyAppAssets = (entry: string, destination: string): string[] => {
   return copied;
 };
 
-/** Shipped asset names treated as the renderer preload, by convention. */
 const PRELOAD_ASSET = /^preload\.(?:js|mjs|cjs)$/i;
 
 /**

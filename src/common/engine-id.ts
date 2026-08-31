@@ -1,18 +1,12 @@
 /**
- * The WebKit engine-id: the content address of one pinned engine build, and the
- * single source of truth for how Bunmaska names engines on disk.
+ * The content address of one pinned engine build. Many engine versions coexist in
+ * the store and the WebKitGTK 6.0 soname (`libwebkitgtk-6.0.so.4`) is shared across
+ * every upstream release, so the id — not the soname — carries the version.
  *
- * The store keys directories on this id so that MANY engine versions coexist
- * side by side (Playwright's browser-registry model), and every app resolves the
- * exact id it was built against — there is no global "current" engine. The
- * WebKitGTK 6.0 soname (`libwebkitgtk-6.0.so.4`) is shared across every upstream
- * release, so the soname cannot identify a version; the id encodes the full
- * upstream version + our build revision instead.
- *
- * Format: a flat, all-dash, six-field string where NO field may contain a dash,
- * so it splits unambiguously: `<engine>-<api>-<upstream>-<rev>-<os>-<arch>`
- * (e.g. `webkitgtk-6.0-2.52.4-bunmaska1-linux-x64`). `'system'` is a reserved
- * sentinel — "use the OS WebView", the default — and is never a parseable id.
+ * Format: `<engine>-<api>-<upstream>-<rev>-<os>-<arch>` (e.g.
+ * `webkitgtk-6.0-2.52.4-bunmaska1-linux-x64`) where NO field may contain a dash, so
+ * it splits unambiguously. `'system'` is a reserved sentinel meaning "use the OS
+ * WebView" and is never a parseable id.
  */
 
 import { InvalidArgumentError } from './errors';
@@ -22,7 +16,6 @@ import type { Arch } from './platform';
 /** Which web-engine family a build belongs to (`webkit` covers WinCairo + macOS; D044). */
 export type EngineFamily = 'webkitgtk' | 'webkit';
 
-/** The OS an engine binary targets. */
 export type EngineOs = 'linux' | 'macos' | 'windows';
 
 /** The structured form of an engine-id. */

@@ -25,7 +25,7 @@ import type {
 import { windowControlsScript } from '../window-controls';
 import * as cocoaApp from './cocoa-app';
 import { createAppDelegate } from './cocoa-app-delegate';
-import { makeOneShotBlock } from './cocoa-block';
+import { cancelOneShotBlock, makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import { cancelMenuTracking, popUpMenu } from './cocoa-menu';
@@ -48,6 +48,9 @@ import {
 import { nsDataToBytes } from './cocoa-native-image';
 import { createNavigationDelegate } from './cocoa-navigation-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
+import { primaryDisplayHeight } from './cocoa-screen';
+import { msgSendRectU8 } from './cocoa-msgsend-variants';
+import { readWindowBounds } from './cocoa-window-bounds';
 import { cocoa } from './cocoa-runtime';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
 import {
@@ -63,10 +66,9 @@ import { createWindowDelegate } from './cocoa-window-delegate';
 import type { Handle } from './objc';
 
 /**
- * The macOS native backend: concrete `NativeApplication` / `NativeWindow` /
- * `NativeWebContents` built on the AppKit + WebKit FFI primitives and the
- * cooperative CF run-loop pump (D020). All Objective-C handles stay as bigints
- * (D016/D029); selectors are resolved through the shared runtime cache.
+ * The macOS native backend: `NativeApplication` / `NativeWindow` /
+ * `NativeWebContents` on the AppKit + WebKit FFI primitives and the cooperative
+ * CF run-loop pump (D020). Objective-C handles stay bigints (D016/D029).
  */
 
 const log = createLogger('macos-backend');
@@ -184,7 +186,6 @@ const registerCustomSchemes = (configuration: Handle): void => {
   }
 };
 
-/** The window style mask for the given options: frameless, or standard with optional resizing. */
 const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle =>
   options.frame === false
     ? BORDERLESS_WINDOW_STYLE
@@ -194,6 +195,8 @@ class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
   readonly #isolatedWorld: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
+  #didFinishLoad = false;
+  readonly #pendingEnvelopes: string[] = [];
   #navigationCallback: ((event: NativeNavigationEvent) => void) | undefined;
   #windowOpenCallback: ((url: string) => void) | undefined;
   readonly #pendingExecs = new Map<number, PendingExec>();
@@ -257,6 +260,16 @@ class MacOSWebContents implements NativeWebContents {
 
   /** @internal Called by the navigation delegate for each navigation event. */
   deliverNavigation(event: NativeNavigationEvent): void {
+    // Same contract as the Linux backend: envelopes sent before the first
+    // finished load are queued and flushed here, not silently dropped.
+    if (event.type === 'did-finish-load' && !this.#didFinishLoad) {
+      this.#didFinishLoad = true;
+      const queued = [...this.#pendingEnvelopes];
+      this.#pendingEnvelopes.length = 0;
+      for (const json of queued) {
+        this.#evaluateInWorld(dispatchScript(json), this.#isolatedWorld);
+      }
+    }
     this.#navigationCallback?.(event);
   }
 
@@ -367,6 +380,7 @@ class MacOSWebContents implements NativeWebContents {
     }
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
+        cancelOneShotBlock(block);
         reject(new Error(`printToPDF timed out after ${RENDER_TIMEOUT_MS}ms`));
       }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
@@ -401,6 +415,7 @@ class MacOSWebContents implements NativeWebContents {
     }
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
+        cancelOneShotBlock(block);
         reject(new Error(`capturePage timed out after ${RENDER_TIMEOUT_MS}ms`));
       }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
@@ -475,6 +490,10 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
+    if (!this.#didFinishLoad) {
+      this.#pendingEnvelopes.push(envelopeJson);
+      return;
+    }
     // Internal dispatch targets the ISOLATED world, where `__bunmaska` lives.
     this.#evaluateInWorld(dispatchScript(envelopeJson), this.#isolatedWorld);
   }
@@ -515,6 +534,7 @@ class MacOSWindow implements NativeWindow {
   readonly #teardown: () => void;
   readonly #releaseNative: () => void;
   #bounds: Rect;
+  #frameKnown = false;
   #tornDown = false;
   #released = false;
   #onClosed: (() => void) | undefined;
@@ -576,6 +596,16 @@ class MacOSWindow implements NativeWindow {
 
   /** @internal Surface a non-preventable lifecycle event. Called by the delegate. */
   emitEvent(type: WindowEventType): void {
+    // A user drag/resize is the one path that moves the frame without going
+    // through our setters; the delegate fires AFTER the window server settles,
+    // so this is the safe moment to trust its answer.
+    if (type === 'move' || type === 'resize') {
+      const real = readWindowBounds(this.#window);
+      if (real !== undefined) {
+        this.#bounds = real;
+        this.#frameKnown = true;
+      }
+    }
     this.#eventHandlers.get(type)?.();
   }
 
@@ -587,28 +617,56 @@ class MacOSWindow implements NativeWindow {
     return nsStringToString(cocoa().msgSend(this.#window, cocoa().selectors.get('title')));
   }
 
+  /** Set the FRAME rect from a top-left global rect (Electron's space). */
+  #setFrameTopLeft(rect: Rect): void {
+    const bottomLeftY = primaryDisplayHeight() - rect.y - rect.height;
+    msgSendRectU8(
+      this.#window,
+      cocoa().selectors.get('setFrame:display:'),
+      [rect.x, bottomLeftY, rect.width, rect.height],
+      true,
+    );
+    this.#bounds = { ...rect };
+    this.#frameKnown = true;
+  }
+
+  /** Anchor for a setter: tracked once known, else the server, else tracked. */
+  #currentFrame(): Rect {
+    if (this.#frameKnown) {
+      return this.#bounds;
+    }
+    return readWindowBounds(this.#window) ?? this.#bounds;
+  }
+
   setSize(width: number, height: number): void {
-    msgSendSize(this.#window, cocoa().selectors.get('setContentSize:'), width, height);
-    this.#bounds = { ...this.#bounds, width, height };
+    // Electron's setSize is the WINDOW (frame) size; keep the top-left anchored.
+    const current = this.#currentFrame();
+    this.#setFrameTopLeft({ x: current.x, y: current.y, width, height });
   }
 
   setPosition(x: number, y: number): void {
-    // `setFrameOrigin:` shares the 2-double NSPoint ABI msgSendSize uses (avoiding
-    // the NSRect-by-value hazard of `setFrame:`). NOTE: macOS screen coordinates are
-    // bottom-left origin, so the top-left mapping (a screen-height flip) is a
-    // documented follow-up needing on-device verification. The tracked bounds are
-    // updated so getBounds/getPosition round-trip with what was set.
-    msgSendSize(this.#window, cocoa().selectors.get('setFrameOrigin:'), x, y);
-    this.#bounds = { ...this.#bounds, x, y };
+    const current = this.#currentFrame();
+    this.#setFrameTopLeft({ x, y, width: current.width, height: current.height });
   }
 
   setBounds(bounds: Rect): void {
-    this.setPosition(bounds.x, bounds.y);
-    this.setSize(bounds.width, bounds.height);
+    this.#setFrameTopLeft(bounds);
   }
 
   getBounds(): Rect {
-    return this.#bounds;
+    // The tracked rect is authoritative once a frame was set or observed: the
+    // window server updates ASYNCHRONOUSLY, so reading it right after our own
+    // setFrame would return the stale pre-set rect. Until then (a never-moved
+    // window whose tracked rect is the creation CONTENT size), one server read
+    // upgrades to the real frame.
+    if (!this.#frameKnown) {
+      const real = readWindowBounds(this.#window);
+      if (real !== undefined) {
+        this.#bounds = real;
+        this.#frameKnown = true;
+      }
+    }
+    return { ...this.#bounds };
   }
 
   setResizable(resizable: boolean): void {
@@ -858,7 +916,6 @@ class MacOSApplication implements NativeApplication {
     this.#onOpenFile = callback;
   }
 
-  /** macOS AppKit application operations (activation, hide/show, dock tile). */
   readonly appKit: NativeAppKit = {
     setActivationPolicy: cocoaApp.setActivationPolicy,
     hide: cocoaApp.hide,
@@ -1067,6 +1124,11 @@ class MacOSApplication implements NativeApplication {
     // process-lifetime (defineObjcClass) and are NOT released here.
     const releaseNative = (): void => {
       msgSendPtr(window, rt.selectors.get('setDelegate:'), 0n);
+      // The three delegates were alloc'd per window and previously leaked with
+      // their registry entries on every close.
+      navigationDelegate.destroy();
+      uiDelegate.destroy();
+      windowDelegate.destroy();
       cocoa().msgSend(webview, rt.selectors.get('release'));
       cocoa().msgSend(window, rt.selectors.get('release'));
     };

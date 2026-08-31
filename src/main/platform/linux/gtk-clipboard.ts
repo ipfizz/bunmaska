@@ -97,8 +97,7 @@ export type SettleReadTextArgs = {
 
 /**
  * Produce the clipboard text from a `GAsyncResult`. A null `char*` (empty/none)
- * or a thrown `finish` (GError path) yields `''`. Pure but for the injected
- * functions, so it is unit-testable without a real clipboard.
+ * or a thrown `finish` (GError path) yields `''`.
  */
 export const settleReadText = (args: SettleReadTextArgs): string => {
   let text: Pointer | null;
@@ -118,7 +117,7 @@ const readGString = (text: Pointer): string => {
   return value;
 };
 
-/** One ASYNC chunk read + the final release of a `GInputStream`, abstracted for unit-testing. */
+/** One ASYNC chunk read + the final release of a `GInputStream`. */
 export type AsyncStreamReader = {
   /** Resolve up to `count` bytes; an empty result signals EOF (or a swallowed error). */
   read(count: number): Promise<Uint8Array>;
@@ -175,8 +174,7 @@ export type SettleReadStreamArgs = {
 
 /**
  * Produce the clipboard payload from a `GAsyncResult`. A null stream (no matching
- * format) or a thrown `finish` (GError path) yields `''`. Pure but for the
- * injected functions, so it is unit-testable without a real clipboard.
+ * format) or a thrown `finish` (GError path) yields `''`.
  */
 export const settleReadStreamAsync = async (args: SettleReadStreamArgs): Promise<string> => {
   let stream: Pointer | null;

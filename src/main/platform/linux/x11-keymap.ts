@@ -4,7 +4,7 @@ import type { ParsedAccelerator } from '../../api/accelerator';
  * Pure X11 keysym-name + modifier-mask mapping for the Linux global-shortcut
  * backend. No FFI here — these map a parsed accelerator onto the X keysym NAME
  * (resolved to a real keysym via `XStringToKeysym` at registration time) and the
- * X modifier mask. Unit-tested directly.
+ * X modifier mask.
  */
 
 /** X11 modifier mask bits (`X.h`). */
@@ -16,8 +16,23 @@ export const MOD4_MASK = 1 << 6; // 64 (Super)
 /** `KeyPress` event type and the XEvent byte offsets we read (64-bit ABI). */
 export const KEY_PRESS = 2;
 export const XEVENT_TYPE_OFFSET = 0;
+/** XKeyEvent.state (uint) sits at 80, directly before keycode (Xlib.h, x64). */
+export const XKEY_STATE_OFFSET = 80;
 export const XKEY_KEYCODE_OFFSET = 84;
 export const XEVENT_BUFFER_SIZE = 192;
+
+/** Lock (CapsLock) and Mod2 (NumLock) — state bits a shortcut must not care about. */
+export const IGNORED_STATE_MASK = (1 << 1) | (1 << 4); // LockMask | Mod2Mask
+
+/**
+ * The lock-bit grab variants: `XGrabKey(mods)` never fires while NumLock or
+ * CapsLock is on, so every registration grabs all four combinations.
+ */
+export const GRAB_VARIANTS: readonly number[] = [0, 1 << 1, 1 << 4, (1 << 1) | (1 << 4)];
+
+/** Whether a KeyPress `state` matches a registered modifier mask, ignoring lock bits. Pure. */
+export const x11StateMatches = (state: number, modifiers: number): boolean =>
+  (state & ~IGNORED_STATE_MASK) === modifiers;
 
 /** `KeyPressMask` for `XSelectInput` (`X.h`). */
 export const KEY_PRESS_MASK = 1 << 0; // 1

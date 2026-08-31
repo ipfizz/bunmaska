@@ -4,10 +4,8 @@ import { createLogger } from '../../common/logger';
 import type { LockBackend } from './single-instance';
 
 /**
- * The live {@link LockBackend}: an atomic pidfile for the primary/secondary
- * decision plus a Bun unix-domain socket for argv hand-off. Stateful — it holds
- * the listening server so {@link LockBackend.stop} can close it — so each lock
- * gets its own instance via {@link createLockBackend}.
+ * The live {@link LockBackend}. Stateful — it holds the listening server so
+ * {@link LockBackend.stop} can close it — so each lock gets its own instance.
  */
 
 const log = createLogger('single-instance');

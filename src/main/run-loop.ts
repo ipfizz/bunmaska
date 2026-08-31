@@ -3,16 +3,11 @@ import { createLogger } from '../common/logger';
 /**
  * Cooperative run-loop pump.
  *
- * Bun owns the main thread and its event loop; native UI toolkits (AppKit,
- * GTK) need their own run loop pumped to process window events and render.
- * Rather than blocking the thread (which crashes Bun — see D019/D020), we lend
- * the thread to the native loop for a non-blocking drain on a fast timer.
- *
- * This class is the platform-neutral control half: it owns start/stop and the
- * tick scheduling. The actual native drain (`CFRunLoopRunInMode` on macOS,
- * `g_main_context_iteration` on Linux) is injected as {@link drainOnce}, and
- * the timer is injected as a {@link Ticker} so the logic is unit-testable
- * without any FFI.
+ * Bun owns the main thread and its event loop; native UI toolkits (AppKit, GTK)
+ * need their own run loop pumped to process window events and render. Blocking the
+ * thread to do that crashes Bun (D019/D020), so the thread is instead lent to the
+ * native loop for a non-blocking drain (`CFRunLoopRunInMode` on macOS,
+ * `g_main_context_iteration` on Linux) on a fast timer.
  */
 
 const log = createLogger('run-loop');
@@ -23,7 +18,7 @@ export type Ticker = (onTick: () => void, intervalMs: number) => () => void;
 export type CooperativePumpOptions = {
   /** Milliseconds between drains. Lower = smoother UI, more CPU. Default 16 (~60Hz). */
   readonly intervalMs?: number;
-  /** Timer source; defaults to `setInterval`/`clearInterval`. Injected in tests. */
+  /** Timer source; defaults to `setInterval`/`clearInterval`. */
   readonly ticker?: Ticker;
 };
 
@@ -77,7 +72,7 @@ export class CooperativePump {
   }
 }
 
-/** Yields to Bun's event loop once, then runs `tick`. Injected in tests. */
+/** Yields to Bun's event loop once, then runs `tick`. */
 export type TickScheduler = (tick: () => void) => void;
 
 export type AdaptiveBlockingPumpOptions = {

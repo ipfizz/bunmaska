@@ -21,14 +21,9 @@ import { createWindowsDrain } from './windows-run-loop';
 import { WindowsWebContents } from './windows-web-contents';
 
 /**
- * Windows {@link NativeApplication} backend on Win32 + WinCairo WebKit, pure
- * `bun:ffi`. Mirrors `linux-backend.ts`/`cocoa-backend.ts` (D024): a thin
- * lifecycle shell over the shared {@link CooperativePump} plus a window factory.
- *
- * The pump drains the Win32 message queue non-blocking (`PeekMessage`, never
- * `GetMessage`) and routes the preventable window close from the queue via
- * {@link dispatchPostedWindowMessage} — there is no JSCallback WndProc, which
- * WebKit's re-entrant message flood would crash (see `windows-native-window.ts`).
+ * Windows {@link NativeApplication} backend on Win32 + WinCairo WebKit (D024). The pump
+ * drains the message queue non-blocking (`PeekMessage`, never `GetMessage`); the window
+ * that hosts WebKit has no JSCallback WndProc, which its re-entrant flood would crash.
  */
 
 const SW_MAXIMIZE = 3;
@@ -60,12 +55,7 @@ const SM_CYSCREEN = 1;
 const TPM_RETURNCMD = 0x0100;
 const TPM_RIGHTBUTTON = 0x0002;
 
-/**
- * Windows {@link NativeWindow}: a native top-level window hosting a WinCairo
- * `WKView`. Lifecycle (preventable close) is delegated to {@link NativeWin32Window}
- * (pump-routed); window management is direct Win32; the web view + IPC live in
- * {@link WindowsWebContents}.
- */
+/** Windows {@link NativeWindow}: a top-level window hosting a WinCairo `WKView`. */
 class WindowsWindow implements NativeWindow {
   readonly #native: NativeWin32Window;
   readonly #webContents: WindowsWebContents;
@@ -101,15 +91,12 @@ class WindowsWindow implements NativeWindow {
       client.height,
       options.preloadScript,
     );
-    // Keep the hosted view filling the window's client area as it resizes.
     this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
     // Mirror the application menu bar onto this window, and route its WM_COMMAND
     // (dispatched by the frame proc) to the realizer's stored onClick handlers.
     this.#appMenuTarget = { setMenuBar: (bar) => this.#native.setMenuBar(bar) };
     this.#native.onMenuCommand((commandId) => windowsMenuRealizer.dispatchMenuCommand(commandId));
     windowsMenuRealizer.registerAppMenuWindow(this.#appMenuTarget);
-    // Custom (frameless) title bars: route the built-in title-bar script's window
-    // ops (drag / minimize / maximize / close) to the native window.
     this.#webContents.onWindowOp((op) => this.#handleWindowOp(op));
     // On the committed-close path, tear down the web contents (reject pending
     // execs, release the view) before surfacing `closed` to the api layer.
@@ -285,7 +272,6 @@ class WindowsWindow implements NativeWindow {
     const user32 = loadUser32().symbols;
     const hwnd = this.#hwnd();
     if (flag && !this.#fullscreen) {
-      // Save the framed style + bounds, then go borderless over the primary screen.
       this.#fullscreen = true;
       this.#savedStyle = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
       this.#savedBounds = this.getBounds();
@@ -469,5 +455,4 @@ export class WindowsApplication implements NativeApplication {
   }
 }
 
-/** Construct the Windows {@link NativeApplication}. */
 export const createWindowsApplication = (): NativeApplication => new WindowsApplication();

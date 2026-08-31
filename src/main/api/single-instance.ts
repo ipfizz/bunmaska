@@ -2,49 +2,41 @@
  * Single-instance lock + second-instance messaging (Electron's
  * `requestSingleInstanceLock` / `second-instance`).
  *
- * The primary/secondary decision is synchronous (Electron's contract): a pidfile
- * is created atomically; if it already exists and names a live process, this
- * process is a secondary. Argv hand-off to the primary uses a unix socket. All
- * I/O is injected as a {@link LockBackend} so the decision logic unit-tests
- * without touching the filesystem or sockets.
+ * The primary/secondary decision must stay SYNCHRONOUS — Electron's contract:
+ * an atomically created pidfile that already names a live process makes this
+ * process a secondary. Argv hand-off to the primary uses a unix socket.
  */
 
-/** The data a secondary hands to the primary when it starts. */
 export type SecondInstancePayload = {
   readonly argv: string[];
   readonly cwd: string;
   readonly additionalData: unknown;
 };
 
-/** Filesystem/socket paths + this process's pid for a lock. */
 export type LockPaths = {
   readonly lockPath: string;
   readonly socketPath: string;
   readonly pid: number;
 };
 
-/** The injected I/O a {@link SingleInstanceManager} performs. */
 export type LockBackend = {
-  /** Atomically create the lock file recording `pid`; `false` if it already exists. */
+  /** Must be ATOMIC; returns `false` when the lock file already exists. */
   tryCreateLock(lockPath: string, pid: number): boolean;
-  /** The pid recorded in the lock file, or `undefined` if missing/unreadable. */
+  /** `undefined` if the lock file is missing or unreadable. */
   readLockPid(lockPath: string): number | undefined;
-  /** Whether a process with `pid` is currently running. */
   isAlive(pid: number): boolean;
-  /** Remove a stale lock file (and its socket). */
+  /** Removes the stale lock file and its socket. */
   clearLock(lockPath: string): void;
-  /** Begin listening for second-instance messages (primary). */
   startServer(socketPath: string, onMessage: (json: string) => void): void;
-  /** Send a payload to the primary (secondary, fire-and-forget). */
+  /** Fire-and-forget. */
   notify(socketPath: string, json: string): void;
-  /** Stop the server and remove the lock + socket (release). */
+  /** Stops the server and removes the lock + socket. */
   stop(lockPath: string, socketPath: string): void;
 };
 
-/** Serialize a second-instance payload for transport. */
 export const encodePayload = (payload: SecondInstancePayload): string => JSON.stringify(payload);
 
-/** Parse a transported payload; `undefined` if malformed or missing `argv`. */
+/** `undefined` if malformed or missing `argv`. */
 export const decodePayload = (json: string): SecondInstancePayload | undefined => {
   let parsed: unknown;
   try {
@@ -64,7 +56,6 @@ export const decodePayload = (json: string): SecondInstancePayload | undefined =
   return { argv: argv as string[], cwd, additionalData: record['additionalData'] };
 };
 
-/** Owns the single-instance lock for the process. */
 export class SingleInstanceManager {
   readonly #backend: LockBackend;
   readonly #paths: LockPaths;
@@ -75,15 +66,14 @@ export class SingleInstanceManager {
     this.#paths = paths;
   }
 
-  /** Whether this process currently holds the lock (is the primary). */
+  /** Whether this process is the primary. */
   has(): boolean {
     return this.#locked;
   }
 
   /**
-   * Try to become the primary instance. Returns `true` if the lock was acquired;
-   * `false` if another live instance holds it (after handing it `payload`, which
-   * surfaces there via the callback registered by the primary's `request`).
+   * `false` means another live instance holds the lock and has been handed
+   * `payload`, which surfaces there via its own `request` callback.
    */
   request(
     payload: SecondInstancePayload,
@@ -105,7 +95,7 @@ export class SingleInstanceManager {
     return this.#acquire(onSecondInstance);
   }
 
-  /** Release the lock if held (stops the server, removes the lock + socket). */
+  /** No-op when the lock is not held. */
   release(): void {
     if (!this.#locked) {
       return;

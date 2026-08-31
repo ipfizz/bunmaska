@@ -1,15 +1,12 @@
 /**
- * The pure `bunmaska.config` schema: types, validation, and the `defineConfig`
- * helper, with no filesystem dependency. The CLI's loader (`src/cli/config.ts`)
- * layers file discovery and dynamic import on top of this; the public
- * `bunmaska/config` entry re-exports only this module, so a project's config file
- * never drags the loader's `node:fs` code into the app's runtime bundle.
+ * The pure `bunmaska.config` schema — types, validation, `defineConfig` — with no
+ * filesystem dependency, so a project's config file never drags the CLI loader's
+ * `node:fs` code into the app's runtime bundle.
  */
 
 import { InvalidArgumentError } from './errors';
 import { type Channel, DEFAULT_CHANNEL } from './manifest';
 
-/** Auto-update feed configuration. */
 export type BunmaskaUpdatesConfig = {
   /** Base URL of the channel feed (where `update.json` + artifacts are served). */
   readonly url?: string;
@@ -18,9 +15,9 @@ export type BunmaskaUpdatesConfig = {
 };
 
 /**
- * A self-hosted/enterprise engine feed. The DEFAULT Bunmaska feed and its signing
- * public key are built in (the public key is a baked trust anchor — never a
- * secret, never an env var). Set this only to run your own engine mirror.
+ * A self-hosted/enterprise engine feed. The default feed and its signing public key
+ * are built in (a baked trust anchor — never a secret, never an env var); set this
+ * only to run your own engine mirror.
  */
 export type BunmaskaEngineFeedConfig = {
   /** Base URL of the feed serving signed `.tar.zst` engines. */
@@ -30,10 +27,8 @@ export type BunmaskaEngineFeedConfig = {
 };
 
 /**
- * Pinned-WebKit engine configuration — the "tested == shipped" knob, and the
- * ONLY engine-related thing a user configures (everything else is internal; see
- * D041). Many engine versions coexist in the shared store; this declares which
- * one THIS app pins.
+ * Pinned-WebKit engine configuration — the "tested == shipped" knob, and the ONLY
+ * engine-related thing a user configures (everything else is internal; D041).
  */
 export type BunmaskaEngineConfig = {
   /**
@@ -45,13 +40,31 @@ export type BunmaskaEngineConfig = {
   readonly webkit?: string;
   /** Copy the pinned engine into the bundle for offline/airgapped installs. */
   readonly embed?: boolean;
-  /** A self-hosted engine feed (advanced). The default feed + key are built in. */
+  /** A self-hosted engine feed (advanced). */
   readonly feed?: BunmaskaEngineFeedConfig;
+};
+
+/**
+ * The renderer build Bunmaska owns. When set, `bunmaska dev` rebuilds on a
+ * renderer change and live-reloads (no restart), and `bunmaska build` ships the
+ * output beside the executable. The defaults bake the only recipe that works
+ * under `loadFile`: a classic IIFE bundle (`file://` blocks ES modules) built
+ * with development JSX (Bun emits `jsxDEV` regardless of tsconfig).
+ */
+export type BunmaskaRendererConfig = {
+  /** The renderer entry (e.g. `src/renderer/main.tsx`), relative to the project root. */
+  readonly entry: string;
+  /** Output directory, relative to the project root. Defaults to `dist/renderer`. */
+  readonly outDir?: string;
+  /**
+   * Static files copied into `outDir` verbatim (e.g. `src/renderer/index.html`),
+   * relative to the project root.
+   */
+  readonly copy?: readonly string[];
 };
 
 /** A project's `bunmaska.config` shape. Every field is optional. */
 export type BunmaskaConfig = {
-  /** Display/bundle name. */
   readonly name?: string;
   /** Bundle identifier (reverse-DNS, e.g. `com.example.app`). */
   readonly id?: string;
@@ -59,10 +72,11 @@ export type BunmaskaConfig = {
   readonly entry?: string;
   /** App icon path — a `.icns`/`.png` on macOS, a `.png` on Linux. */
   readonly icon?: string;
-  /** Auto-update feed configuration. */
   readonly updates?: BunmaskaUpdatesConfig;
   /** Pinned-WebKit engine configuration (defaults to the system WebView). */
   readonly engine?: BunmaskaEngineConfig;
+  /** The renderer build Bunmaska owns (optional; apps with their own bundler skip it). */
+  readonly renderer?: BunmaskaRendererConfig;
 };
 
 /** The config file names searched for, in priority order. */
@@ -72,10 +86,7 @@ export const CONFIG_FILE_NAMES: readonly string[] = [
   'bunmaska.config.mjs',
 ];
 
-/**
- * Identity helper giving config authors type-checking and editor completion:
- * `export default defineConfig({ name: 'My App' })`.
- */
+/** Identity helper giving config authors type-checking and editor completion. */
 export const defineConfig = (config: BunmaskaConfig): BunmaskaConfig => config;
 
 const assertOptionalString = (
@@ -107,9 +118,9 @@ const assertOptionalBoolean = (
 };
 
 /**
- * Validate an untrusted, freshly-imported config value into a {@link BunmaskaConfig}.
- * Pure — never reads disk. Throws {@link InvalidArgumentError} naming the bad
- * field. `source` labels the file in error messages.
+ * Validate an untrusted, freshly-imported config value. Throws
+ * {@link InvalidArgumentError} naming the bad field; `source` labels the file in
+ * that message.
  */
 export const validateConfig = (raw: unknown, source = 'bunmaska.config'): BunmaskaConfig => {
   if (raw === null || typeof raw !== 'object') {
@@ -184,8 +195,40 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
     };
   }
 
+  const renderer = record['renderer'];
+  if (renderer !== undefined) {
+    if (renderer === null || typeof renderer !== 'object') {
+      throw new InvalidArgumentError(`${source}: "renderer" must be an object`);
+    }
+    const rendererRecord = renderer as Record<string, unknown>;
+    const entry = assertOptionalString(rendererRecord['entry'], 'renderer.entry', source);
+    if (entry === undefined) {
+      throw new InvalidArgumentError(
+        `${source}: "renderer.entry" is required when "renderer" is set`,
+      );
+    }
+    const outDir = assertOptionalString(rendererRecord['outDir'], 'renderer.outDir', source);
+    const copyRaw = rendererRecord['copy'];
+    let copy: readonly string[] | undefined;
+    if (copyRaw !== undefined) {
+      if (!Array.isArray(copyRaw) || copyRaw.some((entryPath) => typeof entryPath !== 'string')) {
+        throw new InvalidArgumentError(`${source}: "renderer.copy" must be an array of strings`);
+      }
+      copy = copyRaw as string[];
+    }
+    config.renderer = {
+      entry,
+      ...(outDir !== undefined ? { outDir } : {}),
+      ...(copy !== undefined ? { copy } : {}),
+    };
+  }
+
   return config;
 };
+
+/** The renderer output directory a config selects, or the default. */
+export const rendererOutDir = (renderer: BunmaskaRendererConfig): string =>
+  renderer.outDir ?? 'dist/renderer';
 
 /** The release channel a config selects, falling back to the default. */
 export const configChannel = (config: BunmaskaConfig): Channel =>

@@ -8,54 +8,34 @@ import { type NativeImage, nativeImage } from './native-image';
 /**
  * System clipboard access — the drop-in equivalent of Electron's `clipboard`.
  *
- * A process-wide singleton (not tied to a window), mirroring Electron. Covers
- * plain text on macOS and Linux (GTK 4). Methods throw
- * {@link UnsupportedPlatformError} on platforms without a backend rather than
- * silently no-op'ing.
- *
- * `readText` is asynchronous on BOTH platforms (returns a `Promise<string>`): a
- * deliberate uniform contract, since GDK 4's clipboard read is async-only. The
- * macOS backend reads synchronously under the hood and resolves the value.
- * `writeText`/`clear` stay synchronous on both platforms.
+ * Reads are async on every platform even though only GDK 4's read is async-only:
+ * a deliberate uniform contract, so app code does not branch per OS.
  */
 
 export type Clipboard = {
-  /** Read the clipboard's plain-text contents, or `''` if it holds no text. */
+  /** `''` if the clipboard holds no text. */
   readText(): Promise<string>;
-  /** Replace the clipboard's contents with `text` as plain text. */
   writeText(text: string): void;
-  /** Read the clipboard's HTML markup, or `''` if it holds no HTML. */
+  /** `''` if the clipboard holds no HTML. */
   readHTML(): Promise<string>;
-  /** Replace the clipboard's contents with `markup` as HTML. */
   writeHTML(markup: string): void;
-  /** Read the clipboard's image (an empty {@link NativeImage} if it holds none). */
+  /** An empty {@link NativeImage} if the clipboard holds no image. */
   readImage(): Promise<NativeImage>;
-  /** Replace the clipboard's contents with `image` (written as PNG). */
+  /** Written as PNG. */
   writeImage(image: NativeImage): void;
-  /** The format names (MIME types) currently on the clipboard. */
+  /** MIME type names. */
   availableFormats(): string[];
-  /** Clear the clipboard. */
   clear(): void;
 };
 
-/**
- * The native backend the public clipboard API delegates to.
- *
- * `readText` may return its value synchronously (a string) or as a Promise; the
- * API's `Promise.resolve(...)` flattens both into the uniform `Promise<string>`
- * contract. `writeText`/`clear` are synchronous on every platform. The backend
- * is injectable so the dispatch logic is unit-testable without a real clipboard.
- */
 export type ClipboardBackend = {
   readText(): string | Promise<string>;
   writeText(text: string): void;
   readHTML(): string | Promise<string>;
   writeHTML(markup: string): void;
-  /** PNG image bytes, or an empty array if the clipboard holds no image. */
+  /** PNG bytes, or an empty array if the clipboard holds no image. */
   readImage(): Uint8Array | Promise<Uint8Array>;
-  /** Write PNG image `bytes` to the clipboard. */
   writeImage(bytes: Uint8Array): void;
-  /** The MIME format names currently on the clipboard. */
   availableFormats(): string[];
   clear(): void;
 };

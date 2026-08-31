@@ -1,11 +1,3 @@
-/**
- * The `bunmaska engine …` and `bunmaska doctor` command implementations.
- *
- * Kept out of the CLI entry (`index.ts`) and built on injected seams (store
- * root, output sinks, a config reader) so every branch is unit-testable on any
- * host without touching the real `~/.bunmaska` store or a project on disk.
- */
-
 import { existsSync, statSync } from 'node:fs';
 import { compareEngineIds, isSystemEngine, parseEngineId } from '../common/engine-id';
 import type { BunmaskaConfig } from '../common/config-schema';
@@ -30,7 +22,6 @@ import {
   verifyEngine,
 } from './engine-store';
 
-/** Injected dependencies for the engine/doctor commands. */
 export type EngineCommandDeps = {
   /** The engine store root (the `webkit/` dir). */
   readonly root: string;
@@ -39,11 +30,11 @@ export type EngineCommandDeps = {
   readonly err: (text: string) => void;
   /** Read a project's validated config (empty `{}` when none). */
   readonly readConfig: (target: string) => Promise<BunmaskaConfig>;
-  /** Local-dir install seam (default: {@link installFromDir}). */
+  /** Defaults to {@link installFromDir}. */
   readonly installDir?: (root: string, sourceDir: string) => Promise<InstallResult>;
-  /** Remote (feed) install seam (default: {@link installFromUrl} + real fetch). */
+  /** Defaults to {@link installFromUrl} over the real fetch. */
   readonly installUrl?: (root: string, url: string, publicKeyPem: string) => Promise<InstallResult>;
-  /** Feed-index seam (default: {@link fetchEngineIndex} + real fetch). */
+  /** Defaults to {@link fetchEngineIndex} over the real fetch. */
   readonly fetchIndex?: (feedBase: string) => Promise<EngineIndexEntry[]>;
 };
 
@@ -161,13 +152,10 @@ const runInstall = async (source: string, deps: EngineCommandDeps): Promise<numb
     );
     return 1;
   }
-  // A bare id already in the store needs no download.
   if (!isUrl && isInstalled(deps.root, source)) {
     deps.out(`${source} is already installed (nothing to do)`);
     return 0;
   }
-  // A published feed artifact: resolve the URL (bare id -> configured/official
-  // feed), verify its signature + hash, then install via the store.
   const config = await deps.readConfig('.');
   const url = isUrl ? source : engineFeedArtifactUrl(source, config.engine?.feed?.url ?? undefined);
   const publicKey = resolveEnginePublicKey({
@@ -292,9 +280,8 @@ export const runEngine = async (
 };
 
 /**
- * `bunmaska doctor` — a Tauri-`info`-style health report: runtime, platform,
- * the engine store, and the resolved pin for a project. Exits non-zero only when
- * the project pins a full engine-id that is not installed (a real misconfig).
+ * Exits non-zero only when the project pins a full engine-id that is not
+ * installed.
  */
 export const runDoctor = async (
   target: string | undefined,

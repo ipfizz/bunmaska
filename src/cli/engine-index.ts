@@ -1,18 +1,13 @@
 /**
- * The engine feed's `index.json` — the published list of engines available at a
- * feed, and the single source of truth for `bunmaska engine available`. Each
- * entry is keyed on the engine-id (the content address); os/arch/upstream/family
- * are DERIVED from the id at parse time, so the stored index can't disagree with
- * the id. The docs point at this live file rather than a hand-maintained table.
- *
- * Layout at a feed: `<base>/index.json` (beside each `<id>.tar.zst`).
+ * os/arch/upstream/family are DERIVED from each entry's id at parse time, so the
+ * stored index cannot disagree with the id. Layout at a feed:
+ * `<base>/index.json`, beside each `<id>.tar.zst`.
  */
 
 import { type EngineRef, parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
 import { DEFAULT_ENGINE_FEED_URL, type RemoteFetch, type RemoteManifest } from './engine-remote';
 
-/** One engine listed in a feed index: the stored fields + the id-derived facts. */
 export type EngineIndexEntry = EngineRef & {
   readonly id: string;
   readonly size?: number;
@@ -36,7 +31,6 @@ const err = (message: string): never => {
   throw new BunmaskaError(message, { code: 'ERR_ENGINE_INDEX' });
 };
 
-/** Parse + validate a feed `index.json`, deriving os/arch/upstream/family per id. */
 export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
   let raw: unknown;
   try {
@@ -78,7 +72,6 @@ export const buildEngineIndex = (entries: readonly StoredEntry[]): string => {
   return `${JSON.stringify({ version: 1, engines }, null, 2)}\n`;
 };
 
-/** Fetch + parse a feed's `index.json` (network via the injectable {@link RemoteFetch}). */
 export const fetchEngineIndex = async (
   feedBase: string,
   fetch: RemoteFetch,
@@ -86,10 +79,8 @@ export const fetchEngineIndex = async (
   parseEngineIndex(new TextDecoder().decode(await fetch(engineFeedIndexUrl(feedBase))));
 
 /**
- * Merge one engine's manifest into an existing serialized index: same-id entry
- * replaced, everything else kept, output sorted by id. `indexText` undefined
- * means "no index published yet" and starts one. This is how a CI publish keeps
- * `index.json` current without regenerating it from every manifest by hand.
+ * Same-id entry replaced, everything else kept, output sorted by id.
+ * `indexText` undefined means "no index published yet" and starts one.
  */
 export const mergeEngineIndex = (
   indexText: string | undefined,

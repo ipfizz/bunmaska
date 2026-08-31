@@ -2,11 +2,9 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * comdlg32.dll file-dialog FFI for the Windows `dialog` backend. `GetOpenFileNameW`
- * and `GetSaveFileNameW` are the flat-C legacy pickers (no COM) — each takes a
- * single `OPENFILENAMEW` struct by pointer and runs its own modal message loop,
- * returning `TRUE` when the user confirmed. The big struct is built field-by-field
- * in `windows-dialog.ts`; the offsets there match the x64 layout.
+ * `GetOpenFileNameW`/`GetSaveFileNameW` each take one `OPENFILENAMEW` by pointer and run
+ * their OWN modal message loop, returning `TRUE` when the user confirmed. The struct is
+ * built field-by-field in `windows-dialog.ts`; the offsets there match the x64 layout.
  */
 const COMDLG32_SYMBOLS = {
   // (LPOPENFILENAMEW) -> BOOL

@@ -21,7 +21,6 @@ const DID_WAKE = 'NSWorkspaceDidWakeNotification';
 const SCREEN_LOCKED = 'com.apple.screenIsLocked';
 const SCREEN_UNLOCKED = 'com.apple.screenIsUnlocked';
 
-/** The power-event handlers `powerMonitor` supplies. */
 export type PowerEventHandlers = {
   readonly onSuspend: () => void;
   readonly onResume: () => void;

@@ -11,6 +11,9 @@ import {
   XEVENT_BUFFER_SIZE,
   XEVENT_TYPE_OFFSET,
   XKEY_KEYCODE_OFFSET,
+  GRAB_VARIANTS,
+  x11StateMatches,
+  XKEY_STATE_OFFSET,
 } from './x11-keymap';
 
 /**
@@ -95,7 +98,9 @@ const register = (accelerator: string, callback: () => void): boolean => {
   }
   const modifiers = x11ModifierMask(parsed);
   // owner_events FALSE(0), pointer_mode/keyboard_mode GrabModeAsync(1).
-  x11.symbols.XGrabKey(dpy, keycode, modifiers, rootWindow, 0, 1, 1);
+  for (const lockBits of GRAB_VARIANTS) {
+    x11.symbols.XGrabKey(dpy, keycode, modifiers | lockBits, rootWindow, 0, 1, 1);
+  }
   x11.symbols.XFlush(dpy);
   registrations.push({ keycode, modifiers, callback });
   return true;
@@ -129,7 +134,9 @@ const unregister = (accelerator: string): void => {
   for (let i = registrations.length - 1; i >= 0; i -= 1) {
     const reg = registrations[i];
     if (reg !== undefined && matches(reg, accelerator)) {
-      x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers, rootWindow);
+      for (const lockBits of GRAB_VARIANTS) {
+        x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers | lockBits, rootWindow);
+      }
       registrations.splice(i, 1);
     }
   }
@@ -144,7 +151,9 @@ const unregisterAll = (): void => {
   }
   const x11 = loadX11FFI();
   for (const reg of registrations) {
-    x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers, rootWindow);
+    for (const lockBits of GRAB_VARIANTS) {
+      x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers | lockBits, rootWindow);
+    }
   }
   registrations.length = 0;
   x11.symbols.XFlush(dpy);
@@ -171,8 +180,10 @@ export const pollX11ShortcutsOnce = (): void => {
       continue;
     }
     const keycode = view.getUint32(XKEY_KEYCODE_OFFSET, true);
+    const state = view.getUint32(XKEY_STATE_OFFSET, true);
     for (const reg of registrations) {
-      if (reg.keycode === keycode) {
+      // Keycode alone once dispatched here, so Ctrl+K fired Ctrl+Shift+K too.
+      if (reg.keycode === keycode && x11StateMatches(state, reg.modifiers)) {
         reg.callback();
       }
     }

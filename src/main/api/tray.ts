@@ -10,56 +10,36 @@ import { windowsTrayBackend } from '../platform/windows/windows-tray';
 import type { Menu } from './menu';
 import type { NativeImage } from './native-image';
 
-/** A Tray icon: a filesystem path, or a {@link NativeImage} (Electron parity). */
 export type TrayImage = string | NativeImage;
 
 /**
  * A status-bar / system-tray icon — the drop-in equivalent of Electron's `Tray`.
+ * The native status item is created eagerly in the constructor.
  *
- * Extends Node's {@link EventEmitter} so the listener API (`on`/`once`/…) matches
- * Electron's contract. The native status item is created eagerly in the
- * constructor and reconfigured through the forwarding methods.
+ * Linux is a `StatusNotifierItem` over D-Bus, gated behind
+ * `BUNMASKA_ENABLE_LINUX_TRAY`; without it (and in CI) the tray is an inert
+ * no-op rather than a throw, so cross-platform code can construct a Tray safely.
+ * {@link setContextMenu} is accepted but not yet shown on Linux or Windows.
  *
- * PLATFORMS:
- * - macOS: real `NSStatusItem`; works un-bundled (`bun main.ts`).
- * - Linux: a `StatusNotifierItem` exported over D-Bus (a host like KDE, the GNOME
- *   AppIndicator extension, Waybar or swaybar draws the icon). Gated behind
- *   `BUNMASKA_ENABLE_LINUX_TRAY`; without it (and in CI) the tray is an inert no-op
- *   rather than a throw, so cross-platform code constructs a Tray safely. v1 ships
- *   icon + tooltip + left-click; the context menu (a `com.canonical.dbusmenu`
- *   service) is DEFERRED, so {@link setContextMenu} is accepted but not yet shown
- *   on Linux.
- *
- * IMAGE: the constructor and {@link setImage} accept a filesystem path string to an
- * icon file. A bad/unreadable path does not crash; the icon is simply not set.
- *
- * EVENTS: `click` is emitted when the status item is activated. On macOS, when a
- * context menu is set, AppKit consumes the click to present the menu, so `click`
- * fires only when no menu is set; on Linux, the host's `Activate` drives `click`.
- * `right-click` / `double-click` are DEFERRED (not advertised) until a real event
- * source is wired.
- *
- * The native backend is injectable (mirrors `notification`/`menu`/`screen`) so
- * the class's forwarding and lifecycle are unit-testable with a fake — no FFI.
+ * A bad or unreadable image path does not crash; the icon is simply not set.
+ * `click` fires on macOS only when NO context menu is set — AppKit consumes the
+ * click to present the menu. `right-click`/`double-click` are deferred.
  */
 
-/** A single live native status item the public `Tray` API drives. */
 export type TrayInstance = {
   setToolTip(toolTip: string): void;
   setTitle(title: string): void;
   setImage(image: string): void;
-  /** Install an `NSMenu` realized from `menu`, or clear it with `null`. */
+  /** `null` clears the installed menu. */
   setContextMenu(menu: Menu | null): void;
-  /** Register the callback fired when the status item is activated. */
   onClick(callback: () => void): void;
-  /** Tear the status item down. Must be idempotent. */
+  /** Must be idempotent. */
   destroy(): void;
   isDestroyed(): boolean;
 };
 
-/** The native backend the public `Tray` API delegates to. */
 export type TrayBackend = {
-  /** Create a native status item for the icon at `image` (a filesystem path). */
+  /** `image` is a filesystem path, never a {@link NativeImage}. */
   create(image: string): TrayInstance;
 };
 
@@ -84,7 +64,7 @@ const getBackend = (): TrayBackend => {
   throw new UnsupportedPlatformError(`Tray is not supported on ${currentPlatform()} yet`);
 };
 
-/** Override the native tray backend. Test-only. */
+/** @internal */
 export const setTrayBackendForTesting = (fake: TrayBackend | undefined): void => {
   backend = fake;
 };
@@ -94,11 +74,7 @@ export class Tray extends EventEmitter {
   #destroyed = false;
   #iconDir: string | undefined;
 
-  /**
-   * Create a tray with `image` — a filesystem path or a {@link NativeImage}
-   * (Electron parity). A `NativeImage` is materialized to a temp PNG the native
-   * backends load by path.
-   */
+  /** A {@link NativeImage} is materialized to a temp PNG the backends load by path. */
   constructor(image: TrayImage) {
     super();
     this.#instance = getBackend().create(this.#resolveImagePath(image));
@@ -107,7 +83,6 @@ export class Tray extends EventEmitter {
     });
   }
 
-  /** A path stays a path; a NativeImage is written to a per-instance temp PNG. */
   #resolveImagePath(image: TrayImage): string {
     if (typeof image === 'string') {
       return image;
@@ -118,7 +93,7 @@ export class Tray extends EventEmitter {
     return path;
   }
 
-  /** Set the hover tooltip. No-op after {@link destroy}. */
+  /** No-op after {@link destroy}. */
   setToolTip(toolTip: string): void {
     if (this.#destroyed) {
       return;
@@ -126,7 +101,7 @@ export class Tray extends EventEmitter {
     this.#instance.setToolTip(toolTip);
   }
 
-  /** Set the text shown next to the icon (macOS status bar). No-op after destroy. */
+  /** Text beside the icon in the macOS status bar. No-op after destroy. */
   setTitle(title: string): void {
     if (this.#destroyed) {
       return;
@@ -134,7 +109,7 @@ export class Tray extends EventEmitter {
     this.#instance.setTitle(title);
   }
 
-  /** Replace the icon with `image` (a filesystem path or {@link NativeImage}). No-op after destroy. */
+  /** No-op after destroy. */
   setImage(image: TrayImage): void {
     if (this.#destroyed) {
       return;
@@ -142,7 +117,7 @@ export class Tray extends EventEmitter {
     this.#instance.setImage(this.#resolveImagePath(image));
   }
 
-  /** Attach a context menu (shown on click), or clear it with `null`. No-op after destroy. */
+  /** `null` clears it. Shown on click. No-op after destroy. */
   setContextMenu(menu: Menu | null): void {
     if (this.#destroyed) {
       return;
@@ -150,7 +125,7 @@ export class Tray extends EventEmitter {
     this.#instance.setContextMenu(menu);
   }
 
-  /** Remove the status item. Idempotent. */
+  /** Idempotent. */
   destroy(): void {
     if (this.#destroyed) {
       return;
@@ -159,7 +134,6 @@ export class Tray extends EventEmitter {
     this.#instance.destroy();
   }
 
-  /** Whether {@link destroy} has been called. */
   isDestroyed(): boolean {
     return this.#destroyed;
   }

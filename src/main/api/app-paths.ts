@@ -5,20 +5,12 @@ import type { Platform } from '../../common/platform';
 /**
  * Pure resolution of Electron's `app.getPath(name)` special directories.
  *
- * Kept free of any I/O so it unit-tests on any host: the caller supplies the
- * environment ({@link PathEnvironment}) — home dir, temp dir, resolved app name,
- * exec/app paths, and the relevant env vars — and this maps a path name to an
- * absolute path using each platform's conventions. The `app` layer wires the
- * real `os`/`process` values; tests pass synthetic ones to exercise both
- * platforms from a single host.
- *
  * Each resolver joins with its TARGET platform's separator (`path.posix` for
- * macOS/Linux, `path.win32` for Windows) rather than the host's `path.join`, so a
- * macOS path resolves with `/` even when this runs on a Windows CI host (and vice
- * versa) — making the conventions host-independent and the output deterministic.
+ * macOS/Linux, `path.win32` for Windows) rather than the host's `path.join`, so
+ * a macOS path resolves with `/` even when this runs on a Windows CI host, and
+ * vice versa.
  */
 
-/** Every directory name Bunmaska resolves for `app.getPath` / `app.setPath`. */
 export type AppPathName =
   | 'home'
   | 'appData'
@@ -36,20 +28,19 @@ export type AppPathName =
   | 'logs'
   | 'crashDumps';
 
-/** The host facts {@link resolveAppPath} needs, injected for testability. */
 export type PathEnvironment = {
   readonly platform: Platform;
-  /** The user's home directory (`os.homedir()`). */
+  /** `os.homedir()`. */
   readonly home: string;
-  /** The OS temp directory (`os.tmpdir()`). */
+  /** `os.tmpdir()`. */
   readonly temp: string;
-  /** The resolved application name — names the per-app `userData` subdirectory. */
+  /** Names the per-app `userData` subdirectory. */
   readonly appName: string;
-  /** The running executable (`process.execPath`). */
+  /** `process.execPath`. */
   readonly execPath: string;
-  /** The application root directory (`app.getAppPath()`). */
+  /** `app.getAppPath()`. */
   readonly appPath: string;
-  /** Environment variables (read-only); consulted for Linux XDG overrides. */
+  /** Consulted for the Linux XDG overrides. */
   readonly env: Readonly<Record<string, string | undefined>>;
 };
 
@@ -71,13 +62,12 @@ const KNOWN_NAMES: ReadonlySet<string> = new Set<AppPathName>([
   'crashDumps',
 ]);
 
-/** The env var `variable` if set and non-empty, else the `fallback` path. */
 const envDir = (env: PathEnvironment['env'], variable: string, fallback: string): string => {
   const value = env[variable];
   return value !== undefined && value.length > 0 ? value : fallback;
 };
 
-/** `$VAR` if set and non-empty, else `home/fallback`. Linux XDG user-dir lookup. */
+/** Linux XDG user-dir lookup: `$VAR` if set and non-empty, else `home/fallback`. */
 const xdgDir = (env: PathEnvironment['env'], variable: string, home: string, fallback: string) =>
   envDir(env, variable, posix.join(home, fallback));
 
@@ -157,7 +147,6 @@ const resolveLinux = (name: AppPathName, e: PathEnvironment): string => {
 
 const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
   const { join } = win32;
-  // %APPDATA% is the roaming per-user application-data root; userData hangs off it.
   const appData = envDir(e.env, 'APPDATA', join(e.home, 'AppData', 'Roaming'));
   const userData = join(appData, e.appName);
   switch (name) {
@@ -193,11 +182,7 @@ const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
   }
 };
 
-/**
- * Resolve a special-directory `name` to an absolute path for the given
- * environment. Throws {@link InvalidArgumentError} on an unrecognized name
- * (matching Electron, which rejects unknown path names).
- */
+/** Throws {@link InvalidArgumentError} on an unrecognized name, matching Electron. */
 export const resolveAppPath = (name: AppPathName, environment: PathEnvironment): string => {
   if (!KNOWN_NAMES.has(name)) {
     throw new InvalidArgumentError(`Failed to get '${name}' path: unknown path name`);

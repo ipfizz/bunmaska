@@ -5,12 +5,8 @@ import { cocoa } from './cocoa-runtime';
 /**
  * macOS website-data management via `WKWebsiteDataStore`.
  *
- * `clearStorageData` removes every website data type (cache, cookies,
- * local/session storage, IndexedDB, …) from the default data store since the
- * distant past via `-[WKWebsiteDataStore removeDataOfTypes:modifiedSince:
- * completionHandler:]`. The completion handler is a hand-built ObjC Block
- * (D022b) that fires on the pumped run loop, so the returned Promise settles
- * when the removal finishes.
+ * The completion handler is a hand-built ObjC Block (D022b) that fires on the
+ * pumped run loop, so the returned Promise settles when the removal finishes.
  */
 
 const CLEAR_TIMEOUT_MS = 15000;

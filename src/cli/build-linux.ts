@@ -1,16 +1,10 @@
 /**
- * Linux distributable builder for the `bunmaska` CLI.
- *
- * The app is cross/native compiled to a single self-contained executable with
- * Bun's `--compile --target=bun-linux-x64`, which embeds the Bun runtime and the
- * app's JS into a Linux ELF (this works even from a macOS host). No GTK/WebKitGTK
- * libraries are bundled: Bunmaska dlopens the SYSTEM GTK/WebKitGTK at runtime via
- * bun:ffi on the user's Linux box. The output is an AppDir-style tree packaged as
- * a `.tar.gz` plus a `.deb`. The pure parts (layout paths, .desktop text, control
- * text, archive names) are factored out for unit testing.
+ * No GTK/WebKitGTK libraries are bundled: Bunmaska dlopens the SYSTEM
+ * GTK/WebKitGTK at runtime via bun:ffi. The output is an AppDir-style tree
+ * packaged as a `.tar.gz` plus a `.deb`.
  */
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -28,9 +22,8 @@ export type LinuxLayout = {
 };
 
 /**
- * Compute every on-disk path of an `<out>/<Name>` AppDir-style tree. Pure. Joins
- * with POSIX separators — an AppDir is an inherently Linux (POSIX) layout — so the
- * structure is identical whether computed on Linux or a cross-building host.
+ * Compute every on-disk path of an `<out>/<Name>` AppDir-style tree. POSIX joins
+ * keep the layout identical when computed on a cross-building host.
  */
 export const linuxLayout = (out: string, name: string): LinuxLayout => {
   const { join } = posix;
@@ -47,10 +40,9 @@ export const linuxLayout = (out: string, name: string): LinuxLayout => {
 };
 
 /**
- * The engine-id to bake from a project's `engine.webkit` pin: a full id verbatim,
- * else the `system` sentinel. A bare upstream version (e.g. `2.52.4`) downgrades
- * to `system` for now — resolving it to a full id needs the engine catalog (a
- * follow-up); the caller should surface that.
+ * A full engine id verbatim, else the `system` sentinel. A bare upstream version
+ * (e.g. `2.52.4`) downgrades to `system` — this path does not consult the engine
+ * catalog yet, so the caller should surface the downgrade.
  */
 export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
   if (webkitPin === undefined || isSystemEngine(webkitPin)) {
@@ -64,10 +56,8 @@ export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
   }
 };
 
-/** File name of the `.tar.gz` distributable for an app. Pure. */
 export const tarballName = (name: string): string => `${name}-linux-x64.tar.gz`;
 
-/** File name of the Debian `.deb` package for an app. Pure. */
 export const debFileName = (name: string, version: string): string =>
   `${bundleIdSlug(name)}_${version}_amd64.deb`;
 
@@ -77,7 +67,6 @@ export type DesktopEntryOptions = {
   readonly comment: string;
 };
 
-/** Build the freedesktop `.desktop` entry text. Pure. */
 export const buildDesktopEntry = (opts: DesktopEntryOptions): string =>
   [
     '[Desktop Entry]',
@@ -108,7 +97,6 @@ export type ControlFileOptions = {
  */
 export const DEFAULT_LINUX_DEPENDS: readonly string[] = ['libwebkitgtk-6.0-4', 'libgtk-4-1'];
 
-/** Build the Debian `control` file text. Pure. */
 export const buildControlFile = (opts: ControlFileOptions): string =>
   [
     `Package: ${opts.slug}`,
@@ -146,7 +134,6 @@ const arMember = (name: string, content: Uint8Array): Uint8Array => {
   return out;
 };
 
-/** Concatenate the `ar` magic and members into a `.deb` (`ar`) archive. Pure. */
 export const buildArArchive = (
   members: readonly { name: string; content: Uint8Array }[],
 ): Uint8Array => {
@@ -164,7 +151,6 @@ export const buildArArchive = (
   return out;
 };
 
-/** Run a command, throwing with stderr on a non-zero exit. */
 const spawnOk = async (cmd: readonly string[], cwd?: string): Promise<void> => {
   const proc = Bun.spawn(cmd as string[], {
     ...(cwd !== undefined ? { cwd } : {}),
@@ -178,7 +164,6 @@ const spawnOk = async (cmd: readonly string[], cwd?: string): Promise<void> => {
   }
 };
 
-/** Cross/native compile `entry` to a Linux ELF at `outfile`. Throws on failure. */
 const compileLinuxBinary = async (entry: string, outfile: string): Promise<void> => {
   await spawnOk([
     'bun',
@@ -192,6 +177,8 @@ const compileLinuxBinary = async (entry: string, outfile: string): Promise<void>
 };
 
 export type BuildLinuxAppOptions = {
+  /** A built renderer directory to ship as `renderer/` beside the executable. */
+  readonly rendererDir?: string;
   readonly entry: string;
   readonly name: string;
   readonly id?: string;
@@ -209,10 +196,6 @@ export type BuildLinuxAppResult = {
   readonly deb: string;
 };
 
-/**
- * Produce the Linux distributables for `entry`: an AppDir-style tree, a
- * `.tar.gz` of it, and a `.deb`. Returns the produced paths.
- */
 export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLinuxAppResult> => {
   const out = opts.out ?? process.cwd();
   const layout = linuxLayout(out, opts.name);
@@ -225,10 +208,12 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   await compileLinuxBinary(opts.entry, layout.binPath);
   chmodSync(layout.binPath, 0o755);
 
-  // Ship the entry's runtime assets (the page, the preload) beside the binary, then
-  // bundle a module-using preload so it runs as a classic script in the packaged app.
+  // Bundle a module-using preload so it runs as a classic script in the packaged app.
   const assetsDir = dirname(layout.binPath);
   bundlePreloadAssets(assetsDir, copyAppAssets(opts.entry, assetsDir));
+  if (opts.rendererDir !== undefined) {
+    cpSync(opts.rendererDir, join(assetsDir, 'renderer'), { recursive: true });
+  }
 
   writeFileSync(
     layout.desktopPath,
@@ -247,12 +232,11 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   mkdirSync(dirname(layout.engineIdPath), { recursive: true });
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
 
-  // .tar.gz of the AppDir (use the system tar; -C keeps paths relative).
+  // -C keeps the archived paths relative to <out>.
   const tarball = join(out, tarballName(opts.name));
   await spawnOk(['tar', '-czf', tarball, '-C', out, opts.name]);
 
-  // An embedded engine ships its own WebKitGTK; otherwise the app needs the
-  // system WebKitGTK + GTK (this Depends line is the fix for the latent crash).
+  // An embedded engine ships its own WebKitGTK, so it needs no system Depends.
   const depends = opts.embedEngine === true ? [] : DEFAULT_LINUX_DEPENDS;
   const deb = await packageDeb({
     layout,
@@ -268,10 +252,8 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 };
 
 /**
- * Package the AppDir into a Debian `.deb`: an `ar` archive of `debian-binary`,
- * `control.tar.gz` (a `control` file), and `data.tar.gz` (the `usr/` tree under
- * the filesystem root). The inner tarballs use the system `tar`; the outer `ar`
- * container is written in pure JS.
+ * A `.deb` is an `ar` archive of `debian-binary`, `control.tar.gz`, and
+ * `data.tar.gz` (the `usr/` tree under the filesystem root), in that order.
  */
 const packageDeb = async (args: {
   readonly layout: LinuxLayout;

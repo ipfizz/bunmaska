@@ -7,49 +7,39 @@ import { windowsDpapiBackend } from '../platform/windows/windows-safe-storage';
 
 /**
  * Encryption of strings tied to an OS-protected key — the drop-in equivalent of
- * Electron's `safeStorage`.
+ * Electron's `safeStorage`. The key is a random 32 bytes kept in the OS keyring
+ * and never written to disk by Bunmaska; strings are sealed with AES-256-GCM.
  *
- * The key is a random 32-byte secret kept in the OS keyring (macOS Keychain,
- * Linux libsecret) and never written to disk by Bunmaska. Strings are sealed with
- * AES-256-GCM (authenticated — tampering throws on decrypt).
- *
- * DIVERGENCE FROM ELECTRON (deliberate): Electron falls back to a `basic_text`
+ * DIVERGENCE FROM ELECTRON, deliberate: Electron falls back to a `basic_text`
  * scheme (an obfuscated, effectively-plaintext key) when no OS keyring exists.
- * Bunmaska does NOT — a key sitting next to the ciphertext is not protection. With
- * no keyring, `isEncryptionAvailable()` returns `false` and
- * `encryptString`/`decryptString` throw. Bunmaska also does not promise
- * Electron-blob compatibility: a native, versioned blob format is used.
+ * Bunmaska does NOT — a key sitting next to the ciphertext is not protection.
+ * With no keyring, `isEncryptionAvailable()` is `false` and encrypt/decrypt
+ * throw. Blobs are NOT Electron-compatible: the format is native and versioned.
  */
 
 export type SafeStorage = {
-  /** Whether a keyring-backed key is available so encrypt/decrypt can run. Never throws. */
+  /** Never throws. */
   isEncryptionAvailable(): boolean;
-  /** Seal `plainText` (UTF-8) into an authenticated blob. Throws if encryption is unavailable. */
+  /** `plainText` is UTF-8. Throws when encryption is unavailable. */
   encryptString(plainText: string): Buffer;
-  /** Open a blob produced by {@link encryptString}. Throws on tamper, bad format, or unavailability. */
+  /** Throws on tamper, bad format, or unavailability — never returns garbage. */
   decryptString(encrypted: Buffer): string;
 };
 
-/**
- * The keyring seam the crypto layer delegates to for its 32-byte key. Injectable
- * so the format/crypto logic is unit-tested with an in-memory fake — no FFI, no
- * real keyring, never a blocking call in CI.
- */
 export type KeyringBackend = {
-  /** Whether this host can store/retrieve a key. MUST be cheap + non-blocking + never throw. */
+  /** MUST be cheap, non-blocking, and never throw. */
   isAvailable(): boolean;
-  /** Fetch the existing 32-byte key or create+persist one. May throw (surfaced by encrypt/decrypt). */
+  /** Exactly 32 bytes. May throw; the throw is surfaced by encrypt/decrypt. */
   getOrCreateKey(): Buffer;
 };
 
 const KEY_LENGTH = 32;
-/** GCM nonce length (96-bit IV — the GCM standard / fastest path). */
+/** 96-bit IV: the GCM standard and its fastest path. */
 const IV_LENGTH = 12;
-/** GCM authentication tag length. */
 const TAG_LENGTH = 16;
-/** Blob format version, so a future format can co-exist. */
+/** Bumped when the layout changes, so a future format can co-exist. */
 const VERSION = 0x01;
-/** Smallest valid blob: version + IV + (≥0 ciphertext) + tag. */
+/** Version + IV + zero-length ciphertext + tag. */
 const MIN_BLOB_LENGTH = 1 + IV_LENGTH + TAG_LENGTH;
 
 /**
@@ -83,7 +73,6 @@ const decryptWithKey = (key: Buffer, blob: Buffer): string => {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 };
 
-/** Built-in backend for platforms with no keyring: reports unavailable, throws if forced. */
 const unavailableBackend: KeyringBackend = {
   isAvailable: () => false,
   getOrCreateKey: () => {
@@ -112,7 +101,7 @@ const getBackend = (): KeyringBackend => {
   return unavailableBackend;
 };
 
-/** Whether encryption is available — probed once, then memoised (Electron caches at startup). */
+/** Probed once then memoised, as Electron caches at startup. */
 const isAvailable = (): boolean => {
   if (cachedAvailable === undefined) {
     cachedAvailable = getBackend().isAvailable();
@@ -121,9 +110,8 @@ const isAvailable = (): boolean => {
 };
 
 /**
- * Read the keyring ONCE and cache the key for the process — only the first op
- * pays the round-trip (on Linux, the one blocking D-Bus call); later ops are pure
- * in-memory AES.
+ * Read the keyring ONCE per process: only the first op pays the round-trip — on
+ * Linux, the one blocking D-Bus call.
  */
 const getKey = (): Buffer => {
   if (cachedKey === undefined) {
@@ -138,7 +126,7 @@ const getKey = (): Buffer => {
   return cachedKey;
 };
 
-/** Override the keyring backend AND clear the cached key + availability. Test-only. */
+/** Also clears the cached key and availability. @internal */
 export const setSafeStorageBackendForTesting = (fake: KeyringBackend | undefined): void => {
   backend = fake;
   cachedKey = undefined;

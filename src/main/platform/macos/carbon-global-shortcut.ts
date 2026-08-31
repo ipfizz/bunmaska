@@ -8,12 +8,6 @@ import { carbonModifierMask, macVirtualKeyCode } from './carbon-keymap';
 /**
  * macOS `globalShortcut` backend via Carbon `RegisterEventHotKey`.
  *
- * Carbon hot keys work un-bundled (`bun main.ts`) with no Accessibility grant,
- * and their key-down events flow through the application's Carbon event target,
- * which Bunmaska's cooperative `CFRunLoopRunInMode` pump already services — so a
- * registered hot key dispatches with no extra run-loop wiring.
- *
- * Design:
  * - ONE process-wide event handler is installed lazily for
  *   `kEventClassKeyboard` / `kEventHotKeyPressed`. Its `JSCallback` is retained
  *   for the process lifetime (it is NEVER closed inside its own invocation — see
@@ -154,7 +148,6 @@ const unregisterAll = (): void => {
 /** macOS is supported whenever we are actually on macOS (Carbon is always present). */
 const isSupported = (): boolean => currentPlatform() === 'macos';
 
-/** The macOS Carbon global-shortcut backend. */
 export const macosGlobalShortcutBackend: GlobalShortcutBackend = {
   isSupported,
   register,

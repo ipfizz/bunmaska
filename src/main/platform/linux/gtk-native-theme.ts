@@ -10,9 +10,6 @@ import { connectSignal, makeNotifyCallback } from './gtk-signals';
  * Reads the `gtk-application-prefer-dark-theme` boolean off the default
  * `GtkSettings` via `g_object_get` into a caller-allocated `gboolean` buffer —
  * the in-process GTK signal of the user's dark-mode preference. Pure read, no UI.
- *
- * {@link observeAppearanceChange} connects to that property's `notify` signal so
- * `onChange` fires whenever the desktop's dark-mode preference flips.
  */
 
 const PREFER_DARK = 'gtk-application-prefer-dark-theme';

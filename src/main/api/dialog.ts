@@ -5,37 +5,27 @@ import * as cocoaDialog from '../platform/macos/cocoa-dialog';
 import { windowsDialogBackend } from '../platform/windows/windows-dialog';
 
 /**
- * Native system dialogs — the drop-in equivalent of Electron's `dialog`.
- *
- * Methods return Promises to match Electron's async API. The macOS backend runs
- * the panels modally (synchronously) under the hood; the Linux backend is truly
- * async (GTK's `GtkAlertDialog`/`GtkFileDialog` resolve via a
- * `GAsyncReadyCallback`). The `DialogBackend` methods therefore allow either a
- * value or a Promise, and the API layer wraps each in `Promise.resolve(...)`
- * which flattens a returned Promise transparently. The native backend is
- * injectable so the option-mapping and result-shaping logic is unit-testable
- * without showing a real dialog.
+ * Native system dialogs — the drop-in equivalent of Electron's `dialog`. macOS
+ * and Windows run their panels modally while Linux is truly async
+ * (`GAsyncReadyCallback`), so {@link DialogBackend} may return a value OR a
+ * Promise.
  */
 
 export type MessageBoxOptions = {
   readonly message: string;
   readonly detail?: string;
-  /** Button labels; defaults to `['OK']`. The first is the default button. */
+  /** Defaults to `['OK']`. The FIRST is the default button. */
   readonly buttons?: ReadonlyArray<string>;
-  /**
-   * Severity: `info` | `error` | `question` | `warning` | `none`. Styles the
-   * `NSAlert` icon on macOS; GtkAlertDialog has no severity, so it is a no-op on
-   * Linux.
-   */
+  /** Styles the `NSAlert` icon on macOS; GtkAlertDialog has no severity, so a no-op on Linux. */
   readonly type?: cocoaDialog.MessageBoxType;
 };
 
 export type MessageBoxReturnValue = {
-  /** Index of the clicked button. */
+  /** Index into `buttons`. */
   readonly response: number;
 };
 
-/** An Electron file-type filter: a label and its allowed extensions (no dots; `*` = any). */
+/** `extensions` carry NO leading dot; `*` means any. */
 export type FileFilter = {
   readonly name: string;
   readonly extensions: ReadonlyArray<string>;
@@ -49,9 +39,9 @@ export type OpenDialogOptions = {
   readonly properties?: ReadonlyArray<
     'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'
   >;
-  /** Directory the panel opens at (its containing folder, for a file path). */
+  /** For a file path, the panel opens at its containing folder. */
   readonly defaultPath?: string;
-  /** File-type filters; the selectable extensions are their union. */
+  /** The selectable extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;
 };
 
@@ -61,13 +51,12 @@ export type OpenDialogReturnValue = {
 };
 
 export type SaveDialogOptions = {
-  /** Suggested file name shown in the panel. */
   readonly defaultPath?: string;
-  /** File-type filters; the allowed extensions are their union. */
+  /** The allowed extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;
 };
 
-/** The deduped union of all filter extensions, dropping the `*` wildcard. */
+/** Deduped, with the `*` wildcard dropped. */
 export const flattenFilterExtensions = (filters?: ReadonlyArray<FileFilter>): string[] => {
   if (filters === undefined) {
     return [];
@@ -88,13 +77,6 @@ export type SaveDialogReturnValue = {
   readonly filePath: string;
 };
 
-/**
- * The native backend the public dialog API delegates to.
- *
- * Each method may return its value synchronously (macOS, which runs panels
- * modally) or a Promise (Linux, whose GTK dialogs settle asynchronously). The
- * API layer's `Promise.resolve(...)` flattens both uniformly.
- */
 export type DialogBackend = {
   showMessageBox(spec: cocoaDialog.MessageBoxSpec): number | Promise<number>;
   showOpenDialog(spec: cocoaDialog.OpenDialogSpec): string[] | Promise<string[]>;
@@ -125,7 +107,7 @@ const getBackend = (): DialogBackend => {
   throw new UnsupportedPlatformError(`dialog is not supported on ${currentPlatform()} yet`);
 };
 
-/** Override the native dialog backend. Test-only. */
+/** @internal */
 export const setDialogBackendForTesting = (fake: DialogBackend | undefined): void => {
   backend = fake;
 };
@@ -138,8 +120,6 @@ export type Dialog = {
 };
 
 export const dialog: Dialog = {
-  // `await` flattens a sync value (macOS) or a Promise (Linux) uniformly before
-  // the result object is constructed, so a Promise is never double-wrapped.
   async showMessageBox(options) {
     const response = await getBackend().showMessageBox({
       message: options.message,
@@ -171,8 +151,7 @@ export const dialog: Dialog = {
     return { canceled: filePath.length === 0, filePath };
   },
 
-  // Electron's showErrorBox is sync/void; surface it through the message-box
-  // backend (an error-styled alert). Fire-and-forget on Linux (async dialog).
+  // Electron's showErrorBox is sync/void, so this is fire-and-forget on Linux.
   showErrorBox(title, content) {
     void getBackend().showMessageBox({
       message: title,

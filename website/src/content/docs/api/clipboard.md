@@ -108,7 +108,7 @@ console.log(clipboard.availableFormats());
 // [ 'text/plain', ... ]
 ```
 
-Note: Bunmaska reports MIME-style format names (e.g. `text/plain`, `text/html`, `image/png`), matching Electron's Linux output rather than the macOS `public.*` UTI naming. (The Linux backend currently leaks raw GDK format strings here - a known drift being normalized in alpha.6.)
+Note: Bunmaska reports MIME-style format names (e.g. `text/plain`, `text/html`, `image/png`), matching Electron's Linux output rather than the macOS `public.*` UTI naming. (The Linux backend currently leaks raw GDK format strings here - a known drift, still on the normalization list.)
 
 ### `clipboard.clear()`
 

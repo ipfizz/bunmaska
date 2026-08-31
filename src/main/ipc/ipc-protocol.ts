@@ -1,11 +1,7 @@
 import { InvalidArgumentError } from '../../common/errors';
 
 /**
- * Wire protocol for Bunmaska IPC (D021). Messages cross the in-process boundary
- * (renderer ⇄ main) as JSON strings: the renderer posts them through a
- * `WKScriptMessageHandler`, the main side delivers them via `evaluateJavaScript`.
- *
- * Three envelope kinds:
+ * Wire protocol for Bunmaska IPC (D021) — JSON envelopes crossing renderer ⇄ main.
  * - `send`   — fire-and-forget event on a channel (either direction).
  * - `invoke` — request expecting a `reply`, correlated by `id` (renderer→main).
  * - `reply`  — response to an `invoke` (main→renderer).

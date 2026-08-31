@@ -2,12 +2,10 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * GDI+ (gdiplus.dll) image FFI for the Windows `nativeImage` backend, plus the
- * shlwapi memory-stream helper that feeds it. GDI+ exposes a FLAT-C API
- * (`Gdip*`-prefixed, `extern "C"`) — only the `IStream` it reads/writes is COM,
- * and that is handled with `CreateStreamOnHGlobal`/`GetHGlobalFromStream` (ole32,
- * flat) so the bytes come out via `GlobalLock` rather than `IStream::Read`; the
- * lone COM vtable call is a single `Release` (see `windows-native-image.ts`).
+ * GDI+ (gdiplus.dll) image FFI, plus the shlwapi memory-stream helper that feeds it. Only
+ * the `IStream` GDI+ reads/writes is COM, and it is handled with flat ole32
+ * (`CreateStreamOnHGlobal`/`GetHGlobalFromStream`) so the bytes come out via `GlobalLock`
+ * rather than `IStream::Read`.
  */
 const GDIPLUS_SYMBOLS = {
   // (ULONG_PTR* token, GdiplusStartupInput* input, GdiplusStartupOutput* output) -> Status
@@ -79,7 +77,6 @@ const GDIPLUS_SYMBOLS = {
 export const GDIP_OK = 0;
 /** `ImageLockModeRead` — lock pixels for reading only. */
 export const IMAGE_LOCK_MODE_READ = 1;
-/** `PixelFormat32bppARGB`. */
 export const PIXEL_FORMAT_32BPP_ARGB = 0x0026200a;
 /** `InterpolationModeHighQualityBicubic` — smooth downscaling. */
 export const INTERPOLATION_HIGH_QUALITY_BICUBIC = 7;

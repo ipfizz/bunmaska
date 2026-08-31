@@ -17,11 +17,6 @@ import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
  * the geometry comes entirely from CoreGraphics scalar getters, which were
  * empirically verified on a real arm64 host to return sane values.
  *
- * Fields populated: id (CGDirectDisplayID), bounds size (CGDisplayPixelsWide/
- * High — logical points), scaleFactor (display-mode pixel/logical width),
- * rotation (CGDisplayRotation), internal (CGDisplayIsBuiltin), primary
- * (CGDisplayIsMain).
- *
  * v1 LIMITATION — display ORIGIN (bounds.x/y): CoreGraphics has no scalar
  * getter for a display's global origin; only the struct-return CGDisplayBounds
  * exposes it. The primary display's origin is (0,0) by definition, so single-
@@ -111,6 +106,12 @@ const rawDisplayFor = (
 };
 
 /** Enumerate the active displays via CoreGraphics scalar getters. */
+/** Primary display height (pt) - the top-left <-> bottom-left flip pivot. */
+export const primaryDisplayHeight = (): number => {
+  const symbols = loadCoreGraphicsFFI().symbols;
+  return Number(symbols.CGDisplayPixelsHigh(symbols.CGMainDisplayID()));
+};
+
 export const getDisplays = (): readonly RawDisplay[] => {
   const { symbols } = loadCoreGraphicsFFI();
   const ids = new Uint32Array(MAX_DISPLAYS);
@@ -136,7 +137,6 @@ export const getDisplays = (): readonly RawDisplay[] => {
  */
 export const getCursorScreenPoint = (): Point => ({ x: 0, y: 0 });
 
-/** The macOS screen backend the public `screen` API delegates to. */
 export const cocoaScreenBackend: ScreenBackend = {
   getDisplays,
   getCursorScreenPoint,

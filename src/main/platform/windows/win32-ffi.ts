@@ -2,13 +2,6 @@ import { dlopen, FFIType } from 'bun:ffi';
 import { winLibraryAccessor } from './win32';
 
 /**
- * Win32 windowing + message-pump FFI for the Windows backend (user32.dll and
- * kernel32.dll), the engine-agnostic half of the backend.
- *
- * Mirrors the macOS `cocoa-ffi`/`carbon-ffi` loaders: a memoised, import-safe
- * symbol table per system DLL. Both DLLs live in System32 and are always on the
- * loader search path, so they open by bare name.
- *
  * Handle discipline (see `win32.ts`): every `HWND`/`HINSTANCE`/`HMENU`/`HCURSOR`
  * is declared `u64` and carried as a `bigint`, NOT `ptr` — a Win32 handle is an
  * opaque kernel value, not a virtual address. Real pointers (the `WNDCLASSEXW`

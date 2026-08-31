@@ -69,13 +69,13 @@ jobs:
         run: python bunmaska/tools/engine/patch-webkit-wincairo.py C:\WebKit
         shell: pwsh
 
-      # cmake + VS are preinstalled; add ninja, perl, ruby, gperf.
+      # cmake + VS are preinstalled; add ninja, perl, ruby, gperf. gperf comes
+      # from chocolatey too: the old sourceforge/ezwinports link now serves a
+      # 2-byte "no" stub, which broke every build at Expand-Archive.
       - name: Install build tools (ninja, perl, ruby, gperf)
         run: |
-          choco install -y ninja strawberryperl ruby
-          curl.exe -L -A "Mozilla/5.0" -o "$env:TEMP\gperf.zip" `
-            "https://master.dl.sourceforge.net/project/ezwinports/gperf-3.1-w32-bin.zip?viasf=1"
-          Expand-Archive "$env:TEMP\gperf.zip" -DestinationPath C:\gperf -Force
+          choco install -y ninja strawberryperl ruby gperf
+          gperf --version | Select-Object -First 1
         shell: pwsh
 
       # WinCairo builds with clang-cl (the find_library for clang_rt.builtins
@@ -103,7 +103,7 @@ jobs:
           CC: ${{ env.LLVM_DIR }}\bin\clang-cl.exe
           CXX: ${{ env.LLVM_DIR }}\bin\clang-cl.exe
         run: |
-          $env:Path = "$env:LLVM_DIR\bin;C:\gperf\bin;$env:Path"
+          $env:Path = "$env:LLVM_DIR\bin;$env:Path"
           perl Tools/Scripts/build-webkit --wincairo --release
           if (-not (Test-Path "$env:WEBKIT_OUTPUTDIR\Release\bin\WebKit2.dll")) {
             Write-Host "finishing past the dev-tooling target with ninja -k 0 ..."

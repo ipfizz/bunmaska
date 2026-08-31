@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { BunmaskaError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
@@ -16,150 +16,41 @@ import {
   msgSendU8,
 } from '../../../../../src/main/platform/macos/cocoa-msgsend-variants';
 
-describe('msgSendInitWithContentRect export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendInitWithContentRect).toBe('function');
-  });
-});
+/**
+ * Every variant must refuse to run off macOS rather than dlopen-ing something that
+ * is not there. The calls are deliberately made with null handles: off macOS the
+ * platform guard fires first, so the arguments never reach objc_msgSend.
+ */
+const VARIANTS: ReadonlyArray<readonly [string, () => unknown]> = [
+  [
+    'msgSendInitWithContentRect',
+    () => msgSendInitWithContentRect(0n, 0n, [0, 0, 0, 0], 0n, 0n, false),
+  ],
+  ['msgSendPtr', () => msgSendPtr(0n, 0n, 0n)],
+  ['msgSendU8', () => msgSendU8(0n, 0n, 0)],
+  ['msgSendF64', () => msgSendF64(0n, 0n, 0)],
+  ['msgSendI64', () => msgSendI64(0n, 0n, 0n)],
+  ['msgSendI64Ptr', () => msgSendI64Ptr(0n, 0n, 0n, 0n)],
+  ['msgSendReturnsU8', () => msgSendReturnsU8(0n, 0n)],
+  ['msgSendPtr4', () => msgSendPtr4(0n, 0n, 0n, 0n, 0n, 0n)],
+  ['msgSendPtrI64U8Ptr', () => msgSendPtrI64U8Ptr(0n, 0n, 0n, 0n, 0, 0n)],
+  ['msgSendPtrI64', () => msgSendPtrI64(0n, 0n, 0n, 0n)],
+  ['msgSendPtrI64Ptr', () => msgSendPtrI64Ptr(0n, 0n, 0n, 0n, 0n)],
+  ['msgSendPtrPtrI64Ptr', () => msgSendPtrPtrI64Ptr(0n, 0n, 0n, 0n, 0n, 0n)],
+];
 
-describe('msgSendPtr export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendPtr).toBe('function');
-  });
-});
+test.skipIf(currentPlatform() === 'macos')(
+  'every msgSend variant throws BunmaskaError off macOS',
+  () => {
+    const unguarded = VARIANTS.filter(([, call]) => {
+      try {
+        call();
+        return true;
+      } catch (error) {
+        return !(error instanceof BunmaskaError);
+      }
+    }).map(([name]) => name);
 
-describe('msgSendU8 export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendU8).toBe('function');
-  });
-});
-
-describe('msgSendF64 export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendF64).toBe('function');
-  });
-});
-
-describe('msgSendI64 export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendI64).toBe('function');
-  });
-});
-
-describe('msgSendI64Ptr export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendI64Ptr).toBe('function');
-  });
-});
-
-describe('msgSendReturnsU8 export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendReturnsU8).toBe('function');
-  });
-});
-
-describe('msgSendPtr4 export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendPtr4).toBe('function');
-  });
-});
-
-describe('msgSendPtrI64U8Ptr export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendPtrI64U8Ptr).toBe('function');
-  });
-});
-
-describe('msgSendPtrI64 export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendPtrI64).toBe('function');
-  });
-});
-
-describe('msgSendPtrI64Ptr export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendPtrI64Ptr).toBe('function');
-  });
-});
-
-describe('msgSendPtrPtrI64Ptr export', () => {
-  test('is a function', () => {
-    expect(typeof msgSendPtrPtrI64Ptr).toBe('function');
-  });
-});
-
-if (currentPlatform() !== 'macos') {
-  describe('msgSendInitWithContentRect on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendInitWithContentRect(0n, 0n, [0, 0, 0, 0], 0n, 0n, false)).toThrow(
-        BunmaskaError,
-      );
-    });
-  });
-
-  describe('msgSendPtr on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendPtr(0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendU8 on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendU8(0n, 0n, 0)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendF64 on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendF64(0n, 0n, 0)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendI64 on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendI64(0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendI64Ptr on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendI64Ptr(0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendReturnsU8 on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendReturnsU8(0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendPtr4 on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendPtr4(0n, 0n, 0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendPtrI64U8Ptr on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendPtrI64U8Ptr(0n, 0n, 0n, 0n, 0, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendPtrI64 on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendPtrI64(0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendPtrI64Ptr on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendPtrI64Ptr(0n, 0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-
-  describe('msgSendPtrPtrI64Ptr on non-macOS hosts', () => {
-    test('throws BunmaskaError', () => {
-      expect(() => msgSendPtrPtrI64Ptr(0n, 0n, 0n, 0n, 0n, 0n)).toThrow(BunmaskaError);
-    });
-  });
-}
+    expect(unguarded).toEqual([]);
+  },
+);

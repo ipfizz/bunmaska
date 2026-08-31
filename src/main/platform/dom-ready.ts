@@ -1,10 +1,7 @@
 /**
- * Page-world `dom-ready` injection (Electron's `webContents` `dom-ready`).
- *
- * No native delegate reports DOMContentLoaded, so a tiny page-world script posts
- * to a dedicated script-message handler when the document is ready; the backend
- * routes that to a `dom-ready` navigation event. Platform-neutral (just a JS
- * string + the shared handler name) so both backends inject the same script.
+ * Page-world `dom-ready` injection: no native delegate reports DOMContentLoaded, so
+ * a page-world script posts to a dedicated script-message handler that the backend
+ * routes to a `dom-ready` navigation event. Every backend injects this same script.
  */
 
 /** The page-world script-message handler name the dom-ready script posts to. */

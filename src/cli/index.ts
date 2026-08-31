@@ -1,15 +1,13 @@
 #!/usr/bin/env bun
 
 /**
- * The `bunmaska` command-line interface: `run`, `build`, `--help`, `--version`.
- *
- * This is the user-facing build/launch tool, not a runtime module — it uses
- * Bun/Node filesystem and process APIs only. Output goes through
+ * The `bunmaska` command-line interface. Output goes through
  * `process.stdout`/`process.stderr` because Biome bans `console.*`.
  */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { BunmaskaConfig } from '../common/config-schema';
 import { DEFAULT_CHANNEL } from '../common/manifest';
 import { currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -23,10 +21,13 @@ import {
 } from './build-macos';
 import { buildWindowsApp } from './build-windows';
 import { loadConfig } from './config';
-import { resolveDevEntry, runDev } from './dev';
+import { classifyChange, defaultDevDeps, resolveDevEntry, runDev } from './dev';
+import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
 import { enginesPath } from './engine-store';
 import { runInit } from './init';
+import { runKeygen } from './keygen';
+import { notarizeApp } from './notarize';
 import {
   type BuildOptions,
   type BuildTarget,
@@ -54,6 +55,8 @@ Usage:
   bunmaska build [entry.ts] [options]    Bundle a distributable app (entry defaults
                                          to the config's "entry")
   bunmaska engine <subcommand>           Manage the pinned-WebKit engine store
+  bunmaska keygen [--out <dir>]          Generate the Ed25519 update-signing key
+                                         pair (private + public .pem)
   bunmaska doctor [dir]                   Report runtime, store, and the engine pin
   bunmaska --help                        Show this help
   bunmaska --version                     Print the Bunmaska version
@@ -82,12 +85,18 @@ build options:
                      (TEAMID)' identity that is present in your keychain.
   --dmg              Also build a <Name>.dmg disk image of the macOS .app
                      (macOS-only; uses hdiutil), with an /Applications symlink.
-  --notarize         Notarization hook (macOS, with --sign). Requires the env
-                     vars APPLE_ID, TEAM_ID and an app-specific password; this
-                     build does not submit to Apple — see the docs to release.
+  --notarize         Notarize the macOS .app (with --sign): zips it, submits
+                     via 'xcrun notarytool --wait', staples the ticket. Needs
+                     the env vars APPLE_ID, TEAM_ID and an app-specific
+                     password in BUNMASKA_NOTARIZE_PASSWORD, else it is skipped
+                     with guidance.
   --update           Also emit the auto-update feed beside the bundle: a
                      <name>-<channel>-<os>-<arch>.tar.zst and an update.json the
                      runtime autoUpdater reads. The artifact arch is the host's.
+  --update-key <pem> Sign the --update artifact: writes a detached .sig beside
+                     the .tar.zst with this Ed25519 private key (generate one
+                     with 'bunmaska keygen'). Without it the feed is unsigned
+                     and the runtime autoUpdater will refuse it.
   --channel <name>   Release channel for --update (default: stable).
   --embed-engine <dir>  Windows only: bundle a WinCairo WebKit engine directory
                      into the app's webkit/ folder so the built .exe runs with no
@@ -98,7 +107,6 @@ build options:
 Windows portable dir + .zip. --target cross-builds (e.g. a macOS host can build
 Linux or Windows). --sign and --notarize are macOS-only (codesign/notarytool).`;
 
-/** Derive a default app name from the entry path's base file name. */
 const deriveName = (entry: string): string => {
   const base = entry.split(/[\\/]/).pop() ?? entry;
   const stem = base.replace(/\.[^.]+$/, '');
@@ -108,7 +116,6 @@ const deriveName = (entry: string): string => {
 /** Argv builder + runner for the `xcrun notarytool submit` release hook. */
 type NotarizeHook = (appPath: string) => Promise<void>;
 
-/** Injectable seams so `dispatch` is unit-testable without shelling out. */
 export type DispatchDeps = {
   readonly buildMac?: (opts: BuildMacAppOptions) => Promise<string>;
   readonly signApp?: SignApp;
@@ -129,7 +136,7 @@ const readAppVersion = (): string => {
   }
 };
 
-/** When `--update` was given, emit the `.tar.zst` + `update.json` feed for a bundle. */
+/** When `--update` was given, emit the `.tar.zst` + `update.json` (+ `.sig`) feed. */
 const maybeEmitUpdate = async (
   bundlePath: string,
   name: string,
@@ -139,6 +146,16 @@ const maybeEmitUpdate = async (
   if (options.update !== true) {
     return;
   }
+  let signingKeyPem: string | undefined;
+  if (options.updateKey !== undefined) {
+    signingKeyPem = readFileSync(options.updateKey, 'utf8');
+  } else {
+    err(
+      'bunmaska build: WARNING: the update feed is UNSIGNED (no --update-key). ' +
+        'The runtime autoUpdater refuses unsigned updates; sign with ' +
+        '--update-key <private.pem> (generate a pair with `bunmaska keygen`).',
+    );
+  }
   const result = await emitUpdateArtifact({
     bundlePath,
     outDir: dirname(bundlePath),
@@ -147,15 +164,18 @@ const maybeEmitUpdate = async (
     channel: options.channel ?? DEFAULT_CHANNEL,
     os: target,
     arch: currentArch(),
+    ...(signingKeyPem === undefined ? {} : { signingKeyPem }),
   });
   out(result.artifactPath);
   out(result.manifestPath);
+  if (result.sigPath !== undefined) {
+    out(result.sigPath);
+  }
 };
 
 /**
- * Resolve the per-app engine-id to bake (and whether it's embedded) from the
- * project's `engine.webkit` pin, warning when a bare upstream version cannot yet
- * resolve to a full id. Shared by the Linux and Windows build branches.
+ * Warns when a bare upstream version cannot yet resolve to a full id. Shared by
+ * the Linux and Windows build branches.
  */
 const resolveProjectEngine = async (): Promise<{ engineId: string; embed: boolean }> => {
   const { config } = await loadConfig(process.cwd());
@@ -210,6 +230,28 @@ const runBuild = async (
   }
 
   const name = command.options.name ?? deriveName(entry);
+
+  // Fail fast on an unreadable signing key: discovering it after a full build
+  // wastes the build and surfaced as a raw stack.
+  if (command.options.updateKey !== undefined) {
+    try {
+      readFileSync(command.options.updateKey, 'utf8');
+    } catch {
+      err(`bunmaska build: cannot read --update-key ${command.options.updateKey}`);
+      return 1;
+    }
+  }
+
+  // A configured renderer builds first and ships as `renderer/` beside the
+  // executable; nothing else in the build copies it (assets are entry siblings).
+  let rendererDir: string | undefined;
+  const rendererConfig = (await loadConfig(process.cwd())).config.renderer;
+  if (rendererConfig !== undefined) {
+    const rendererResult = await buildRenderer(process.cwd(), rendererConfig);
+    rendererDir = rendererResult.outDir;
+    out(`renderer built (${rendererResult.written.join(', ')})`);
+  }
+
   if (target === 'linux') {
     const { engineId, embed } = await resolveProjectEngine();
     const result = await buildLinuxApp({
@@ -220,6 +262,7 @@ const runBuild = async (
       ...(command.options.id !== undefined ? { id: command.options.id } : {}),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(command.options.icon !== undefined ? { icon: command.options.icon } : {}),
+      ...(rendererDir !== undefined ? { rendererDir } : {}),
     });
     out(result.appDir);
     out(result.tarball);
@@ -239,6 +282,7 @@ const runBuild = async (
       ...(command.options.embedEngine !== undefined
         ? { embedEngine: command.options.embedEngine }
         : {}),
+      ...(rendererDir !== undefined ? { rendererDir } : {}),
     });
     out(result.appDir);
     out(result.exePath);
@@ -259,11 +303,12 @@ const runBuild = async (
     ...(deps.signApp !== undefined ? { signApp: deps.signApp } : {}),
     ...(deps.convertIcon !== undefined ? { convertIcon: deps.convertIcon } : {}),
     ...(deps.buildDmg !== undefined ? { buildDmg: deps.buildDmg } : {}),
+    ...(rendererDir !== undefined ? { rendererDir } : {}),
   });
   out(appPath);
 
-  // Notarization is a documented release HOOK: without Apple credentials we
-  // print guidance and do NOT submit to Apple.
+  // Without Apple credentials we print guidance and do NOT submit to Apple;
+  // with them the default hook zips, submits (--wait) and staples.
   if (command.options.notarize === true) {
     const creds = notarizeCredentials();
     if (creds === undefined) {
@@ -271,8 +316,9 @@ const runBuild = async (
         'bunmaska build: notarization requires APPLE_ID/TEAM_ID and an app-specific password ' +
           '(env BUNMASKA_NOTARIZE_PASSWORD) — see docs. Skipping notarization.',
       );
-    } else if (deps.notarize !== undefined) {
-      await deps.notarize(appPath);
+    } else {
+      const notarize = deps.notarize ?? ((app: string): Promise<void> => notarizeApp(app, creds));
+      await notarize(appPath);
     }
   }
   await maybeEmitUpdate(appPath, name, 'macos', command.options);
@@ -292,7 +338,6 @@ const notarizeCredentials = ():
   return { appleId, teamId, password };
 };
 
-/** Scaffold a new project and print next steps. Returns the exit code. */
 const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => {
   let result: ReturnType<typeof runInit>;
   try {
@@ -315,7 +360,6 @@ const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => 
   return 0;
 };
 
-/** Shared dependencies for the `engine`/`doctor` commands (real store + config). */
 const engineCommandDeps = (): Parameters<typeof runEngine>[1] => ({
   root: enginesPath(),
   env: process.env,
@@ -335,18 +379,59 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
     process.once('SIGTERM', onSignal);
   });
 
-/** Run the app with file-watch restarts until interrupted. Returns the exit code. */
+/**
+ * The engine env a launched app needs to resolve its `engine.webkit` pin. Only
+ * `build`/`doctor` used to read the pin, so `dev` and `run` silently launched on
+ * the system WebKit — which on Windows means no engine at all.
+ */
+const launchEngineEnv = async (): Promise<Record<string, string>> => {
+  try {
+    const { config } = await loadConfig(process.cwd());
+    const engineId = resolveBuildEngineId(config.engine?.webkit);
+    return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
+  } catch {
+    // A missing or invalid config is the caller's problem to report, not ours.
+    return {};
+  }
+};
+
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
   let entry: string;
+  let renderer: BunmaskaConfig['renderer'];
   try {
     const { config } = await loadConfig(process.cwd());
     entry = resolveDevEntry(config, command.entry);
+    renderer = config.renderer;
   } catch (error) {
     err(error instanceof Error ? error.message : String(error));
     return 1;
   }
+  const dir = process.cwd();
+  const log = (message: string): void => out(message);
+  const baseDeps = defaultDevDeps(dir, log, await launchEngineEnv());
+  let deps = baseDeps;
+  if (renderer !== undefined) {
+    const rendererConfig = renderer;
+    const rendererRoot = dirname(rendererConfig.entry);
+    const rebuild = async (): Promise<void> => {
+      // A broken renderer edit must never take the dev loop down with it.
+      try {
+        const result = await buildRenderer(dir, rendererConfig);
+        log(`renderer rebuilt (${result.written.join(', ')})`);
+      } catch (error) {
+        err(error instanceof Error ? error.message : String(error));
+      }
+    };
+    // Build once up front so the first launch shows current code.
+    await rebuild();
+    deps = {
+      ...baseDeps,
+      classify: (relPath) => classifyChange(relPath, rendererRoot),
+      rebuild,
+    };
+  }
   out(`bunmaska dev: running ${entry} (Ctrl-C to stop)`);
-  await runDev(process.cwd(), entry, awaitInterrupt);
+  await runDev(dir, entry, awaitInterrupt, deps);
   return 0;
 };
 
@@ -364,11 +449,13 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
     case 'dev':
       return await runDevCommand(command);
     case 'run':
-      return await runApp(command.entry, command.args);
+      return await runApp(command.entry, command.args, { extraEnv: await launchEngineEnv() });
     case 'build':
       return await runBuild(command, deps);
     case 'engine':
       return await runEngine(command.sub, engineCommandDeps());
+    case 'keygen':
+      return runKeygen(command.out ?? process.cwd(), { out, err });
     case 'doctor':
       return await runDoctor(command.target, engineCommandDeps());
     case 'error':

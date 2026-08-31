@@ -1,9 +1,6 @@
 /**
- * Emit the auto-update feed for a built bundle: a compressed `.tar.zst` of the
- * `.app`/AppDir plus the `update.json` manifest the runtime `autoUpdater`
- * consumes. The tar is produced with the system `tar` and compressed with
- * `Bun.zstdCompressSync` (portable — no reliance on `tar --zstd`); the manifest
- * is built from the same {@link ../common/manifest} contract.
+ * Emits the auto-update feed for a built bundle: a `.tar.zst` of the `.app`/AppDir
+ * plus the `update.json` manifest the runtime `autoUpdater` consumes.
  */
 
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -17,8 +14,8 @@ import {
   type UpdateManifest,
 } from '../common/manifest';
 import type { Arch } from '../common/platform';
+import { signArtifact } from '../common/signature';
 
-/** Inputs needed to emit an update artifact for a finished bundle. */
 export type UpdateArtifactSpec = {
   /** Path to the built bundle (the `.app` directory or the Linux AppDir). */
   readonly bundlePath: string;
@@ -29,11 +26,11 @@ export type UpdateArtifactSpec = {
   readonly channel: string;
   readonly os: ArtifactOs;
   readonly arch: Arch;
+  /** PEM Ed25519 private key; when set, a detached `.sig` is written beside the artifact. */
+  readonly signingKeyPem?: string;
 };
 
-/** Injectable side effects so the manifest emission is unit-testable. */
 export type UpdateArtifactDeps = {
-  /** Produce a `.tar.zst` of `bundlePath` at `outPath`. */
   readonly tarZst: (bundlePath: string, outPath: string) => Promise<void>;
   readonly readBytes: (path: string) => Uint8Array;
   readonly writeText: (path: string, text: string) => void;
@@ -46,7 +43,6 @@ const toArtifactSpec = (spec: UpdateArtifactSpec): ArtifactSpec => ({
   arch: spec.arch,
 });
 
-/** Build the {@link UpdateManifest} for a spec and the artifact's bytes. Pure. */
 export const buildUpdateManifest = (
   spec: UpdateArtifactSpec,
   bytes: Uint8Array,
@@ -61,11 +57,12 @@ export const buildUpdateManifest = (
   artifact: artifactFileName(toArtifactSpec(spec), 'tar.zst'),
 });
 
-/** The result of {@link emitUpdateArtifact}. */
 export type UpdateArtifactResult = {
   readonly artifactPath: string;
   readonly manifestPath: string;
   readonly manifest: UpdateManifest;
+  /** Present only when the spec carried a signing key. */
+  readonly sigPath?: string;
 };
 
 const tarThenZstd = async (bundlePath: string, outPath: string): Promise<void> => {
@@ -92,10 +89,6 @@ const defaultDeps: UpdateArtifactDeps = {
   },
 };
 
-/**
- * Compress `bundlePath` into a channel-named `.tar.zst` under `outDir`, then
- * write `update.json` describing it. Returns both paths and the manifest.
- */
 export const emitUpdateArtifact = async (
   spec: UpdateArtifactSpec,
   deps: UpdateArtifactDeps = defaultDeps,
@@ -107,5 +100,11 @@ export const emitUpdateArtifact = async (
   const manifest = buildUpdateManifest(spec, bytes);
   const manifestPath = join(spec.outDir, 'update.json');
   deps.writeText(manifestPath, serializeUpdateManifest(manifest));
-  return { artifactPath, manifestPath, manifest };
+  if (spec.signingKeyPem === undefined) {
+    return { artifactPath, manifestPath, manifest };
+  }
+  // Same detached format the runtime autoUpdater fetches as `<artifact>.sig`.
+  const sigPath = `${artifactPath}.sig`;
+  deps.writeText(sigPath, `${signArtifact(spec.signingKeyPem, bytes)}\n`);
+  return { artifactPath, manifestPath, manifest, sigPath };
 };

@@ -1,14 +1,7 @@
 /**
- * Pack a built engine directory into the signed feed artifact that
- * `bunmaska engine install <url>` consumes — the producer side of
- * {@link installFromUrl}. Reads a store-shaped engine dir (`lib/` + `engine.json`),
- * compresses it to `.tar.zst`, content-hashes the bytes, and signs them with the
- * release Ed25519 key. The three outputs map one-to-one to the feed's three files
- * (`<id>.tar.zst`, `.json`, `.sig`), so publishing is a plain object upload.
- *
- * Network + a real CDN are never needed to test this: the produced artifact
- * round-trips through the real `installFromUrl` verify path against an in-memory
- * feed (see `engine-pack.test.ts`).
+ * The producer side of {@link installFromUrl}. The three outputs map one-to-one
+ * to the feed's three files (`<id>.tar.zst`, `.json`, `.sig`), so publishing is
+ * a plain object upload.
  */
 
 import { BunmaskaError } from '../common/errors';
@@ -38,22 +31,19 @@ export const zstdTarCompress = async (srcDir: string): Promise<Uint8Array> => {
   return Bun.zstdCompressSync(tarBytes);
 };
 
-/** A packed engine ready to publish: the artifact bytes, its feed manifest, and its signature. */
 export type PackedEngine = {
   readonly artifact: Uint8Array;
   readonly manifest: RemoteManifest;
   readonly signature: string;
 };
 
-/** Injectable side effects for {@link packEngineDir}. */
 export type PackDeps = {
   readonly compress?: (srcDir: string) => Promise<Uint8Array>;
 };
 
 /**
- * Pack a store-shaped engine directory into a signed `.tar.zst` artifact plus its
- * feed manifest (`id`/`hash`/`size`/`soname`) and detached base64 Ed25519
- * signature. Throws if the dir has no readable `engine.json`.
+ * The signature is detached base64 Ed25519 over the artifact bytes. Throws if
+ * the dir has no readable `engine.json`.
  */
 export const packEngineDir = async (
   engineDir: string,

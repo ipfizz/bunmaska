@@ -8,12 +8,6 @@ import type { Handle } from './objc';
 /**
  * Desktop integration via `NSWorkspace` and `NSBeep` — the macOS half of
  * Electron's `shell`.
- *
- * `openExternal` / `openPath` hand a URL or path to the OS, which launches the
- * default handler (browser, Finder, …) and reports whether it accepted the
- * request. `showItemInFolder` reveals a path in Finder. These have real side
- * effects (launching apps), so automated tests assert they run without crashing
- * rather than that something actually opened.
  */
 
 const APPKIT_PATH = '/System/Library/Frameworks/AppKit.framework/AppKit';
@@ -61,7 +55,6 @@ export const showItemInFolder = (path: string): void => {
   msgSendPtr(sharedWorkspace(), rt.selectors.get('activateFileViewerSelectingURLs:'), urls);
 };
 
-/** Play the system beep. */
 export const beep = (): void => {
   getNSBeep().symbols.NSBeep();
 };
