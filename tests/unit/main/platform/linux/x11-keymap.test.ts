@@ -2,11 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { parseAccelerator } from '../../../../../src/main/api/accelerator';
 import {
   CONTROL_MASK,
+  IGNORED_STATE_MASK,
   MOD1_MASK,
   MOD4_MASK,
   SHIFT_MASK,
   x11KeysymName,
   x11ModifierMask,
+  x11StateMatches,
 } from '../../../../../src/main/platform/linux/x11-keymap';
 import { X11_FFI_SYMBOLS } from '../../../../../src/main/platform/linux/x11-ffi';
 
@@ -97,5 +99,21 @@ describe('X11_FFI_SYMBOLS shape', () => {
 
   test('XGrabKey has the 7-argument Xlib signature', () => {
     expect(X11_FFI_SYMBOLS.XGrabKey.args).toHaveLength(7);
+  });
+});
+
+describe('x11StateMatches', () => {
+  test('matches the exact registered modifiers', () => {
+    expect(x11StateMatches(CONTROL_MASK | SHIFT_MASK, CONTROL_MASK | SHIFT_MASK)).toBe(true);
+  });
+
+  test('rejects a subset or superset of the registered modifiers', () => {
+    // The old dispatch matched on keycode alone, so Ctrl+K fired Ctrl+Shift+K too.
+    expect(x11StateMatches(CONTROL_MASK, CONTROL_MASK | SHIFT_MASK)).toBe(false);
+    expect(x11StateMatches(CONTROL_MASK | SHIFT_MASK, CONTROL_MASK)).toBe(false);
+  });
+
+  test('ignores CapsLock and NumLock state bits', () => {
+    expect(x11StateMatches(CONTROL_MASK | IGNORED_STATE_MASK, CONTROL_MASK)).toBe(true);
   });
 });

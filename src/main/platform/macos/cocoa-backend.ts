@@ -192,6 +192,8 @@ class MacOSWebContents implements NativeWebContents {
   readonly #webview: Handle;
   readonly #isolatedWorld: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
+  #didFinishLoad = false;
+  readonly #pendingEnvelopes: string[] = [];
   #navigationCallback: ((event: NativeNavigationEvent) => void) | undefined;
   #windowOpenCallback: ((url: string) => void) | undefined;
   readonly #pendingExecs = new Map<number, PendingExec>();
@@ -255,6 +257,16 @@ class MacOSWebContents implements NativeWebContents {
 
   /** @internal Called by the navigation delegate for each navigation event. */
   deliverNavigation(event: NativeNavigationEvent): void {
+    // Same contract as the Linux backend: envelopes sent before the first
+    // finished load are queued and flushed here, not silently dropped.
+    if (event.type === 'did-finish-load' && !this.#didFinishLoad) {
+      this.#didFinishLoad = true;
+      const queued = [...this.#pendingEnvelopes];
+      this.#pendingEnvelopes.length = 0;
+      for (const json of queued) {
+        this.#evaluateInWorld(dispatchScript(json), this.#isolatedWorld);
+      }
+    }
     this.#navigationCallback?.(event);
   }
 
@@ -473,6 +485,10 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
+    if (!this.#didFinishLoad) {
+      this.#pendingEnvelopes.push(envelopeJson);
+      return;
+    }
     // Internal dispatch targets the ISOLATED world, where `__bunmaska` lives.
     this.#evaluateInWorld(dispatchScript(envelopeJson), this.#isolatedWorld);
   }

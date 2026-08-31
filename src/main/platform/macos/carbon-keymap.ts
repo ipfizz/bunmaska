@@ -106,7 +106,9 @@ export const macVirtualKeyCode = (key: string): number | undefined =>
 /** Build the Carbon modifier mask for a parsed accelerator (CmdOrCtrl already resolved). */
 export const carbonModifierMask = (parsed: ParsedAccelerator): number => {
   let mask = 0;
-  if (parsed.meta) {
+  // Electron: Super/Meta is Cmd on macOS. Ignoring parsed.super registered
+  // 'Super+K' as a bare-K global grab.
+  if (parsed.meta || parsed.super) {
     mask |= CMD_KEY;
   }
   if (parsed.shift) {

@@ -89,3 +89,14 @@ describe('carbonModifierMask', () => {
     expect(carbonModifierMask(parsed)).toBe(0);
   });
 });
+
+test('Super maps to Cmd on macOS, matching Electron', () => {
+  const superK = parseAccelerator('Super+K', 'macos');
+  const cmdK = parseAccelerator('Cmd+K', 'macos');
+  if (superK === undefined || cmdK === undefined) {
+    throw new Error('both accelerators must parse');
+  }
+  // Without this, Super+K registered a bare-K global grab.
+  expect(carbonModifierMask(superK)).toBe(carbonModifierMask(cmdK));
+  expect(carbonModifierMask(superK)).not.toBe(0);
+});

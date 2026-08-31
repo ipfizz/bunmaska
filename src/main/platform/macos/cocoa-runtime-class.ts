@@ -1,3 +1,4 @@
+import { BunmaskaError } from '../../../common/errors';
 import { dlopen, FFIType, JSCallback } from 'bun:ffi';
 import { cstr } from '../cstr';
 import { cocoa } from './cocoa-runtime';
@@ -106,6 +107,13 @@ export const defineObjcClass = (
   const rt = cocoa();
   const superclass = rt.classes.get(superclassName);
   const cls = runtime.symbols.objc_allocateClassPair(superclass, cstr(name), 0n);
+  // objc_allocateClassPair returns nil for a duplicate name; class_addMethod on
+  // nil then corrupts silently instead of failing here.
+  if (cls === 0n) {
+    throw new BunmaskaError(
+      `defineObjcClass: objc_allocateClassPair returned nil for ${JSON.stringify(name)} — the class name is already registered in this process`,
+    );
+  }
 
   for (const method of methods) {
     const callback = buildCallback(method);
