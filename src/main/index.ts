@@ -3,6 +3,8 @@ import './bootstrap';
 export { App, app } from './api/app';
 export {
   type AutoUpdater,
+  type AutoUpdaterDeps,
+  AutoUpdaterImpl,
   autoUpdater,
   type FeedURLOptions,
   type StagedUpdate,

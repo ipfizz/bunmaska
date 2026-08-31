@@ -27,6 +27,11 @@ describe('entry barrels', () => {
     expect(bunmaska.BunmaskaError).toBe(bunmaskaMain.BunmaskaError);
   });
 
+  test('AutoUpdaterImpl is exported so apps can construct a custom-installer updater', () => {
+    expect(typeof bunmaskaMain.AutoUpdaterImpl).toBe('function');
+    expect(rootExports.has('AutoUpdaterImpl')).toBe(true);
+  });
+
   test.each([...IMPLEMENTED_MODULES])('IMPLEMENTED_MODULES claim is exported: %s', (name) => {
     expect(mainExports.has(name)).toBe(true);
     expect(rootExports.has(name)).toBe(true);

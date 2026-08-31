@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash, parseUpdateManifest } from '../../../src/common/manifest';
+import { generateSigningKeyPair, verifyArtifact } from '../../../src/common/signature';
 import {
   buildUpdateManifest,
   emitUpdateArtifact,
@@ -105,4 +106,37 @@ describe('emitUpdateArtifact (real tar + zstd)', () => {
       expect(existsSync(result.artifactPath.replace(/\.zst$/, ''))).toBe(false);
     },
   );
+});
+
+describe('emitUpdateArtifact signing', () => {
+  const KEYS = generateSigningKeyPair();
+
+  test('writes a detached .sig beside the artifact that verifyArtifact accepts', async () => {
+    const artifactBytes = new Uint8Array([9, 8, 7, 6, 5]);
+    const writes = new Map<string, string>();
+    const result = await emitUpdateArtifact(
+      { ...spec('/out', '/build/My App.app'), signingKeyPem: KEYS.privateKey },
+      {
+        tarZst: async () => undefined,
+        readBytes: () => artifactBytes,
+        writeText: (path, text) => writes.set(slash(path), text),
+      },
+    );
+    expect(slash(result.sigPath ?? '')).toBe('/out/my-app-stable-macos-arm64.tar.zst.sig');
+    const sig = (writes.get('/out/my-app-stable-macos-arm64.tar.zst.sig') ?? '').trim();
+    expect(verifyArtifact(KEYS.publicKey, artifactBytes, sig)).toBe(true);
+    // The signature must cover exactly the artifact bytes, not verify for others.
+    expect(verifyArtifact(KEYS.publicKey, new Uint8Array([1]), sig)).toBe(false);
+  });
+
+  test('without a signing key no .sig is written and sigPath is absent', async () => {
+    const writes = new Map<string, string>();
+    const result = await emitUpdateArtifact(spec('/out', '/build/My App.app'), {
+      tarZst: async () => undefined,
+      readBytes: () => new Uint8Array([1, 2]),
+      writeText: (path, text) => writes.set(slash(path), text),
+    });
+    expect(result.sigPath).toBeUndefined();
+    expect([...writes.keys()]).toEqual(['/out/update.json']);
+  });
 });

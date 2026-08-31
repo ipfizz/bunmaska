@@ -14,6 +14,7 @@ import {
   type UpdateManifest,
 } from '../common/manifest';
 import type { Arch } from '../common/platform';
+import { signArtifact } from '../common/signature';
 
 export type UpdateArtifactSpec = {
   /** Path to the built bundle (the `.app` directory or the Linux AppDir). */
@@ -25,6 +26,8 @@ export type UpdateArtifactSpec = {
   readonly channel: string;
   readonly os: ArtifactOs;
   readonly arch: Arch;
+  /** PEM Ed25519 private key; when set, a detached `.sig` is written beside the artifact. */
+  readonly signingKeyPem?: string;
 };
 
 export type UpdateArtifactDeps = {
@@ -58,6 +61,8 @@ export type UpdateArtifactResult = {
   readonly artifactPath: string;
   readonly manifestPath: string;
   readonly manifest: UpdateManifest;
+  /** Present only when the spec carried a signing key. */
+  readonly sigPath?: string;
 };
 
 const tarThenZstd = async (bundlePath: string, outPath: string): Promise<void> => {
@@ -95,5 +100,11 @@ export const emitUpdateArtifact = async (
   const manifest = buildUpdateManifest(spec, bytes);
   const manifestPath = join(spec.outDir, 'update.json');
   deps.writeText(manifestPath, serializeUpdateManifest(manifest));
-  return { artifactPath, manifestPath, manifest };
+  if (spec.signingKeyPem === undefined) {
+    return { artifactPath, manifestPath, manifest };
+  }
+  // Same detached format the runtime autoUpdater fetches as `<artifact>.sig`.
+  const sigPath = `${artifactPath}.sig`;
+  deps.writeText(sigPath, `${signArtifact(spec.signingKeyPem, bytes)}\n`);
+  return { artifactPath, manifestPath, manifest, sigPath };
 };

@@ -166,11 +166,12 @@ export type NotarizeOptions = {
 };
 
 /**
- * Build the `xcrun notarytool submit …` argv for an `.app` bundle. Pure.
+ * Build the `xcrun notarytool submit …` argv. Pure.
  *
- * This is a documented HOOK for a real release: it is NOT invoked by the build
- * (it needs Apple credentials and network). `password` is an app-specific
- * password for the Apple ID. `--wait` blocks until Apple finishes processing.
+ * The default `--notarize` hook submits the ditto ZIP of the bundle (notarytool
+ * refuses a bare `.app`), so `appPath` is the submit target, not always an app.
+ * `password` is an app-specific password for the Apple ID. `--wait` blocks
+ * until Apple finishes processing.
  */
 export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
   'xcrun',
@@ -189,8 +190,8 @@ export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
 /**
  * Build the `xcrun stapler staple …` argv for an `.app` bundle. Pure.
  *
- * Also a documented HOOK: stapling attaches the notarization ticket to the
- * bundle and is only meaningful after a successful notarytool submission.
+ * Stapling attaches the notarization ticket to the bundle and is only
+ * meaningful after a successful notarytool submission.
  */
 export const buildStapleArgs = (appPath: string): string[] => [
   'xcrun',
@@ -255,7 +256,8 @@ export const buildHdiutilArgs = (opts: HdiutilOptions): string[] => [
   opts.outDmg,
 ];
 
-const runTool = async (label: string, argv: string[]): Promise<void> => {
+/** Spawn a build tool and throw (with its stderr) on a non-zero exit. */
+export const runTool = async (label: string, argv: string[]): Promise<void> => {
   const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' });
   const exitCode = await proc.exited;
   if (exitCode !== 0) {

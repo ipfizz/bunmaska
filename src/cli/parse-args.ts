@@ -23,6 +23,8 @@ export type BuildOptions = {
   readonly channel?: string;
   /** Also emit the auto-update feed: a `.tar.zst` of the bundle + `update.json`. */
   readonly update?: boolean;
+  /** PEM private key file that signs the `--update` artifact (`.sig` beside the `.tar.zst`). */
+  readonly updateKey?: string;
   /** Windows: directory of a WinCairo WebKit engine to bundle so the `.exe` self-contains it. */
   readonly embedEngine?: string;
 };
@@ -44,12 +46,13 @@ export type Command =
   | { readonly kind: 'run'; readonly entry: string; readonly args: readonly string[] }
   | { readonly kind: 'build'; readonly entry?: string; readonly options: BuildOptions }
   | { readonly kind: 'engine'; readonly sub: EngineSubcommand }
+  | { readonly kind: 'keygen'; readonly out?: string }
   | { readonly kind: 'doctor'; readonly target?: string }
   | { readonly kind: 'error'; readonly message: string };
 
 const BUILD_STRING_FLAGS = new Map<
   string,
-  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine'
+  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine' | 'updateKey'
 >([
   ['--name', 'name'],
   ['--id', 'id'],
@@ -57,6 +60,7 @@ const BUILD_STRING_FLAGS = new Map<
   ['--icon', 'icon'],
   ['--sign', 'sign'],
   ['--channel', 'channel'],
+  ['--update-key', 'updateKey'],
   ['--embed-engine', 'embedEngine'],
 ]);
 
@@ -153,6 +157,27 @@ const parseBuild = (rest: readonly string[]): Command => {
   return entry === undefined ? { kind: 'build', options } : { kind: 'build', entry, options };
 };
 
+const parseKeygen = (rest: readonly string[]): Command => {
+  let outDir: string | undefined;
+  for (let i = 0; i < rest.length; i += 1) {
+    const token = rest[i];
+    if (token === undefined) {
+      continue;
+    }
+    if (token === '--out') {
+      const value = rest[i + 1];
+      if (value === undefined) {
+        return { kind: 'error', message: 'bunmaska keygen: --out requires a directory' };
+      }
+      outDir = value;
+      i += 1;
+      continue;
+    }
+    return { kind: 'error', message: `bunmaska keygen: unexpected argument ${token}` };
+  }
+  return outDir === undefined ? { kind: 'keygen' } : { kind: 'keygen', out: outDir };
+};
+
 const parseEngine = (rest: readonly string[]): Command => {
   const [action, ...args] = rest;
   if (action === undefined) {
@@ -245,6 +270,9 @@ export const parseArgs = (argv: readonly string[]): Command => {
   }
   if (head === 'engine') {
     return parseEngine(rest);
+  }
+  if (head === 'keygen') {
+    return parseKeygen(rest);
   }
   if (head === 'doctor') {
     const target = rest[0];

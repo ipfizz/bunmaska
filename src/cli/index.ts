@@ -26,6 +26,8 @@ import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
 import { enginesPath } from './engine-store';
 import { runInit } from './init';
+import { runKeygen } from './keygen';
+import { notarizeApp } from './notarize';
 import {
   type BuildOptions,
   type BuildTarget,
@@ -53,6 +55,8 @@ Usage:
   bunmaska build [entry.ts] [options]    Bundle a distributable app (entry defaults
                                          to the config's "entry")
   bunmaska engine <subcommand>           Manage the pinned-WebKit engine store
+  bunmaska keygen [--out <dir>]          Generate the Ed25519 update-signing key
+                                         pair (private + public .pem)
   bunmaska doctor [dir]                   Report runtime, store, and the engine pin
   bunmaska --help                        Show this help
   bunmaska --version                     Print the Bunmaska version
@@ -81,12 +85,18 @@ build options:
                      (TEAMID)' identity that is present in your keychain.
   --dmg              Also build a <Name>.dmg disk image of the macOS .app
                      (macOS-only; uses hdiutil), with an /Applications symlink.
-  --notarize         Notarization hook (macOS, with --sign). Requires the env
-                     vars APPLE_ID, TEAM_ID and an app-specific password; this
-                     build does not submit to Apple — see the docs to release.
+  --notarize         Notarize the macOS .app (with --sign): zips it, submits
+                     via 'xcrun notarytool --wait', staples the ticket. Needs
+                     the env vars APPLE_ID, TEAM_ID and an app-specific
+                     password in BUNMASKA_NOTARIZE_PASSWORD, else it is skipped
+                     with guidance.
   --update           Also emit the auto-update feed beside the bundle: a
                      <name>-<channel>-<os>-<arch>.tar.zst and an update.json the
                      runtime autoUpdater reads. The artifact arch is the host's.
+  --update-key <pem> Sign the --update artifact: writes a detached .sig beside
+                     the .tar.zst with this Ed25519 private key (generate one
+                     with 'bunmaska keygen'). Without it the feed is unsigned
+                     and the runtime autoUpdater will refuse it.
   --channel <name>   Release channel for --update (default: stable).
   --embed-engine <dir>  Windows only: bundle a WinCairo WebKit engine directory
                      into the app's webkit/ folder so the built .exe runs with no
@@ -126,7 +136,7 @@ const readAppVersion = (): string => {
   }
 };
 
-/** When `--update` was given, emit the `.tar.zst` + `update.json` feed for a bundle. */
+/** When `--update` was given, emit the `.tar.zst` + `update.json` (+ `.sig`) feed. */
 const maybeEmitUpdate = async (
   bundlePath: string,
   name: string,
@@ -136,6 +146,16 @@ const maybeEmitUpdate = async (
   if (options.update !== true) {
     return;
   }
+  let signingKeyPem: string | undefined;
+  if (options.updateKey !== undefined) {
+    signingKeyPem = readFileSync(options.updateKey, 'utf8');
+  } else {
+    err(
+      'bunmaska build: WARNING: the update feed is UNSIGNED (no --update-key). ' +
+        'The runtime autoUpdater refuses unsigned updates; sign with ' +
+        '--update-key <private.pem> (generate a pair with `bunmaska keygen`).',
+    );
+  }
   const result = await emitUpdateArtifact({
     bundlePath,
     outDir: dirname(bundlePath),
@@ -144,9 +164,13 @@ const maybeEmitUpdate = async (
     channel: options.channel ?? DEFAULT_CHANNEL,
     os: target,
     arch: currentArch(),
+    ...(signingKeyPem === undefined ? {} : { signingKeyPem }),
   });
   out(result.artifactPath);
   out(result.manifestPath);
+  if (result.sigPath !== undefined) {
+    out(result.sigPath);
+  }
 };
 
 /**
@@ -206,6 +230,17 @@ const runBuild = async (
   }
 
   const name = command.options.name ?? deriveName(entry);
+
+  // Fail fast on an unreadable signing key: discovering it after a full build
+  // wastes the build and surfaced as a raw stack.
+  if (command.options.updateKey !== undefined) {
+    try {
+      readFileSync(command.options.updateKey, 'utf8');
+    } catch {
+      err(`bunmaska build: cannot read --update-key ${command.options.updateKey}`);
+      return 1;
+    }
+  }
 
   // A configured renderer builds first and ships as `renderer/` beside the
   // executable; nothing else in the build copies it (assets are entry siblings).
@@ -272,8 +307,8 @@ const runBuild = async (
   });
   out(appPath);
 
-  // Notarization is a documented release HOOK: without Apple credentials we
-  // print guidance and do NOT submit to Apple.
+  // Without Apple credentials we print guidance and do NOT submit to Apple;
+  // with them the default hook zips, submits (--wait) and staples.
   if (command.options.notarize === true) {
     const creds = notarizeCredentials();
     if (creds === undefined) {
@@ -281,8 +316,9 @@ const runBuild = async (
         'bunmaska build: notarization requires APPLE_ID/TEAM_ID and an app-specific password ' +
           '(env BUNMASKA_NOTARIZE_PASSWORD) — see docs. Skipping notarization.',
       );
-    } else if (deps.notarize !== undefined) {
-      await deps.notarize(appPath);
+    } else {
+      const notarize = deps.notarize ?? ((app: string): Promise<void> => notarizeApp(app, creds));
+      await notarize(appPath);
     }
   }
   await maybeEmitUpdate(appPath, name, 'macos', command.options);
@@ -418,6 +454,8 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
       return await runBuild(command, deps);
     case 'engine':
       return await runEngine(command.sub, engineCommandDeps());
+    case 'keygen':
+      return runKeygen(command.out ?? process.cwd(), { out, err });
     case 'doctor':
       return await runDoctor(command.target, engineCommandDeps());
     case 'error':

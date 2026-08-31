@@ -9,10 +9,10 @@ import {
   parseUpdateManifest,
   type UpdateManifest,
 } from '../../common/manifest';
-import { createLogger } from '../../common/logger';
 import { type Arch, currentArch as hostArch, currentPlatform } from '../../common/platform';
 import { verifyArtifact } from '../../common/signature';
 import { app } from './app';
+import { defaultInstall } from './update-installer';
 
 /**
  * Application self-update — a drop-in subset of Electron's `autoUpdater`, built
@@ -21,10 +21,10 @@ import { app } from './app';
  * An {@link EventEmitter} (D023) emitting Electron's event names:
  * `checking-for-update`, `update-available`, `update-not-available`,
  * `update-downloaded` and `error`. The feed must be https. The default installer
- * is EXPERIMENTAL — it is the one step not exercised by the test suite.
+ * swaps the bundle via a detached helper script (see `update-installer.ts`);
+ * its script generators are unit-tested, but the live swap is the one step the
+ * suite does not exercise end to end.
  */
-
-const log = createLogger('auto-updater');
 
 export type FeedURLOptions = {
   readonly url: string;
@@ -117,17 +117,6 @@ const stageToTmp = async (tarBytes: Uint8Array, manifest: UpdateManifest): Promi
   const tarPath = join(tmpdir(), `bunmaska-update-${manifest.hash}.tar`);
   writeFileSync(tarPath, tarBytes);
   return tarPath;
-};
-
-/**
- * Default installer: stages the tar and quits. It does NOT swap the bundle or
- * relaunch — the atomic swap is platform-specific and unimplemented, so an app
- * that needs a real install must inject its own `install`.
- */
-const defaultInstall = (staged: StagedUpdate): void => {
-  log.warn('autoUpdater.quitAndInstall: using the experimental default installer');
-  log.warn(`staged update for ${staged.manifest.version} at ${staged.tarPath}`);
-  app.quit();
 };
 
 const productionDeps = (): AutoUpdaterDeps => ({
@@ -305,7 +294,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     }
   }
 
-  /** Throws if no update has been downloaded. The default installer is EXPERIMENTAL. */
+  /** Throws if no update has been downloaded. See `update-installer.ts` for the default installer. */
   quitAndInstall(): void {
     if (this.#staged === undefined) {
       throw new Error(
