@@ -458,9 +458,11 @@ export class NativeWin32Window {
   /** The content (client) area size in physical pixels. */
   getClientSize(): { width: number; height: number } {
     const rect = new Uint8Array(RECT_SIZE);
-    loadUser32().symbols.GetClientRect(this.#hwnd, ptr(rect));
-    const dv = new DataView(rect.buffer);
-    return { width: dv.getInt32(8, true), height: dv.getInt32(12, true) };
+    const rectPtr = ptr(rect);
+    loadUser32().symbols.GetClientRect(this.#hwnd, rectPtr);
+    // Native writes are only visible via read.* on the pointer, never through
+    // the backing JS array (the rule windows-run-loop.ts documents).
+    return { width: read.i32(rectPtr, 8), height: read.i32(rectPtr, 12) };
   }
 
   show(): void {

@@ -61,6 +61,7 @@ const descriptorPtr = (): Pointer => {
 
 type RetainedBlock = { readonly literal: Uint8Array; readonly cb: JSCallback };
 const retained = new Set<RetainedBlock>();
+const cancelable = new Map<Handle, RetainedBlock>();
 
 /** Number of blocks still awaiting their callback. Test-only. */
 export const retainedBlockCount = (): number => retained.size;
@@ -93,6 +94,11 @@ export const makeOneShotBlock = (
         const settle = setTimeout(() => {
           if (entry !== undefined) {
             retained.delete(entry);
+            for (const [key, value] of cancelable) {
+              if (value === entry) {
+                cancelable.delete(key);
+              }
+            }
           }
           cb.close();
         }, 0);
@@ -120,5 +126,28 @@ export const makeOneShotBlock = (
 
   entry = { literal, cb };
   retained.add(entry);
-  return BigInt(ptr(literal));
+  const blockPtr = BigInt(ptr(literal));
+  cancelable.set(blockPtr, entry);
+  return blockPtr;
+};
+
+/**
+ * Release a one-shot block that will never fire (a timed-out completion).
+ * Without this, every timeout leaked the retained literal AND its JSCallback.
+ * Deferred close, same discipline as the fired path: the native side may still
+ * be mid-call with the trampoline.
+ */
+export const cancelOneShotBlock = (blockPtr: Handle): void => {
+  const entry = cancelable.get(blockPtr);
+  if (entry === undefined) {
+    return;
+  }
+  cancelable.delete(blockPtr);
+  const settle = setTimeout(() => {
+    retained.delete(entry);
+    entry.cb.close();
+  }, 0);
+  if (typeof settle === 'object' && settle !== null && 'unref' in settle) {
+    (settle as { unref: () => void }).unref();
+  }
 };

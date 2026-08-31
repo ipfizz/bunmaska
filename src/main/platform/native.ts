@@ -168,6 +168,7 @@ export type WindowEventType =
   | 'show'
   | 'hide'
   | 'resize'
+  | 'move'
   | 'maximize'
   | 'unmaximize'
   | 'minimize'

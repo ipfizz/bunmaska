@@ -122,6 +122,23 @@ const FRAME_CONFIG_VARIANT = {
   },
 } as const;
 
+// (receiver, selector, NSRect{x,y,w,h} as four doubles (D018), BOOL) -> void.
+// For -[NSWindow setFrame:display:].
+const RECT_U8_VARIANT = {
+  objc_msgSend: {
+    args: [
+      FFIType.u64,
+      FFIType.u64,
+      FFIType.f64,
+      FFIType.f64,
+      FFIType.f64,
+      FFIType.f64,
+      FFIType.u8,
+    ],
+    returns: FFIType.void,
+  },
+} as const;
+
 const SIZE_VARIANT = {
   objc_msgSend: {
     args: [FFIType.u64, FFIType.u64, FFIType.f64, FFIType.f64],
@@ -140,6 +157,10 @@ const PTR_POINT_PTR_RETURNS_U8_VARIANT = {
 
 const getInitWithContentRectLib = macOSLibraryAccessor('msgSendInitWithContentRect', () =>
   dlopen(LIBOBJC_PATH, INIT_WITH_CONTENT_RECT_VARIANT),
+);
+
+const getRectU8Lib = macOSLibraryAccessor('msgSendRectU8', () =>
+  dlopen(LIBOBJC_PATH, RECT_U8_VARIANT),
 );
 
 const getPtrLib = macOSLibraryAccessor('msgSendPtr', () => dlopen(LIBOBJC_PATH, PTR_VARIANT));
@@ -205,6 +226,24 @@ export const msgSendInitWithContentRect = (
     backing,
     defer ? 1 : 0,
   );
+
+/** Send a message with an NSRect (four doubles, D018) plus a trailing BOOL. */
+export const msgSendRectU8 = (
+  receiver: Handle,
+  selector: Handle,
+  rect: CGRectArgs,
+  flag: boolean,
+): void => {
+  getRectU8Lib().symbols.objc_msgSend(
+    receiver,
+    selector,
+    rect[0],
+    rect[1],
+    rect[2],
+    rect[3],
+    flag ? 1 : 0,
+  );
+};
 
 export const msgSendPtr = (receiver: Handle, selector: Handle, arg: Handle): Handle =>
   getPtrLib().symbols.objc_msgSend(receiver, selector, arg);

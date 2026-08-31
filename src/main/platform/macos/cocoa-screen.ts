@@ -106,6 +106,12 @@ const rawDisplayFor = (
 };
 
 /** Enumerate the active displays via CoreGraphics scalar getters. */
+/** Primary display height (pt) - the top-left <-> bottom-left flip pivot. */
+export const primaryDisplayHeight = (): number => {
+  const symbols = loadCoreGraphicsFFI().symbols;
+  return Number(symbols.CGDisplayPixelsHigh(symbols.CGMainDisplayID()));
+};
+
 export const getDisplays = (): readonly RawDisplay[] => {
   const { symbols } = loadCoreGraphicsFFI();
   const ids = new Uint32Array(MAX_DISPLAYS);

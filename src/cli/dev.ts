@@ -385,7 +385,13 @@ export const defaultDevDeps = (
     // how the supervisor delivers reload requests to it.
     const proc = Bun.spawn(['bun', 'run', entry], {
       cwd,
-      env: { ...process.env, ...extraEnv, BUNMASKA_DEV: '1' },
+      env: {
+        ...process.env,
+        ...extraEnv,
+        BUNMASKA_DEV: '1',
+        // Dot-named so the watcher never classifies the state file itself.
+        BUNMASKA_DEV_STATE: resolve(cwd, '.bunmaska-dev-state.json'),
+      },
       stdin: 'pipe',
       stdout: 'inherit',
       stderr: 'inherit',

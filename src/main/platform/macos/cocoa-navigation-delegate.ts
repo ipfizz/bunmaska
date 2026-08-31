@@ -77,6 +77,8 @@ const ensureDelegateClass = (): Handle => {
 export type NavigationDelegate = {
   /** The Objective-C delegate instance to pass to `setNavigationDelegate:`. */
   readonly handle: Handle;
+  /** Unregister and release the delegate instance (window teardown). */
+  readonly destroy: () => void;
 };
 
 /** Create a `WKNavigationDelegate` routing its callbacks to `onNavigation`. */
@@ -87,5 +89,11 @@ export const createNavigationDelegate = (
   const cls = ensureDelegateClass();
   const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
   registry.set(handle, onNavigation);
-  return { handle };
+  return {
+    handle,
+    destroy: () => {
+      registry.delete(handle);
+      rt.msgSend(handle, rt.selectors.get('release'));
+    },
+  };
 };

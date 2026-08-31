@@ -3,6 +3,7 @@ import { makeCancelableEvent } from '../../common/cancelable-event';
 import type { NativeWindow, WindowEventType } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
 import { startDevReload } from '../dev-reload';
+import { makeDevWindowStateWriter, readDevWindowState } from '../dev-window-state';
 import { nativeApp } from '../native-app';
 import type { Rect } from '../platform/native';
 import { app } from './app';
@@ -59,6 +60,7 @@ const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
   'show',
   'hide',
   'resize',
+  'move',
   'maximize',
   'unmaximize',
   'minimize',
@@ -126,6 +128,13 @@ export class BrowserWindow extends EventEmitter {
     nextId += 1;
 
     this.#resizable = options.resizable ?? true;
+    // Dev only: a supervisor restart is a fresh process, so the first window
+    // seeds its bounds from the state file to reopen where the developer left it.
+    const devStatePath = process.env['BUNMASKA_DEV_STATE'];
+    const devBounds = this.id === 1 ? readDevWindowState(devStatePath) : undefined;
+    if (devBounds !== undefined) {
+      options = { ...options, width: devBounds.width, height: devBounds.height };
+    }
     const preloadScript = loadPreloadScript(options.webPreferences?.preload);
     this.#native = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
@@ -173,6 +182,14 @@ export class BrowserWindow extends EventEmitter {
           app.emit('browser-window-blur', makeCancelableEvent(), this);
         }
       });
+    }
+    if (devBounds !== undefined) {
+      this.#native.setPosition(devBounds.x, devBounds.y);
+    }
+    if (devStatePath !== undefined && devStatePath !== '' && this.id === 1) {
+      const write = makeDevWindowStateWriter(devStatePath, () => this.#native.getBounds());
+      this.on('move', write);
+      this.on('resize', write);
     }
     registry.set(this.id, this);
     app.emit('browser-window-created', makeCancelableEvent(), this);

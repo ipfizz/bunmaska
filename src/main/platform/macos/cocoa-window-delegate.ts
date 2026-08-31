@@ -44,6 +44,7 @@ const NOTIFICATION_EVENTS: ReadonlyArray<readonly [selector: string, type: Windo
   ['windowDidBecomeKey:', 'focus'],
   ['windowDidResignKey:', 'blur'],
   ['windowDidResize:', 'resize'],
+  ['windowDidMove:', 'move'],
   ['windowDidMiniaturize:', 'minimize'],
   ['windowDidDeminiaturize:', 'restore'],
 ];
@@ -92,6 +93,8 @@ const ensureDelegateClass = (): Handle => {
 export type WindowDelegate = {
   /** The Objective-C delegate instance to pass to `setDelegate:`. */
   readonly handle: Handle;
+  /** Unregister and release the delegate instance (window teardown). */
+  readonly destroy: () => void;
 };
 
 /**
@@ -104,5 +107,11 @@ export const createWindowDelegate = (handlers: WindowDelegateHandlers): WindowDe
   const cls = ensureDelegateClass();
   const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
   registry.set(handle, handlers);
-  return { handle };
+  return {
+    handle,
+    destroy: () => {
+      registry.delete(handle);
+      rt.msgSend(handle, rt.selectors.get('release'));
+    },
+  };
 };

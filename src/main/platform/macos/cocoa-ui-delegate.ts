@@ -47,6 +47,8 @@ const ensureDelegateClass = (): Handle => {
 export type UIDelegate = {
   /** The Objective-C delegate instance to pass to `setUIDelegate:`. */
   readonly handle: Handle;
+  /** Unregister and release the delegate instance (window teardown). */
+  readonly destroy: () => void;
 };
 
 /** Create a `WKUIDelegate` whose window-open requests call `onWindowOpen(url)`. */
@@ -55,5 +57,11 @@ export const createUIDelegate = (onWindowOpen: (url: string) => void): UIDelegat
   const cls = ensureDelegateClass();
   const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
   registry.set(handle, onWindowOpen);
-  return { handle };
+  return {
+    handle,
+    destroy: () => {
+      registry.delete(handle);
+      rt.msgSend(handle, rt.selectors.get('release'));
+    },
+  };
 };
