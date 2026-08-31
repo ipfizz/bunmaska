@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="assets/logo.png" width="140" alt="bunmaska - Electron, minus the Chromium">
+  <img src="assets/logo.png" width="140" alt="bunmaska - electron minus chromium, powered by bun and webkit">
 </p>
 
 <p align="center">
-  <em>bunmaska - Electron, minus the Chromium.</em>
+  <em>electron minus chromium, powered by bun and webkit 🚀</em>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <strong>A drop-in Electron replacement on Bun and your OS's own WebKit.</strong><br>
+  <strong>Same APIs. 23MB downloads. Zero native builds.</strong><br>
   <sub>No bundled Chromium. Native modules that are just <code>.ts</code> files. It's alpha, and it says so.</sub>
 </p>
 
@@ -28,7 +28,7 @@
 
 ---
 
-**Bunmaska** is a **drop-in Electron replacement** built on [Bun](https://bun.sh) and your operating system's own WebKit - an **Electron alternative without bundled Chromium**. You keep writing against the APIs you already know - `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard`, `webContents` - and we swap the heavy parts underneath: the runtime becomes Bun instead of Node, and the renderer becomes whatever WebKit your OS already ships. All of it is pure `bun:ffi` with **zero compiled native code** in the framework.
+**Bunmaska** is a **drop-in Electron replacement** powered by [Bun](https://bun.sh) and WebKit - an **Electron alternative without bundled Chromium**. You keep writing against the APIs you already know - `app`, `BrowserWindow`, `ipcMain`, `ipcRenderer`, `Menu`, `dialog`, `clipboard`, `webContents` - and we swap the heavy parts underneath: the runtime becomes Bun instead of Node, and the renderer becomes WebKit. All of it is pure `bun:ffi` with **zero compiled native code** in the framework.
 
 ## Before / after
 
@@ -111,7 +111,7 @@ Two things that aren't "Electron but smaller" - they're structurally different.
 
 **Why not just Electron?** No bundled Chromium - so your apps are small, and the OS patches the browser engine for you while you sleep. Plus native modules with no build step. If you need the last slice of the API or battle-tested stability *today*, use Electron and check back.
 
-**Does it really have no Chromium?** Correct. macOS and Linux render on the system's own WebKit; Windows ships a from-source WinCairo WebKit - the real WebKit port, never WebView2/Chromium.
+**Does it really have no Chromium?** Correct. Everything renders on WebKit - the system framework on macOS and Linux, a from-source WinCairo build on Windows. Never WebView2/Chromium.
 
 **What breaks?** It's alpha, so: some of the Electron surface isn't implemented yet (it throws a clear error naming the missing module, not a mystery failure at 2 a.m.), and a few APIs differ per platform. We publish exactly which on the [parity matrix](https://bunmaska.org/docs/migrating/parity) - no fantasy, no vapor.
 

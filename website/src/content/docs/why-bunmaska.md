@@ -1,6 +1,6 @@
 ---
 title: Why Bunmaska
-description: "Why a Bun desktop app framework can drop bundled Chromium: the runtime is Bun, the renderer is your OS's own WebKit, the bridge is pure bun:ffi."
+description: "Why a Bun desktop app framework can drop bundled Chromium: the runtime is Bun, the renderer is WebKit, the bridge is pure bun:ffi."
 seoTitle: "How bunmaska works - Bun + system WebKit, pure bun:ffi"
 order: 2
 ---
