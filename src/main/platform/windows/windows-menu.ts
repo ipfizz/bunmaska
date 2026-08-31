@@ -129,10 +129,11 @@ export const createWindowsMenuRealizer = (): WindowsMenuRealizer => {
       return handle;
     },
 
-    setApplicationMenu(menu: bigint): void {
+    setApplicationMenu(menu: bigint | null): void {
       // Recover the spec from the handle realize() just produced, so a FRESH bar
-      // (one HMENU per window) can be built for every window.
-      const items = lastRealized?.handle === menu ? lastRealized.items : appMenuItems;
+      // (one HMENU per window) can be built for every window. null clears.
+      const items =
+        menu === null ? null : lastRealized?.handle === menu ? lastRealized.items : appMenuItems;
       appMenuItems = items ?? null;
       for (const window of appMenuWindows) {
         window.setMenuBar(items !== null && items !== undefined ? buildMenuBar(items) : null);

@@ -143,6 +143,7 @@ export const realizeMenu = (items: ReadonlyArray<NativeMenuItemSpec>): Handle =>
 };
 
 /** Install `menu` as the application's main menu bar. */
+/** Install `menu` as the main menu; `0n` (nil) clears the menu bar. */
 export const setApplicationMenu = (menu: Handle): void => {
   const rt = cocoa();
   const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));

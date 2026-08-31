@@ -280,12 +280,12 @@ export class MenuItem {
 /** `realize` returns an opaque native menu handle. */
 export type MenuRealizer = {
   realize(items: ReadonlyArray<NativeMenuItemSpec>): bigint;
-  setApplicationMenu(menu: bigint): void;
+  setApplicationMenu(menu: bigint | null): void;
 };
 
 const macosRealizer: MenuRealizer = {
   realize: (items) => cocoaMenu.realizeMenu(items),
-  setApplicationMenu: (menu) => cocoaMenu.setApplicationMenu(menu),
+  setApplicationMenu: (menu) => cocoaMenu.setApplicationMenu(menu ?? 0n),
 };
 
 let realizer: MenuRealizer | undefined;
@@ -448,9 +448,9 @@ export class Menu {
   /** `null` clears the stored menu but leaves the installed native menu bar in place. */
   static setApplicationMenu(menu: Menu | null): void {
     applicationMenu = menu;
-    if (menu !== null) {
-      getRealizer().setApplicationMenu(menu.realize());
-    }
+    // null must reach the native side too: it clears the menu bar (Electron
+    // semantics on Windows/Linux; on macOS it empties the main menu).
+    getRealizer().setApplicationMenu(menu === null ? null : menu.realize());
   }
 
   static getApplicationMenu(): Menu | null {

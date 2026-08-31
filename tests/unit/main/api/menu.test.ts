@@ -14,17 +14,20 @@ import {
 
 let realized: ReadonlyArray<NativeMenuItemSpec> | undefined;
 let installed = 0;
+let lastInstalledHandle: bigint | null | undefined;
 
 beforeEach(() => {
   realized = undefined;
   installed = 0;
+  lastInstalledHandle = undefined;
   const fake: MenuRealizer = {
     realize: (items) => {
       realized = items;
       return 1n;
     },
-    setApplicationMenu: () => {
+    setApplicationMenu: (handle) => {
       installed += 1;
+      lastInstalledHandle = handle;
     },
   };
   setMenuRealizerForTesting(fake);
@@ -276,6 +279,15 @@ describe('Menu realization spec', () => {
     expect(installed).toBe(1);
     expect(realized).toHaveLength(1);
     expect(realized?.[0]?.label).toBe('App');
+  });
+
+  test('setApplicationMenu(null) reaches the realizer and clears', () => {
+    // It used to update only the JS getter, leaving the native bar installed.
+    Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'App' }]));
+    Menu.setApplicationMenu(null);
+    expect(installed).toBe(2);
+    expect(lastInstalledHandle).toBeNull();
+    expect(Menu.getApplicationMenu()).toBeNull();
   });
 
   test('maps an accelerator down to its key equivalent', () => {

@@ -258,7 +258,13 @@ export const realizeForWindow = (
 ): MenuEntry => realizeCore(items, dispatchRole);
 
 /** Install `menuHandle` as the current application menu (applied to future windows). */
-const setApplicationMenu = (menuHandle: bigint): void => {
+const setApplicationMenu = (menuHandle: bigint | null): void => {
+  if (menuHandle === null) {
+    // Windows created after this get no menu bar (live bars are not torn down;
+    // the Linux bar is attached at window construction only).
+    currentAppMenu = undefined;
+    return;
+  }
   const entry = menuEntries.get(menuHandle);
   if (entry === undefined) {
     throw new Error(`setApplicationMenu: unknown menu handle ${menuHandle}`);
