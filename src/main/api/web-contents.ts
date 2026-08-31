@@ -177,7 +177,7 @@ export class WebContents extends EventEmitter {
     return Buffer.from(await this.#native.printToPDF());
   }
 
-  /** macOS only; Linux and Windows reject until their snapshot paths are wired. */
+  /** macOS and Linux; Windows rejects until its snapshot path is wired. */
   async capturePage(): Promise<NativeImage> {
     return nativeImage.createFromBuffer(await this.#native.capturePage());
   }

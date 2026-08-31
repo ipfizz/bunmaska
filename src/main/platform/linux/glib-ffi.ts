@@ -71,7 +71,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // (value /*GVariant* boolean 'b'*/) -> gboolean. ABORTS if value is not a boolean —
+  // (value /*GVariant* boolean 'b'*/) -> gboolean. ABORTS if value is not a boolean -
   // guard with g_variant_get_type_string first (a native abort is NOT JS-catchable).
   g_variant_get_boolean: {
     args: [FFIType.pointer],
@@ -83,13 +83,13 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.u64,
   },
-  // (value) -> const gchar* type string (BORROWED — do NOT free), e.g. "b" for a boolean.
+  // (value) -> const gchar* type string (BORROWED - do NOT free), e.g. "b" for a boolean.
   g_variant_get_type_string: {
     args: [FFIType.pointer],
     returns: FFIType.cstring,
   },
   // (value /*GVariant* tuple*/, index_ /*gsize*/) -> GVariant* (transfer-full; caller
-  //  MUST g_variant_unref) — pulls the i-th child out of a tuple (e.g. the `b` from `(b)`).
+  //  MUST g_variant_unref) - pulls the i-th child out of a tuple (e.g. the `b` from `(b)`).
   g_variant_get_child_value: {
     args: [FFIType.pointer, FFIType.u64],
     returns: FFIType.pointer,
@@ -99,7 +99,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // (value /*GVariant* 'u'*/) -> guint32. ABORTS on a non-u32 — guard with the type string.
+  // (value /*GVariant* 'u'*/) -> guint32. ABORTS on a non-u32 - guard with the type string.
   g_variant_get_uint32: {
     args: [FFIType.pointer],
     returns: FFIType.u32,
@@ -189,6 +189,17 @@ export const GLIB_FFI_SYMBOLS = {
   g_variant_ref_sink: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
+  },
+  // (GList*) -> void. Frees the LIST CELLS ONLY - each node's data must already
+  // have been freed by its owner (e.g. soup_cookie_free), or it leaks.
+  g_list_free: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (GDateTime*) -> gint64 unix seconds. i64, not i32 - post-2038 dates truncate.
+  g_date_time_to_unix: {
+    args: [FFIType.pointer],
+    returns: FFIType.i64,
   },
 } as const;
 

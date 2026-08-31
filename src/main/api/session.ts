@@ -1,5 +1,5 @@
 /**
- * Session — a drop-in subset of Electron's `session` / `Session`.
+ * Session - a drop-in subset of Electron's `session` / `Session`.
  *
  * `setUserAgent(ua)` applies only to windows created AFTERWARD, at construction
  * (before their first navigation); change a live one with
@@ -7,17 +7,34 @@
  * can be read at window construction without a cycle.
  */
 
-import { UnsupportedPlatformError } from '../../common/errors';
+import { InvalidArgumentError, UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform } from '../../common/platform';
+import {
+  type Cookie,
+  type CookieFilter,
+  type CookieSetDetails,
+  cookieFromSetDetails,
+} from './cookie-util';
+import * as macosCookies from '../platform/macos/cocoa-cookies';
 import * as macosWebsiteData from '../platform/macos/cocoa-website-data';
+import * as linuxCookies from '../platform/linux/webkit-cookies';
 import { windowsSessionBackend } from '../platform/windows/windows-session';
 
 export type SessionBackend = {
   clearStorageData(): Promise<void>;
+  /** Resolve the cookies matching `filter` (already filtered by the backend). */
+  getCookies(filter: CookieFilter): Promise<Cookie[]>;
+  /** Store a fully normalized cookie (the API layer derives domain/path). */
+  setCookie(cookie: Cookie): Promise<void>;
+  /** Delete every cookie named `name` that matches `url`'s host and path. */
+  removeCookie(url: string, name: string): Promise<void>;
 };
 
 const macosBackend: SessionBackend = {
   clearStorageData: () => macosWebsiteData.clearStorageData(),
+  getCookies: (filter) => macosCookies.getCookies(filter),
+  setCookie: (cookie) => macosCookies.setCookie(cookie),
+  removeCookie: (url, name) => macosCookies.removeCookie(url, name),
 };
 
 const linuxBackend: SessionBackend = {
@@ -26,6 +43,9 @@ const linuxBackend: SessionBackend = {
     Promise.reject(
       new UnsupportedPlatformError('session.clearStorageData is not yet wired on Linux'),
     ),
+  getCookies: (filter) => linuxCookies.getCookies(filter),
+  setCookie: (cookie) => linuxCookies.setCookie(cookie),
+  removeCookie: (url, name) => linuxCookies.removeCookie(url, name),
 };
 
 let backend: SessionBackend | undefined;
@@ -51,8 +71,45 @@ export const setSessionBackendForTesting = (fake: SessionBackend | undefined): v
   backend = fake;
 };
 
+/**
+ * Electron's `session.cookies` subset. Works on macOS and Linux; every method
+ * rejects on Windows (the WinCairo WebKit C API gap - see windows-session.ts).
+ */
+export class Cookies {
+  /** Resolve the cookies matching `filter` (all cookies when omitted). */
+  get(filter: CookieFilter = {}): Promise<Cookie[]> {
+    return getBackend().getCookies(filter);
+  }
+
+  /**
+   * Store a cookie. `details.url` is required; domain/path derive from it when
+   * absent. macOS accepts but cannot persist `httpOnly` (no public NSHTTPCookie
+   * property key); Linux persists it.
+   */
+  async set(details: CookieSetDetails): Promise<void> {
+    if (typeof details.url !== 'string' || details.url === '') {
+      throw new InvalidArgumentError('cookies.set requires a url');
+    }
+    return getBackend().setCookie(cookieFromSetDetails(details));
+  }
+
+  /** Delete every cookie named `name` matching `url`'s host and path. */
+  async remove(url: string, name: string): Promise<void> {
+    if (typeof url !== 'string' || url === '') {
+      throw new InvalidArgumentError('cookies.remove requires a url');
+    }
+    if (typeof name !== 'string' || name === '') {
+      throw new InvalidArgumentError('cookies.remove requires a cookie name');
+    }
+    return getBackend().removeCookie(url, name);
+  }
+}
+
 export class Session {
   #userAgent = '';
+
+  /** Cookie store access (Electron's `session.cookies`). */
+  readonly cookies = new Cookies();
 
   /** The session's User-Agent override, or `''` when none is set. */
   getUserAgent(): string {
@@ -75,7 +132,7 @@ export class Session {
   }
 }
 
-/** The `session` module — Electron's `session.defaultSession`. */
+/** The `session` module - Electron's `session.defaultSession`. */
 export const session: { readonly defaultSession: Session } = {
   defaultSession: new Session(),
 };

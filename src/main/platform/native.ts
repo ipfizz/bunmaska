@@ -122,7 +122,7 @@ export interface NativeWebContents {
   printToPDF(): Promise<Uint8Array>;
   /**
    * Capture the page to a PNG image and resolve to its bytes (Electron's
-   * `capturePage`). Rejects where it is not yet wired (Linux, Windows).
+   * `capturePage`). Rejects where it is not yet wired (Windows).
    */
   capturePage(): Promise<Uint8Array>;
   /** Open the native web inspector (devtools) for this view. Best-effort. */

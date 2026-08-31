@@ -1,17 +1,17 @@
 import { type Pointer, ptr, read } from 'bun:ffi';
 import { describe, expect, it } from 'bun:test';
+import { GASYNC_READY_CB_DEF } from '../../../../../src/main/platform/linux/gasync';
 import {
-  ALERT_CHOOSE_CB_DEF,
   buildButtonsArray,
   mapChooseResult,
   settleChoose,
   settleFilePath,
 } from '../../../../../src/main/platform/linux/gtk-dialog';
 
-describe('ALERT_CHOOSE_CB_DEF (GAsyncReadyCallback ABI, shape-only)', () => {
+describe('GASYNC_READY_CB_DEF (GAsyncReadyCallback ABI, shape-only)', () => {
   it('is (source, result, user_data) -> void', () => {
-    expect(ALERT_CHOOSE_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
-    expect(ALERT_CHOOSE_CB_DEF.returns).toBe('void');
+    expect(GASYNC_READY_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
+    expect(GASYNC_READY_CB_DEF.returns).toBe('void');
   });
 });
 

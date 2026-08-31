@@ -21,6 +21,10 @@ export const WEBKIT_LOAD_FINISHED = 3;
 export const WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES = 0;
 /** `WebKitUserScriptInjectionTime`: inject the preload at document start. */
 export const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START = 0;
+/** `WebKitSnapshotRegion`: the visible viewport (Electron `capturePage` semantics), not FULL_DOCUMENT (1). */
+export const WEBKIT_SNAPSHOT_REGION_VISIBLE = 0;
+/** `WebKitSnapshotOptions`: no selection highlight, opaque background. */
+export const WEBKIT_SNAPSHOT_OPTIONS_NONE = 0;
 
 /**
  * The WebKitGTK 6.0 FFI symbol descriptor table. Load-bearing details:
@@ -211,6 +215,66 @@ export const WEBKITGTK_FFI_SYMBOLS = {
   webkit_uri_scheme_request_finish_error: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
+  },
+  // () -> WebKitNetworkSession* (the process-default session; transfer-none).
+  webkit_network_session_get_default: {
+    args: [],
+    returns: FFIType.pointer,
+  },
+  // (WebKitNetworkSession*) -> WebKitCookieManager* (transfer-none).
+  webkit_network_session_get_cookie_manager: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (manager, cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  webkit_cookie_manager_get_all_cookies: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (manager, GAsyncResult*, GError** /*null ok*/) -> GList* of SoupCookie*
+  // (transfer-FULL: soup_cookie_free each node's data, then g_list_free the list).
+  webkit_cookie_manager_get_all_cookies_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (manager, SoupCookie* /*NOT consumed — caller frees after the finish*/,
+  //  cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  webkit_cookie_manager_add_cookie: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (manager, GAsyncResult*, GError** /*null ok*/) -> gboolean (i32).
+  webkit_cookie_manager_add_cookie_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
+  // Same shape as add_cookie; matches on the cookie's name+domain+path.
+  webkit_cookie_manager_delete_cookie: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  webkit_cookie_manager_delete_cookie_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
+  // (view, region:WebKitSnapshotRegion /*i32 enum, VISIBLE=0*/, options /*i32 flags, NONE=0*/,
+  //  cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  webkit_web_view_get_snapshot: {
+    args: [
+      FFIType.pointer,
+      FFIType.i32,
+      FFIType.i32,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.void,
+  },
+  // (view, GAsyncResult*, GError** /*null ok*/) -> cairo_surface_t*
+  // (transfer-FULL: cairo_surface_destroy when done; NULL on error).
+  webkit_web_view_get_snapshot_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
   },
 } as const;
 

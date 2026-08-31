@@ -398,6 +398,26 @@ export const msgSendI64Ptr = (
   arg1: Handle,
 ): Handle => getI64PtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1);
 
+const RETURNS_F64_VARIANT = {
+  objc_msgSend: {
+    args: [FFIType.u64, FFIType.u64],
+    returns: FFIType.f64,
+  },
+} as const;
+
+const getReturnsF64Lib = macOSLibraryAccessor('msgSendReturnsF64', () =>
+  dlopen(LIBOBJC_PATH, RETURNS_F64_VARIANT),
+);
+
+/**
+ * Send a zero-extra-arg message returning a C `double` — e.g. `-[NSDate
+ * timeIntervalSince1970]`. Plain `objc_msgSend` is correct on BOTH ABIs: ARM64
+ * returns doubles in d0, and x86_64 in xmm0 (`objc_msgSend_fpret` exists only
+ * for `long double` there) - no fpret variant needed.
+ */
+export const msgSendReturnsF64 = (receiver: Handle, selector: Handle): number =>
+  getReturnsF64Lib().symbols.objc_msgSend(receiver, selector);
+
 const PTR_I64_PTR_VARIANT = {
   objc_msgSend: {
     args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.i64, FFIType.u64],

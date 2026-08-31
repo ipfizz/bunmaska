@@ -13,7 +13,7 @@ import {
 import { GDK_FFI_SYMBOLS, loadGdkFFI } from '../../../../../src/main/platform/linux/gdk-ffi';
 import { loadGdkPixbufFFI } from '../../../../../src/main/platform/linux/gdk-pixbuf-ffi';
 import { GIO_FFI_SYMBOLS, loadGioFFI } from '../../../../../src/main/platform/linux/gio-ffi';
-import { loadGlibFFI } from '../../../../../src/main/platform/linux/glib-ffi';
+import { GLIB_FFI_SYMBOLS, loadGlibFFI } from '../../../../../src/main/platform/linux/glib-ffi';
 import {
   GOBJECT_FFI_SYMBOLS,
   loadGObjectFFI,
@@ -30,6 +30,8 @@ import {
   LIBNOTIFY_FFI_SYMBOLS,
   loadLibnotifyFFI,
 } from '../../../../../src/main/platform/linux/libnotify-ffi';
+import { loadCairoFFI } from '../../../../../src/main/platform/linux/cairo-ffi';
+import { loadSoupFFI, SOUP_FFI_SYMBOLS } from '../../../../../src/main/platform/linux/soup-ffi';
 import {
   loadWebKitGtkFFI,
   readGetUriResult,
@@ -65,6 +67,16 @@ const GBOOLEAN_RETURNS: ReadonlyArray<readonly [string, Sym]> = [
   ['notify_is_initted', LIBNOTIFY_FFI_SYMBOLS.notify_is_initted],
   ['notify_notification_show', LIBNOTIFY_FFI_SYMBOLS.notify_notification_show],
   ['notify_notification_close', LIBNOTIFY_FFI_SYMBOLS.notify_notification_close],
+  ['soup_cookie_get_secure', SOUP_FFI_SYMBOLS.soup_cookie_get_secure],
+  ['soup_cookie_get_http_only', SOUP_FFI_SYMBOLS.soup_cookie_get_http_only],
+  [
+    'webkit_cookie_manager_add_cookie_finish',
+    WEBKITGTK_FFI_SYMBOLS.webkit_cookie_manager_add_cookie_finish,
+  ],
+  [
+    'webkit_cookie_manager_delete_cookie_finish',
+    WEBKITGTK_FFI_SYMBOLS.webkit_cookie_manager_delete_cookie_finish,
+  ],
 ];
 
 describe('gboolean is i32, never bool', () => {
@@ -89,6 +101,8 @@ const POINTER_GETTERS: ReadonlyArray<readonly [string, Sym]> = [
   ['webkit_web_view_get_uri', WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_uri],
   ['jsc_value_to_string', JSC_FFI_SYMBOLS.jsc_value_to_string],
   ['g_file_get_path', GIO_FFI_SYMBOLS.g_file_get_path],
+  ['soup_cookie_get_name', SOUP_FFI_SYMBOLS.soup_cookie_get_name],
+  ['soup_cookie_get_domain', SOUP_FFI_SYMBOLS.soup_cookie_get_domain],
 ];
 
 describe('string getters return a guardable pointer, not cstring', () => {
@@ -149,6 +163,19 @@ describe('width-sensitive scalars', () => {
   test('webkit_uri_scheme_request_finish takes a 64-bit stream length', () => {
     expect(WEBKITGTK_FFI_SYMBOLS.webkit_uri_scheme_request_finish.args[2]).toBe(T.i64);
   });
+
+  test('g_date_time_to_unix returns gint64 (i32 truncates post-2038 expirations)', () => {
+    expect(GLIB_FFI_SYMBOLS.g_date_time_to_unix.returns).toBe(T.i64);
+  });
+
+  test('soup_cookie_new max_age is a C int (i32), not i64', () => {
+    expect(SOUP_FFI_SYMBOLS.soup_cookie_new.args[4]).toBe(T.i32);
+  });
+
+  test('webkit_web_view_get_snapshot region/options are i32 enums, not pointers', () => {
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_snapshot.args[1]).toBe(T.i32);
+    expect(WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_snapshot.args[2]).toBe(T.i32);
+  });
 });
 
 describe('constants that change runtime behaviour', () => {
@@ -188,6 +215,8 @@ const LOADERS: ReadonlyArray<readonly [string, () => unknown]> = [
   ['loadJscFFI', loadJscFFI],
   ['loadLibnotifyFFI', loadLibnotifyFFI],
   ['loadWebKitGtkFFI', loadWebKitGtkFFI],
+  ['loadSoupFFI', loadSoupFFI],
+  ['loadCairoFFI', loadCairoFFI],
 ];
 
 test.skipIf(currentPlatform() === 'linux')(

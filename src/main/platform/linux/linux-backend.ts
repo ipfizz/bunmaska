@@ -34,6 +34,7 @@ import {
   SignalRegistry,
 } from './gtk-signals';
 import { createWebViewWithIpc, sendToRenderer } from './webkit-ipc';
+import { capturePage as webkitCapturePage } from './webkit-snapshot';
 import { registerAllSchemes } from './webkit-uri-scheme';
 import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
 
@@ -241,11 +242,7 @@ class LinuxWebContents implements NativeWebContents {
   }
 
   capturePage(): Promise<Uint8Array> {
-    // Feasible via webkit_web_view_get_snapshot → cairo surface → PNG; not yet
-    // wired (the async cairo path is a follow-up). Deferred (see PARITY.md).
-    return Promise.reject(
-      new UnsupportedPlatformError('webContents.capturePage is not yet supported on Linux'),
-    );
+    return webkitCapturePage(this.#view);
   }
 
   sendInputEvent(): void {
