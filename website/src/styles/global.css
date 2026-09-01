@@ -596,6 +596,17 @@
   line-height: 1.55;
 }
 
+/* On phones a wide table scrolls inside its own box instead of dragging the
+   whole page sideways (the parity matrix is 770px+ at its narrowest). */
+@media (max-width: 767px) {
+  .prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .prose th,
 .prose td {
   text-align: left;
@@ -614,4 +625,11 @@
 
 .section-border {
   border: 1px solid var(--accent-border);
+}
+
+/* Grid items default to min-width:auto, so one unbreakable line (a code
+   sample) silently inflates its track past the phone viewport and the whole
+   page pans sideways. Zeroing it lets each panel's own overflow-x work. */
+.grid > * {
+  min-width: 0;
 }

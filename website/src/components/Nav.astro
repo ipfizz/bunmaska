@@ -18,7 +18,7 @@ const LINKS = [
     <div class="flex items-center gap-2">
       <a
         href="/"
-        class="flex items-center gap-2 text-base font-medium tracking-tight"
+        class="flex shrink-0 items-center gap-2 whitespace-nowrap text-base font-medium tracking-tight"
         aria-label="Bunmaska home"
       >
         <img src="/logo-nav.png" alt="" width="36" height="36" class="h-9 w-9" />
@@ -26,7 +26,7 @@ const LINKS = [
       </a>
       <a
         href="/docs/changelog"
-        class="tag whitespace-nowrap font-mono transition-colors hover:text-text"
+        class="tag hidden whitespace-nowrap font-mono transition-colors hover:text-text min-[430px]:inline-flex"
         style="height:1.35rem;"
         title="Changelog"
       >
@@ -91,21 +91,45 @@ const LINKS = [
     </nav>
   </div>
 
-  <div id="mobile-menu" hidden class="border-t border-border md:hidden">
-    <nav class="wrap flex flex-col gap-1 py-3" aria-label="Mobile">
+</header>
+
+<!-- Outside the header: its backdrop-filter would become the containing
+     block for this fixed panel and crush it into the 64px bar. -->
+  <div
+    id="mobile-menu"
+    hidden
+    class="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto border-t border-border md:hidden"
+    style="background: var(--bg);"
+  >
+    <nav class="wrap flex flex-col gap-1 py-4" aria-label="Mobile">
       {
         LINKS.map((l) => (
           <a
             href={l.href}
-            class="rounded-sm px-3 py-2.5 text-sm text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
+            class="rounded-sm px-3 py-3.5 text-base transition-colors hover:bg-bg-subtle"
           >
             {l.label}
           </a>
         ))
       }
+      <a
+        href="/docs/migrating/parity"
+        class="rounded-sm px-3 py-3.5 text-base transition-colors hover:bg-bg-subtle">API Parity</a
+      >
+      <a
+        href="/docs/changelog"
+        class="rounded-sm px-3 py-3.5 text-base transition-colors hover:bg-bg-subtle"
+        >Changelog <span class="font-mono text-sm text-text-faint">v{VERSION}</span></a
+      >
+      <a
+        href={GITHUB}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="mt-2 flex items-center gap-2.5 border-t border-border px-3 pt-5 pb-3.5 text-base text-text-muted transition-colors hover:text-text"
+        ><Icon name="mdi:github" class="h-5 w-5" />GitHub</a
+      >
     </nav>
   </div>
-</header>
 
 <style>
   /* Transparent over the hero; a blurred, bordered bar appears only on scroll. */
@@ -113,10 +137,27 @@ const LINKS = [
     background: transparent;
     backdrop-filter: none;
   }
-  #site-nav.scrolled {
+  #site-nav.scrolled,
+  #site-nav.menu-open {
     background: color-mix(in srgb, var(--bg) 82%, transparent);
     backdrop-filter: blur(12px);
     border-bottom-color: var(--border);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    #mobile-menu:not([hidden]) {
+      animation: menu-in 0.18s ease-out;
+    }
+    @keyframes menu-in {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
   }
 </style>
 
@@ -136,7 +177,14 @@ const LINKS = [
       toggle.setAttribute("aria-expanded", String(open));
       toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
       menu.hidden = !open;
+      // The panel is opaque and full-height, so the page behind must not
+      // scroll, and the transparent-over-hero bar must become a real surface.
+      nav?.classList.toggle("menu-open", open);
+      document.body.style.overflow = open ? "hidden" : "";
     };
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !menu.hidden) setOpen(false);
+    });
     toggle.addEventListener("click", () =>
       setOpen(toggle.getAttribute("aria-expanded") !== "true"),
     );
