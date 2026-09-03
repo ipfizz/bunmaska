@@ -43,6 +43,9 @@ jobs:
         run: bun run check
 
       - name: Build the site
+        env:
+          # Lets the build-time star-count fetch use the authenticated rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
         run: bun run build
 
       # Run wrangler via bunx (the wrangler-action's npm install is flaky on Bun).

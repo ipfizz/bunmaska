@@ -1,4 +1,5 @@
 ---
+import { Icon } from "astro-icon/components";
 import type { NavItem } from "../nav";
 
 interface Props {
@@ -12,7 +13,7 @@ const { prev, next } = Astro.props;
   {
     prev ? (
       <a href={`/docs/${prev.slug}`} class="card card-hover p-4 text-left">
-        <span class="text-[0.8125rem] text-text-faint">← Previous</span>
+        <span class="inline-flex items-center gap-1 text-[0.8125rem] text-text-faint"><Icon name="lucide:arrow-left" class="h-3.5 w-3.5" />Previous</span>
         <span class="mt-1 block text-[0.9375rem] font-medium text-text">{prev.label}</span>
       </a>
     ) : (
@@ -22,7 +23,7 @@ const { prev, next } = Astro.props;
   {
     next && (
       <a href={`/docs/${next.slug}`} class="card card-hover p-4 text-right sm:col-start-2">
-        <span class="text-[0.8125rem] text-text-faint">Next ></span>
+        <span class="inline-flex items-center justify-end gap-1 text-[0.8125rem] text-text-faint">Next<Icon name="lucide:arrow-right" class="h-3.5 w-3.5" /></span>
         <span class="mt-1 block text-[0.9375rem] font-medium text-text">{next.label}</span>
       </a>
     )

@@ -18,7 +18,7 @@ const rows: { label: string; electron: string; bunmaska: string }[] = [
 ---
 
 <section class="section-border reveal">
-  <div class="wrap py-16 sm:py-20">
+  <div class="wrap py-10 sm:py-16 lg:py-20">
     <div class="mx-auto max-w-[46ch] text-center">
       <p class="eyebrow mb-4">Bunmaska vs Electron</p>
       <h2 class={HEAD}>
@@ -32,8 +32,8 @@ const rows: { label: string; electron: string; bunmaska: string }[] = [
     </div>
 
     <div class="mx-auto mt-12 max-w-3xl overflow-hidden rounded-md border border-border">
-      <div class="grid grid-cols-[1.1fr_1fr_1fr] bg-bg-subtle text-sm">
-        <div class="px-4 py-3 sm:px-5"></div>
+      <div class="grid grid-cols-2 bg-bg-subtle text-sm sm:grid-cols-[1.1fr_1fr_1fr]">
+        <div class="hidden px-4 py-3 sm:block sm:px-5"></div>
         <div class="px-4 py-3 font-medium text-text-muted sm:px-5">Electron</div>
         <div class="border-l border-border px-4 py-3 font-medium text-accent-text sm:px-5">
           Bunmaska
@@ -43,13 +43,13 @@ const rows: { label: string; electron: string; bunmaska: string }[] = [
         rows.map((row, i) => (
           <div
             class:list={[
-              "grid grid-cols-[1.1fr_1fr_1fr] text-sm",
+              "grid grid-cols-2 text-sm sm:grid-cols-[1.1fr_1fr_1fr]",
               i > 0 && "border-t border-border",
             ]}
           >
-            <div class="px-4 py-3 text-text-faint sm:px-5">{row.label}</div>
-            <div class="px-4 py-3 text-text-muted sm:px-5">{row.electron}</div>
-            <div class="border-l border-border bg-accent-bg/30 px-4 py-3 font-medium text-text sm:px-5">
+            <div class="col-span-2 px-4 pt-3 pb-1 text-xs uppercase tracking-[0.06em] text-text-faint sm:col-span-1 sm:py-3 sm:text-sm sm:normal-case sm:tracking-normal sm:px-5">{row.label}</div>
+            <div class="min-w-0 break-words px-4 pb-3 text-text-muted sm:py-3 sm:px-5">{row.electron}</div>
+            <div class="min-w-0 break-words border-l border-border bg-accent-bg/30 px-4 pb-3 font-medium text-text sm:py-3 sm:px-5">
               {row.bunmaska}
             </div>
           </div>

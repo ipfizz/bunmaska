@@ -633,3 +633,50 @@
 .grid > * {
   min-width: 0;
 }
+
+/* ------------------------------------------------------------------ *
+ * Mobile app chrome: the fixed bottom tab bar (see Nav.astro) needs the
+ * page to end above it, including the iPhone home-indicator inset.
+ * ------------------------------------------------------------------ */
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* Roomier tap targets where lists get dense on a phone. */
+  .footer-link {
+    display: block;
+    padding-block: 0.375rem;
+  }
+}
+
+/* Parity/status marks in markdown tables: lucide icons via CSS masks, so the
+   .md source stays plain HTML and screen readers get the role="img" label. */
+.st {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  vertical-align: -0.16em;
+  background-color: currentColor;
+  -webkit-mask: var(--st-icon) center / contain no-repeat;
+  mask: var(--st-icon) center / contain no-repeat;
+}
+.st-full {
+  color: var(--success);
+  --st-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E");
+}
+.st-partial {
+  color: var(--accent-text);
+  --st-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a10 10 0 0 1 0 20z' fill='%23000' stroke='none'/%3E%3C/svg%3E");
+}
+.st-blocked {
+  color: var(--text-faint);
+  --st-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M4.929 4.929 19.07 19.071'/%3E%3C/svg%3E");
+}
+.st-none {
+  color: var(--danger);
+  --st-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");
+}
+.prose td .st {
+  width: 1.15em;
+  height: 1.15em;
+}

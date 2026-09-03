@@ -31,7 +31,7 @@ const cols = [
   {
     title: "Project",
     links: [
-      { href: GITHUB, label: "GitHub", external: true },
+      { href: GITHUB, label: "Star on GitHub", external: true },
       { href: NPM, label: "npm", external: true },
       { href: "/roadmap", label: "Roadmap" },
       { href: "/docs/changelog", label: "Changelog" },
@@ -42,8 +42,8 @@ const cols = [
 ---
 
 <footer class="border-t border-border">
-  <div class="max-w-6xl mx-auto grid gap-10 py-14 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-    <div>
+  <div class="wrap grid grid-cols-2 gap-x-6 gap-y-8 py-10 md:grid-cols-3 md:gap-10 lg:grid-cols-5 lg:py-14">
+    <div class="col-span-2 md:col-span-3 lg:col-span-1">
       <div class="flex flex-wrap items-center gap-2">
         <span class="flex items-center gap-2 text-base font-medium tracking-tight"
           ><img src="/logo-nav.png" alt="" width="28" height="28" class="h-7 w-7" />bunmaska</span
@@ -65,13 +65,13 @@ const cols = [
     {
       cols.map((col) => (
         <div>
-          <p class="eyebrow mb-3">{col.title}</p>
-          <ul class="space-y-2">
+          <p class="eyebrow mb-2 md:mb-3">{col.title}</p>
+          <ul class="md:space-y-2">
             {col.links.map((l) => (
               <li>
                 <a
                   href={l.href}
-                  class="text-sm text-text-muted transition-colors hover:text-text"
+                  class="footer-link text-sm text-text-muted transition-colors hover:text-text"
                   {...(l.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                 >
                   {l.label}
@@ -86,7 +86,7 @@ const cols = [
 
   <div class="border-t border-border">
     <div
-      class="wrap flex flex-col items-start justify-between gap-2 py-5 text-sm text-text-faint sm:flex-row sm:items-center"
+      class="wrap flex flex-col items-start justify-between gap-2 py-5 text-[0.8125rem] text-text-faint sm:flex-row sm:items-center sm:text-sm"
     >
       <span
         >© 2026 Bunmaska, named after the <a href="/about" class="underline decoration-border underline-offset-2 hover:text-text">bun maska</a> at an Irani cafe near

@@ -1,4 +1,5 @@
 ---
+import { Icon } from "astro-icon/components";
 interface Props {
   type?: "note" | "tip" | "caution" | "danger";
   title?: string;
@@ -7,10 +8,10 @@ interface Props {
 const { type = "note", title } = Astro.props;
 
 const styles: Record<NonNullable<Props["type"]>, { border: string; bg: string; label: string; icon: string }> = {
-  note: { border: "var(--border-strong)", bg: "var(--bg-subtle)", label: "Note", icon: "›" },
-  tip: { border: "var(--accent)", bg: "var(--accent-bg)", label: "Tip", icon: "★" },
-  caution: { border: "var(--maska-500)", bg: "var(--accent-bg)", label: "Caution", icon: "▲" },
-  danger: { border: "var(--danger)", bg: "color-mix(in srgb, var(--danger) 9%, transparent)", label: "Heads up", icon: "✦" },
+  note: { border: "var(--border-strong)", bg: "var(--bg-subtle)", label: "Note", icon: "lucide:info" },
+  tip: { border: "var(--accent)", bg: "var(--accent-bg)", label: "Tip", icon: "lucide:lightbulb" },
+  caution: { border: "var(--maska-500)", bg: "var(--accent-bg)", label: "Caution", icon: "lucide:triangle-alert" },
+  danger: { border: "var(--danger)", bg: "color-mix(in srgb, var(--danger) 9%, transparent)", label: "Heads up", icon: "lucide:circle-alert" },
 };
 
 const s = styles[type];
@@ -22,7 +23,7 @@ const heading = title ?? s.label;
   style={`border-color:${s.border};background:${s.bg};`}
 >
   <p class="mb-1 flex items-center gap-2 font-semibold" style="letter-spacing:-0.01em;">
-    <span aria-hidden="true" style={`color:${s.border};`}>{s.icon}</span>
+    <Icon name={s.icon} class="h-4 w-4 shrink-0" style={`color:${s.border};`} aria-hidden="true" />
     {heading}
   </p>
   <div class="callout-body text-text-muted">

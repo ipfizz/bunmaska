@@ -69,8 +69,8 @@ We don't lie in tables - this one is still filling in:
 
 | | Frameless (`frame: false`) | Drag (`--app-region`) | `window.__bunmaska.window` controls |
 | --- | :---: | :---: | :---: |
-| **Windows** | ✅ | ✅ | ✅ |
-| **macOS** | ✅ | ✅ (native `-webkit-app-region`) | ◐ coming |
-| **Linux** | ✅ | ◐ coming | ◐ coming |
+| **Windows** | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> |
+| **macOS** | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> (native `-webkit-app-region`) | <span class="st st-partial" role="img" aria-label="partial"></span> coming |
+| **Linux** | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> coming | <span class="st st-partial" role="img" aria-label="partial"></span> coming |
 
 The `--app-region` CSS convention and the `window.__bunmaska.window` API are stable; the macOS/Linux control handlers and Linux drag are wired next. Track them on the [roadmap](/roadmap), and check the [parity matrix](/docs/migrating/parity) for the rest.

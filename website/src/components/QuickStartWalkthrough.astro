@@ -1,4 +1,5 @@
 ---
+import { Icon } from "astro-icon/components";
 import { HEAD } from "../styles/constants";
 import CodeBlock from "./ui/CodeBlock.astro";
 
@@ -10,7 +11,7 @@ app.whenReady().then(() => {
 });`;
 ---
 
-<section class="relative section-border py-12 overflow-hidden">
+<section class="relative section-border py-10 sm:py-12 overflow-hidden">
   <div
     class="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(255,191,73,0.08),transparent_55%)]"
   >
@@ -50,13 +51,11 @@ app.whenReady().then(() => {
     <div class="mx-auto mt-8 max-w-2xl">
       <CodeBlock code={helloApp} lang="ts" title="src/main.ts" />
       <div
-        class="mt-6 flex items-center justify-center gap-2 text-sm text-text-faint"
+        class="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-text-faint"
       >
-        <span>✓ Standalone executable</span>
-        <span>•</span>
-        <span>✓ No runtime install</span>
-        <span>•</span>
-        <span>✓ Double-click to launch</span>
+        <span class="inline-flex items-center gap-1.5"><Icon name="lucide:check" class="h-3.5 w-3.5 text-success" />Standalone executable</span>
+        <span class="inline-flex items-center gap-1.5"><Icon name="lucide:check" class="h-3.5 w-3.5 text-success" />No runtime install</span>
+        <span class="inline-flex items-center gap-1.5"><Icon name="lucide:check" class="h-3.5 w-3.5 text-success" />Double-click to launch</span>
       </div>
     </div>
   </div>

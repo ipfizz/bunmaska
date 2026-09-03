@@ -11,9 +11,9 @@ Bunmaska ships on **macOS, Linux, and now Windows** - each driving the operating
 
 | Platform | Status | Architectures | Engine |
 | --- | --- | --- | --- |
-| **macOS** | ✅ Shipping | Apple Silicon (ARM64) + Intel (x64) | AppKit + `WKWebView` |
-| **Linux** | ✅ Shipping | x64 + ARM64 (incl. Raspberry Pi) | GTK 4 + WebKitGTK 6 |
-| **Windows** | ✅ Shipping (x64) | x64 today · ARM64 on the roadmap | WinCairo WebKit (built from source, bundled) |
+| **macOS** | <span class="st st-full" role="img" aria-label="full"></span> Shipping | Apple Silicon (ARM64) + Intel (x64) | AppKit + `WKWebView` |
+| **Linux** | <span class="st st-full" role="img" aria-label="full"></span> Shipping | x64 + ARM64 (incl. Raspberry Pi) | GTK 4 + WebKitGTK 6 |
+| **Windows** | <span class="st st-full" role="img" aria-label="full"></span> Shipping (x64) | x64 today · ARM64 on the roadmap | WinCairo WebKit (built from source, bundled) |
 
 ## macOS
 

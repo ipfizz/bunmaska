@@ -5,6 +5,9 @@ import { Image } from "astro:assets";
 import InstallTabs from "./ui/InstallTabs.tsx";
 import { HEAD } from "../styles/constants.ts";
 import AnimatedBadge from "./ui/AnimatedBadge.astro";
+import { Icon } from "astro-icon/components";
+import { GITHUB, STARS, starsLabel } from "../site";
+const stars = starsLabel(STARS);
 import HeroPixels from "./ui/HeroPixels.tsx";
 ---
 
@@ -24,7 +27,7 @@ import HeroPixels from "./ui/HeroPixels.tsx";
     >
     </div>
     <div class="relative mx-auto flex h-full max-w-6xl flex-col items-center justify-center space-y-4 px-6">
-      <AnimatedBadge text="electron minus chromium, powered by bun and webkit 🚀" />
+      <AnimatedBadge text="electron minus chromium, powered by bun and webkit" />
       <div class="text-center">
         <h1
           class="mx-auto max-w-[24ch] font-serif leading-[1.08] text-balance text-[clamp(2.25rem,4.5vw,3rem)]"
@@ -53,8 +56,15 @@ import HeroPixels from "./ui/HeroPixels.tsx";
         <InstallTabs client:visible />
       </div>
       <div class="flex flex-wrap items-center justify-center gap-3">
-        <a href="/docs/quickstart" class="btn btn-accent">Get started ></a>
-        <a href="/docs/introduction" class="btn btn-ghost">View Docs</a>
+        <a href="/docs/quickstart" class="btn btn-accent w-full sm:w-auto">Get started<Icon name="lucide:arrow-right" class="ml-1.5 h-4 w-4" /></a>
+        <a href="/docs/introduction" class="btn btn-ghost w-full sm:w-auto">View Docs</a>
+        <a
+          href={GITHUB}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn btn-ghost w-full sm:w-auto"
+          ><Icon name="lucide:star" class="mr-1.5 h-4 w-4" />Star on GitHub{stars && <span class="ml-1.5 font-mono text-xs text-text-faint">{stars}</span>}</a
+        >
       </div>
     </div>
   </DashedBox>

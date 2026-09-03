@@ -1,8 +1,17 @@
 ---
 import ThemeToggle from "./ui/ThemeToggle.tsx";
-import { VERSION, GITHUB } from "../site";
+import { VERSION, GITHUB, STARS, starsLabel } from "../site";
 import { Icon } from "astro-icon/components";
 
+const stars = starsLabel(STARS);
+const path = Astro.url.pathname;
+const isDocs = path.startsWith("/docs/") && !path.startsWith("/docs/native-modules");
+const TABS = [
+  { href: "/", label: "Home", icon: "lucide:house", active: path === "/" },
+  { href: "/docs/introduction", label: "Docs", icon: "lucide:book-open", active: isDocs },
+  { href: "/docs/native-modules/overview", label: "Native", icon: "lucide:puzzle", active: path.startsWith("/docs/native-modules") },
+  { href: "/roadmap", label: "Roadmap", icon: "lucide:map", active: path.startsWith("/roadmap") },
+];
 const LINKS = [
   { href: "/docs/introduction", label: "Docs" },
   { href: "/roadmap", label: "Roadmap" },
@@ -47,47 +56,21 @@ const LINKS = [
           ))
         }
       </div>
-      <span
-        class="ml-1 border border-[var(--border)] rounded-[var(--radius-sm)] p-2"
+      <a
+        href={GITHUB}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Star Bunmaska on GitHub"
+        class="ml-1 inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 text-sm text-text-muted transition-colors hover:text-text"
       >
-        <a
-          href={GITHUB}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Bunmaska on GitHub"
+        <Icon name="mdi:github" class="h-5 w-5" />
+        <span class="hidden items-center gap-1.5 md:inline-flex"
+          ><Icon name="lucide:star" class="h-3.5 w-3.5" />Star{stars && <span class="font-mono text-xs text-text-faint">{stars}</span>}</span
         >
-          <Icon
-            name="mdi:github"
-            class="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5"
-          />
-        </a>
-      </span>
+      </a>
       <span class="ml-1">
         <ThemeToggle client:load />
       </span>
-      <button
-        id="nav-toggle"
-        type="button"
-        class="ml-1 inline-flex items-center justify-center border border-[var(--border)] rounded-[var(--radius-sm)] p-2 text-text-muted transition-colors hover:text-text md:hidden"
-        aria-label="Open menu"
-        aria-expanded="false"
-        aria-controls="mobile-menu"
-      >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-      </button>
     </nav>
   </div>
 
@@ -98,8 +81,8 @@ const LINKS = [
   <div
     id="mobile-menu"
     hidden
-    class="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto border-t border-border md:hidden"
-    style="background: var(--bg);"
+    class="fixed inset-x-0 top-16 z-40 overflow-y-auto border-t border-border md:hidden"
+    style="bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px)); background: var(--bg);"
   >
     <nav class="wrap flex flex-col gap-1 py-4" aria-label="Mobile">
       {
@@ -126,10 +109,54 @@ const LINKS = [
         target="_blank"
         rel="noopener noreferrer"
         class="mt-2 flex items-center gap-2.5 border-t border-border px-3 pt-5 pb-3.5 text-base text-text-muted transition-colors hover:text-text"
-        ><Icon name="mdi:github" class="h-5 w-5" />GitHub</a
+        ><Icon name="mdi:github" class="h-5 w-5" />Star on GitHub{stars && <span class="font-mono text-sm text-text-faint">{stars}</span>}</a
       >
     </nav>
   </div>
+
+  <!-- Mobile app chrome: a bottom tab bar, Instagram-style. Fixed, above the
+       iPhone home indicator via safe-area, hidden from md up where the top
+       nav carries the links. The Menu tab drives the same panel as before. -->
+  <nav
+    id="bottom-nav"
+    class="fixed inset-x-0 bottom-0 z-50 border-t border-border md:hidden"
+    style="background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding-bottom: env(safe-area-inset-bottom, 0px);"
+    aria-label="Mobile"
+  >
+    <ul class="grid h-[3.75rem] grid-cols-5">
+      {
+        TABS.map((t) => (
+          <li>
+            <a
+              href={t.href}
+              aria-current={t.active ? "page" : undefined}
+              class:list={[
+                "flex h-full flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium transition-colors",
+                t.active ? "text-accent-text" : "text-text-faint",
+              ]}
+            >
+              <Icon name={t.icon} class="h-[1.35rem] w-[1.35rem]" />
+              {t.label}
+            </a>
+          </li>
+        ))
+      }
+      <li>
+        <button
+          id="nav-toggle"
+          type="button"
+          class="flex h-full w-full flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium text-text-faint transition-colors"
+          aria-label="Open menu"
+          aria-expanded="false"
+          aria-controls="mobile-menu"
+        >
+          <Icon name="lucide:menu" class="menu-icon h-[1.35rem] w-[1.35rem]" />
+          <Icon name="lucide:x" class="close-icon hidden h-[1.35rem] w-[1.35rem]" />
+          Menu
+        </button>
+      </li>
+    </ul>
+  </nav>
 
 <style>
   /* Transparent over the hero; a blurred, bordered bar appears only on scroll. */
@@ -181,6 +208,9 @@ const LINKS = [
       // scroll, and the transparent-over-hero bar must become a real surface.
       nav?.classList.toggle("menu-open", open);
       document.body.style.overflow = open ? "hidden" : "";
+      toggle.querySelector(".menu-icon")?.classList.toggle("hidden", open);
+      toggle.querySelector(".close-icon")?.classList.toggle("hidden", !open);
+      toggle.classList.toggle("text-accent-text", open);
     };
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !menu.hidden) setOpen(false);

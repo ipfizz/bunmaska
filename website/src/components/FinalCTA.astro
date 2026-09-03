@@ -1,5 +1,8 @@
 ---
 import { DISPLAY } from "../styles/constants";
+import { Icon } from "astro-icon/components";
+import { GITHUB, STARS, starsLabel } from "../site";
+const stars = starsLabel(STARS);
 ---
 
 <section class="relative overflow-hidden">
@@ -8,7 +11,7 @@ import { DISPLAY } from "../styles/constants";
     style="background: radial-gradient(55% 60% at 50% 100%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%);"
   >
   </div>
-  <div class="wrap py-12 text-center sm:py-14">
+  <div class="wrap py-10 text-center sm:py-14">
     <h2
       class={`mx-auto max-w-[18ch] ${DISPLAY}`}
       style="letter-spacing:-0.01em;"
@@ -21,12 +24,13 @@ import { DISPLAY } from "../styles/constants";
       Try it in a weekend. Hate it by Monday, or don't.
     </p>
     <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
-      <a href="/docs/quickstart" class="btn btn-accent">Get started ></a>
+      <a href="/docs/quickstart" class="btn btn-accent w-full sm:w-auto">Get started<Icon name="lucide:arrow-right" class="ml-1.5 h-4 w-4" /></a>
       <a
-        href="https://github.com/ipfizz/bunmaska"
+        href={GITHUB}
         target="_blank"
         rel="noopener noreferrer"
-        class="btn btn-ghost">GitHub</a
+        class="btn btn-ghost w-full sm:w-auto"
+        ><Icon name="lucide:star" class="mr-1.5 h-4 w-4" />Star on GitHub{stars && <span class="ml-1.5 font-mono text-xs text-text-faint">{stars}</span>}</a
       >
     </div>
   </div>

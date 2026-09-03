@@ -1,4 +1,5 @@
 ---
+import { Icon } from "astro-icon/components";
 import { HEAD } from "../styles/constants";
 import { homeFaq } from "../faq";
 
@@ -7,7 +8,7 @@ import { homeFaq } from "../faq";
 const faqs = homeFaq.map((item) => [item.q, item.a] as const);
 ---
 
-<section class="relative overflow-hidden py-12 section-border">
+<section class="relative overflow-hidden py-10 sm:py-12 section-border">
   <div
     class="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,191,73,0.05),transparent_60%)]"
   >
@@ -49,7 +50,7 @@ const faqs = homeFaq.map((item) => [item.q, item.a] as const);
       <p
         class="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm text-text-faint"
       >
-        <span>⚡</span>
+        <Icon name="lucide:zap" class="h-4 w-4 text-accent-text" />
         Ship fast. Break carefully. Fix publicly.
       </p>
     </div>

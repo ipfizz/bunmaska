@@ -23,7 +23,7 @@ const { current } = Astro.props;
                   href={`/docs/${item.slug}`}
                   aria-current={active ? "page" : undefined}
                   class:list={[
-                    "-ml-px block border-l py-[0.3rem] pl-3 pr-2 text-[0.8125rem] leading-snug transition-colors",
+                    "-ml-px block border-l py-2 pl-3 pr-2 text-[0.8125rem] leading-snug transition-colors lg:py-[0.3rem]",
                     active
                       ? "border-accent font-medium text-accent-text"
                       : "border-transparent text-text-muted hover:border-border-strong hover:text-text",
