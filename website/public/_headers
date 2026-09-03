@@ -1,0 +1,3 @@
+# The Cloudflare Pages mirror must never compete with bunmaska.org in search.
+https://bunmaska.pages.dev/*
+  X-Robots-Tag: noindex

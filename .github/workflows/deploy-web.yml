@@ -21,6 +21,10 @@ jobs:
         working-directory: website
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The IndexNow step diffs against the previous push; a shallow clone
+          # would silently see no changes on a multi-commit push.
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -56,19 +60,34 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@4 pages deploy dist --project-name=bunmaska --branch=main
 
-      # IndexNow: one ping tells Bing (and the AI surfaces riding its index -
-      # Copilot, partly ChatGPT), Yandex, Naver etc. the site changed. Google
-      # does not participate - the sitemap covers it. Key file lives in public/.
-      - name: Ping IndexNow with the deployed URLs
+      # IndexNow: tell Bing (and Yandex, Naver, Seznam, Amazon, and the AI
+      # surfaces riding Bing's index) which pages changed. Google does not
+      # participate; the sitemap covers it. Only URLs whose source changed are
+      # sent; pushing the whole sitemap on every deploy is the protocol's
+      # documented anti-pattern. Key file lives in public/.
+      - name: Ping IndexNow with the URLs whose source changed
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
           KEY=$(ls dist | grep -E '^[0-9a-f]{32}\.txt$' | head -1 | sed 's/\.txt$//')
-          grep -oh '<loc>[^<]*' dist/sitemap-*.xml | sed 's/<loc>//' | grep -v '\.xml$' > /tmp/urls.txt
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE" 2>/dev/null; then
+            git diff --name-only "$BEFORE" HEAD > /tmp/changed.txt
+          else
+            # Manual dispatch or an unknown base: treat it as a site-wide change.
+            echo "website/src/layouts/Base.astro" > /tmp/changed.txt
+          fi
+          python3 scripts/indexnow-urls.py dist < /tmp/changed.txt > /tmp/urls.txt
           COUNT=$(wc -l < /tmp/urls.txt | tr -d ' ')
-          python3 -c "
+          if [ "$COUNT" = "0" ]; then
+            echo "IndexNow: no page content changed, skipping the ping"
+            exit 0
+          fi
+          python3 - "$KEY" <<'PY' > /tmp/indexnow.json
           import json, sys
+          key = sys.argv[1]
           urls = open('/tmp/urls.txt').read().split()
-          print(json.dumps({'host': 'bunmaska.org', 'key': '$KEY', 'keyLocation': f'https://bunmaska.org/$KEY.txt', 'urlList': urls}))
-          " > /tmp/indexnow.json
+          print(json.dumps({'host': 'bunmaska.org', 'key': key, 'keyLocation': f'https://bunmaska.org/{key}.txt', 'urlList': urls}))
+          PY
           curl -s -w "IndexNow HTTP %{http_code} ($COUNT urls)\n" -o /dev/null \
             -X POST -H "Content-Type: application/json" \
             --data @/tmp/indexnow.json https://api.indexnow.org/indexnow
