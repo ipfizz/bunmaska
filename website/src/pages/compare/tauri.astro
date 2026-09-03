@@ -1,9 +1,10 @@
 ---
+import { Icon } from "astro-icon/components";
 import Base from "../../layouts/Base.astro";
 import Nav from "../../components/Nav.astro";
 import Footer from "../../components/Footer.astro";
 
-const title = "Tauri without Rust - bunmaska";
+const title = "Tauri without Rust: a Tauri alternative in TypeScript - bunmaska";
 const description =
   "Want Tauri's tiny, no-Chromium apps but all TypeScript instead of Rust? bunmaska keeps the Electron mental model on Bun and system WebKit. Trade-offs, honestly.";
 ---
@@ -54,7 +55,7 @@ const description =
       </p>
 
       <p class="mt-8">
-        <a class="btn btn-accent" href="/docs/quickstart">Get started →</a>
+        <a class="btn btn-accent" href="/docs/quickstart">Get started<Icon name="lucide:arrow-right" class="ml-1.5 h-4 w-4" /></a>
         <a class="btn btn-ghost" href="/alternatives">All Electron alternatives</a>
       </p>
     </article>

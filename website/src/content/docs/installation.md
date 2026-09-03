@@ -14,6 +14,8 @@ order: 3
 
 ## Install
 
+Published as [bunmaska on npm](https://www.npmjs.com/package/bunmaska); the CLI ships in the same package.
+
 ```sh
 bun add bunmaska
 # or, if you must:

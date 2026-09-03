@@ -16,7 +16,7 @@ const cards = [
   },
   {
     t: "Still the expensive platform",
-    d: "Windows has no system WebKit, so we ship and maintain the WinCairo engine ourselves - CVE treadmill and all. That's why hosting the WinCairo builds is on the alpha.7 stop: a Windows app has to be able to fetch its engine.",
+    d: "Windows has no system WebKit, so we ship and maintain the WinCairo engine ourselves - CVE treadmill and all. That's why the engine feed exists: a Windows app fetches its signed engine from engines.bunmaska.org, and tracking WPE's stable train there is the alpha.8 stop.",
   },
 ];
 ---
@@ -47,10 +47,11 @@ const cards = [
       }
     </div>
     <p class="mx-auto mt-6 max-w-[64ch] text-center text-sm text-text-faint">
-      Honest status: the backend is built and runs on a Windows CI runner, but a
-      Windows app still needs a WinCairo engine in the store - and we don't host
-      those builds yet. Windows is real in the code; shipping it end-to-end
-      waits on the hosted engine, the same step Linux is waiting on.
+      Honest status: the backend is built and runs on a Windows CI runner, and
+      the hosted WinCairo engine installs from the real feed end-to-end. What is
+      still open is the stable-train build of that engine and ARM64 - both on
+      the roadmap above. Linux is one step behind: its relocatable engine loads
+      from the store but is not hosted yet.
     </p>
   </div>
 </section>

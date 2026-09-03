@@ -1,4 +1,5 @@
 ---
+import { Icon } from "astro-icon/components";
 import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
@@ -17,7 +18,7 @@ import { DISPLAY } from "../styles/constants";
       one won't take the whole app down.
     </p>
     <div class="flex flex-wrap items-center justify-center gap-3">
-      <a href="/" class="btn btn-accent">Back home ></a>
+      <a href="/" class="btn btn-accent"><Icon name="lucide:arrow-left" class="mr-1.5 h-4 w-4" />Back home</a>
       <a href="/docs/introduction" class="btn btn-ghost">Read the docs</a>
     </div>
   </main>

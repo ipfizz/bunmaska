@@ -1,10 +1,11 @@
 ---
+import { Icon } from "astro-icon/components";
 import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
 import { faq, faqPageJsonLd } from "../faq";
 
-const title = "A lightweight Electron alternative without Chromium";
+const title = "Electron alternatives in 2026: lightweight, without Chromium";
 const description =
   "bunmaska is an Electron alternative built on Bun and system WebKit - no bundled Chromium, no CVE re-ship treadmill, a drop-in API. Honest alpha status inside.";
 ---
@@ -99,7 +100,7 @@ const description =
       }
 
       <p class="mt-10">
-        <a class="btn btn-accent" href="/docs/quickstart">Get started →</a>
+        <a class="btn btn-accent" href="/docs/quickstart">Get started<Icon name="lucide:arrow-right" class="ml-1.5 h-4 w-4" /></a>
       </p>
     </article>
   </main>

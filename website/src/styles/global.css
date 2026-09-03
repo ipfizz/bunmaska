@@ -241,19 +241,23 @@
       transform 0.15s ease;
     cursor: pointer;
   }
-  .btn-accent {
+  /* `.btn.x` out-specifies `.prose a`, which otherwise recolors and underlines a
+     button placed inside prose - a gold label on a gold button. */
+  .btn.btn-accent {
     background-color: var(--accent);
     color: #1a1408;
     border-color: var(--accent);
+    text-decoration: none;
   }
   .btn-accent:hover {
     background-color: var(--maska-400);
     transform: translateY(-1px);
   }
-  .btn-ghost {
+  .btn.btn-ghost {
     background-color: transparent;
     color: var(--text);
     border-color: var(--border-strong);
+    text-decoration: none;
   }
   .btn-ghost:hover {
     border-color: var(--text-faint);
@@ -520,6 +524,17 @@
 
 .prose a:hover {
   text-decoration-color: var(--accent);
+}
+/* This link rule is unlayered, so it outranks the @layer components button
+   rules on every property it sets - a button inside prose went gold-on-gold.
+   Reassert the button colours here, at the same layer level. */
+.prose a.btn-accent {
+  color: #1a1408;
+  text-decoration: none;
+}
+.prose a.btn-ghost {
+  color: var(--text);
+  text-decoration: none;
 }
 
 .prose ul,

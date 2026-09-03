@@ -62,7 +62,9 @@ const organization = {
 const softwareApp = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
+  "@id": `${Astro.site?.href}#software`,
   name: "Bunmaska",
+  alternateName: "bunmaska",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "macOS, Linux, Windows",
   description: DEFAULT_DESCRIPTION,
@@ -70,10 +72,24 @@ const softwareApp = {
   softwareVersion: VERSION,
   license: "https://opensource.org/licenses/MIT",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  installUrl: NPM,
+  downloadUrl: NPM,
+  softwareHelp: { "@type": "CreativeWork", url: new URL("/docs/introduction", Astro.site).href },
   sameAs: [GITHUB, NPM],
 };
+const sourceCode = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  name: "bunmaska",
+  codeRepository: GITHUB,
+  programmingLanguage: "TypeScript",
+  runtimePlatform: "Bun",
+  license: "https://opensource.org/licenses/MIT",
+  url: NPM,
+  targetProduct: { "@id": `${Astro.site?.href}#software` },
+};
 const extra = jsonLd === undefined ? [] : Array.isArray(jsonLd) ? jsonLd : [jsonLd];
-const graphs = [website, ...(isHome ? [organization, softwareApp] : []), ...extra];
+const graphs = [website, ...(isHome ? [organization, softwareApp, sourceCode] : []), ...extra];
 ---
 
 <!doctype html>
@@ -91,7 +107,7 @@ const graphs = [website, ...(isHome ? [organization, softwareApp] : []), ...extr
     <meta name="description" content={description} />
     <meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
     <meta name="generator" content={Astro.generator} />
-    <meta property="og:site_name" content="bunmaska" />
+    <meta property="og:site_name" content="Bunmaska" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content={ogType} />
