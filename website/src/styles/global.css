@@ -695,3 +695,17 @@
   width: 1.15em;
   height: 1.15em;
 }
+
+/* Geist Mono ships contextual ligatures that swallow the space before a
+   double hyphen: `build --update` rendered as "build--update". A site full of
+   CLI flags cannot afford that; code is set with ligatures off everywhere. */
+code,
+pre,
+kbd,
+samp,
+.font-mono {
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
+}
