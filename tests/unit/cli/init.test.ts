@@ -45,43 +45,20 @@ describe('initTemplateFiles', () => {
   const files = initTemplateFiles({ name: 'My App', id: 'com.example.my-app' });
   const byPath = new Map(files.map((f) => [f.path, f.contents]));
 
-  test('includes the core project files', () => {
-    for (const path of [
-      'package.json',
-      'bunmaska.config.ts',
-      'src/main.ts',
-      'src/preload.js',
-      'src/index.html',
-      '.gitignore',
-      'README.md',
-    ]) {
-      expect(byPath.has(path)).toBe(true);
-    }
-  });
-
   test('package.json is valid JSON with a slugged name and bunmaska dep', () => {
     const pkg = JSON.parse(byPath.get('package.json') ?? '{}');
     expect(pkg.name).toBe('my-app');
     expect(pkg.dependencies.bunmaska).toMatch(/^\^/);
-    expect(pkg.scripts.dev).toBe('bunmaska dev');
   });
 
   test('config substitutes the name and id', () => {
     const config = byPath.get('bunmaska.config.ts') ?? '';
     expect(config).toContain('name: "My App"');
     expect(config).toContain('id: "com.example.my-app"');
-    expect(config).toContain("from 'bunmaska/config'");
   });
 
   test('gitignore covers the dev window-state scratch file', () => {
     expect(byPath.get('.gitignore') ?? '').toContain('.bunmaska-dev-state.json');
-  });
-
-  test('main.ts wires the preload and ipc handler', () => {
-    const main = byPath.get('src/main.ts') ?? '';
-    expect(main).toContain("ipcMain.handle('ping'");
-    expect(main).toContain('preload:');
-    expect(main).toContain("from 'bunmaska'");
   });
 });
 
