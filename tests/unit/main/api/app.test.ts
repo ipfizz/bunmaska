@@ -132,6 +132,14 @@ describe('App.whenReady', () => {
     await a.whenReady();
     expect(a.isReady()).toBe(true);
   });
+
+  test('rejects instead of throwing when the start hook fails', async () => {
+    const a = new App();
+    a.setStartHook(() => {
+      throw new Error('no display');
+    });
+    await expect(a.whenReady()).rejects.toThrow('no display');
+  });
 });
 
 describe('App event surface', () => {

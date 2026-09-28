@@ -37,7 +37,12 @@ export const ensureNativeStarted = (): void => {
   native.onOpenFile?.((path) => {
     app.emit('open-file', makeCancelableEvent(), path);
   });
-  native.start();
+  try {
+    native.start();
+  } catch (error) {
+    started = false;
+    throw error;
+  }
 };
 
 /** Reset the one-shot guard. Test-only. */

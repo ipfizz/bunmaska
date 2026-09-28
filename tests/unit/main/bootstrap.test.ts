@@ -83,6 +83,24 @@ describe('bootstrap native wiring', () => {
     expect(app.isReady()).toBe(true);
   });
 
+  test('retries the native start after a failed one', () => {
+    const { native } = makeNative();
+    let starts = 0;
+    resetBootstrapForTesting();
+    setNativeAppForTesting({
+      ...native,
+      start: () => {
+        starts += 1;
+        if (starts === 1) {
+          throw new Error('no display');
+        }
+      },
+    });
+    expect(() => ensureNativeStarted()).toThrow('no display');
+    ensureNativeStarted();
+    expect(starts).toBe(2);
+  });
+
   test('forwards native open-url to the app open-url event', () => {
     installSafeAppExit();
     const { native, openUrl } = makeNative();

@@ -75,7 +75,11 @@ export class App extends EventEmitter {
   /** The first call triggers the native bootstrap, if a start hook is wired. */
   whenReady(): Promise<void> {
     if (!this.#ready) {
-      this.#startHook?.();
+      try {
+        this.#startHook?.();
+      } catch (error) {
+        return Promise.reject(error);
+      }
     }
     if (this.#ready) {
       return Promise.resolve();
