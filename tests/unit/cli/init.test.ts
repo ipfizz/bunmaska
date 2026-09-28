@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -143,6 +143,62 @@ describe('runInit with an explicit name', () => {
 describe('deriveProjectName', () => {
   test('uses the directory base name', () => {
     expect(deriveProjectName('/tmp/cool-app')).toBe('cool-app');
+  });
+});
+
+/** A stand-in `bunmaska` package that records what the scaffolded main.ts does. */
+const FAKE_BUNMASKA = `import { EventEmitter } from 'node:events';
+export const calls = { windows: [], quits: 0, handlers: new Map() };
+class App extends EventEmitter {
+  whenReady() { return Promise.resolve(); }
+  quit() { calls.quits += 1; }
+}
+export const app = new App();
+export class BrowserWindow {
+  constructor(options) { calls.windows.push(options); }
+  loadFile() {}
+}
+export const ipcMain = { handle: (channel, fn) => calls.handlers.set(channel, fn) };
+`;
+
+type FakeBunmaska = {
+  readonly calls: {
+    readonly windows: { webPreferences: { preload: string } }[];
+    readonly handlers: Map<string, () => unknown>;
+  };
+  readonly app: { emit(event: string, ...args: unknown[]): boolean };
+};
+
+describe('scaffolded main.ts', () => {
+  const launch = async (): Promise<FakeBunmaska> => {
+    const dir = join(makeTmpDir(), 'demo-app');
+    runInit(dir);
+    const fake = join(dir, 'node_modules', 'bunmaska');
+    mkdirSync(fake, { recursive: true });
+    writeFileSync(
+      join(fake, 'package.json'),
+      '{"name":"bunmaska","type":"module","main":"index.js"}',
+    );
+    writeFileSync(join(fake, 'index.js'), FAKE_BUNMASKA);
+    const bunmaska = (await import(join(fake, 'index.js'))) as FakeBunmaska;
+    await import(join(dir, 'src', 'main.ts'));
+    await Promise.resolve();
+    return bunmaska;
+  };
+
+  test('opens a window with an existing preload once ready and answers ping', async () => {
+    const { calls } = await launch();
+    expect(calls.windows).toHaveLength(1);
+    expect(existsSync(calls.windows[0]?.webPreferences.preload ?? '')).toBe(true);
+    expect(calls.handlers.get('ping')?.()).toBe('pong');
+  });
+
+  test('reopens a window on activate when none is visible (macOS Dock click)', async () => {
+    const { app, calls } = await launch();
+    app.emit('activate', {}, true);
+    expect(calls.windows).toHaveLength(1);
+    app.emit('activate', {}, false);
+    expect(calls.windows).toHaveLength(2);
   });
 });
 

@@ -94,10 +94,15 @@ const createWindow = (): void => {
 
 app.whenReady().then(createWindow);
 
-// On macOS apps usually stay alive until Cmd-Q; elsewhere, quit on last window.
+// On macOS apps usually stay alive until Cmd-Q and reopen a window from the Dock.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+app.on('activate', (_event, hasVisibleWindows) => {
+  if (!hasVisibleWindows) {
+    createWindow();
   }
 });
 `;
