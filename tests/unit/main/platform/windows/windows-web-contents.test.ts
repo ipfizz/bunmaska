@@ -55,4 +55,15 @@ describe('WindowsWebContents', () => {
     createContents();
     expect(warnings).toEqual([]);
   });
+
+  test('a null or non-object exec result is ignored and later results still settle', async () => {
+    const { contents, options } = createContents();
+    const exec = options.messageHandlers.find((handler) => handler.name === 'bunmaskaExec');
+    const pending = contents.executeJavaScript('1 + 1');
+    for (const body of ['null', '1', '"x"']) {
+      expect(() => exec?.onMessage(body)).not.toThrow();
+    }
+    exec?.onMessage(JSON.stringify({ execId: 1, ok: true, result: 2 }));
+    expect(await pending).toBe(2);
+  });
 });

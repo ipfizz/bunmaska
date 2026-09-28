@@ -70,14 +70,14 @@ class WindowsExecResultChannel {
 
   /** Settle the pending exec for the `{ execId, ok, result?, error? }` JSON. */
   deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
+    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string } | null;
     try {
       outcome = JSON.parse(json);
     } catch (error) {
       log.warn('dropping malformed exec result', error);
       return;
     }
-    if (typeof outcome.execId !== 'number') {
+    if (typeof outcome?.execId !== 'number') {
       return;
     }
     const pending = this.#pending.get(outcome.execId);
