@@ -255,11 +255,8 @@ export const scaffoldProject = (
   return written;
 };
 
-/** The directory's base name, or `bunmaska-app` for `.` and empty names. */
-export const deriveProjectName = (dir: string): string => {
-  const base = basename(resolve(dir));
-  return base.length > 0 && base !== '.' ? base : 'bunmaska-app';
-};
+/** The directory's base name, or `bunmaska-app` at the filesystem root. */
+export const deriveProjectName = (dir: string): string => basename(resolve(dir)) || 'bunmaska-app';
 
 export type InitResult = {
   readonly dir: string;

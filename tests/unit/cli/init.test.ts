@@ -153,6 +153,10 @@ describe('deriveProjectName', () => {
   test('uses the directory base name', () => {
     expect(deriveProjectName('/tmp/cool-app')).toBe('cool-app');
   });
+
+  test('falls back to bunmaska-app at the filesystem root', () => {
+    expect(deriveProjectName('/')).toBe('bunmaska-app');
+  });
 });
 
 /** A stand-in `bunmaska` package that records what the scaffolded main.ts does. */
