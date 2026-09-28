@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync, rmSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
@@ -112,6 +113,19 @@ describe('autoUpdater.setFeedURL / getFeedURL', () => {
   test('rejects a malformed url', () => {
     const { updater } = makeUpdater({});
     expect(() => updater.setFeedURL('not a url')).toThrow(/invalid url/i);
+  });
+
+  test('rejects a publicKey that is not a PEM Ed25519 public key', () => {
+    const { updater } = makeUpdater({});
+    const ecKey = generateKeyPairSync('ec', {
+      namedCurve: 'P-256',
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    }).publicKey;
+    for (const publicKey of ['not a pem', KEYS.publicKey.replaceAll('\n', ''), ecKey]) {
+      expect(() => updater.setFeedURL({ url: 'https://feed', publicKey })).toThrow(/Ed25519/);
+    }
+    expect(() => updater.setFeedURL(FEED)).not.toThrow();
   });
 
   test('allows http only for a localhost dev feed', () => {

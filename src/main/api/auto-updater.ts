@@ -10,7 +10,7 @@ import {
   type UpdateManifest,
 } from '../../common/manifest';
 import { type Arch, currentArch as hostArch, currentPlatform } from '../../common/platform';
-import { verifyArtifact } from '../../common/signature';
+import { isEd25519PublicKey, verifyArtifact } from '../../common/signature';
 import { app } from './app';
 import { DEFAULT_APP_VERSION } from './app-metadata';
 import { defaultInstall } from './update-installer';
@@ -192,6 +192,11 @@ export class AutoUpdaterImpl extends EventEmitter {
     if (!isSecureFeedUrl(parsed)) {
       throw new Error(
         `autoUpdater.setFeedURL: refusing a non-HTTPS feed url ${JSON.stringify(opts.url)} (https is required; http is allowed only for localhost)`,
+      );
+    }
+    if (opts.publicKey !== undefined && !isEd25519PublicKey(opts.publicKey)) {
+      throw new Error(
+        'autoUpdater.setFeedURL: publicKey is not a PEM Ed25519 public key (use the update-public-key.pem from bunmaska keygen)',
       );
     }
     this.#feedURL = opts.url;

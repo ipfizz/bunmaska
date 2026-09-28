@@ -22,6 +22,15 @@ export const generateSigningKeyPair = (): SigningKeyPair => {
   return { publicKey, privateKey };
 };
 
+/** Whether `pem` parses as an Ed25519 public key (a mangled PEM would otherwise fail every verify). */
+export const isEd25519PublicKey = (pem: string): boolean => {
+  try {
+    return createPublicKey(pem).asymmetricKeyType === 'ed25519';
+  } catch {
+    return false;
+  }
+};
+
 /** Sign artifact bytes with a PEM private key; returns a base64 detached signature. */
 export const signArtifact = (privateKeyPem: string, message: Uint8Array): string =>
   sign(null, message, createPrivateKey(privateKeyPem)).toString('base64');
