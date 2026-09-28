@@ -53,33 +53,30 @@ export const setSessionBackendForTesting = (fake: SessionBackend | undefined): v
   setForTesting(fake);
 };
 
+/**
+ * Completion handlers arrive on the run-loop pump, so a call before start would hang to its
+ * timeout. A fake backend has no pump, and unit tests must never need a display.
+ */
+const ensureStarted = (): void => {
+  if (!fakeInstalled) {
+    ensureNativeStarted();
+  }
+};
+
 /** Electron's `session.cookies` subset; every method rejects on Windows (no WinCairo API). */
 export class Cookies {
-  /**
-   * Completion handlers arrive on the run-loop pump, so a call before start would hang to its
-   * timeout. A fake backend has no pump, and unit tests must never need a display.
-   */
-  #ensureStarted(): void {
-    if (!fakeInstalled) {
-      ensureNativeStarted();
-    }
-  }
-
   /** All cookies when `filter` is omitted. */
   get(filter: CookieFilter = {}): Promise<Cookie[]> {
-    this.#ensureStarted();
+    ensureStarted();
     return getBackend().getCookies(filter);
   }
 
-  /**
-   * Domain and path derive from `details.url`; an explicit `domain` is dot-prefixed. macOS
-   * cannot persist `httpOnly` (no public NSHTTPCookie key); Linux does.
-   */
+  /** Domain and path derive from `details.url`; an explicit `domain` is dot-prefixed. */
   async set(details: CookieSetDetails): Promise<void> {
     if (typeof details.url !== 'string' || details.url === '') {
       throw new InvalidArgumentError('cookies.set requires a url');
     }
-    this.#ensureStarted();
+    ensureStarted();
     return getBackend().setCookie(cookieFromSetDetails(details));
   }
 
@@ -91,7 +88,7 @@ export class Cookies {
     if (typeof name !== 'string' || name === '') {
       throw new InvalidArgumentError('cookies.remove requires a cookie name');
     }
-    this.#ensureStarted();
+    ensureStarted();
     return getBackend().removeCookie(url, name);
   }
 }
@@ -111,8 +108,20 @@ export class Session {
     this.#userAgent = userAgent;
   }
 
-  /** Clears cache, cookies, local/session storage, IndexedDB, … Rejects on Linux. */
-  clearStorageData(): Promise<void> {
+  /**
+   * Clears all website data on macOS, only cookies and fetch caches on Windows, and rejects on
+   * Linux. A `storages` or `origin` filter rejects rather than widening to everything.
+   */
+  clearStorageData(options?: {
+    readonly origin?: string;
+    readonly storages?: readonly string[];
+  }): Promise<void> {
+    if (options?.origin !== undefined || options?.storages !== undefined) {
+      return Promise.reject(
+        new UnsupportedPlatformError('session.clearStorageData: origin/storages filters'),
+      ); // ponytail: per-type clearing needs a data-type mask on every backend
+    }
+    ensureStarted();
     return getBackend().clearStorageData();
   }
 
