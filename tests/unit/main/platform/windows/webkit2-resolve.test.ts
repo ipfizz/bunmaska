@@ -8,8 +8,8 @@ import {
 
 /**
  * `resolveWindowsEngineDir` decides which WinCairo WebKit directory THIS Windows
- * process loads. Windows ships no system WebKit, so — unlike Linux, where the
- * resolver can fall back to the OS WebKitGTK — every "system" outcome here means
+ * process loads. Windows ships no system WebKit, so (unlike Linux, where the
+ * resolver can fall back to the OS WebKitGTK) every "system" outcome here means
  * "no engine" (`undefined`). It delegates to the cross-platform `resolveEngineWith`,
  * so the precedence (BUNMASKA_WEBKIT_PATH > BUNMASKA_WEBKIT_ID > baked engine.id)
  * and the store layout (`<root>/<id>/lib`) are inherited; these tests pin down the

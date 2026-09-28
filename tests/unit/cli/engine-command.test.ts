@@ -242,7 +242,7 @@ describe('engine install', () => {
     expect(seenUrl).toBe(`https://mirror.example/e/${ID}.tar.zst`);
   });
 
-  test('an already-installed bare id is a no-op — it does not re-download', async () => {
+  test('an already-installed bare id is a no-op: it does not re-download', async () => {
     const root = makeTmpDir();
     await installFromDir(root, makeEngineDir(root, ID));
     const c = capture(root);

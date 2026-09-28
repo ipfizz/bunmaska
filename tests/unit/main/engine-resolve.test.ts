@@ -26,7 +26,7 @@ const resolve = (deps: ResolveDeps) =>
   });
 
 describe('resolveEngineWith', () => {
-  test('BUNMASKA_WEBKIT_PATH wins — explicit pinned dir, highest precedence', () => {
+  test('BUNMASKA_WEBKIT_PATH wins: explicit pinned dir, highest precedence', () => {
     const r = resolve({ env: { BUNMASKA_WEBKIT_PATH: '/opt/webkit/lib' } });
     expect(r.mode).toBe('pinned');
     expect(r.libDir).toBe('/opt/webkit/lib');
@@ -178,7 +178,7 @@ describe('prepareEngineForLoad', () => {
     prepareEngineForLoad(pinned, {}, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
 
-    // A second call (e.g. the other loader) is a no-op — single shared engine.
+    // A second call (e.g. the other loader) is a no-op: single shared engine.
     prepareEngineForLoad(pinned, { LD_LIBRARY_PATH: '/other' }, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
   });
@@ -219,7 +219,7 @@ describe('prepareEngineForLoad', () => {
     expect(links).toEqual([[ROOT, '/opt/MyApp', ID]]);
   });
 
-  test('explicit-dir pin (no id/root) does not link — nothing to refcount', () => {
+  test('explicit-dir pin (no id/root) does not link: nothing to refcount', () => {
     const links: unknown[] = [];
     prepareEngineForLoad(
       { mode: 'pinned', libDir: '/opt/lib', warnings: [] },

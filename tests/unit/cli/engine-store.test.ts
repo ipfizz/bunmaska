@@ -120,7 +120,7 @@ describe('installFromSource', () => {
     expect(existsSync(engineDir(root, ID))).toBe(false);
   });
 
-  test('is idempotent — a second install does not re-extract', async () => {
+  test('is idempotent: a second install does not re-extract', async () => {
     const root = makeTmpDir();
     let extracts = 0;
     const deps = {
@@ -180,7 +180,7 @@ describe('installFromSource', () => {
     expect(isInstalled(root, ID)).toBe(false);
   });
 
-  test('rejects a substituted engine — extracted engine.json id must match the claimed id', async () => {
+  test('rejects a substituted engine: extracted engine.json id must match the claimed id', async () => {
     const root = makeTmpDir();
     // A genuinely-signed OLDER artifact (its engine.json says ID2) served under ID's URL.
     const substituted: InstallSource = {
