@@ -1,8 +1,4 @@
-/**
- * The distributable artifact naming + update-manifest contract, shared by the
- * `bunmaska build` packager (which writes `version.json` beside each artifact) and
- * the runtime `autoUpdater` (which reads a channel feed's `update.json`).
- */
+/** Artifact naming and the `update.json` contract shared by `build --update` and `autoUpdater`. */
 
 import type { Arch } from './platform';
 
@@ -22,10 +18,7 @@ export type ArtifactSpec = {
   readonly arch: Arch;
 };
 
-/**
- * The manifest written to `version.json` beside a build's artifact, and served as
- * a channel's `update.json` feed.
- */
+/** A channel's `update.json`; `update.json.sig` authenticates all of it before any download. */
 export type UpdateManifest = {
   readonly name: string;
   readonly version: string;

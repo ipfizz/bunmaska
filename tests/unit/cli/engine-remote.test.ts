@@ -127,7 +127,7 @@ describe('installFromUrl', () => {
     expect(existsSync(engineDir(root, ID))).toBe(false);
   });
 
-  // The .sig covers the artifact bytes, NOT the .json — so a hostile feed can pair
+  // The .sig covers the artifact bytes, NOT the .json, so a hostile feed can pair
   // a validly-signed artifact with a traversal id. The store guard must still refuse.
   test('rejects a path-traversal id even when the signature is valid', async () => {
     const root = makeTmpDir();

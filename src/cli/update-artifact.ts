@@ -1,7 +1,4 @@
-/**
- * Emits the auto-update feed for a built bundle: a `.tar.zst` of the `.app`/AppDir
- * plus the `update.json` manifest the runtime `autoUpdater` consumes.
- */
+/** `build --update`: the feed's `.tar.zst` and `update.json`, plus a `.sig` for each when signing. */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -26,7 +23,7 @@ export type UpdateArtifactSpec = {
   readonly channel: string;
   readonly os: ArtifactOs;
   readonly arch: Arch;
-  /** PEM Ed25519 private key; when set, a detached `.sig` is written beside the artifact. */
+  /** PEM Ed25519 private key; when set, `.sig`s are written beside the artifact and `update.json`. */
   readonly signingKeyPem?: string;
 };
 

@@ -15,49 +15,29 @@ import { app } from './app';
 import { DEFAULT_APP_VERSION } from './app-metadata';
 import { defaultInstall } from './update-installer';
 
-/**
- * Application self-update — a drop-in subset of Electron's `autoUpdater`, built
- * on the same `version.json` contract `bunmaska build` emits.
- *
- * An {@link EventEmitter} (D023) emitting Electron's event names:
- * `checking-for-update`, `update-available`, `update-not-available`,
- * `update-downloaded` and `error`. The feed must be https. The default installer
- * swaps the bundle via a detached helper script (see `update-installer.ts`);
- * its script generators are unit-tested, but the live swap is the one step the
- * suite does not exercise end to end.
- */
-
 export type FeedURLOptions = {
   readonly url: string;
   /**
-   * PEM Ed25519 public key that every downloaded artifact's detached `.sig` must
-   * verify against. Required to download — unsigned updates are refused. This is
-   * the app publisher's own release key (baked into the app), not a Bunmaska key.
+   * PEM Ed25519 key that `update.json.sig` and `<artifact>.sig` must verify against;
+   * required to download. The publisher's own release key, not a Bunmaska key.
    */
   readonly publicKey?: string;
   /** If set, a manifest whose `channel` differs is rejected (channel confusion). */
   readonly channel?: string;
 };
 
-/**
- * Caps guarding the decompression step against a zip bomb: a tiny signed-looking
- * artifact that expands to gigabytes and OOMs the process. The compressed cap is
- * checked against the declared size before any fetch; the decompressed cap after.
- */
+/** Sanity bounds on publisher-signed input; the download itself is capped at the signed size. */
 export const MAX_COMPRESSED_ARTIFACT_BYTES = 512 * 1024 * 1024;
 export const MAX_DECOMPRESSED_TAR_BYTES = 2 * 1024 * 1024 * 1024;
 
-/** The zip-bomb guard: throws if a byte length exceeds `max`. */
 export const assertSizeWithin = (length: number, max: number, what: string): void => {
   if (length > max) {
     throw new Error(`autoUpdater: ${what} exceeds the ${max}-byte limit (got ${length})`);
   }
 };
 
-/** http is refused for any host but these — dev feeds served from localhost. */
 const LOCAL_FEED_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
 
-/** Transport-secure: https anywhere, http only on localhost. */
 const isSecureFeedUrl = (parsed: URL): boolean =>
   parsed.protocol === 'https:' ||
   (parsed.protocol === 'http:' && LOCAL_FEED_HOSTS.has(parsed.hostname));
@@ -70,7 +50,7 @@ export type UpdateInfo = {
 
 export type StagedUpdate = {
   readonly manifest: UpdateManifest;
-  /** The decompressed `.tar`, alone in a private directory the default installer writes its helper into. */
+  /** The decompressed `.tar`, alone in a private dir the default installer also writes into. */
   readonly tarPath: string;
 };
 
@@ -130,7 +110,7 @@ const httpFetchText = async (url: string): Promise<string> =>
 const httpFetchBytes = async (url: string, maxBytes: number): Promise<Uint8Array> =>
   readFeedResponse(await fetch(url), url, maxBytes);
 
-/** Electron callers fire and forget, relying on the `error` event; awaiting callers still see the rejection. */
+/** Fire-and-forget callers (Electron's pattern) get failures via `error`; awaiters still reject. */
 const markHandled = <T>(promise: Promise<T>): Promise<T> => {
   promise.catch(() => undefined);
   return promise;
@@ -149,7 +129,7 @@ const productionDeps = (): AutoUpdaterDeps => ({
   currentVersion: () => app.getVersion(),
   currentOs: currentPlatform,
   currentArch: hostArch,
-  // Async zstd runs on Bun's threadpool, so a large update never stalls the pumped main thread.
+  // Async zstd runs on Bun's threadpool; a sync decompress would freeze the pumped main thread.
   decompress: async (bytes) => new Uint8Array(await Bun.zstdDecompress(bytes)),
   stage: stageToTmp,
   install: defaultInstall,
@@ -168,11 +148,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     this.#deps = { ...productionDeps(), ...deps };
   }
 
-  /**
-   * Base URL of the channel feed, where `update.json` + artifacts live. Must be
-   * https (http only for localhost) so a plaintext MITM cannot serve a malicious
-   * feed.
-   */
+  /** Base URL of the channel feed; https only, except http on localhost for dev. */
   setFeedURL(options: FeedURLOptions | string): void {
     const opts = typeof options === 'string' ? { url: options } : options;
     if (typeof opts.url !== 'string' || opts.url.length === 0) {
@@ -218,7 +194,7 @@ export class AutoUpdaterImpl extends EventEmitter {
   #requirePublicKey(): string {
     if (this.#publicKey === undefined || this.#publicKey.length === 0) {
       throw new Error(
-        'autoUpdater: no update public key configured; pass { publicKey } to setFeedURL — unsigned updates are refused',
+        'autoUpdater: no update public key configured; pass { publicKey } to setFeedURL (unsigned updates are refused)',
       );
     }
     return this.#publicKey;
@@ -297,12 +273,8 @@ export class AutoUpdaterImpl extends EventEmitter {
   }
 
   /**
-   * Download, verify and stage the update found by the most recent
-   * {@link checkForUpdates}.
-   *
-   * The signature — not the wyhash — is what makes an update trustworthy: a
-   * feed/MITM controls the manifest, so its size + hash are self-referential;
-   * only the publisher's key can produce a valid `.sig`.
+   * Download, verify and stage the update from the last {@link checkForUpdates}.
+   * Trust comes only from the two signatures, never the wyhash (see `common/signature.ts`).
    */
   downloadUpdate(): Promise<StagedUpdate> {
     return markHandled(this.#download());
@@ -357,7 +329,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     }
   }
 
-  /** Throws if no update has been downloaded. See `update-installer.ts` for the default installer. */
+  /** Throws if nothing is downloaded, or if the installer refuses this app's layout. */
   quitAndInstall(): void {
     if (this.#staged === undefined) {
       throw new Error(
@@ -368,6 +340,6 @@ export class AutoUpdaterImpl extends EventEmitter {
   }
 }
 
-/** The application updater singleton — Electron's `autoUpdater`. */
+/** Electron's `autoUpdater` singleton. */
 export const autoUpdater = new AutoUpdaterImpl();
 export type AutoUpdater = AutoUpdaterImpl;

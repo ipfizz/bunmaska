@@ -1,8 +1,6 @@
 /**
- * The default `quitAndInstall` installer: a detached helper script waits for the
- * app to exit, extracts the staged tar into a TEMP SIBLING of the install root,
- * rename-swaps it into place (a half-extract can never brick the installed
- * app), relaunches, and deletes itself.
+ * The default `quitAndInstall`: a detached helper extracts into a sibling of the install
+ * root and rename-swaps it in, so a half-finished extract can never brick the installed app.
  */
 
 import { chmodSync, writeFileSync } from 'node:fs';
@@ -12,11 +10,7 @@ import { currentPlatform } from '../../common/platform';
 import { app } from './app';
 import type { StagedUpdate } from './auto-updater';
 
-/**
- * Where the running app is installed, derived from the executable path;
- * `undefined` means "not an installed bundle" (e.g. `bun main.ts`) and the
- * installer must refuse rather than swap a guessed directory.
- */
+/** The bundle root around `execPath`, or `undefined` (e.g. `bun main.ts`): never swap a guessed dir. */
 export const deriveInstallRoot = (execPath: string, os: ArtifactOs): string | undefined => {
   if (os === 'macos') {
     // build-macos layout: <Name>.app/Contents/MacOS/<Name>
@@ -85,7 +79,7 @@ export const buildShInstallScript = (spec: ShInstallSpec): string => {
   return [
     '#!/bin/sh',
     '# bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
-    // Every failure path relaunches the old app; a failed update must not leave the user with none.
+    // Every failure relaunches the old app; a failed update must not leave the user with none.
     `fail() { rm -rf ${staging}; ${relaunch} & exit 1; }`,
     `while kill -0 ${spec.pid} 2>/dev/null; do sleep 0.5; done`,
     `rm -rf ${staging} ${old}`,
@@ -158,7 +152,7 @@ export type InstallerDeps = {
   readonly quit: () => void;
 };
 
-/** Write + spawn the helper for a staged update, then quit; refuses un-bundled layouts. */
+/** Writes and spawns the helper, then quits; throws, without quitting, for an unswappable layout. */
 export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): void => {
   const os = deps.os();
   const execPath = deps.execPath();
