@@ -98,7 +98,9 @@ export class App extends EventEmitter {
       return;
     }
     this.#ready = true;
-    this.emit('ready');
+    // Deferred like Electron's post-first-tick `ready`: a listener added later this
+    // tick still fires, and a throwing listener cannot abort the backend's start().
+    queueMicrotask(() => this.emit('ready'));
   }
 
   /**

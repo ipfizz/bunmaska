@@ -69,7 +69,7 @@ describe('App.isReady', () => {
 });
 
 describe('App.markReady', () => {
-  test('emits ready exactly once when called multiple times', () => {
+  test('emits ready exactly once when called multiple times', async () => {
     const a = new App();
     let calls = 0;
     a.on('ready', () => {
@@ -78,26 +78,40 @@ describe('App.markReady', () => {
     a.markReady();
     a.markReady();
     a.markReady();
+    await Promise.resolve();
     expect(calls).toBe(1);
   });
 
-  test('fires handlers registered before markReady', () => {
+  test('emits ready after markReady returns, not inside it', async () => {
     const a = new App();
+    const order: string[] = [];
+    a.on('ready', () => order.push('ready'));
+    a.markReady();
+    order.push('returned');
+    await Promise.resolve();
+    expect(order).toEqual(['returned', 'ready']);
+  });
+
+  test('fires a handler registered in the same tick as markReady', async () => {
+    const a = new App();
+    a.markReady();
     let fired = false;
     a.on('ready', () => {
       fired = true;
     });
-    a.markReady();
+    await Promise.resolve();
     expect(fired).toBe(true);
   });
 
-  test('does not fire handlers registered after markReady', () => {
+  test('does not fire handlers registered after ready was emitted', async () => {
     const a = new App();
     a.markReady();
+    await Promise.resolve();
     let fired = false;
     a.on('ready', () => {
       fired = true;
     });
+    await Promise.resolve();
     expect(fired).toBe(false);
   });
 });
