@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
@@ -7,22 +14,26 @@ import { bundlePreloadAssets, copyAppAssets, isRuntimeAsset } from '../../../src
 
 describe('isRuntimeAsset', () => {
   test('keeps page, preload, styles, images and data', () => {
-    expect(isRuntimeAsset('index.html')).toBe(true);
-    expect(isRuntimeAsset('preload.js')).toBe(true);
-    expect(isRuntimeAsset('styles.css')).toBe(true);
-    expect(isRuntimeAsset('icon.png')).toBe(true);
-    expect(isRuntimeAsset('data.json')).toBe(true);
+    for (const name of ['index.html', 'preload.js', 'styles.css', 'icon.PNG', 'data.json']) {
+      expect(isRuntimeAsset(name)).toBe(true);
+    }
   });
 
-  test('excludes TypeScript sources (compiled into the binary)', () => {
-    expect(isRuntimeAsset('main.ts')).toBe(false);
-    expect(isRuntimeAsset('component.tsx')).toBe(false);
-    expect(isRuntimeAsset('mod.mts')).toBe(false);
-    expect(isRuntimeAsset('mod.cts')).toBe(false);
-  });
-
-  test('excludes node_modules', () => {
-    expect(isRuntimeAsset('node_modules')).toBe(false);
+  test('rejects sources, keys, lockfiles and build outputs', () => {
+    for (const name of [
+      'main.ts',
+      'component.tsx',
+      'update-signing-key.pem',
+      'app.key',
+      'cert.p12',
+      'bun.lock',
+      'App-linux-x64.tar.gz',
+      'app_1.0.0_amd64.deb',
+      'app-stable-macos-arm64.tar.zst',
+      'node_modules',
+    ]) {
+      expect(isRuntimeAsset(name)).toBe(false);
+    }
   });
 });
 
@@ -45,6 +56,37 @@ describe('copyAppAssets', () => {
     expect(existsSync(join(destination, 'preload.js'))).toBe(true);
     expect(existsSync(join(destination, 'main.ts'))).toBe(false);
     expect(existsSync(join(destination, 'eval.ts'))).toBe(false);
+  });
+
+  test('never ships keys, dotfiles, nested sources or earlier build outputs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bunmaska-assets-'));
+    const destination = join(root, 'out');
+    mkdirSync(join(root, 'lib', '.cache'), { recursive: true });
+    mkdirSync(join(root, 'node_modules', 'x'), { recursive: true });
+    mkdirSync(destination, { recursive: true });
+    for (const name of [
+      'main.ts',
+      'index.html',
+      'update-signing-key.pem',
+      '.env',
+      'bun.lock',
+      'App-linux-x64.tar.gz',
+      'lib/secret.ts',
+      'lib/style.css',
+      'lib/.cache/page.html',
+      'node_modules/x/index.js',
+    ]) {
+      writeFileSync(join(root, name), 'x');
+    }
+
+    const copied = copyAppAssets(join(root, 'main.ts'), destination).sort();
+
+    expect(copied).toEqual(['index.html', 'lib']);
+    expect(readdirSync(destination, { recursive: true }).sort()).toEqual([
+      'index.html',
+      'lib',
+      join('lib', 'style.css'),
+    ]);
   });
 
   test('returns empty when the entry directory is absent', () => {
