@@ -1,14 +1,17 @@
 import { type FFIFunction, FFIType } from 'bun:ffi';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { StoreEnv } from '../../../cli/engine-store';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import {
   type EngineResolution,
+  engineEnv,
   engineLibPath,
   prepareEngineForLoad,
   resolveEngine,
 } from '../../engine/resolve';
+import { cstr } from '../cstr';
 import { dlopen, type NarrowLibrary } from '../dlopen';
 
 /**
@@ -27,6 +30,10 @@ import { dlopen, type NarrowLibrary } from '../dlopen';
  */
 
 const LIBGLIB_PATH = 'libglib-2.0.so.0';
+const LIBC_PATH = 'libc.so.6';
+const LIBC_FFI_SYMBOLS = {
+  setenv: { args: [FFIType.cstring, FFIType.cstring, FFIType.i32], returns: FFIType.i32 },
+} as const;
 
 /** The path to dlopen for `soname`: the pinned engine's bundled copy when it has one, else the bare soname. */
 export const linuxLibPath = (
@@ -48,6 +55,22 @@ export const linuxLibPath = (
   return soname;
 };
 
+/** Copy the pinned engine's env exports into the C environment: Bun's `process.env` writes never reach `getenv`. */
+export const exportEngineEnv = (
+  engine: EngineResolution,
+  env: StoreEnv,
+  setenv: (name: string, value: string) => void,
+): void => {
+  for (const name of Object.keys(engineEnv(engine, env))) {
+    const value = env[name];
+    if (value !== undefined) {
+      setenv(name, value);
+    }
+  }
+};
+
+const nativeEnv = { exported: false };
+
 /**
  * `dlopen` for every Linux loader. A pinned engine must supply GLib, GTK and the rest of its
  * closure to the whole process: a bare-soname load of any of them first binds the system copy,
@@ -59,6 +82,12 @@ export const dlopenLinux = <Fns extends Record<string, FFIFunction>>(
 ): NarrowLibrary<Fns> => {
   const engine = resolveEngine();
   prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
+  if (!nativeEnv.exported) {
+    nativeEnv.exported = true;
+    exportEngineEnv(engine, process.env, (name, value) => {
+      dlopen(LIBC_PATH, LIBC_FFI_SYMBOLS).symbols.setenv(cstr(name), cstr(value), 1);
+    });
+  }
   return dlopen(linuxLibPath(engine, soname), symbols);
 };
 
