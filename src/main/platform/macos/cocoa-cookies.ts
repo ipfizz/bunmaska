@@ -116,40 +116,46 @@ export const getCookies = (filter: CookieFilter): Promise<Cookie[]> =>
     });
   });
 
-/**
- * Store one cookie via `cookieWithProperties:` + `setCookie:completionHandler:`.
- * `httpOnly` is accepted but NOT persisted: NSHTTPCookie exposes no public
- * HttpOnly property key, so the flag is read-only on macOS.
- */
+/** Build an autoreleased `NSHTTPCookie` for `cookie`, or `0n` when Foundation rejects it. */
+export const nsHTTPCookie = (cookie: Cookie): Handle => {
+  const rt = cocoa();
+  const dict = rt.msgSend(rt.classes.get('NSMutableDictionary'), rt.selectors.get('dictionary'));
+  const setProperty = (key: string, value: Handle): void => {
+    msgSendPtrPtr(dict, rt.selectors.get('setObject:forKey:'), value, nsString(key));
+  };
+  setProperty('Name', nsString(cookie.name));
+  setProperty('Value', nsString(cookie.value));
+  setProperty('Domain', nsString(cookie.domain));
+  setProperty('Path', nsString(cookie.path));
+  // Electron defaults sameSite to lax; the key and value are NSHTTPCookieSameSitePolicy/Lax.
+  setProperty('SameSite', nsString('lax'));
+  if (cookie.secure) {
+    setProperty('Secure', nsString('TRUE'));
+  }
+  if (cookie.httpOnly) {
+    setProperty('HttpOnly', nsString('TRUE'));
+  }
+  if (cookie.expirationDate !== undefined) {
+    setProperty(
+      'Expires',
+      msgSendF64(
+        rt.classes.get('NSDate'),
+        rt.selectors.get('dateWithTimeIntervalSince1970:'),
+        cookie.expirationDate,
+      ),
+    );
+  }
+  return msgSendPtr(
+    rt.classes.get('NSHTTPCookie'),
+    rt.selectors.get('cookieWithProperties:'),
+    dict,
+  );
+};
+
 export const setCookie = (cookie: Cookie): Promise<void> =>
   bounded('cookies.set', (resolve, reject) => {
     const rt = cocoa();
-    const dict = rt.msgSend(rt.classes.get('NSMutableDictionary'), rt.selectors.get('dictionary'));
-    const setProperty = (key: string, value: Handle): void => {
-      msgSendPtrPtr(dict, rt.selectors.get('setObject:forKey:'), value, nsString(key));
-    };
-    setProperty('Name', nsString(cookie.name));
-    setProperty('Value', nsString(cookie.value));
-    setProperty('Domain', nsString(cookie.domain));
-    setProperty('Path', nsString(cookie.path));
-    if (cookie.secure) {
-      setProperty('Secure', nsString('TRUE'));
-    }
-    if (cookie.expirationDate !== undefined) {
-      setProperty(
-        'Expires',
-        msgSendF64(
-          rt.classes.get('NSDate'),
-          rt.selectors.get('dateWithTimeIntervalSince1970:'),
-          cookie.expirationDate,
-        ),
-      );
-    }
-    const nsCookie = msgSendPtr(
-      rt.classes.get('NSHTTPCookie'),
-      rt.selectors.get('cookieWithProperties:'),
-      dict,
-    );
+    const nsCookie = nsHTTPCookie(cookie);
     if (nsCookie === 0n) {
       reject(
         new InvalidArgumentError('cookies.set: NSHTTPCookie rejected the properties (empty name?)'),
