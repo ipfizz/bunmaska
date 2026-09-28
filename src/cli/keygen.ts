@@ -5,7 +5,7 @@
 
 import { lstatSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { generateSigningKeyPair } from './engine-signature';
+import { generateSigningKeyPair } from '../common/signature';
 
 /** Fixed file names so docs and build flags can reference them verbatim. */
 export const PRIVATE_KEY_FILE = 'update-signing-key.pem';

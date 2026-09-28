@@ -5,8 +5,8 @@
  */
 
 import { BunmaskaError } from '../common/errors';
+import { verifyArtifact } from '../common/signature';
 import { installFromSource, type InstallResult } from './engine-store';
-import { verifyArtifact } from './engine-signature';
 
 /**
  * The official feed. A self-hosted mirror overrides it via `bunmaska.config`
