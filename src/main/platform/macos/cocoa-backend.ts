@@ -26,7 +26,7 @@ import type {
 import { windowControlsScript } from '../window-controls';
 import * as cocoaApp from './cocoa-app';
 import { createAppDelegate } from './cocoa-app-delegate';
-import { cancelOneShotBlock, makeOneShotBlock } from './cocoa-block';
+import { makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import { cancelMenuTracking, popUpMenu } from './cocoa-menu';
@@ -382,8 +382,8 @@ class MacOSWebContents implements NativeWebContents {
       return Promise.reject(new Error('printToPDF failed: web contents destroyed'));
     }
     return new Promise<Uint8Array>((resolve, reject) => {
+      // WebKit still calls the block later (nil on close), so a timeout only rejects.
       const timer = setTimeout(() => {
-        cancelOneShotBlock(block);
         reject(new Error(`printToPDF timed out after ${RENDER_TIMEOUT_MS}ms`));
       }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
@@ -418,7 +418,6 @@ class MacOSWebContents implements NativeWebContents {
     }
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
-        cancelOneShotBlock(block);
         reject(new Error(`capturePage timed out after ${RENDER_TIMEOUT_MS}ms`));
       }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(

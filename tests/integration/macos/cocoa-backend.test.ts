@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
+import { retainedBlockCount } from '../../../src/main/platform/macos/cocoa-block';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -146,6 +147,40 @@ if (currentPlatform() === 'macos') {
         expect([...png.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
       } finally {
         app.quit();
+      }
+    });
+
+    test('a timed-out render keeps its completion block alive until WebKit calls it', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      const win = app.createWindow({ width: 320, height: 240, title: 't', show: true });
+      win.webContents.loadHTML('<p>render</p>', 'about:blank');
+      await waitFor(() => win.webContents.getURL() === 'about:blank');
+      // Let earlier tests' fired blocks finish their deferred cleanup before counting.
+      await delay(50);
+      // No pump while timers are faked, so WebKit cannot complete the render first.
+      app.quit();
+      const pump = createMacOSApplication();
+      const baseline = retainedBlockCount();
+      jest.useFakeTimers();
+      try {
+        const pdf = win.webContents.printToPDF();
+        const png = win.webContents.capturePage();
+        jest.advanceTimersByTime(30_001);
+        await expect(pdf).rejects.toThrow(/timed out/);
+        await expect(png).rejects.toThrow(/timed out/);
+        jest.advanceTimersByTime(10);
+        expect(retainedBlockCount()).toBe(baseline + 2);
+      } finally {
+        jest.useRealTimers();
+      }
+      pump.start();
+      try {
+        win.destroy();
+        await waitFor(() => retainedBlockCount() === baseline);
+        expect(retainedBlockCount()).toBe(baseline);
+      } finally {
+        pump.quit();
       }
     });
 
