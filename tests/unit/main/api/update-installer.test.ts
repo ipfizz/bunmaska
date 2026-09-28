@@ -62,7 +62,15 @@ describe('deriveInstallRoot', () => {
 
   test('Windows: the portable dir is the executable directory, never a root', () => {
     expect(deriveInstallRoot('/apps/Demo/Demo.exe', 'windows')).toBe('/apps/Demo');
+    expect(deriveInstallRoot('/apps/Demo/demo.EXE', 'windows')).toBe('/apps/Demo');
     expect(deriveInstallRoot('/Demo.exe', 'windows')).toBeUndefined();
+  });
+
+  test('Windows: refuses a dev runner or any dir not laid out as <Name>/<Name>.exe', () => {
+    expect(deriveInstallRoot('C:/Users/u/.bun/bin/bun.exe', 'windows')).toBeUndefined();
+    expect(deriveInstallRoot('C:/tools/bun/bun.exe', 'windows')).toBeUndefined();
+    expect(deriveInstallRoot('C:/tools/node/node.exe', 'windows')).toBeUndefined();
+    expect(deriveInstallRoot('C:/Users/u/Downloads/Demo.exe', 'windows')).toBeUndefined();
   });
 });
 

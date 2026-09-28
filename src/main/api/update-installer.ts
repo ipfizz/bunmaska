@@ -44,9 +44,18 @@ export const deriveInstallRoot = (execPath: string, os: ArtifactOs): string | un
     }
     return rootDir;
   }
-  // build-windows layout: the portable dir holds the exe; refuse a drive root.
+  // build-windows layout: <Name>/<Name>.exe. Anything else (bun.exe in its
+  // toolchain dir, a drive root) would get moved aside and deleted by the swap.
   const rootDir = dirname(execPath);
-  return dirname(rootDir) === rootDir ? undefined : rootDir;
+  const exeStem = basename(execPath).replace(/\.exe$/i, '');
+  if (
+    dirname(rootDir) === rootDir ||
+    /^(bun|node)$/i.test(exeStem) ||
+    exeStem.toLowerCase() !== basename(rootDir).toLowerCase()
+  ) {
+    return undefined;
+  }
+  return rootDir;
 };
 
 /** Top-level dir inside the update tar; mirrors `bunmaska build`'s bundle names. */
