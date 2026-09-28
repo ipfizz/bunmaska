@@ -92,6 +92,52 @@ describe('parseAccelerator', () => {
     expect(onMac('CmdOrCtrl+Return')?.key).toBe('Return');
   });
 
+  test('accepts every key name in Electron keyboard-shortcuts.md', () => {
+    const electronKeys = [
+      ...'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      'F1',
+      'F24',
+      ...')!@#$%^&*(:;=<,_->.?/~`{][|\\}"',
+      'Plus',
+      'Space',
+      'Tab',
+      'Capslock',
+      'Numlock',
+      'Scrolllock',
+      'Backspace',
+      'Delete',
+      'Insert',
+      'Return',
+      'Enter',
+      'Up',
+      'Down',
+      'Left',
+      'Right',
+      'Home',
+      'End',
+      'PageUp',
+      'PageDown',
+      'Escape',
+      'Esc',
+      'VolumeUp',
+      'VolumeDown',
+      'VolumeMute',
+      'MediaNextTrack',
+      'MediaPreviousTrack',
+      'MediaStop',
+      'MediaPlayPause',
+      'PrintScreen',
+      'num0',
+      'num9',
+      'numdec',
+      'numadd',
+      'numsub',
+      'nummult',
+      'numdiv',
+    ];
+    expect(electronKeys.filter((key) => onMac(`Shift+${key}`) === undefined)).toEqual([]);
+  });
+
   test('returns undefined for an empty string', () => {
     expect(onMac('')).toBeUndefined();
   });
