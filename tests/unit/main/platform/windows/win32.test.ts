@@ -2,13 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { ptr } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
-import {
-  NULL_HANDLE,
-  readRect,
-  type WinHandle,
-  winLibraryAccessor,
-  wstr,
-} from '../../../../../src/main/platform/windows/win32';
+import { readRect, winLibraryAccessor, wstr } from '../../../../../src/main/platform/windows/win32';
 
 describe('wstr', () => {
   test('null-terminates with a UTF-16 (two-byte) NUL', () => {
@@ -44,13 +38,6 @@ describe('readRect', () => {
   test('turns a RECT (left, top, right, bottom) at an offset into x/y/width/height', () => {
     const buffer = new Int32Array([7, 7, -30, 110, 220, 330]);
     expect(readRect(ptr(buffer), 8)).toEqual({ x: -30, y: 110, width: 250, height: 220 });
-  });
-});
-
-describe('NULL_HANDLE', () => {
-  test('is the zero bigint handle', () => {
-    const handle: WinHandle = NULL_HANDLE;
-    expect(handle).toBe(0n);
   });
 });
 

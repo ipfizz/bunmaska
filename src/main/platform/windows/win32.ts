@@ -12,11 +12,6 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import type { Rect } from '../native';
 
-/** Opaque pointer-width Win32 handle (`HWND`/`HMENU`/`HINSTANCE`/...). */
-export type WinHandle = bigint;
-
-export const NULL_HANDLE: WinHandle = 0n;
-
 /**
  * Encode a JS string as a null-terminated UTF-16LE byte sequence suitable for a
  * Win32 wide-character (`LPCWSTR`) argument — the `wstr` sibling of {@link cstr}.
