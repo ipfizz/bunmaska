@@ -47,8 +47,6 @@ export const guarded =
 
 /** ABI shape for `GtkWindow::close-request`: `(self, user_data) -> gboolean`. */
 export const CLOSE_REQUEST_CB_DEF = { args: ['ptr', 'ptr'], returns: 'i32' } as const;
-/** ABI shape for `GtkWidget::destroy`: `(self, user_data) -> void`. */
-export const DESTROY_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
 /** ABI shape for `WebKitWebView::load-changed`: `(self, load_event, user_data) -> void`. */
 export const LOAD_CHANGED_CB_DEF = { args: ['ptr', 'i32', 'ptr'], returns: 'void' } as const;
 /** ABI shape for `WebKitWebView::load-failed`: `(self, load_event, uri, error, user_data) -> gboolean`. */
@@ -103,15 +101,6 @@ export const makeNotifyCallback = (onNotify: () => void): JSCallback =>
     }, undefined),
     NOTIFY_CB_DEF,
   );
-
-/**
- * `GtkWidget::destroy` handler. Fires `onClosed` bookkeeping + drops retained
- * refs; performs no further GTK calls on self.
- */
-export const makeDestroyCallback = (onClosed: () => void): JSCallback =>
-  new JSCallback((_self: Pointer, _userData: Pointer): void => {
-    onClosed();
-  }, DESTROY_CB_DEF);
 
 /**
  * `load-changed` + `load-failed` handlers sharing one failed flag: WebKitGTK always
@@ -280,11 +269,6 @@ export class SignalRegistry {
     const connection = connectSignal(instance, detailedSignal, callback);
     this.#connections.push({ instance, connection });
     return connection;
-  }
-
-  /** The number of retained connections (for tests + teardown bookkeeping). */
-  get size(): number {
-    return this.#connections.length;
   }
 
   /**

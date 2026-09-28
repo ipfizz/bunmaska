@@ -46,18 +46,18 @@ export type WebViewIpcOptions = {
   /** The preload bridge source injected at document-start in the isolated world. */
   readonly preloadSource: string;
   readonly userPreloadSource?: string;
-  readonly isolatedSetupSource?: string;
-  readonly isolatedHostSource?: string;
-  readonly pageWorldSource?: string;
+  readonly isolatedSetupSource: string;
+  readonly isolatedHostSource: string;
+  readonly pageWorldSource: string;
   /** Called with each JSON envelope the renderer posts. */
   readonly onMessage: (json: string) => void;
   /**
    * Called with each JSON `{ execId, ok, result?, error? }` the page-world
    * `executeJavaScript` wrapper posts to the `bunmaskaExec` handler. Optional.
    */
-  readonly onExecMessage?: (json: string) => void;
+  readonly onExecMessage: (json: string) => void;
   /** Called when the page-world dom-ready script fires (DOMContentLoaded). Optional. */
-  readonly onDomReady?: () => void;
+  readonly onDomReady: () => void;
 };
 
 const requirePointer = (ptr: Pointer | null, what: string): Pointer => {
@@ -125,50 +125,39 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   // JSCallback is retained in the SAME registry so it is closed on window
   // teardown — NEVER per-call (closing a JSCallback mid-invocation frees its
   // native trampoline). Connect the detailed signal BEFORE registering (race).
-  if (options.onExecMessage !== undefined) {
-    const execCallback = makeScriptMessageCallback(options.onExecMessage);
-    registry.connect(ucm, EXEC_SIGNAL, execCallback);
-    webkit.symbols.webkit_user_content_manager_register_script_message_handler(
-      ucm,
-      cstr(EXEC_HANDLER_NAME),
-      null,
-    );
-  }
+  registry.connect(ucm, EXEC_SIGNAL, makeScriptMessageCallback(options.onExecMessage));
+  webkit.symbols.webkit_user_content_manager_register_script_message_handler(
+    ucm,
+    cstr(EXEC_HANDLER_NAME),
+    null,
+  );
 
   // Page-world dom-ready handler: the injected script posts here on
   // DOMContentLoaded. Same retain/connect-before-register discipline as exec.
-  if (options.onDomReady !== undefined) {
-    const onDomReady = options.onDomReady;
-    const domReadyCallback = makeScriptMessageCallback(() => onDomReady());
-    registry.connect(ucm, `script-message-received::${DOM_READY_HANDLER_NAME}`, domReadyCallback);
-    webkit.symbols.webkit_user_content_manager_register_script_message_handler(
-      ucm,
-      cstr(DOM_READY_HANDLER_NAME),
-      null,
-    );
-  }
+  registry.connect(
+    ucm,
+    `script-message-received::${DOM_READY_HANDLER_NAME}`,
+    makeScriptMessageCallback(() => options.onDomReady()),
+  );
+  webkit.symbols.webkit_user_content_manager_register_script_message_handler(
+    ucm,
+    cstr(DOM_READY_HANDLER_NAME),
+    null,
+  );
 
   // Isolated world: channel-id setup (if any) BEFORE the bridge, then the
   // bridge, then the contextBridge host (installs exposeInMainWorld), then the
   // user preload (so it can call exposeInMainWorld).
-  if (options.isolatedSetupSource !== undefined) {
-    addUserScript(ucm, options.isolatedSetupSource);
-  }
+  addUserScript(ucm, options.isolatedSetupSource);
   addUserScript(ucm, options.preloadSource);
-  if (options.isolatedHostSource !== undefined) {
-    addUserScript(ucm, options.isolatedHostSource);
-  }
+  addUserScript(ucm, options.isolatedHostSource);
   if (options.userPreloadSource !== undefined) {
     addUserScript(ucm, options.userPreloadSource);
   }
   // Page/main world: the cross-world contextBridge stub (Phase B).
-  if (options.pageWorldSource !== undefined) {
-    addPageWorldScript(ucm, options.pageWorldSource);
-  }
+  addPageWorldScript(ucm, options.pageWorldSource);
   // Page/main world: the dom-ready notifier (posts on DOMContentLoaded).
-  if (options.onDomReady !== undefined) {
-    addPageWorldScript(ucm, generateDomReadyScript());
-  }
+  addPageWorldScript(ucm, generateDomReadyScript());
 
   const view = requirePointer(
     gobject.symbols.g_object_new(

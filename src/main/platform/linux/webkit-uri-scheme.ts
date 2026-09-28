@@ -30,28 +30,6 @@ const retainedCallbacks = new Set<JSCallback>();
 /** Schemes already registered on the (single, default) context — dedup guard. */
 const registeredSchemes = new Set<string>();
 
-/**
- * The dispatcher the callback uses to serve a URI. Defaults to the live
- * {@link protocol.dispatch}; overridable for unit tests.
- */
-let dispatcher: (url: string) => BuiltProtocolResponse | undefined = protocol.dispatch;
-
-/** Override the URI dispatcher. Test-only. */
-export const setUriSchemeDispatcherForTesting = (
-  fake: ((url: string) => BuiltProtocolResponse | undefined) | undefined,
-): void => {
-  dispatcher = fake ?? protocol.dispatch;
-};
-
-/** Reset the registration guard + drop retained callbacks. Test-only. */
-export const resetUriSchemeRegistryForTesting = (): void => {
-  for (const callback of retainedCallbacks) {
-    callback.close();
-  }
-  retainedCallbacks.clear();
-  registeredSchemes.clear();
-};
-
 /** Read the (transfer-none) request URI as a JS string. */
 const requestUri = (request: Pointer): string => {
   const webkit = loadWebKitGtkFFI();
@@ -127,7 +105,7 @@ const finishWithBytes = (request: Pointer, built: BuiltProtocolResponse): void =
 export const handleUriSchemeRequest = (request: Pointer): void => {
   try {
     const url = requestUri(request);
-    const built = dispatcher(url);
+    const built = protocol.dispatch(url);
     if (built === undefined) {
       finishError(request);
       return;
