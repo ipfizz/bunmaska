@@ -259,7 +259,7 @@ const PixelBlast: FC<PixelBlastProps> = ({
   color = '#e0a019',
   className,
   style,
-  antialias = true,
+  antialias = false,
   patternScale = 2,
   patternDensity = 1,
   pixelSizeJitter = 0,
@@ -285,12 +285,7 @@ const PixelBlast: FC<PixelBlastProps> = ({
 
     if (!threeRef.current) {
       const canvas = document.createElement('canvas');
-      const renderer = new THREE.WebGLRenderer({
-        canvas,
-        antialias,
-        alpha: true,
-        powerPreference: 'high-performance',
-      });
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias, alpha: true });
       renderer.domElement.style.width = '100%';
       renderer.domElement.style.height = '100%';
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
