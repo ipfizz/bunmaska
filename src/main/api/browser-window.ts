@@ -85,11 +85,14 @@ export class BrowserWindow extends EventEmitter {
     ensureNativeStarted();
     if (process.env['BUNMASKA_DEV'] === '1' && !devReloadInstalled) {
       devReloadInstalled = true;
-      startDevReload(() => {
-        for (const window of BrowserWindow.getAllWindows()) {
-          window.webContents.reload();
-        }
-      });
+      startDevReload(
+        () => {
+          for (const window of BrowserWindow.getAllWindows()) {
+            window.webContents.reload();
+          }
+        },
+        () => app.quit(),
+      );
     }
     this.id = nextId;
     nextId += 1;
