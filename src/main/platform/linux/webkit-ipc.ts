@@ -68,11 +68,7 @@ const requirePointer = (ptr: Pointer | null, what: string): Pointer => {
   return ptr;
 };
 
-/**
- * Build a `WebKitUserScript` from `source` for the named isolated world and add
- * it to the manager at document-start in all frames. The manager takes its own
- * ref on the script, so it need not be retained here.
- */
+/** Add `source` to the isolated `BunmaskaPreload` world at document-start. */
 const addUserScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
   const script = webkit.symbols.webkit_user_script_new_for_world(
@@ -83,7 +79,7 @@ const addUserScript = (ucm: Pointer, source: string): void => {
     null,
     null,
   );
-  webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script'));
+  webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script')); // ponytail: our script ref leaks; unref needs webkit_user_script_unref in webkitgtk-ffi
 };
 
 const addPageWorldScript = (ucm: Pointer, source: string): void => {
@@ -95,7 +91,7 @@ const addPageWorldScript = (ucm: Pointer, source: string): void => {
     null,
     null,
   );
-  webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script'));
+  webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script')); // ponytail: our script ref leaks; unref needs webkit_user_script_unref in webkitgtk-ffi
 };
 
 /**

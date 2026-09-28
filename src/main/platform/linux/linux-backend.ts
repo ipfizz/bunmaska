@@ -23,6 +23,7 @@ import type {
 } from '../native';
 import { windowControlsScript } from '../window-controls';
 import { ExecResultChannel } from './eval-js';
+import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkFFI } from './gtk-ffi';
 import { getCurrentAppMenu, getMenuEntry, realizeForWindow, onAppMenuCleared } from './gtk-menu';
 import { loadGtkMenuFFI } from './gtk-menu-ffi';
@@ -62,6 +63,7 @@ const GTK_ORIENTATION_VERTICAL = 1;
  */
 class LinuxWebContents implements NativeWebContents {
   readonly #view: Pointer;
+  readonly #ucm: Pointer;
   readonly #registry: SignalRegistry;
   readonly #exec = new ExecResultChannel((source) => evalInPageWorld(this.#view, source));
   #destroyed = false;
@@ -96,6 +98,7 @@ class LinuxWebContents implements NativeWebContents {
       },
     });
     this.#view = wired.view;
+    this.#ucm = wired.ucm;
     this.#registry = wired.registry;
     // Wire every custom scheme registered via `protocol.handle` onto THIS view's
     // WebKitWebContext before any load, so `app://…` loads are served. Each
@@ -150,6 +153,9 @@ class LinuxWebContents implements NativeWebContents {
     this.#destroyed = true;
     this.#exec.destroy();
     this.#registry.disconnectAll();
+    // Deferred: close() can run inside this manager's own script-message emission.
+    const ucm = this.#ucm;
+    setTimeout(() => loadGObjectFFI().symbols.g_object_unref(ucm), 0);
   }
 
   loadURL(url: string): void {
