@@ -1,8 +1,6 @@
 /**
- * The preload bootstrap: `globalThis.__bunmaska`, the low-level bridge injected
- * into every page at document-start, that `ipcRenderer` / `contextBridge` build on.
- * Authored as a plain-JS string (never a stringified TS function) so the exact text
- * reaches the page's JS engine with no transpilation in between.
+ * `globalThis.__bunmaska`, the document-start bridge `ipcRenderer` and `contextBridge` build on.
+ * Plain-JS text, never a stringified TS function, so no transpiler rewrites what is injected.
  */
 
 const BOOTSTRAP_SOURCE = `(function () {
@@ -39,7 +37,7 @@ const BOOTSTRAP_SOURCE = `(function () {
     }
   }
 
-  var nextId = Math.floor(Math.random() * 0x1fffffffffff) + 1; // ponytail: random base so a pre-reload reply misses; add an envelope nonce if one still lands
+  var nextId = Math.floor(Math.random() * 0x1fffffffffff) + 1; // ponytail: random base per document; envelope nonce if replies still cross
   var pending = new Map();
   var listeners = new Map();
 
@@ -108,13 +106,11 @@ const BOOTSTRAP_SOURCE = `(function () {
         for (var i = 0; i < snapshot.length; i += 1) {
           var record = snapshot[i];
           var current = listeners.get(env.channel) || [];
-          // Skip records removed (by removeListener/removeAllListeners) earlier
-          // in this same dispatch.
+          // Skip records removed earlier in this same dispatch.
           if (current.indexOf(record) === -1) {
             continue;
           }
-          // once-listeners are removed BEFORE firing so a re-entrant dispatch
-          // cannot invoke them a second time.
+          // Remove a once BEFORE firing so a re-entrant dispatch cannot fire it twice.
           if (record.once) {
             current.splice(current.indexOf(record), 1);
           }

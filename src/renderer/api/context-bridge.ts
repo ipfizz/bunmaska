@@ -6,14 +6,7 @@ import {
   installCrossWorldHost,
 } from './cross-world-bridge';
 
-/**
- * Renderer-side `contextBridge`, with real context isolation. The preload runs in
- * a dedicated isolated JS world (`WKContentWorld 'BunmaskaPreload'` on macOS, the
- * `BunmaskaPreload` named world on Linux) that page scripts cannot see, so
- * `exposeInMainWorld` cannot just freeze `api` onto the isolated global — it
- * installs a cross-world host over a shared-`document` CustomEvent channel. That
- * channel's LIMITATIONS block in `cross-world-bridge.ts` is the security contract.
- */
+// The security contract is the LIMITATIONS block in cross-world-bridge.ts.
 
 export type ContextBridge = {
   exposeInMainWorld(key: string, api: Record<string, unknown>): void;

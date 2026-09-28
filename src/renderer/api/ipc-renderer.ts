@@ -1,10 +1,6 @@
 import { BunmaskaError } from '../../common/errors';
 
-/**
- * Renderer-side IPC over the `globalThis.__bunmaska` bridge. `on` listeners
- * receive a placeholder event object as their first argument to match Electron's
- * `(event, ...args)` shape.
- */
+/** IPC over `globalThis.__bunmaska`; listeners get a placeholder event first, as in Electron. */
 
 type BridgeListener = (...args: unknown[]) => void;
 
@@ -44,9 +40,7 @@ type WrapperEntry = { channel: string; listener: IpcRendererListener; wrapper: B
 
 /** Create the `ipcRenderer` object bound to the current page's bridge. */
 export const createIpcRenderer = (): IpcRenderer => {
-  // The bridge stores the WRAPPED listener (one that injects the event arg), so
-  // removeListener must look up the exact wrapper registered for a (channel,
-  // listener) pair.
+  // The bridge holds the wrapper, not the listener, so removeListener must find the wrapper.
   const wrappers: WrapperEntry[] = [];
 
   const wrap = (channel: string, listener: IpcRendererListener): BridgeListener => {
