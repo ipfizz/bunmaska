@@ -56,6 +56,11 @@ if (currentPlatform() === 'macos') {
       // Executable bit set for owner/group/other.
       expect(mode & 0o111).not.toBe(0);
 
+      // LaunchServices must refuse an OS the compiled binary cannot load on.
+      const build = spawnSync('vtool', ['-show-build', exe], { encoding: 'utf8' });
+      const minos = /minos (\S+)/.exec(build.stdout)?.[1];
+      expect(plistText).toContain(`<key>LSMinimumSystemVersion</key>\n  <string>${minos}</string>`);
+
       // The compiled binary should actually run and print 'hi'.
       const result = spawnSync(exe, [], { encoding: 'utf8' });
       expect(result.status).toBe(0);

@@ -19,7 +19,8 @@ import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 import { runTool } from './run-tool';
 
-const MINIMUM_SYSTEM_VERSION = '11.0';
+// The minos `bun build --compile` stamps into the Mach-O (Bun 1.4.2).
+const MINIMUM_SYSTEM_VERSION = '13.0';
 
 const escapeXml = (value: string): string =>
   value
