@@ -6,6 +6,7 @@ import { currentPlatform } from '../../../src/common/platform';
 const onlyMac = currentPlatform() === 'macos';
 
 const NOTARIZE_ENV = ['APPLE_ID', 'TEAM_ID', 'BUNMASKA_NOTARIZE_PASSWORD'] as const;
+const DEVELOPER_ID = 'Developer ID Application: Example (TEAMID123)';
 
 describe('dispatch routes --sign to the macOS builder', () => {
   test.skipIf(!onlyMac)('threads --sign and the signer seam through to buildMacApp', async () => {
@@ -50,9 +51,16 @@ describe('dispatch --notarize', () => {
   const notarizeBuild = async (): Promise<{ code: number; notarized: string[] }> => {
     const notarized: string[] = [];
     const code = await dispatch(
-      { kind: 'build', entry: 'app.ts', options: { target: 'macos', sign: '-', notarize: true } },
       {
-        buildMac: async (opts) => `/tmp/${opts.name}.app`,
+        kind: 'build',
+        entry: 'app.ts',
+        options: { target: 'macos', sign: DEVELOPER_ID, notarize: true },
+      },
+      {
+        buildMac: async (opts) => {
+          await opts.notarize?.(`/tmp/${opts.name}.app`);
+          return `/tmp/${opts.name}.app`;
+        },
         notarize: async (appPath) => {
           notarized.push(appPath);
         },
@@ -91,35 +99,28 @@ describe('dispatch --notarize', () => {
     expect(notarized).toEqual(['/tmp/app.app']);
   });
 
-  test.skipIf(!onlyMac)('with --dmg, packages the .app only after it is stapled', async () => {
+  test.skipIf(!onlyMac)('with --dmg, lets the builder notarize before it packages', async () => {
     process.env['APPLE_ID'] = 'dev@example.com';
     process.env['TEAM_ID'] = 'TEAMID123';
     process.env['BUNMASKA_NOTARIZE_PASSWORD'] = 'app-specific';
-    const events: string[] = [];
+    let captured: BuildMacAppOptions | undefined;
+    const notarize = async (): Promise<void> => undefined;
     const code = await dispatch(
       {
         kind: 'build',
         entry: 'app.ts',
-        options: { target: 'macos', sign: '-', notarize: true, dmg: true },
+        options: { target: 'macos', sign: DEVELOPER_ID, notarize: true, dmg: true },
       },
       {
         buildMac: async (opts) => {
-          events.push(`build dmg=${opts.dmg === true}`);
+          captured = opts;
           return '/tmp/out/app.app';
         },
-        notarize: async () => {
-          events.push('notarize');
-        },
-        buildDmg: async (opts) => {
-          events.push(`dmg ${opts.appDir} -> ${opts.outDmg}`);
-        },
+        notarize,
       },
     );
     expect(code).toBe(0);
-    expect(events).toEqual([
-      'build dmg=false',
-      'notarize',
-      'dmg /tmp/out/app.app -> /tmp/out/app.dmg',
-    ]);
+    expect(captured?.dmg).toBe(true);
+    expect(captured?.notarize).toBe(notarize);
   });
 });
