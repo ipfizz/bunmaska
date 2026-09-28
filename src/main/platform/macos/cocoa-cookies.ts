@@ -98,7 +98,7 @@ const getAllCookieHandles = (onCookies: (handles: Handle[]) => void): void => {
       }
       onCookies(handles);
     },
-    [FFIType.ptr],
+    [FFIType.u64],
   );
   msgSendPtr(cookieStore(), rt.selectors.get('getAllCookies:'), block);
 };

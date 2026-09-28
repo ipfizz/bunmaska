@@ -11,12 +11,11 @@ import {
   msgSendReturnsI64,
 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
+import { CORE_GRAPHICS_PATH } from './core-graphics-image-ffi';
 import { type Handle, macOSLibraryAccessor } from './objc';
 
 // bun:ffi cannot return an NSRect/NSPoint struct, so geometry goes through KVC (valueForKey:
 // boxes it in an NSValue) and is copied out with getValue:size:.
-
-const CG_PATH = '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics';
 
 const CG_SYMBOLS = {
   CGGetActiveDisplayList: {
@@ -36,7 +35,7 @@ const CG_SYMBOLS = {
 } as const;
 
 export const loadCoreGraphicsFFI = macOSLibraryAccessor('CoreGraphics screen', () =>
-  dlopen(CG_PATH, CG_SYMBOLS),
+  dlopen(CORE_GRAPHICS_PATH, CG_SYMBOLS),
 );
 
 type CGSymbols = ReturnType<typeof loadCoreGraphicsFFI>['symbols'];

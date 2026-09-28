@@ -53,6 +53,25 @@ describe('macVirtualKeyCode', () => {
     expect(macVirtualKeyCode('Tab')).toBe(48);
   });
 
+  test('maps the numeric keypad and Insert the accelerator parser accepts', () => {
+    const code = (accelerator: string): number | undefined => {
+      const parsed = parseAccelerator(accelerator, 'macos');
+      return parsed === undefined ? undefined : macVirtualKeyCode(parsed.key);
+    };
+    expect(code('num0')).toBe(82);
+    expect(code('num7')).toBe(89);
+    // kVK_ANSI_Keypad8 and 9 skip 0x5A, which is kVK_F20.
+    expect(code('num8')).toBe(91);
+    expect(code('num9')).toBe(92);
+    expect(code('numdec')).toBe(65);
+    expect(code('nummult')).toBe(67);
+    expect(code('numadd')).toBe(69);
+    expect(code('numdiv')).toBe(75);
+    expect(code('numsub')).toBe(78);
+    // A PC keyboard's Insert key reaches macOS as kVK_Help.
+    expect(code('Insert')).toBe(114);
+  });
+
   test('returns undefined for a key macOS has no code for', () => {
     expect(macVirtualKeyCode('F21')).toBeUndefined();
   });

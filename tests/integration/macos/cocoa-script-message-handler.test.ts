@@ -10,11 +10,19 @@ import type { Handle } from '../../../src/main/platform/macos/objc';
 let nextBody: Handle = 0n;
 let fakeMessageClass: Handle | undefined;
 
-/** A stand-in for `WKScriptMessage` whose `-body` returns `body`. */
+/** A main-frame `WKScriptMessage` stand-in whose `-body` returns `body`; it is its own frameInfo. */
 const fakeMessage = (body: Handle): Handle => {
   const rt = cocoa();
   fakeMessageClass ??= defineObjcClass('BunmaskaTestScriptMessage', 'NSObject', [
     { selector: 'body', typeEncoding: '@@:', args: [], returns: 'object', impl: () => nextBody },
+    {
+      selector: 'frameInfo',
+      typeEncoding: '@@:',
+      args: [],
+      returns: 'object',
+      impl: (self) => self,
+    },
+    { selector: 'isMainFrame', typeEncoding: 'c@:', args: [], returns: 'bool', impl: () => 1 },
   ]);
   nextBody = body;
   return rt.msgSend(

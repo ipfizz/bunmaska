@@ -16,7 +16,10 @@ import {
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 import { loadWebKit } from '../../../src/main/platform/macos/cocoa-webkit';
-import { LIBOBJC_PATH } from '../../../src/main/platform/macos/objc';
+import {
+  LIBOBJC_PATH,
+  setNativeErrorReporterForTesting,
+} from '../../../src/main/platform/macos/objc';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -252,6 +255,26 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
       expect(await win.webContents.executeJavaScript('2 + 3')).toBe(5);
       win.destroy();
     } finally {
+      app.quit();
+    }
+  });
+
+  test('a page posting null to the exec channel is ignored', async () => {
+    const app = createMacOSApplication();
+    app.start();
+    const errors: unknown[] = [];
+    setNativeErrorReporterForTesting((error) => errors.push(error));
+    try {
+      const win = app.createWindow({ width: 320, height: 240, title: 't', show: true });
+      await loadPage(
+        win,
+        "<script>webkit.messageHandlers.bunmaskaExec.postMessage('null')</script>",
+      );
+      expect(await win.webContents.executeJavaScript('1')).toBe(1);
+      expect(errors).toEqual([]);
+      win.destroy();
+    } finally {
+      setNativeErrorReporterForTesting(undefined);
       app.quit();
     }
   });
@@ -498,6 +521,72 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
       expect(seen).toEqual(['object', 'undefined']);
       expect(domReady).toBe(1);
       win.destroy();
+    } finally {
+      app.quit();
+    }
+  });
+
+  test('a message a sub-frame posts to a bunmaska handler is dropped', async () => {
+    const app = createMacOSApplication();
+    app.start();
+    try {
+      const win = app.createWindow({ width: 320, height: 240, title: 't', show: true });
+      let domReady = 0;
+      win.webContents.onNavigation((event) => {
+        if (event.type === 'dom-ready') {
+          domReady += 1;
+        }
+      });
+      win.webContents.loadHTML(
+        `<iframe srcdoc="<script>webkit.messageHandlers.bunmaskaDomReady.postMessage('')</script>"></iframe>`,
+        'about:blank',
+      );
+      const probe = `document.querySelector('iframe')?.contentDocument?.readyState === 'complete'`;
+      const deadline = performance.now() + 5_000;
+      while (!(await win.webContents.executeJavaScript(probe)) && performance.now() < deadline) {
+        await Bun.sleep(20);
+      }
+      expect(await win.webContents.executeJavaScript(probe)).toBe(true);
+      expect(domReady).toBe(1);
+      win.destroy();
+    } finally {
+      app.quit();
+    }
+  });
+
+  test('only a frameless window mirrors --app-region, as Electron ignores it when framed', () => {
+    const app = createMacOSApplication();
+    app.start();
+    const mirrorsAppRegion = (title: string): boolean => {
+      const rt = cocoa();
+      const webview = rt.msgSend(nsWindowTitled(title), rt.selectors.get('contentView'));
+      const configuration = rt.msgSend(webview, rt.selectors.get('configuration'));
+      const controller = rt.msgSend(configuration, rt.selectors.get('userContentController'));
+      const scripts = rt.msgSend(controller, rt.selectors.get('userScripts'));
+      const count = msgSendReturnsI64(scripts, rt.selectors.get('count'));
+      for (let i = 0n; i < count; i += 1n) {
+        const script = msgSendI64(scripts, rt.selectors.get('objectAtIndex:'), i);
+        if (
+          nsStringToString(rt.msgSend(script, rt.selectors.get('source'))).includes('--app-region')
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    try {
+      const framed = app.createWindow({ width: 200, height: 100, title: 'framed', show: false });
+      const frameless = app.createWindow({
+        width: 200,
+        height: 100,
+        title: 'frameless-region',
+        show: false,
+        frame: false,
+      });
+      expect(mirrorsAppRegion('framed')).toBe(false);
+      expect(mirrorsAppRegion('frameless-region')).toBe(true);
+      framed.destroy();
+      frameless.destroy();
     } finally {
       app.quit();
     }

@@ -1,5 +1,5 @@
 import { nsStringToString } from './cocoa-foundation';
-import { msgSendPtrReturnsU8 } from './cocoa-msgsend-variants';
+import { msgSendPtrReturnsU8, msgSendReturnsU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
@@ -22,7 +22,12 @@ const ensureHandlerClass = (): Handle => {
       args: ['object', 'object'],
       impl: (self, _cmd, _controller, message) => {
         const callback = registry.get(self);
-        if (callback === undefined) {
+        // Every bunmaska channel is main-frame only (Electron's nodeIntegrationInSubFrames: false).
+        const frame = rt.msgSend(message, rt.selectors.get('frameInfo'));
+        if (
+          callback === undefined ||
+          msgSendReturnsU8(frame, rt.selectors.get('isMainFrame')) !== 1
+        ) {
           return;
         }
         const body = rt.msgSend(message, rt.selectors.get('body'));

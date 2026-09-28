@@ -78,7 +78,7 @@ if (currentPlatform() === 'macos') {
     test('Dock reopen reports the BOOL flag and returns it, as Electron does', () => {
       const seen: boolean[] = [];
       const delegate = createAppDelegate({ ...NOOP_HANDLERS, activate: (v) => seen.push(v) });
-      expect(sendReopen(delegate.handle, 0n)).toBe(0);
+      expect(sendReopen(delegate.handle, 0x1_0000_0000n)).toBe(0);
       expect(sendReopen(delegate.handle, 0x1_0000_0001n)).toBe(1);
       expect(seen).toEqual([false, true]);
     });

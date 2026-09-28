@@ -114,7 +114,7 @@ const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
 /** Electron runs preloads in the main frame only; an iframe must never get the bridge. */
 const FOR_MAIN_FRAME_ONLY = 1;
 const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
-/** Page-world handler name `executeJavaScript` posts its result to (D022). */
+/** Page-world handler name `executeJavaScript` posts its result to (D022b). */
 const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
 /** Milliseconds before a pending printToPDF/capturePage rejects. */
 const RENDER_TIMEOUT_MS = 30_000;
@@ -153,15 +153,11 @@ const enableDeveloperExtras = (preferences: Handle): void => {
 /** One stateless handler serves every scheme of every window. */
 let schemeHandler: Handle | undefined;
 
-/** RFC 3986 scheme syntax. */
-const VALID_SCHEME = /^[a-z][a-z0-9+.-]*$/;
-
 /**
  * Put every `protocol.handle` scheme on `configuration`; WebKit only accepts
  * scheme handlers before the web view exists. `setURLSchemeHandler:` raises an
- * NSException for a scheme WebKit handles itself (https, file, ...) or a
- * malformed one, and an NSException aborts Bun past any JS catch, so those are
- * skipped up front.
+ * uncatchable NSInvalidArgumentException for a scheme WebKit serves itself:
+ * protocol.handle rejects the known ones, and `handlesURLScheme:` catches any it misses.
  */
 const registerCustomSchemes = (configuration: Handle): void => {
   const schemes = protocol.getRegisteredSchemes();
@@ -172,7 +168,6 @@ const registerCustomSchemes = (configuration: Handle): void => {
   schemeHandler ??= createUrlSchemeHandler().handle;
   for (const scheme of schemes) {
     const unsupported =
-      !VALID_SCHEME.test(scheme) ||
       msgSendPtrReturnsU8(
         rt.classes.get('WKWebView'),
         rt.selectors.get('handlesURLScheme:'),
@@ -265,14 +260,14 @@ class MacOSWebContents implements NativeWebContents {
    * `{ execId, ok, result?, error? }` outcome of an `executeJavaScript` call.
    */
   deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
+    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string } | null;
     try {
       outcome = JSON.parse(json);
     } catch (error) {
       log.warn('dropping malformed exec result', error);
       return;
     }
-    if (typeof outcome.execId !== 'number') {
+    if (typeof outcome?.execId !== 'number') {
       return;
     }
     const pending = this.#pendingExecs.get(outcome.execId);
@@ -394,7 +389,7 @@ class MacOSWebContents implements NativeWebContents {
 
   /**
    * Evaluate `code` in the page world (Electron's main world). The result comes
-   * back through the page-world `bunmaskaExec` handler, not a completion block (D022).
+   * back through the page-world `bunmaskaExec` handler, not a completion block (D022b).
    */
   executeJavaScript(code: string): Promise<unknown> {
     if (this.#destroyed) {
@@ -427,12 +422,12 @@ class MacOSWebContents implements NativeWebContents {
           clearTimeout(timer);
           const data = BigInt(pdfData ?? 0);
           if (data === 0n) {
-            reject(new Error(`printToPDF failed (NSError ${error ?? 'nil'})`));
+            reject(new Error(`printToPDF failed (NSError ${error || 'nil'})`));
             return;
           }
           resolve(nsDataToBytes(data));
         },
-        [FFIType.ptr, FFIType.ptr],
+        [FFIType.u64, FFIType.u64],
       );
       msgSendPtrPtr(
         this.#webview,
@@ -457,7 +452,7 @@ class MacOSWebContents implements NativeWebContents {
           clearTimeout(timer);
           const img = BigInt(image ?? 0);
           if (img === 0n) {
-            reject(new Error(`capturePage failed (NSError ${error ?? 'nil'})`));
+            reject(new Error(`capturePage failed (NSError ${error || 'nil'})`));
             return;
           }
           try {
@@ -466,7 +461,7 @@ class MacOSWebContents implements NativeWebContents {
             reject(cause instanceof Error ? cause : new Error(String(cause)));
           }
         },
-        [FFIType.ptr, FFIType.ptr],
+        [FFIType.u64, FFIType.u64],
       );
       msgSendPtrPtr(
         this.#webview,
@@ -529,7 +524,7 @@ class MacOSWebContents implements NativeWebContents {
     this.#evaluateInWorld(dispatchScript(envelopeJson), this.#isolatedWorld);
   }
 
-  /** Fire-and-forget in `world`'s main frame: nil frame, nil completion handler (D022). */
+  /** Fire-and-forget in `world`'s main frame: nil frame, nil completion handler (D021). */
   #evaluateInWorld(code: string, world: Handle): void {
     const rt = cocoa();
     msgSendPtr4(
@@ -1013,7 +1008,7 @@ class MacOSApplication implements NativeApplication {
       nsString(SCRIPT_MESSAGE_HANDLER_NAME),
     );
 
-    // executeJavaScript's return channel (D022). pageWorld() is interned by WebKit,
+    // executeJavaScript's return channel (D022b). pageWorld() is interned by WebKit,
     // so teardown gets the same handle without a retain here.
     const execHandler = createScriptMessageHandler((json) => contents?.deliverExecResult(json));
     msgSendPtr3(
@@ -1059,8 +1054,11 @@ class MacOSApplication implements NativeApplication {
     }
     addUserScript(generatePageWorldStub(channelId), pageWorld());
     // Never put __bunmaska in the page world: it would defeat context isolation.
+    // Electron ignores drag regions in a framed window, so only a frameless one pays for the scan.
     // ponytail: --app-region mirror only; window-op controls wait for the isolated bridge (D045)
-    addUserScript(windowControlsScript(), pageWorld());
+    if (options.frame === false) {
+      addUserScript(windowControlsScript(), pageWorld());
+    }
     addUserScript(generateDomReadyScript(), pageWorld());
 
     const webview = msgSendInitWithFrameConfig(
