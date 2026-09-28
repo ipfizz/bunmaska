@@ -1,10 +1,4 @@
-/**
- * Dev-only window-state persistence. Under `bunmaska dev` the supervisor sets
- * `BUNMASKA_DEV_STATE` to a scratch JSON path; the first BrowserWindow seeds its
- * bounds from it and writes them back on move/resize, so a restart reopens the
- * window where the developer left it instead of at the OS default. Strictly
- * inert without the env var - a packaged app never touches this path.
- */
+/** Dev-only window bounds persistence via `BUNMASKA_DEV_STATE`; inert without it. */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Rect } from './platform/native';
@@ -54,10 +48,7 @@ export const readDevWindowState = (statePath: string | undefined): Rect | undefi
   }
 };
 
-/**
- * A debounced best-effort writer; every failure is swallowed (losing dev window
- * state must never affect the app).
- */
+/** A debounced writer; every failure is swallowed, since lost dev state must not affect the app. */
 export const makeDevWindowStateWriter = (
   statePath: string,
   getBounds: () => Rect,
@@ -72,7 +63,7 @@ export const makeDevWindowStateWriter = (
       try {
         writeFileSync(statePath, serializeDevWindowState(getBounds()));
       } catch {
-        // Best effort only.
+        // Best effort.
       }
     }, DEV_STATE_WRITE_DEBOUNCE_MS);
     pending.unref?.();
