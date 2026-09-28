@@ -28,7 +28,7 @@ import { loadGMenuFFI } from './gtk-menu-ffi';
  */
 
 /** ABI shape for `GSimpleAction::activate`: `(action, parameter, user_data) -> void`. */
-export const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
+const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
 /** The action-group namespace prefix inserted into the window. */
 const ACTION_GROUP_PREFIX = 'bunmaska';
