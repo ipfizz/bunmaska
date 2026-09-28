@@ -376,18 +376,22 @@ export class BrowserWindow extends EventEmitter {
   static fromId(id: number): BrowserWindow | undefined {
     return registry.get(id);
   }
+
+  static fromWebContents(webContents: WebContents): BrowserWindow | null {
+    return BrowserWindow.getAllWindows().find((w) => w.webContents === webContents) ?? null;
+  }
+
+  static getFocusedWindow(): BrowserWindow | null {
+    return BrowserWindow.getAllWindows().find((w) => w.isFocused()) ?? null;
+  }
 }
 
 // Let Menu.popup resolve a target window (focused → most-recent) without importing
 // BrowserWindow into menu.ts (which would cycle). The registry is creation-ordered.
 installWindowResolver({
   focused: () => {
-    for (const window of registry.values()) {
-      if (window.isFocused()) {
-        return popupTargets.get(window);
-      }
-    }
-    return undefined;
+    const window = BrowserWindow.getFocusedWindow();
+    return window === null ? undefined : popupTargets.get(window);
   },
   mostRecent: () => {
     const windows = [...registry.values()];

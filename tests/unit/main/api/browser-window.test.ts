@@ -419,6 +419,22 @@ describe('BrowserWindow registry', () => {
   test('fromId returns undefined for an unknown id', () => {
     expect(BrowserWindow.fromId(9999)).toBeUndefined();
   });
+
+  test('fromWebContents returns the owning open window, else null', () => {
+    const a = new BrowserWindow();
+    const b = new BrowserWindow();
+    expect(BrowserWindow.fromWebContents(b.webContents)).toBe(b);
+    a.close();
+    expect(BrowserWindow.fromWebContents(a.webContents)).toBeNull();
+  });
+
+  test('getFocusedWindow returns the focused window, else null', () => {
+    new BrowserWindow();
+    const b = new BrowserWindow();
+    expect(BrowserWindow.getFocusedWindow()).toBeNull();
+    b.focus();
+    expect(BrowserWindow.getFocusedWindow()).toBe(b);
+  });
 });
 
 describe('BrowserWindow lifecycle', () => {
