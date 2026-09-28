@@ -10,8 +10,6 @@ import { winLibraryAccessor } from './win32';
 const WTSAPI32_SYMBOLS = {
   // (HWND, DWORD dwFlags) -> BOOL — deliver WM_WTSSESSION_CHANGE to the window.
   WTSRegisterSessionNotification: { args: [FFIType.u64, FFIType.u32], returns: FFIType.i32 },
-  // (HWND) -> BOOL — stop delivering session-change notifications.
-  WTSUnRegisterSessionNotification: { args: [FFIType.u64], returns: FFIType.i32 },
 } as const;
 
 /** `NOTIFY_FOR_THIS_SESSION` — only this session's lock/unlock events. */
