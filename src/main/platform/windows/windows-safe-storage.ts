@@ -1,6 +1,6 @@
 import { type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { FFIError } from '../../../common/errors';
@@ -95,18 +95,36 @@ export const dpapiUnprotect = (data: Uint8Array): Uint8Array =>
     'CryptUnprotectData',
   );
 
+/**
+ * Read the sealed key at `path`, creating it on first use. The key file is shared by every
+ * Bunmaska app of the user, so a first run publishes with an exclusive hard link and then
+ * reads back whichever key won (D036): overwriting would orphan the loser's ciphertexts.
+ */
+export const loadOrCreateSealedKey = (
+  path: string,
+  seal: (key: Uint8Array) => Uint8Array,
+  unseal: (sealed: Uint8Array) => Uint8Array,
+): Buffer => {
+  if (!existsSync(path)) {
+    mkdirSync(dirname(path), { recursive: true });
+    const staged = `${path}.${process.pid}.tmp`;
+    writeFileSync(staged, seal(randomBytes(KEY_LENGTH)));
+    try {
+      linkSync(staged, path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error;
+      }
+    } finally {
+      unlinkSync(staged);
+    }
+  }
+  return Buffer.from(unseal(readFileSync(path)));
+};
+
 export const windowsDpapiBackend: KeyringBackend = {
   // DPAPI ships with every Windows install — the key can always be sealed.
   isAvailable: (): boolean => true,
 
-  getOrCreateKey: (): Buffer => {
-    const path = keyFilePath();
-    if (existsSync(path)) {
-      return Buffer.from(dpapiUnprotect(readFileSync(path)));
-    }
-    const key = randomBytes(KEY_LENGTH);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, dpapiProtect(key));
-    return key;
-  },
+  getOrCreateKey: (): Buffer => loadOrCreateSealedKey(keyFilePath(), dpapiProtect, dpapiUnprotect),
 };
