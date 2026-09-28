@@ -162,23 +162,32 @@ type ScriptMessageApi = Pick<
   | 'WKFrameInfoGetIsMainFrame'
   | 'WKGetTypeID'
   | 'WKStringGetTypeID'
+  | 'WKCompletionListenerComplete'
 >;
 
-/** Forward a main-frame script message's string body to `onMessage`. */
+/** Forward a main-frame script message's string body to `onMessage`, then complete its reply. */
 export const deliverScriptMessage = (
   message: Pointer,
+  listener: Pointer | null,
   onMessage: (body: string) => void,
   wk: ScriptMessageApi = loadWebKit2().symbols,
   readString: (ref: Pointer) => string = wkStringToJs,
 ): void => {
-  // The handlers live in the page world, so any iframe could post to the bridge.
-  if (!wk.WKFrameInfoGetIsMainFrame(wk.WKScriptMessageGetFrameInfo(message))) {
-    return;
-  }
-  const body = wk.WKScriptMessageGetBody(message);
-  // Any page script can post a number/bool/object; reading that as a WKString faults the process.
-  if (body !== null && wk.WKGetTypeID(body) === wk.WKStringGetTypeID()) {
-    onMessage(readString(body));
+  try {
+    // The handlers live in the page world, so any iframe could post to the bridge.
+    if (!wk.WKFrameInfoGetIsMainFrame(wk.WKScriptMessageGetFrameInfo(message))) {
+      return;
+    }
+    const body = wk.WKScriptMessageGetBody(message);
+    // Any page script can post a number/bool/object; reading that as a WKString faults the process.
+    if (body !== null && wk.WKGetTypeID(body) === wk.WKStringGetTypeID()) {
+      onMessage(readString(body));
+    }
+  } finally {
+    // An unanswered reply pins the posting document's global object in the WebContent process.
+    if (listener !== null) {
+      wk.WKCompletionListenerComplete(listener, null);
+    }
   }
 };
 
@@ -244,7 +253,8 @@ export class WindowsWebView {
     const callbacks: JSCallback[] = [];
     for (const handler of options.messageHandlers) {
       const callback = new JSCallback(
-        (messageRef: Pointer) => deliverScriptMessage(messageRef, handler.onMessage, s),
+        (messageRef: Pointer, listenerRef: Pointer | null) =>
+          deliverScriptMessage(messageRef, listenerRef, handler.onMessage, s),
         { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.void },
       );
       if (callback.ptr === null) {

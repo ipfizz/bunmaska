@@ -69,7 +69,8 @@ const WEBKIT2_SYMBOLS = {
     returns: FFIType.void,
   },
   WKUserContentControllerRemoveAllUserScripts: { args: [FFIType.ptr], returns: FFIType.void },
-  // (ucc, WKStringRef name, WKScriptMessageHandlerCallback, const void* context)
+  // (ucc, WKStringRef name, callback, const void* context); the callback is
+  // (WKScriptMessageRef, WKCompletionListenerRef reply, const void* context).
   WKUserContentControllerAddScriptMessageHandler: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
@@ -86,6 +87,8 @@ const WEBKIT2_SYMBOLS = {
   WKScriptMessageGetBody: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKScriptMessageGetFrameInfo: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKFrameInfoGetIsMainFrame: { args: [FFIType.ptr], returns: FFIType.bool },
+  // (WKCompletionListenerRef, WKTypeRef reply): NULL resolves the page's postMessage promise.
+  WKCompletionListenerComplete: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
 
   // ── Strings / URLs ───────────────────────────────────────────────────────
   // WKTypeID is uint32_t.
