@@ -3,17 +3,6 @@ import { dlopen } from '../dlopen';
 import { cstr } from '../cstr';
 import { bigIntOut, LIBOBJC_PATH, macOSLibraryAccessor, ptrIn } from './objc';
 
-/**
- * macOS native run-loop drain.
- *
- * Returns a function the {@link AdaptiveBlockingPump} calls each tick with a
- * timeout. A UI event returns it immediately (returnAfterSourceHandled), so the
- * thread sleeps when idle yet wakes the instant input arrives. Returns whether a
- * source was handled — the pump stays responsive while that holds and backs off
- * when it doesn't. Each drain runs inside an autorelease pool so per-tick
- * temporaries are released.
- */
-
 const CORE_FOUNDATION_PATH = '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation';
 
 const K_CF_STRING_ENCODING_UTF8 = 0x08000100;
@@ -62,9 +51,9 @@ export const withAutoreleasePool = <T>(fn: () => T): T => {
 let jsPool: Pointer | null | undefined;
 
 /**
- * Create the macOS drain function. Throws {@link UnsupportedPlatformError} on
- * any non-macOS host (via the lazy accessors). The returned function is cheap
- * to call repeatedly and never blocks.
+ * The macOS drain for AdaptiveBlockingPump (D047). It blocks in CFRunLoopRunInMode
+ * for up to `timeoutMs`, returns early once a source is handled, and reports
+ * whether one was. Throws UnsupportedPlatformError off macOS.
  */
 export const createMacOSDrain = (pumpEvents?: () => void): ((timeoutMs: number) => boolean) => {
   const cf = getCoreFoundation();
