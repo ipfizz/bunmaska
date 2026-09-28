@@ -3,6 +3,8 @@ import { dlopen } from '../dlopen';
 import { cstr } from '../cstr';
 import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
+const { u64, u8, i64, f64, cstring } = FFIType;
+
 /**
  * Typed `objc_msgSend` variants for selectors whose signatures don't match
  * the zero-extra-arg form exposed on {@link CocoaRuntime}.
@@ -39,155 +41,48 @@ export const RECT_F64: readonly FFIType.f64[] = new Array<FFIType.f64>(
   rectPadding(process.arch) + 4,
 ).fill(FFIType.f64);
 
-const INIT_WITH_CONTENT_RECT_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, ...RECT_F64, FFIType.u64, FFIType.u64, FFIType.u8],
-    returns: FFIType.u64,
-  },
-} as const;
+/** One lazily opened `objc_msgSend` binding with its own signature. */
+const variant = <const Args extends readonly FFIType[], const Returns extends FFIType>(
+  name: string,
+  args: Args,
+  returns: Returns,
+) => {
+  const library = macOSLibraryAccessor(name, () =>
+    dlopen(LIBOBJC_PATH, { objc_msgSend: { args, returns } }),
+  );
+  return () => library().symbols.objc_msgSend;
+};
 
-const PTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const U8_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u8],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const F64_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.f64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const I64_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.i64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const RETURNS_U8_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64],
-    returns: FFIType.u8,
-  },
-} as const;
-
-const CSTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.cstring],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const PTR_PTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const PTR3_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const RETURNS_I64_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64],
-    returns: FFIType.i64,
-  },
-} as const;
-
-const PTR_RETURNS_U8_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64],
-    returns: FFIType.u8,
-  },
-} as const;
-
-const FRAME_CONFIG_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, ...RECT_F64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-// (receiver, selector, NSRect by value (D018), BOOL) -> void.
-const RECT_U8_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, ...RECT_F64, FFIType.u8],
-    returns: FFIType.void,
-  },
-} as const;
-
-const SIZE_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.f64, FFIType.f64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-// (receiver, selector, ptr, NSPoint{x,y} as two doubles (D018), ptr) -> BOOL.
-// For -[NSMenu popUpMenuPositioningItem:atLocation:inView:].
-const PTR_POINT_PTR_RETURNS_U8_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.f64, FFIType.f64, FFIType.u64],
-    returns: FFIType.u8,
-  },
-} as const;
-
-const getInitWithContentRectLib = macOSLibraryAccessor('msgSendInitWithContentRect', () =>
-  dlopen(LIBOBJC_PATH, INIT_WITH_CONTENT_RECT_VARIANT),
+const initWithContentRect = variant(
+  'msgSendInitWithContentRect',
+  [u64, u64, ...RECT_F64, u64, u64, u8],
+  u64,
 );
-
-const getRectU8Lib = macOSLibraryAccessor('msgSendRectU8', () =>
-  dlopen(LIBOBJC_PATH, RECT_U8_VARIANT),
+const rectU8 = variant('msgSendRectU8', [u64, u64, ...RECT_F64, u8], FFIType.void);
+const ptr1 = variant('msgSendPtr', [u64, u64, u64], u64);
+const u8Arg = variant('msgSendU8', [u64, u64, u8], u64);
+const f64Arg = variant('msgSendF64', [u64, u64, f64], u64);
+const i64Arg = variant('msgSendI64', [u64, u64, i64], u64);
+const returnsU8 = variant('msgSendReturnsU8', [u64, u64], u8);
+const cstrArg = variant('msgSendCStr', [u64, u64, cstring], u64);
+const ptr2 = variant('msgSendPtrPtr', [u64, u64, u64, u64], u64);
+const frameConfig = variant('msgSendInitWithFrameConfig', [u64, u64, ...RECT_F64, u64], u64);
+const ptr3 = variant('msgSendPtr3', [u64, u64, u64, u64, u64], u64);
+const returnsI64 = variant('msgSendReturnsI64', [u64, u64], i64);
+const ptrReturnsU8 = variant('msgSendPtrReturnsU8', [u64, u64, u64], u8);
+const size = variant('msgSendSize', [u64, u64, f64, f64], u64);
+const ptrPointPtrReturnsU8 = variant(
+  'msgSendPtrPointPtrReturnsU8',
+  [u64, u64, u64, f64, f64, u64],
+  u8,
 );
-
-const getPtrLib = macOSLibraryAccessor('msgSendPtr', () => dlopen(LIBOBJC_PATH, PTR_VARIANT));
-
-const getU8Lib = macOSLibraryAccessor('msgSendU8', () => dlopen(LIBOBJC_PATH, U8_VARIANT));
-
-const getF64Lib = macOSLibraryAccessor('msgSendF64', () => dlopen(LIBOBJC_PATH, F64_VARIANT));
-
-const getI64Lib = macOSLibraryAccessor('msgSendI64', () => dlopen(LIBOBJC_PATH, I64_VARIANT));
-
-const getReturnsU8Lib = macOSLibraryAccessor('msgSendReturnsU8', () =>
-  dlopen(LIBOBJC_PATH, RETURNS_U8_VARIANT),
-);
-
-const getCStrLib = macOSLibraryAccessor('msgSendCStr', () => dlopen(LIBOBJC_PATH, CSTR_VARIANT));
-
-const getPtrPtrLib = macOSLibraryAccessor('msgSendPtrPtr', () =>
-  dlopen(LIBOBJC_PATH, PTR_PTR_VARIANT),
-);
-
-const getFrameConfigLib = macOSLibraryAccessor('msgSendInitWithFrameConfig', () =>
-  dlopen(LIBOBJC_PATH, FRAME_CONFIG_VARIANT),
-);
-
-const getPtr3Lib = macOSLibraryAccessor('msgSendPtr3', () => dlopen(LIBOBJC_PATH, PTR3_VARIANT));
-
-const getReturnsI64Lib = macOSLibraryAccessor('msgSendReturnsI64', () =>
-  dlopen(LIBOBJC_PATH, RETURNS_I64_VARIANT),
-);
-
-const getPtrReturnsU8Lib = macOSLibraryAccessor('msgSendPtrReturnsU8', () =>
-  dlopen(LIBOBJC_PATH, PTR_RETURNS_U8_VARIANT),
-);
-
-const getSizeLib = macOSLibraryAccessor('msgSendSize', () => dlopen(LIBOBJC_PATH, SIZE_VARIANT));
+const ptr4 = variant('msgSendPtr4', [u64, u64, u64, u64, u64, u64], u64);
+const ptrI64U8Ptr = variant('msgSendPtrI64U8Ptr', [u64, u64, u64, i64, u8, u64], u64);
+const ptrI64 = variant('msgSendPtrI64', [u64, u64, u64, i64], u64);
+const i64Ptr = variant('msgSendI64Ptr', [u64, u64, i64, u64], u64);
+const returnsF64 = variant('msgSendReturnsF64', [u64, u64], f64);
+const ptrI64Ptr = variant('msgSendPtrI64Ptr', [u64, u64, u64, i64, u64], u64);
+const ptrPtrI64Ptr = variant('msgSendPtrPtrI64Ptr', [u64, u64, u64, u64, i64, u64], u64);
 
 /** Send `initWithContentRect:styleMask:backing:defer:`; the rect goes by value (D018). */
 export const msgSendInitWithContentRect = (
@@ -198,14 +93,7 @@ export const msgSendInitWithContentRect = (
   backing: Handle,
   defer: boolean,
 ): Handle =>
-  getInitWithContentRectLib().symbols.objc_msgSend(
-    receiver,
-    selector,
-    ...cgRectArgs(rect),
-    styleMask,
-    backing,
-    defer ? 1 : 0,
-  );
+  initWithContentRect()(receiver, selector, ...cgRectArgs(rect), styleMask, backing, defer ? 1 : 0);
 
 /** Send a message with an NSRect by value (D018) plus a trailing BOOL. */
 export const msgSendRectU8 = (
@@ -214,36 +102,36 @@ export const msgSendRectU8 = (
   rect: CGRectArgs,
   flag: boolean,
 ): void => {
-  getRectU8Lib().symbols.objc_msgSend(receiver, selector, ...cgRectArgs(rect), flag ? 1 : 0);
+  rectU8()(receiver, selector, ...cgRectArgs(rect), flag ? 1 : 0);
 };
 
 export const msgSendPtr = (receiver: Handle, selector: Handle, arg: Handle): Handle =>
-  getPtrLib().symbols.objc_msgSend(receiver, selector, arg);
+  ptr1()(receiver, selector, arg);
 
 /** Send a message with one extra `BOOL` arg: pass `0` (NO) or `1` (YES). */
 export const msgSendU8 = (receiver: Handle, selector: Handle, arg: number): Handle =>
-  getU8Lib().symbols.objc_msgSend(receiver, selector, arg);
+  u8Arg()(receiver, selector, arg);
 
 export const msgSendF64 = (receiver: Handle, selector: Handle, arg: number): Handle =>
-  getF64Lib().symbols.objc_msgSend(receiver, selector, arg);
+  f64Arg()(receiver, selector, arg);
 
 export const msgSendI64 = (receiver: Handle, selector: Handle, arg: bigint): Handle =>
-  getI64Lib().symbols.objc_msgSend(receiver, selector, arg);
+  i64Arg()(receiver, selector, arg);
 
 /** Send a zero-extra-arg message returning `BOOL`: 0 (NO) or 1 (YES). */
 export const msgSendReturnsU8 = (receiver: Handle, selector: Handle): number =>
-  getReturnsU8Lib().symbols.objc_msgSend(receiver, selector);
+  returnsU8()(receiver, selector);
 
 /** Send a message with one extra C-string arg; the text is encoded null-terminated. */
 export const msgSendCStr = (receiver: Handle, selector: Handle, text: string): Handle =>
-  getCStrLib().symbols.objc_msgSend(receiver, selector, cstr(text));
+  cstrArg()(receiver, selector, cstr(text));
 
 export const msgSendPtrPtr = (
   receiver: Handle,
   selector: Handle,
   arg0: Handle,
   arg1: Handle,
-): Handle => getPtrPtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1);
+): Handle => ptr2()(receiver, selector, arg0, arg1);
 
 /** Send `initWithFrame:configuration:`; the rect goes by value (D018). */
 export const msgSendInitWithFrameConfig = (
@@ -251,8 +139,7 @@ export const msgSendInitWithFrameConfig = (
   selector: Handle,
   frame: CGRectArgs,
   configuration: Handle,
-): Handle =>
-  getFrameConfigLib().symbols.objc_msgSend(receiver, selector, ...cgRectArgs(frame), configuration);
+): Handle => frameConfig()(receiver, selector, ...cgRectArgs(frame), configuration);
 
 export const msgSendPtr3 = (
   receiver: Handle,
@@ -260,14 +147,14 @@ export const msgSendPtr3 = (
   arg0: Handle,
   arg1: Handle,
   arg2: Handle,
-): Handle => getPtr3Lib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2);
+): Handle => ptr3()(receiver, selector, arg0, arg1, arg2);
 
 export const msgSendReturnsI64 = (receiver: Handle, selector: Handle): bigint =>
-  getReturnsI64Lib().symbols.objc_msgSend(receiver, selector);
+  returnsI64()(receiver, selector);
 
 /** Send a message with one extra pointer arg, returning `BOOL`: 0 (NO) or 1 (YES). */
 export const msgSendPtrReturnsU8 = (receiver: Handle, selector: Handle, arg: Handle): number =>
-  getPtrReturnsU8Lib().symbols.objc_msgSend(receiver, selector, arg);
+  ptrReturnsU8()(receiver, selector, arg);
 
 /**
  * Send a message with an `NSSize`/`CGSize` arg (two `double`s by value), e.g.
@@ -278,11 +165,7 @@ export const msgSendSize = (
   selector: Handle,
   width: number,
   height: number,
-): Handle => getSizeLib().symbols.objc_msgSend(receiver, selector, width, height);
-
-const getPtrPointPtrReturnsU8Lib = macOSLibraryAccessor('msgSendPtrPointPtrReturnsU8', () =>
-  dlopen(LIBOBJC_PATH, PTR_POINT_PTR_RETURNS_U8_VARIANT),
-);
+): Handle => size()(receiver, selector, width, height);
 
 /**
  * Send a message taking a pointer, an `NSPoint` (two `double`s BY VALUE — the
@@ -297,17 +180,7 @@ export const msgSendPtrPointPtrReturnsU8 = (
   x: number,
   y: number,
   view: Handle,
-): number =>
-  getPtrPointPtrReturnsU8Lib().symbols.objc_msgSend(receiver, selector, item, x, y, view);
-
-const PTR4_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getPtr4Lib = macOSLibraryAccessor('msgSendPtr4', () => dlopen(LIBOBJC_PATH, PTR4_VARIANT));
+): number => ptrPointPtrReturnsU8()(receiver, selector, item, x, y, view);
 
 /**
  * Send a message with four extra pointer-sized args — specifically
@@ -322,18 +195,7 @@ export const msgSendPtr4 = (
   arg1: Handle,
   arg2: Handle,
   arg3: Handle,
-): Handle => getPtr4Lib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2, arg3);
-
-const PTR_I64_U8_PTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.i64, FFIType.u8, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getPtrI64U8PtrLib = macOSLibraryAccessor('msgSendPtrI64U8Ptr', () =>
-  dlopen(LIBOBJC_PATH, PTR_I64_U8_PTR_VARIANT),
-);
+): Handle => ptr4()(receiver, selector, arg0, arg1, arg2, arg3);
 
 /**
  * Send a message with a pointer arg, an `NSInteger` arg, a `BOOL` arg, and a
@@ -348,18 +210,7 @@ export const msgSendPtrI64U8Ptr = (
   arg1: bigint,
   arg2: number,
   arg3: Handle,
-): Handle => getPtrI64U8PtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2, arg3);
-
-const PTR_I64_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.i64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getPtrI64Lib = macOSLibraryAccessor('msgSendPtrI64', () =>
-  dlopen(LIBOBJC_PATH, PTR_I64_VARIANT),
-);
+): Handle => ptrI64U8Ptr()(receiver, selector, arg0, arg1, arg2, arg3);
 
 /**
  * Send a message with a pointer arg and an `NSInteger`/`NSUInteger` arg —
@@ -371,18 +222,7 @@ export const msgSendPtrI64 = (
   selector: Handle,
   arg0: Handle,
   arg1: bigint,
-): Handle => getPtrI64Lib().symbols.objc_msgSend(receiver, selector, arg0, arg1);
-
-const I64_PTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.i64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getI64PtrLib = macOSLibraryAccessor('msgSendI64Ptr', () =>
-  dlopen(LIBOBJC_PATH, I64_PTR_VARIANT),
-);
+): Handle => ptrI64()(receiver, selector, arg0, arg1);
 
 /**
  * Send a message with an `NSInteger` arg followed by a trailing pointer arg —
@@ -395,18 +235,7 @@ export const msgSendI64Ptr = (
   selector: Handle,
   arg0: bigint,
   arg1: Handle,
-): Handle => getI64PtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1);
-
-const RETURNS_F64_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64],
-    returns: FFIType.f64,
-  },
-} as const;
-
-const getReturnsF64Lib = macOSLibraryAccessor('msgSendReturnsF64', () =>
-  dlopen(LIBOBJC_PATH, RETURNS_F64_VARIANT),
-);
+): Handle => i64Ptr()(receiver, selector, arg0, arg1);
 
 /**
  * Send a zero-extra-arg message returning a C `double` — e.g. `-[NSDate
@@ -415,18 +244,7 @@ const getReturnsF64Lib = macOSLibraryAccessor('msgSendReturnsF64', () =>
  * for `long double` there) - no fpret variant needed.
  */
 export const msgSendReturnsF64 = (receiver: Handle, selector: Handle): number =>
-  getReturnsF64Lib().symbols.objc_msgSend(receiver, selector);
-
-const PTR_I64_PTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.i64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getPtrI64PtrLib = macOSLibraryAccessor('msgSendPtrI64Ptr', () =>
-  dlopen(LIBOBJC_PATH, PTR_I64_PTR_VARIANT),
-);
+  returnsF64()(receiver, selector);
 
 /**
  * Send a message with a pointer arg, an `NSInteger` arg, and a trailing pointer
@@ -439,18 +257,7 @@ export const msgSendPtrI64Ptr = (
   arg0: Handle,
   arg1: bigint,
   arg2: Handle,
-): Handle => getPtrI64PtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2);
-
-const PTR_PTR_I64_PTR_VARIANT = {
-  objc_msgSend: {
-    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64, FFIType.i64, FFIType.u64],
-    returns: FFIType.u64,
-  },
-} as const;
-
-const getPtrPtrI64PtrLib = macOSLibraryAccessor('msgSendPtrPtrI64Ptr', () =>
-  dlopen(LIBOBJC_PATH, PTR_PTR_I64_PTR_VARIANT),
-);
+): Handle => ptrI64Ptr()(receiver, selector, arg0, arg1, arg2);
 
 /**
  * Send a message with two pointer args, an `NSInteger` arg, and a trailing
@@ -465,4 +272,4 @@ export const msgSendPtrPtrI64Ptr = (
   arg1: Handle,
   arg2: bigint,
   arg3: Handle,
-): Handle => getPtrPtrI64PtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1, arg2, arg3);
+): Handle => ptrPtrI64Ptr()(receiver, selector, arg0, arg1, arg2, arg3);
