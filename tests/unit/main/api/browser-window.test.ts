@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InvalidArgumentError } from '../../../../src/common/errors';
 import { app } from '../../../../src/main/api/app';
+import { Menu, setMenuRealizerForTesting } from '../../../../src/main/api/menu';
+import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
 import {
   BrowserWindow,
   resetWindowRegistryForTesting,
@@ -448,6 +450,30 @@ describe('BrowserWindow registry', () => {
     expect(BrowserWindow.getFocusedWindow()).toBeNull();
     b.focus();
     expect(BrowserWindow.getFocusedWindow()).toBe(b);
+  });
+
+  test('a menu item click receives the focused window', () => {
+    let specs: readonly NativeMenuItemSpec[] = [];
+    setMenuRealizerForTesting({
+      realize: (items) => {
+        specs = items;
+        return 1n;
+      },
+      setApplicationMenu: () => undefined,
+    });
+    try {
+      new BrowserWindow();
+      const b = new BrowserWindow();
+      b.focus();
+      let received: unknown;
+      Menu.buildFromTemplate([
+        { label: 'Go', click: (_item, window) => (received = window) },
+      ]).realize();
+      specs[0]?.onClick?.();
+      expect(received).toBe(b);
+    } finally {
+      setMenuRealizerForTesting(undefined);
+    }
   });
 });
 

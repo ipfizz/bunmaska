@@ -372,4 +372,5 @@ installWindowResolver({
     return last === undefined ? undefined : popupTargets.get(last);
   },
   resolve: (window) => (window instanceof BrowserWindow ? popupTargets.get(window) : undefined),
+  focusedWindow: () => BrowserWindow.getFocusedWindow() ?? undefined,
 });

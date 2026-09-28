@@ -270,6 +270,7 @@ describe('Menu.popup target resolution', () => {
       focused: () => undefined,
       mostRecent: () => undefined,
       resolve: (w) => (w === sentinel ? target : undefined),
+      focusedWindow: () => undefined,
     });
     Menu.buildFromTemplate([{ label: 'Cut' }]).popup({ window: sentinel, x: 12, y: 34 });
     expect(calls).toEqual([{ fn: 'popupMenu', args: [1n, 12, 34] }]);
@@ -281,6 +282,7 @@ describe('Menu.popup target resolution', () => {
       focused: () => focused.target,
       mostRecent: () => undefined,
       resolve: () => undefined,
+      focusedWindow: () => undefined,
     });
     Menu.buildFromTemplate([{ label: 'X' }]).popup();
     expect(focused.calls[0]?.fn).toBe('popupMenu');
@@ -292,6 +294,7 @@ describe('Menu.popup target resolution', () => {
       focused: () => undefined,
       mostRecent: () => undefined,
       resolve: () => undefined,
+      focusedWindow: () => undefined,
     });
     expect(() => Menu.buildFromTemplate([{ label: 'X' }]).popup()).toThrow(/no open window/);
   });
@@ -300,7 +303,12 @@ describe('Menu.popup target resolution', () => {
     expect(() =>
       resolvePopupTarget(
         { window: {} as BrowserWindow },
-        { focused: () => undefined, mostRecent: () => undefined, resolve: () => undefined },
+        {
+          focused: () => undefined,
+          mostRecent: () => undefined,
+          resolve: () => undefined,
+          focusedWindow: () => undefined,
+        },
       ),
     ).toThrow(/not an open/);
   });
@@ -312,6 +320,7 @@ describe('Menu.popup target resolution', () => {
       focused: () => undefined,
       mostRecent: () => undefined,
       resolve: (x) => (x === w ? target : undefined),
+      focusedWindow: () => undefined,
     });
     Menu.buildFromTemplate([{ label: 'X' }]).closePopup(w);
     expect(calls).toEqual([{ fn: 'closePopupMenu', args: [] }]);

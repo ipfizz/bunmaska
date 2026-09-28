@@ -327,7 +327,7 @@ const activate = (item: MenuItem, siblings: readonly MenuItem[]): void => {
       other.checked = other === item;
     }
   }
-  item.click?.(item, windowResolver?.focusedWindow?.(), {});
+  item.click?.(item, windowResolver?.focusedWindow(), {});
 };
 
 const toSpecs = (items: readonly MenuItem[]): NativeMenuItemSpec[] =>
@@ -395,7 +395,7 @@ export type WindowResolver = {
   /** `undefined` when `window` is not a known open window. */
   resolve(window: unknown): PopupTarget | undefined;
   /** The window handed to `MenuItem.click`. */
-  focusedWindow?(): BrowserWindow | undefined;
+  focusedWindow(): BrowserWindow | undefined;
 };
 
 let windowResolver: WindowResolver | undefined;
