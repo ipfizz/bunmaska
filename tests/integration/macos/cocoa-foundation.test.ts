@@ -17,7 +17,7 @@ if (currentPlatform() === 'macos') {
     });
 
     test('round-trips UTF-8 multibyte content', () => {
-      expect(nsStringToString(nsString('café — 日本語'))).toBe('café — 日本語');
+      expect(nsStringToString(nsString('café → 日本語'))).toBe('café → 日本語');
     });
 
     test('nsStringToString returns empty string for a null handle', () => {

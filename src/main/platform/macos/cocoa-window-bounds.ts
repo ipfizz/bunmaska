@@ -1,11 +1,3 @@
-/**
- * Real NSWindow frame geometry via the CGWindowList, beating the
- * no-struct-return wall: `-[NSWindow frame]` returns NSRect by value (blocked,
- * D018), but `CGRectMakeWithDictionaryRepresentation` fills a caller-allocated
- * OUT buffer. `kCGWindowBounds` is GLOBAL TOP-LEFT and frame-inclusive, which is
- * exactly Electron's `getBounds` contract, so no coordinate flip on reads.
- */
-
 import { FFIType, ptr } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import type { Rect } from '../native';
@@ -36,9 +28,9 @@ const loadCoreGraphics = (): ReturnType<typeof dlopen<typeof SYMBOLS>> => {
 };
 
 /**
- * The window's on-screen frame in global top-left coordinates, or `undefined`
- * when the window server does not list it (hidden/never-shown windows) - the
- * caller falls back to its tracked bounds then.
+ * The window's frame from the CGWindowList, since `-[NSWindow frame]` returns a struct
+ * (D030). `kCGWindowBounds` is global top-left and frame-inclusive, Electron's `getBounds`
+ * contract, so no flip. `undefined` when the server does not list the window (never shown).
  */
 export const readWindowBounds = (window: Handle): Rect | undefined => {
   const rt = cocoa();

@@ -3,19 +3,10 @@ import { dlopen } from '../dlopen';
 import { dataSymbolAddress, macOSLibraryAccessor } from './objc';
 
 /**
- * Security.framework + CoreFoundation symbols behind the macOS Keychain backend
- * of `safeStorage`.
- *
- * `SecItemAdd`/`SecItemCopyMatching`/`SecItemDelete` take a `CFDictionaryRef`
- * query; we pass an `NSMutableDictionary` (toll-free bridged) as a `u64` handle
- * to match the codebase's ObjC-handle convention (D029). The dictionary KEYS must
- * be the REAL exported `kSec*` `CFStringRef` constants — SecItem compares keys by
- * POINTER identity, so value-equal CFStrings are rejected (errSecParam, -50).
- *
- * Reading those constants needs `dlsym` + a pointer-precise memory read: Bun's
- * `dlopen` only exposes FUNCTION symbols (a declared symbol is CALLED), so a DATA
- * global is resolved via `dlsym(handle, name)` then `read.u64(addr, 0)` (NOT
- * `BigInt(read.ptr(...))`, which round-trips through a lossy JS number — D029).
+ * Keychain symbols behind macOS `safeStorage`. The query dictionary's KEYS must be the
+ * exported `kSec*` constants: SecItem compares keys by POINTER identity, so a value-equal
+ * CFString fails with errSecParam (-50). Read each constant with `read.u64`, never
+ * `BigInt(read.ptr())`, which goes through a lossy JS number (D029).
  */
 
 const SECURITY_PATH = '/System/Library/Frameworks/Security.framework/Security';
@@ -31,7 +22,7 @@ export const loadSecurityFFI = macOSLibraryAccessor('Security.framework safeStor
   }),
 );
 
-/** The `kSec*` / `kCF*` constants the Keychain query dictionary needs (as `CFTypeRef` handles). */
+/** The `kSec*` / `kCF*` constants the Keychain query needs, as `CFTypeRef` handles. */
 export type SecConstants = {
   kSecClass: bigint;
   kSecClassGenericPassword: bigint;

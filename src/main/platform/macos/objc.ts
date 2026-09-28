@@ -4,15 +4,7 @@ import { currentPlatform } from '../../../common/platform';
 import { cstr } from '../cstr';
 import { dlopen } from '../dlopen';
 
-/**
- * Shared Objective-C FFI primitives for the macOS backend.
- *
- * Every Bunmaska Objective-C handle (`id`, `SEL`, `Class`, `IMP`) flows through
- * the codebase as a `bigint` (D016); the only place the `Pointer ↔ bigint`
- * conversion happens is here and at each `objc_msgSend` boundary.
- */
-
-/** Opaque pointer-width Objective-C handle (`id`/`SEL`/`Class`/`IMP`). */
+/** An Objective-C `id`/`SEL`/`Class`/`IMP`: always a bigint (D016) in a u64 slot (D029). */
 export type Handle = bigint;
 
 export const LIBOBJC_PATH = 'libobjc.A.dylib';
@@ -47,11 +39,7 @@ export const callFromNative = <T>(fallback: T, run: () => T): T => {
   }
 };
 
-/**
- * Build a memoising accessor for a macOS-only resource. The accessor opens the
- * resource on first call and caches it; it throws {@link UnsupportedPlatformError}
- * on any non-macOS host so importing modules stay safe to load everywhere.
- */
+/** Memoise a macOS-only resource; throws {@link UnsupportedPlatformError} at call time elsewhere. */
 export const macOSLibraryAccessor = <T>(name: string, open: () => T): (() => T) => {
   let cached: T | undefined;
   return () => {

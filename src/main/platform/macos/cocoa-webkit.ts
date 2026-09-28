@@ -2,14 +2,12 @@ import { nsString } from './cocoa-foundation';
 import { msgSendPtr } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 
-/**
- * Loads `WebKit.framework` through `NSBundle` rather than `dlopen`: modern system
- * frameworks live in the dyld shared cache and expose few C symbols, but
- * `[bundle load]` reliably registers their Objective-C classes.
- */
-
 let loaded = false;
 
+/**
+ * Register WebKit's classes (`WKWebView` and friends); idempotent. Loaded via NSBundle
+ * because Bun's dlopen needs a declared C symbol and WebKit's public API is ObjC only.
+ */
 export const loadWebKit = (): void => {
   if (loaded) {
     return;

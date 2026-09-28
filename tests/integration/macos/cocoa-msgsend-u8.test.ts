@@ -4,7 +4,7 @@ import { msgSendU8 } from '../../../src/main/platform/macos/cocoa-msgsend-varian
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 if (currentPlatform() === 'macos') {
-  describe('msgSendU8 — one-extra-u8-arg variant', () => {
+  describe('msgSendU8 - one-extra-u8-arg variant', () => {
     test('[NSNumber numberWithBool:1] returns a non-zero NSNumber instance', () => {
       const rt = cocoa();
       const nsNumber = rt.classes.get('NSNumber');

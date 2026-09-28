@@ -4,20 +4,13 @@ import { cgRectArgs, RECT_F64 } from './cocoa-msgsend-variants';
 import { macOSLibraryAccessor } from './objc';
 
 /**
- * CoreGraphics bitmap-context symbols behind macOS `nativeImage` resize/crop.
- *
- * The resize/crop redraw goes through an OFFSCREEN bitmap context
- * (`CGBitmapContextCreate(NULL, …)`) — a malloc-backed buffer with NO window
- * server, so it works headless (no `NSApplication`, no `lockFocus`).
- *
- * Everything here is an opaque pointer (CGContextRef/CGImageRef/CGColorSpaceRef)
- * — no struct is ever returned (D030). The one struct ARG, the `CGRect` passed to
- * `CGContextDrawImage`, goes through {@link cgRectArgs} (D018).
+ * Offscreen CoreGraphics bitmap symbols behind macOS `nativeImage` resize/crop: no window
+ * server, so they work headless. Nothing returns a struct (D030).
  */
 
 const CORE_GRAPHICS_PATH = '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics';
 
-/** `kCGImageAlphaPremultipliedLast` — RGBA, the standard CG drawing format. */
+/** `kCGImageAlphaPremultipliedLast`: RGBA, the standard CG drawing format. */
 export const KCG_ALPHA_PREMULTIPLIED_LAST = 1;
 
 const CORE_GRAPHICS_SYMBOLS = {
@@ -47,7 +40,6 @@ const CORE_GRAPHICS_SYMBOLS = {
   },
 } as const;
 
-/** Open CoreGraphics and expose the offscreen-bitmap symbols (memoised; macOS-only). */
 export const loadCoreGraphicsImageFFI = macOSLibraryAccessor('CoreGraphics nativeImage', () => {
   const { symbols } = dlopen(CORE_GRAPHICS_PATH, CORE_GRAPHICS_SYMBOLS);
   const draw = symbols.CGContextDrawImage;

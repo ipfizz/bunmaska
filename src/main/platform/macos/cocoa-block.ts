@@ -2,31 +2,22 @@ import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { callFromNative, dataSymbolAddress, type Handle } from './objc';
 
 /**
- * Hand-built ObjC **Blocks** for bun:ffi — the primitive that unblocks every
- * completion-handler-based AppKit/WebKit API (D022, now SOLVED).
- *
- * A Block is a C struct whose 5th field (`invoke`, at offset 0x10) is a function
- * pointer the ObjC runtime calls as `invoke(block, ...args)`. We build a GLOBAL
- * block (no captured variables, so the runtime never copies/frees it) whose
- * `invoke` is a {@link JSCallback}:
+ * Hand-built ObjC Blocks for completion-handler APIs (D022b). The runtime calls a
+ * block as `invoke(block, ...args)`, reading `invoke` at offset 16:
  *
  * ```
  * struct Block_literal { void *isa; int flags; int reserved; void *invoke; void *descriptor; }
  * struct Block_descriptor { unsigned long reserved; unsigned long size; }
  * ```
  *
- * - `isa` = `&_NSConcreteGlobalBlock` (resolved once via `dlsym`).
- * - `flags` = `BLOCK_IS_GLOBAL` (1 << 28). No copy/dispose helpers, no signature
- *   (direct invocation does not need one — verified against `dispatch_async` +
- *   the run loop).
- * - `invoke` = the JSCallback pointer; its first parameter is the block itself.
+ * - `isa` = `&_NSConcreteGlobalBlock`: a GLOBAL block captures nothing, so the
+ *   runtime never copies or frees it.
+ * - `flags` = `BLOCK_IS_GLOBAL` (1 << 28). No copy/dispose helpers and no signature:
+ *   direct invocation needs neither (verified with `dispatch_async` + the run loop).
+ * - `invoke` = a JSCallback whose first parameter is the block itself.
  *
- * LIFETIME: a completion handler fires LATER, on the pumped run loop, so the
- * literal + descriptor + JSCallback must stay reachable until then — they are
- * held in {@link retained}. After the handler runs we close the JSCallback on a
- * DEFERRED tick (never synchronously inside its own invocation, which would free
- * the native trampoline mid-call and segfault — the same crash class as the GTK
- * `runAsyncDialog` callbacks).
+ * The literal and JSCallback stay in {@link retained} until the block fires, then
+ * close on a deferred tick, never inside their own invocation (D022b).
  */
 
 const BLOCK_IS_GLOBAL = 1 << 28;
@@ -56,14 +47,9 @@ export const retainedBlockCount = (): number => retained.size;
 export type BlockArg = number | bigint | null;
 
 /**
- * Build a one-shot global Block whose handler runs when the runtime invokes it.
- * `argTypes` are the block's parameter FFI types AFTER the implicit leading block
- * pointer (which is dropped before `handler` is called). The handler receives the
- * real arguments in order. The block frees itself (deferred) after it fires, so
- * this is for completion handlers that are called exactly once.
- *
- * Returns the block pointer as a {@link Handle} to pass to an `objc_msgSend`
- * argument slot.
+ * Build a block for a completion handler called exactly once; it frees itself after
+ * firing. `argTypes` follow the implicit block pointer, which `handler` never sees.
+ * Declare ObjC object params as `FFIType.u64`: `ptr` loses tagged-pointer bits (D029).
  */
 export const makeOneShotBlock = (
   handler: (...args: BlockArg[]) => void,
@@ -73,10 +59,8 @@ export const makeOneShotBlock = (
   const cb = new JSCallback(
     (...all: BlockArg[]) => {
       if (retained.get(blockPtr)?.cancelled === false) {
-        // Drop the leading block pointer; hand the real args to the caller.
         callFromNative(undefined, () => handler(...all.slice(1)));
       }
-      // Deferred close: never free the trampoline inside its own invocation.
       setTimeout(() => {
         retained.delete(blockPtr);
         cb.close();

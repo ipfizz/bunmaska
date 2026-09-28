@@ -1,12 +1,5 @@
-/**
- * Memoising wrapper around `sel_registerName`: one registrar call per distinct
- * selector name for the lifetime of the cache instance.
- */
-
-/** Opaque pointer-width handle returned by `sel_registerName`. */
 export type Selector = bigint;
 
-/** Shape of `sel_registerName`: name → opaque selector handle. */
 export type SelectorRegistrar = (name: string) => Selector;
 
 export class SelectorCache {

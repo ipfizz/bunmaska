@@ -4,7 +4,7 @@ import { msgSendReturnsU8 } from '../../../src/main/platform/macos/cocoa-msgsend
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 if (currentPlatform() === 'macos') {
-  describe('msgSendReturnsU8 — BOOL-returning, zero-extra-arg variant', () => {
+  describe('msgSendReturnsU8 - BOOL-returning, zero-extra-arg variant', () => {
     test('[NSObject_instance isProxy] returns 0 (NO)', () => {
       const rt = cocoa();
       const nsObject = rt.classes.get('NSObject');

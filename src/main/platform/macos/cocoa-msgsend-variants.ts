@@ -5,24 +5,6 @@ import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
 const { u64, u8, i64, f64, cstring } = FFIType;
 
-/**
- * Typed `objc_msgSend` variants for selectors whose signatures don't match
- * the zero-extra-arg form exposed on {@link CocoaRuntime}.
- *
- * Bun's FFI cannot declare two distinct signatures for the same symbol name
- * inside one `dlopen` call, so each variant `dlopen`s `libobjc.A.dylib` again
- * with a different signature. dyld dedupes the underlying image; the cost is
- * one extra `Library` wrapper object per variant.
- *
- * Every Objective-C object/selector slot is declared `u64` (not `pointer`) so
- * tagged-pointer objects survive the FFI boundary as full-precision bigints
- * (D029). Non-handle args keep their natural type (`f64`, `u8`, `i64`,
- * `cstring`).
- *
- * Every export here is macOS-only: each throws {@link UnsupportedPlatformError}
- * on other platforms.
- */
-
 export type CGRectArgs = readonly [x: number, y: number, width: number, height: number];
 
 // D018: arm64 passes a 4-double CGRect (an HFA) in d0-d3, exactly like four doubles.
@@ -41,7 +23,7 @@ export const RECT_F64: readonly FFIType.f64[] = new Array<FFIType.f64>(
   rectPadding(process.arch) + 4,
 ).fill(FFIType.f64);
 
-/** One lazily opened `objc_msgSend` binding with its own signature. */
+/** One `objc_msgSend` signature, compiled on first use; handle slots are u64 (D029). */
 const variant = <const Args extends readonly FFIType[], const Returns extends FFIType>(
   name: string,
   args: Args,
@@ -157,8 +139,8 @@ export const msgSendPtrReturnsU8 = (receiver: Handle, selector: Handle, arg: Han
   ptrReturnsU8()(receiver, selector, arg);
 
 /**
- * Send a message with an `NSSize`/`CGSize` arg (two `double`s by value), e.g.
- * `[window setContentSize:(NSSize){w, h}]`.
+ * Send an `NSSize`/`CGSize` by value. A 2-double struct needs no D018 padding: it goes
+ * in d0-d1 on arm64 and xmm0-1 on x86_64 (16 bytes is not MEMORY class, unlike CGRect).
  */
 export const msgSendSize = (
   receiver: Handle,
@@ -167,12 +149,7 @@ export const msgSendSize = (
   height: number,
 ): Handle => size()(receiver, selector, width, height);
 
-/**
- * Send a message taking a pointer, an `NSPoint` (two `double`s BY VALUE — the
- * struct-as-doubles trick, D018), then a pointer, returning a `BOOL` — specifically
- * `-[NSMenu popUpMenuPositioningItem:atLocation:inView:]`. A 2-double homogeneous-FP struct
- * arg occupies the same registers as two separate doubles (proven by {@link msgSendSize}).
- */
+/** Pointer, `NSPoint` by value (see {@link msgSendSize}), pointer; returns BOOL. */
 export const msgSendPtrPointPtrReturnsU8 = (
   receiver: Handle,
   selector: Handle,
@@ -182,12 +159,6 @@ export const msgSendPtrPointPtrReturnsU8 = (
   view: Handle,
 ): number => ptrPointPtrReturnsU8()(receiver, selector, item, x, y, view);
 
-/**
- * Send a message with four extra pointer-sized args — specifically
- * `[WKWebView evaluateJavaScript:inFrame:inContentWorld:completionHandler:]`
- * (macOS 11+). Pass `frame = 0n` (main frame) and `completionHandler = 0n`
- * (`_Nullable`, fire-and-forget — no block thunk, no D022 hazard).
- */
 export const msgSendPtr4 = (
   receiver: Handle,
   selector: Handle,
@@ -197,12 +168,6 @@ export const msgSendPtr4 = (
   arg3: Handle,
 ): Handle => ptr4()(receiver, selector, arg0, arg1, arg2, arg3);
 
-/**
- * Send a message with a pointer arg, an `NSInteger` arg, a `BOOL` arg, and a
- * trailing pointer arg — specifically
- * `[WKUserScript initWithSource:injectionTime:forMainFrameOnly:inContentWorld:]`
- * (macOS 11+).
- */
 export const msgSendPtrI64U8Ptr = (
   receiver: Handle,
   selector: Handle,
@@ -212,11 +177,6 @@ export const msgSendPtrI64U8Ptr = (
   arg3: Handle,
 ): Handle => ptrI64U8Ptr()(receiver, selector, arg0, arg1, arg2, arg3);
 
-/**
- * Send a message with a pointer arg and an `NSInteger`/`NSUInteger` arg —
- * specifically `[NSData dataWithBytes:(const void*)ptr length:(NSUInteger)len]`,
- * where the byte pointer is a pinned buffer and the length is its size.
- */
 export const msgSendPtrI64 = (
   receiver: Handle,
   selector: Handle,
@@ -224,12 +184,6 @@ export const msgSendPtrI64 = (
   arg1: bigint,
 ): Handle => ptrI64()(receiver, selector, arg0, arg1);
 
-/**
- * Send a message with an `NSInteger` arg followed by a trailing pointer arg —
- * specifically `[NSBitmapImageRep representationUsingType:(NSBitmapImageFileType)
- * properties:(NSDictionary*)]` (the file-type enum then a nullable properties
- * dictionary).
- */
 export const msgSendI64Ptr = (
   receiver: Handle,
   selector: Handle,
@@ -237,20 +191,10 @@ export const msgSendI64Ptr = (
   arg1: Handle,
 ): Handle => i64Ptr()(receiver, selector, arg0, arg1);
 
-/**
- * Send a zero-extra-arg message returning a C `double` — e.g. `-[NSDate
- * timeIntervalSince1970]`. Plain `objc_msgSend` is correct on BOTH ABIs: ARM64
- * returns doubles in d0, and x86_64 in xmm0 (`objc_msgSend_fpret` exists only
- * for `long double` there) - no fpret variant needed.
- */
+/** Returns a C double: plain `objc_msgSend` is right on both ABIs; `_fpret` is only for x86_64 long double. */
 export const msgSendReturnsF64 = (receiver: Handle, selector: Handle): number =>
   returnsF64()(receiver, selector);
 
-/**
- * Send a message with a pointer arg, an `NSInteger` arg, and a trailing pointer
- * arg — specifically `[NSError errorWithDomain:code:userInfo:]` (domain string,
- * integer code, nullable userInfo dictionary).
- */
 export const msgSendPtrI64Ptr = (
   receiver: Handle,
   selector: Handle,
@@ -259,12 +203,6 @@ export const msgSendPtrI64Ptr = (
   arg2: Handle,
 ): Handle => ptrI64Ptr()(receiver, selector, arg0, arg1, arg2);
 
-/**
- * Send a message with two pointer args, an `NSInteger` arg, and a trailing
- * pointer arg — specifically `[[NSURLResponse alloc]
- * initWithURL:MIMEType:expectedContentLength:textEncodingName:]` (URL pointer,
- * MIME-type NSString pointer, content length, text-encoding NSString or 0).
- */
 export const msgSendPtrPtrI64Ptr = (
   receiver: Handle,
   selector: Handle,

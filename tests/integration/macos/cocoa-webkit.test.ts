@@ -20,7 +20,7 @@ if (currentPlatform() === 'macos') {
       expect(cocoa().classes.get('WKUserContentController')).not.toBe(0n);
     });
 
-    test('is idempotent — repeated calls are safe', () => {
+    test('is idempotent - repeated calls are safe', () => {
       loadWebKit();
       loadWebKit();
       expect(cocoa().classes.get('WKWebView')).not.toBe(0n);

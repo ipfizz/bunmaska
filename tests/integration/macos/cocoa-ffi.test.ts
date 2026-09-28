@@ -15,7 +15,7 @@ if (currentPlatform() === 'macos') {
       expect(sel).not.toBe(0n);
     });
 
-    test('sel_registerName is idempotent — same name yields the same selector pointer', () => {
+    test('sel_registerName is idempotent - same name yields the same selector pointer', () => {
       const lib = loadCocoaFFI();
       const a = lib.symbols.sel_registerName(cstr('release'));
       const b = lib.symbols.sel_registerName(cstr('release'));

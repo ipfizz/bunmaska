@@ -6,36 +6,16 @@ import { cocoa } from './cocoa-runtime';
 import { callFromNative, type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
 /**
- * Define Objective-C classes at runtime with JS-backed methods:
- * `objc_allocateClassPair` → `class_addMethod` with a `JSCallback` as the IMP →
- * `objc_registerClassPair` (D026).
- *
- * Every Objective-C method's first two args are the implicit `self` (id) and
- * `_cmd` (SEL); declared args follow. All are modelled as `u64` handles (D029).
- */
-
-/**
- * A JS-backed method to attach to a runtime class.
- *
- * `returns` defaults to `'void'`. A `'bool'` method's `impl` must return `0`/`1`
- * (NO/YES); a throwing one answers YES, as in Electron a throwing listener cannot
- * veto. A throwing `'object'` method answers nil. See {@link callFromNative}.
+ * A JS-backed method for a runtime class. A throwing impl answers YES for `'bool'`
+ * (as in Electron, a throwing listener cannot veto) and nil for `'object'`.
  */
 export type ObjcMethodSpec = {
-  /** The selector name, e.g. `userContentController:didReceiveScriptMessage:`. */
   readonly selector: string;
-  /** The ObjC type encoding, e.g. `v@:@` (void; self, _cmd, one object arg). */
   readonly typeEncoding: string;
-  /** The declared (post-`self`/`_cmd`) argument kinds; a BOOL is only defined in its low byte. */
+  /** Kinds after `self`/`_cmd`; a BOOL is defined only in its low byte, so never read it as an object. */
   readonly args: ReadonlyArray<'object' | 'bool'>;
-  /** Return kind; defaults to `'void'`. */
   readonly returns?: 'void' | 'bool' | 'object';
-  /**
-   * The JS implementation. Receives `(self, _cmd, ...args)` as bigint handles.
-   * A `returns: 'bool'` method's impl must produce `0`/`1`; a `returns: 'object'`
-   * method's impl must produce a `Handle` (`0n` = nil). The build wrapper reads
-   * that runtime value (a `() => number`/`() => Handle` is assignable here too).
-   */
+  /** Gets `(self, _cmd, ...args)`; returns 0/1 for `'bool'`, a Handle (0n = nil) for `'object'`. */
   readonly impl: (self: Handle, cmd: Handle, ...args: Handle[]) => void;
 };
 
@@ -56,8 +36,7 @@ const getRuntime = macOSLibraryAccessor('objc runtime class', () =>
   }),
 );
 
-// JSCallbacks must outlive the ObjC class that points at them; the runtime keeps
-// classes for the process lifetime, so we retain their callbacks for as long.
+// Never close these: a registered class and its IMPs live for the whole process.
 const retainedCallbacks: JSCallback[] = [];
 
 const buildCallback = (method: ObjcMethodSpec): JSCallback => {
@@ -95,10 +74,7 @@ const buildCallback = (method: ObjcMethodSpec): JSCallback => {
   );
 };
 
-/**
- * Allocate, populate, and register an Objective-C class. Returns the class
- * handle. Throws {@link UnsupportedPlatformError} off macOS (via the accessor).
- */
+/** Register an ObjC class whose IMPs are JSCallbacks (D026); throws off macOS. */
 export const defineObjcClass = (
   name: string,
   superclassName: string,
@@ -108,11 +84,10 @@ export const defineObjcClass = (
   const rt = cocoa();
   const superclass = rt.classes.get(superclassName);
   const cls = runtime.symbols.objc_allocateClassPair(superclass, cstr(name), 0n);
-  // objc_allocateClassPair returns nil for a duplicate name; class_addMethod on
-  // nil then corrupts silently instead of failing here.
+  // Nil means the name is taken; class_addMethod on nil corrupts silently.
   if (cls === 0n) {
     throw new BunmaskaError(
-      `defineObjcClass: objc_allocateClassPair returned nil for ${JSON.stringify(name)} — the class name is already registered in this process`,
+      `defineObjcClass: objc_allocateClassPair returned nil for ${JSON.stringify(name)} - the class name is already registered in this process`,
     );
   }
 

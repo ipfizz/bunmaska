@@ -15,7 +15,7 @@ if (currentPlatform() === 'macos') {
       expect(sel).not.toBe(0n);
     });
 
-    test('selectors.get is cached — same name yields same bigint', () => {
+    test('selectors.get is cached - same name yields same bigint', () => {
       const a = cocoa().selectors.get('release');
       const b = cocoa().selectors.get('release');
       expect(b).toBe(a);
