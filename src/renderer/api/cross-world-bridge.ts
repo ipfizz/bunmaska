@@ -235,8 +235,7 @@ export const generateIsolatedHostSource = (channelId: string): string => {
     if (!entry) {
       return;
     }
-    var handler = entry.api[detail.method];
-    if (typeof handler !== 'function') {
+    if (entry.methods.indexOf(detail.method) === -1) {
       reply({
         callId: detail.callId,
         ok: false,
@@ -246,7 +245,7 @@ export const generateIsolatedHostSource = (channelId: string): string => {
     }
     Promise.resolve()
       .then(function () {
-        return handler.apply(entry.api, detail.args || []);
+        return entry.api[detail.method].apply(entry.api, detail.args || []);
       })
       .then(function (result) {
         reply({ callId: detail.callId, ok: true, result: clone(result) });

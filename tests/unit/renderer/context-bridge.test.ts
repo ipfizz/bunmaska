@@ -9,6 +9,7 @@ import {
   type EventScope,
   generateIsolatedHostSource,
   generatePageWorldStub,
+  installCrossWorldHost,
   replyChannel,
 } from '../../../src/renderer/api/cross-world-bridge';
 
@@ -281,6 +282,19 @@ describe('page object hardening', () => {
     const page = makePageWorld(doc);
     createContextBridge(transport(doc)).exposeInMainWorld('myApi', { ping: () => 'pong' });
     expect(Object.getPrototypeOf(page.read('myApi'))).toBe(null);
+  });
+
+  test('a forged call to an inherited, unannounced method is refused', async () => {
+    const doc = new MockDocument();
+    const api = Object.assign(Object.create({ secret: () => 'SECRET' }), { ping: () => 'pong' });
+    installCrossWorldHost(CHANNEL, doc, MockCustomEvent)('api', api);
+    const replies: unknown[] = [];
+    doc.addEventListener(replyChannel(CHANNEL), (e) => replies.push(e.detail));
+    doc.dispatchEvent({ type: CHANNEL, detail: { callId: 99, key: 'api', method: 'secret' } });
+    await Bun.sleep(0);
+    expect(replies).toEqual([
+      { callId: 99, ok: false, error: 'contextBridge: no method "secret"' },
+    ]);
   });
 
   test('a prototype-pollution member name is rejected at expose time', () => {
