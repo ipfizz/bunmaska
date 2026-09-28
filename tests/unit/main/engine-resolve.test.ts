@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   bakedIdCandidates,
   type EngineResolution,
-  engineEnv,
   engineLibPath,
   prepareEngineForLoad,
   type ResolveDeps,
@@ -138,44 +137,20 @@ describe('engineLibPath', () => {
   });
 });
 
-describe('engineEnv', () => {
-  test('pinned -> sets LD_LIBRARY_PATH, GIO_EXTRA_MODULES, and WEBKIT_EXEC_PATH', () => {
-    const r = resolve({ env: {}, readBakedId: () => ID });
-    const env = engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' });
-    expect(slash(env.LD_LIBRARY_PATH ?? '')).toBe(`${ROOT}/${ID}/lib:/usr/lib`);
-    expect(slash(env.GIO_EXTRA_MODULES ?? '')).toBe(`${ROOT}/${ID}/lib/gio/modules`);
-    expect(slash(env.WEBKIT_EXEC_PATH ?? '')).toBe(`${ROOT}/${ID}/libexec`);
-  });
-
-  test('pinned with no prior LD_LIBRARY_PATH -> just the lib dir', () => {
-    const r = resolve({ env: {}, readBakedId: () => ID });
-    const env = engineEnv(r, {});
-    expect(slash(env.LD_LIBRARY_PATH ?? '')).toBe(`${ROOT}/${ID}/lib`);
-  });
-
-  test('system -> no env changes', () => {
-    const r = resolve({ env: {} });
-    expect(engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' })).toEqual({});
-  });
-});
-
 describe('prepareEngineForLoad', () => {
   // Reset BEFORE each test too: on Linux the real GTK/WebKitGTK loaders run in
   // the same process and set this one-shot guard, which would otherwise leak in.
   beforeEach(() => resetEnginePreparation());
   afterEach(() => resetEnginePreparation());
 
-  test('pinned: exports the engine env and prints warnings, exactly once', () => {
+  test('pinned: prints warnings exactly once', () => {
     const pinned: EngineResolution = {
       mode: 'pinned',
       libDir: '/store/x/lib',
       warnings: ['heads up'],
     };
-    const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
     const writes: string[] = [];
-    prepareEngineForLoad(pinned, target, (s) => writes.push(s));
-    expect(slash(target['LD_LIBRARY_PATH'] ?? '')).toBe('/store/x/lib:/usr/lib');
-    expect(slash(target['GIO_EXTRA_MODULES'] ?? '')).toBe('/store/x/lib/gio/modules');
+    prepareEngineForLoad(pinned, {}, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
 
     // A second call (e.g. the other loader) is a no-op — single shared engine.
@@ -183,12 +158,19 @@ describe('prepareEngineForLoad', () => {
     expect(writes).toEqual(['heads up\n']);
   });
 
-  test('system: applies no env and prints nothing', () => {
+  test('pinned: leaves the env alone, so child_process children never inherit the engine libs', () => {
     const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
+    prepareEngineForLoad(
+      { mode: 'pinned', libDir: '/store/x/lib', warnings: [] },
+      target,
+      () => undefined,
+    );
+    expect(target).toEqual({ LD_LIBRARY_PATH: '/usr/lib' });
+  });
+
+  test('system: prints nothing', () => {
     const writes: string[] = [];
-    prepareEngineForLoad({ mode: 'system', warnings: [] }, target, (s) => writes.push(s));
-    expect(target['LD_LIBRARY_PATH']).toBe('/usr/lib');
-    expect(target['GIO_EXTRA_MODULES']).toBeUndefined();
+    prepareEngineForLoad({ mode: 'system', warnings: [] }, {}, (s) => writes.push(s));
     expect(writes).toEqual([]);
   });
 

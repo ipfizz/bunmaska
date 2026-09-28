@@ -158,28 +158,6 @@ export const engineLibPath = (resolution: EngineResolution, soname: string): str
     ? join(resolution.libDir, soname)
     : soname;
 
-/**
- * Environment overrides for a pinned engine: `LD_LIBRARY_PATH` prepended so its
- * bundled GTK/libsoup/ICU/GStreamer win over the distro's, `GIO_EXTRA_MODULES` for
- * its gio modules, and `WEBKIT_EXEC_PATH` so WebKit spawns the engine's OWN helper
- * processes (WebKitNetworkProcess/WebProcess/GPUProcess) rather than the system's.
- */
-export const engineEnv = (
-  resolution: EngineResolution,
-  env: StoreEnv,
-): { LD_LIBRARY_PATH?: string; GIO_EXTRA_MODULES?: string; WEBKIT_EXEC_PATH?: string } => {
-  if (resolution.mode !== 'pinned' || resolution.libDir === undefined) {
-    return {};
-  }
-  const prior = env['LD_LIBRARY_PATH'];
-  return {
-    LD_LIBRARY_PATH:
-      prior !== undefined && prior.length > 0 ? `${resolution.libDir}:${prior}` : resolution.libDir,
-    GIO_EXTRA_MODULES: join(resolution.libDir, 'gio', 'modules'),
-    WEBKIT_EXEC_PATH: join(resolution.libDir, '..', 'libexec'),
-  };
-};
-
 const prep: { done: boolean } = { done: false };
 
 /** Injectable seams for {@link prepareEngineForLoad}'s auto-link side effect. */
@@ -191,15 +169,18 @@ export type PrepareDeps = {
 };
 
 /**
- * Apply a resolution before the first `dlopen`: print fallback warnings, export the
- * pinned engine's env, and — for a STORE pin — register this app in the store's
- * `.links` refcount so GC/prune know the engine is needed. Runs once per process:
- * both Linux loaders call it, only the first takes effect, keeping them on a single
- * shared engine.
+ * Apply a resolution before the first `dlopen`: print fallback warnings and, for a
+ * STORE pin, register this app in the store's `.links` refcount so prune keeps the
+ * engine. Runs once per process; later loaders' calls are no-ops.
+ *
+ * It exports no env: Bun's `process.env` writes never reach native `getenv` (so
+ * WebKit's helper spawns never see them) yet leak into every `child_process` child.
+ * ponytail: a pinned Linux engine's helper processes come from its build's compiled-in
+ * PKGLIBEXECDIR; relocating them needs a from-source build (DEVELOPER_MODE or a dladdr patch).
  */
 export const prepareEngineForLoad = (
   resolution: EngineResolution,
-  target: StoreEnv,
+  _env: StoreEnv, // ponytail: unused; drop with the gtk/webkitgtk/soup loader call sites
   write: (text: string) => void,
   deps: PrepareDeps = {},
 ): void => {
@@ -209,16 +190,6 @@ export const prepareEngineForLoad = (
   prep.done = true;
   for (const warning of resolution.warnings) {
     write(`${warning}\n`);
-  }
-  const env = engineEnv(resolution, target);
-  if (env.LD_LIBRARY_PATH !== undefined) {
-    target['LD_LIBRARY_PATH'] = env.LD_LIBRARY_PATH;
-  }
-  if (env.GIO_EXTRA_MODULES !== undefined) {
-    target['GIO_EXTRA_MODULES'] = env.GIO_EXTRA_MODULES;
-  }
-  if (env.WEBKIT_EXEC_PATH !== undefined) {
-    target['WEBKIT_EXEC_PATH'] = env.WEBKIT_EXEC_PATH;
   }
   // Auto-link only a STORE pin (it has an id + root); an explicit-dir pin and
   // system mode have nothing to refcount.
