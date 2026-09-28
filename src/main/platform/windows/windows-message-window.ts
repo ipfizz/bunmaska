@@ -1,19 +1,15 @@
 import { FFIType, JSCallback, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import { wstr } from './win32';
+import { registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
 
-/**
- * A hidden, non-WebKit Win32 window that receives system notifications
- * (`WM_POWERBROADCAST`, `WM_WTSSESSION_CHANGE`, a tray icon's callback). It hosts no
- * WebKit, so a JSCallback WndProc is safe here (unlike `windows-native-window.ts`).
- */
+// Hidden windows for system notifications (power, session, tray). They host no WebKit,
+// so a JSCallback WndProc is safe here (D043).
 
-const WNDCLASSEXW_SIZE = 80;
 const CLASS_NAME = 'BunmaskaMessageWindow';
-/** `WS_EX_TOOLWINDOW` — keep the (never-shown) window out of the taskbar/alt-tab. */
 const WS_EX_TOOLWINDOW = 0x00000080;
 const WS_OVERLAPPED = 0x00000000;
+const WM_CLOSE = 0x0010;
 
 /** A per-window message observer: a posted/sent message and its parameters. */
 export type MessageHandler = (message: number, wParam: bigint, lParam: bigint) => void;
@@ -26,7 +22,7 @@ export type MessageWindow = {
 
 const handlersByHwnd = new Map<bigint, MessageHandler>();
 
-/** Lazily-created shared state: the registered class + the retained WndProc. */
+// Retained for the process: the registered class calls this proc until exit.
 let registered: { readonly wndProc: JSCallback } | undefined;
 
 /** Register the window class once, wiring the shared dispatching WndProc. */
@@ -42,10 +38,11 @@ const ensureClassRegistered = (): void => {
         try {
           handler(message, wParam, lParam);
         } catch {
-          // A throwing JS handler must never propagate into the native WndProc.
+          // Same rule as the frame proc: never propagate into native code.
         }
       }
-      return user32.DefWindowProcW(hwnd, message, wParam, lParam);
+      // An external WM_CLOSE must not destroy it; only destroy() does.
+      return message === WM_CLOSE ? 0n : user32.DefWindowProcW(hwnd, message, wParam, lParam);
     },
     { args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64], returns: FFIType.i64 },
   );
@@ -55,47 +52,41 @@ const ensureClassRegistered = (): void => {
   }
 
   const hInstance = loadKernel32().symbols.GetModuleHandleW(null);
-  const className = wstr(CLASS_NAME);
-  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
-  const view = new DataView(wc.buffer);
-  view.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
-  view.setBigUint64(8, BigInt(wndProcPtr), true); // lpfnWndProc
-  view.setBigUint64(24, hInstance, true); // hInstance
-  view.setBigUint64(64, BigInt(ptr(className)), true); // lpszClassName
-  user32.RegisterClassExW(ptr(wc));
-  // Retain the JSCallback for the whole process (the class references it forever).
+  registerWindowClass(user32, CLASS_NAME, BigInt(wndProcPtr), hInstance);
   registered = { wndProc };
 };
 
-/**
- * Create a hidden top-level window whose messages are delivered to `handler`.
- * Top-level (not message-only) so it receives broadcast `WM_POWERBROADCAST`; the
- * `WS_EX_TOOLWINDOW` style keeps it invisible to the user. The window is never
- * shown.
- */
+/** A never-shown top-level window feeding `handler`; not message-only, so it gets broadcasts. */
 export const createMessageWindow = (handler: MessageHandler): MessageWindow => {
   ensureClassRegistered();
   const user32 = loadUser32().symbols;
   const hInstance = loadKernel32().symbols.GetModuleHandleW(null);
-  const className = wstr(CLASS_NAME);
   const hwnd = user32.CreateWindowExW(
     WS_EX_TOOLWINDOW,
-    ptr(className),
+    ptr(wstr(CLASS_NAME)),
     null,
     WS_OVERLAPPED,
     0,
     0,
     0,
     0,
-    0n, // no parent — a (hidden) top-level window receives WM_POWERBROADCAST
+    0n,
     0n,
     hInstance,
     null,
   );
+  if (hwnd === 0n) {
+    throw new FFIError('CreateWindowExW returned NULL for the message window');
+  }
   handlersByHwnd.set(hwnd, handler);
+  let destroyed = false;
   return {
     hwnd,
     destroy: (): void => {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
       handlersByHwnd.delete(hwnd);
       user32.DestroyWindow(hwnd);
     },

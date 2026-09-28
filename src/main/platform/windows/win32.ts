@@ -1,45 +1,51 @@
-/**
- * Every Win32 handle (`HWND`, `HMENU`, `HINSTANCE`, `HICON`, ...) flows through
- * the codebase as a `bigint` and crosses the FFI boundary as `u64`, NOT as a
- * Bun `Pointer`. A `HANDLE` is an opaque kernel value, not a virtual address, so
- * Bun's 52-bit pointer representation would corrupt its high bits — the same
- * truncation hazard the macOS backend avoids for tagged pointers (D029). Real
- * pointers (struct buffers, wide strings) are passed with `ptr()` as usual.
- */
+// Every Win32 handle (HWND, HMENU, HINSTANCE, ...) is a `bigint` declared `u64`, never
+// `ptr`: pseudo-handles and sentinels such as (HWND)-1 exceed 2^53 and a Bun Pointer
+// truncates them (the D029 hazard). Only real buffers (structs, strings) go through ptr().
 
-import { UnsupportedPlatformError } from '../../../common/errors';
+import { type Pointer, ptr, read } from 'bun:ffi';
+import { FFIError, UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import type { Rect } from '../native';
 
-/** Opaque pointer-width Win32 handle (`HWND`/`HMENU`/`HINSTANCE`/...). */
-export type WinHandle = bigint;
+/** A NUL-terminated UTF-16LE `LPCWSTR`; the caller keeps it alive across the call. */
+export const wstr = (input: string): Uint8Array => Buffer.from(`${input}\0`, 'utf16le');
 
-export const NULL_HANDLE: WinHandle = 0n;
-
-/**
- * Encode a JS string as a null-terminated UTF-16LE byte sequence suitable for a
- * Win32 wide-character (`LPCWSTR`) argument — the `wstr` sibling of {@link cstr}.
- *
- * Modern Win32 and the WebKit C API are UTF-16; Windows is little-endian, and a
- * `WCHAR` is one UTF-16 code unit, so each `charCodeAt` unit is emitted as two
- * little-endian bytes (surrogate pairs become their two units) followed by a
- * 16-bit NUL. The caller pins the buffer (e.g. `ptr(wstr(s))`) for the call.
- */
-export const wstr = (input: string): Uint8Array => {
-  const terminated = `${input}\0`;
-  const out = new Uint8Array(terminated.length * 2);
-  for (let i = 0; i < terminated.length; i += 1) {
-    const unit = terminated.charCodeAt(i);
-    out[i * 2] = unit & 0xff;
-    out[i * 2 + 1] = (unit >> 8) & 0xff;
-  }
-  return out;
+/** Read a native `RECT` (left, top, right, bottom as LONGs) at `offset` as a {@link Rect}. */
+export const readRect = (pointer: Pointer, offset: number): Rect => {
+  const left = read.i32(pointer, offset);
+  const top = read.i32(pointer, offset + 4);
+  return {
+    x: left,
+    y: top,
+    width: read.i32(pointer, offset + 8) - left,
+    height: read.i32(pointer, offset + 12) - top,
+  };
 };
 
-/**
- * Build a memoising accessor for a Windows-only resource. The accessor opens the
- * resource on first call and caches it; it throws {@link UnsupportedPlatformError}
- * on any non-Windows host so importing modules stay safe to load everywhere.
- */
+const WNDCLASSEXW_SIZE = 80;
+
+/** Register a window class, throwing `FFIError` on failure; the name is copied into an atom. */
+export const registerWindowClass = (
+  user32: { readonly RegisterClassExW: (wc: Pointer) => number },
+  name: string,
+  wndProc: bigint,
+  hInstance: bigint,
+  hCursor = 0n,
+): void => {
+  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
+  const dv = new DataView(wc.buffer);
+  dv.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
+  dv.setBigUint64(8, wndProc, true); // lpfnWndProc
+  dv.setBigUint64(24, hInstance, true); // hInstance
+  dv.setBigUint64(40, hCursor, true); // hCursor
+  const className = wstr(name);
+  dv.setBigUint64(64, BigInt(ptr(className)), true); // lpszClassName
+  if (user32.RegisterClassExW(ptr(wc)) === 0) {
+    throw new FFIError(`RegisterClassExW failed for ${name}`);
+  }
+};
+
+/** Memoise `open` on first call; throws {@link UnsupportedPlatformError} off Windows. */
 export const winLibraryAccessor = <T>(name: string, open: () => T): (() => T) => {
   let cached: T | undefined;
   return () => {

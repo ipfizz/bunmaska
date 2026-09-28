@@ -1,18 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { UnsupportedPlatformError } from '../../../../../src/common/errors';
+import { type Pointer, ptr, read } from 'bun:ffi';
+import { FFIError, UnsupportedPlatformError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
-  NULL_HANDLE,
-  type WinHandle,
+  readRect,
+  registerWindowClass,
   winLibraryAccessor,
   wstr,
 } from '../../../../../src/main/platform/windows/win32';
 
 describe('wstr', () => {
-  test('returns a Uint8Array', () => {
-    expect(wstr('x')).toBeInstanceOf(Uint8Array);
-  });
-
   test('null-terminates with a UTF-16 (two-byte) NUL', () => {
     const bytes = wstr('hello');
     expect(bytes[bytes.length - 2]).toBe(0);
@@ -42,18 +39,54 @@ describe('wstr', () => {
   });
 });
 
-describe('NULL_HANDLE', () => {
-  test('is the zero bigint handle', () => {
-    const handle: WinHandle = NULL_HANDLE;
-    expect(handle).toBe(0n);
+describe('readRect', () => {
+  test('turns a RECT (left, top, right, bottom) at an offset into x/y/width/height', () => {
+    const buffer = new Int32Array([7, 7, -30, 110, 220, 330]);
+    expect(readRect(ptr(buffer), 8)).toEqual({ x: -30, y: 110, width: 250, height: 220 });
+  });
+});
+
+describe('registerWindowClass', () => {
+  const readWide = (pointer: Pointer): string => {
+    let text = '';
+    for (let offset = 0; read.u16(pointer, offset) !== 0; offset += 2) {
+      text += String.fromCharCode(read.u16(pointer, offset));
+    }
+    return text;
+  };
+
+  test('packs WNDCLASSEXW: cbSize, then proc@8, instance@24, cursor@40, name@64', () => {
+    let packed: unknown[] = [];
+    registerWindowClass(
+      {
+        RegisterClassExW: (wc: Pointer) => {
+          packed = [
+            read.u32(wc, 0),
+            read.u64(wc, 8),
+            read.u64(wc, 24),
+            read.u64(wc, 40),
+            readWide(read.ptr(wc, 64) as Pointer),
+          ];
+          return 1;
+        },
+      },
+      'BunmaskaTest',
+      0x1111n,
+      0x2222n,
+      0x3333n,
+    );
+    expect(packed).toEqual([80, 0x1111n, 0x2222n, 0x3333n, 'BunmaskaTest']);
+  });
+
+  test('throws FFIError when RegisterClassExW returns 0', () => {
+    expect(() => registerWindowClass({ RegisterClassExW: () => 0 }, 'Bad', 1n, 2n)).toThrow(
+      FFIError,
+    );
   });
 });
 
 describe('winLibraryAccessor', () => {
-  test('returns a memoising accessor that calls open at most once', () => {
-    if (currentPlatform() !== 'windows') {
-      return;
-    }
+  test.skipIf(currentPlatform() !== 'windows')('memoises: open runs at most once', () => {
     let opens = 0;
     const get = winLibraryAccessor('test', () => {
       opens += 1;
@@ -65,11 +98,11 @@ describe('winLibraryAccessor', () => {
     expect(opens).toBe(1);
   });
 
-  test('throws UnsupportedPlatformError on non-Windows hosts', () => {
-    if (currentPlatform() === 'windows') {
-      return;
-    }
-    const get = winLibraryAccessor('test', () => ({}));
-    expect(() => get()).toThrow(UnsupportedPlatformError);
-  });
+  test.skipIf(currentPlatform() === 'windows')(
+    'throws UnsupportedPlatformError off Windows',
+    () => {
+      const get = winLibraryAccessor('test', () => ({}));
+      expect(() => get()).toThrow(UnsupportedPlatformError);
+    },
+  );
 });
