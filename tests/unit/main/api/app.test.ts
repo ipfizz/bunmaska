@@ -309,10 +309,8 @@ describe('App.isPackaged', () => {
     expect(appWith({ execPath: '/opt/homebrew/bin/bun' }).isPackaged).toBe(false);
   });
 
-  test('is true inside a packaged bundle', () => {
-    expect(appWith({ execPath: '/Applications/Demo.app/Contents/MacOS/Demo' }).isPackaged).toBe(
-      true,
-    );
+  test('is true inside a compiled binary', () => {
+    expect(appWith({ mainScript: '/$bunfs/root/Demo' }).isPackaged).toBe(true);
   });
 });
 

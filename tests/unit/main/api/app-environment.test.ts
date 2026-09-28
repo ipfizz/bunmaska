@@ -106,16 +106,22 @@ describe('buildAppEnvironment — isPackaged', () => {
     expect(build({ execPath: '/opt/homebrew/bin/bun' }).isPackaged).toBe(false);
   });
 
-  test('is false when launched via node', () => {
-    expect(build({ execPath: '/usr/local/bin/node' }).isPackaged).toBe(false);
+  test('is false under bun.exe on Windows', () => {
+    const env = build({
+      execPath: 'C:\\Users\\ada\\.bun\\bin\\bun.exe',
+      mainScript: 'C:\\proj\\src\\main.ts',
+    });
+    expect(env.isPackaged).toBe(false);
   });
 
-  test('is true inside a packaged macOS .app bundle', () => {
-    expect(build({ execPath: '/Applications/Demo.app/Contents/MacOS/Demo' }).isPackaged).toBe(true);
+  test('is true for a compiled binary', () => {
+    const env = build({ execPath: '/opt/demo/demo', mainScript: '/$bunfs/root/demo' });
+    expect(env.isPackaged).toBe(true);
   });
 
-  test('is true for a compiled standalone binary', () => {
-    expect(build({ execPath: '/opt/demo/demo' }).isPackaged).toBe(true);
+  test('is true for a compiled Windows binary', () => {
+    const env = build({ execPath: 'C:\\Demo\\demo.exe', mainScript: 'B:\\~BUN\\root\\demo.exe' });
+    expect(env.isPackaged).toBe(true);
   });
 });
 

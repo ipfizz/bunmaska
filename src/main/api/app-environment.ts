@@ -44,11 +44,8 @@ export type AppEnvironment = {
   readonly relaunch: (execPath: string, args: string[]) => void;
 };
 
-/** Matches the dev-runner executables (`bun`, `bun-canary`, `node`). */
-const DEV_RUNNER = /[/\\](bun|bun-[^/\\]+|node)$/;
-
-/** Heuristic: a build is "packaged" unless it runs under the bun/node dev binary. */
-const computeIsPackaged = (execPath: string): boolean => !DEV_RUNNER.test(execPath);
+/** A `bun build --compile` binary runs its entry from Bun's embedded filesystem. */
+const COMPILED_ENTRY = /^(?:\/\$bunfs\/|[A-Za-z]:[\\/]~BUN[\\/])/;
 
 const computePreferredLanguages = (
   env: EnvironmentDeps['env'],
@@ -60,9 +57,6 @@ const computePreferredLanguages = (
   }
   return normalizedLocale.length > 0 ? [normalizedLocale] : [];
 };
-
-/** A `bun build --compile` binary runs its entry from Bun's embedded filesystem. */
-const COMPILED_ENTRY = /^(?:\/\$bunfs\/|[A-Za-z]:[\\/]~BUN[\\/])/;
 
 const locateApp = (deps: EnvironmentDeps): { dir: string; manifest: Manifest | undefined } => {
   if (COMPILED_ENTRY.test(deps.mainScript)) {
@@ -89,7 +83,7 @@ export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
     manifest: app.manifest,
     locale,
     preferredLanguages: computePreferredLanguages(deps.env, locale),
-    isPackaged: computeIsPackaged(deps.execPath),
+    isPackaged: COMPILED_ENTRY.test(deps.mainScript),
     exit: deps.exit,
     relaunch: deps.relaunch,
   };
