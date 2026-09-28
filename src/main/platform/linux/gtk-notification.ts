@@ -24,7 +24,6 @@ const ensureInit = (): boolean => {
     initialized = true;
     return true;
   }
-  // ponytail: every app notifies as 'Bunmaska'; needs app.getName() passed down from api/notification.ts.
   const ok = notify.symbols.notify_init(cstr('Bunmaska')) !== 0;
   initialized = ok;
   return ok;
@@ -43,6 +42,9 @@ const present = (spec: NotificationSpec): NotificationHandle => {
   );
   if (notification === null) {
     throw new Error('notify_notification_new() returned null');
+  }
+  if (spec.appName !== undefined) {
+    notify.symbols.notify_notification_set_app_name(notification, cstr(spec.appName));
   }
   if (spec.silent) {
     // set_hint sinks the floating GVariant.

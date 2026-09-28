@@ -17,6 +17,7 @@ describe.skipIf(currentPlatform() !== 'linux')('Linux notification backend (libn
       body: 'Integration body',
       subtitle: '',
       silent: true,
+      appName: 'Bunmaska Test App',
     });
     handle.onClosed(() => undefined);
     handle.close();

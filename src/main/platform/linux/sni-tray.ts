@@ -32,7 +32,6 @@ const OBJECT_PATH_PREFIX = '/StatusNotifierItem';
 const SNI_IFACE = 'org.kde.StatusNotifierItem';
 const WATCHER_NAME = 'org.kde.StatusNotifierWatcher';
 const WATCHER_PATH = '/StatusNotifierWatcher';
-const APP_ID = 'bunmaska';
 
 /** Only served properties are declared, so GetAll never hits an unserved one. */
 export const SNI_XML = `<node>
@@ -212,6 +211,7 @@ const inertInstance = (): TrayInstance => {
 };
 
 type State = {
+  readonly id: string;
   status: 'Active' | 'Passive';
   title: string;
   toolTip: string;
@@ -226,7 +226,7 @@ const getPropertyValue = (state: State, name: string): Pointer | null => {
     case 'Category':
       return g.g_variant_new_string(cstr('ApplicationStatus'));
     case 'Id':
-      return g.g_variant_new_string(cstr(APP_ID));
+      return g.g_variant_new_string(cstr(state.id));
     case 'Title':
       return g.g_variant_new_string(cstr(state.title));
     case 'Status':
@@ -249,7 +249,7 @@ const getPropertyValue = (state: State, name: string): Pointer | null => {
 let trayCount = 0;
 
 /** Null on any failure. */
-const createLive = (conn: Pointer, initialImage: string): TrayInstance | null => {
+const createLive = (conn: Pointer, initialImage: string, appName: string): TrayInstance | null => {
   const gdbus = loadGDBusFFI();
   // One object path per tray: a second registration at a shared path fails on one connection.
   const objectPath = `${OBJECT_PATH_PREFIX}/${trayCount++}`;
@@ -263,8 +263,9 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   }
 
   const state: State = {
+    id: appName,
     status: 'Active',
-    title: 'Bunmaska',
+    title: appName,
     toolTip: '',
     icon: decodeIcon(initialImage),
     click: null,
@@ -394,7 +395,7 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
 };
 
 export const linuxTrayBackend: TrayBackend = {
-  create: (image) => {
+  create: (image, _options, appName = 'Bunmaska') => {
     if (!liveTrayEnabled()) {
       return inertInstance();
     }
@@ -402,6 +403,6 @@ export const linuxTrayBackend: TrayBackend = {
     if (conn === null) {
       return inertInstance();
     }
-    return createLive(conn, image) ?? inertInstance();
+    return createLive(conn, image, appName) ?? inertInstance();
   },
 };

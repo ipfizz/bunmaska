@@ -16,7 +16,6 @@ const SS_PATH = '/org/freedesktop/ScreenSaver';
 const SS_IFACE = 'org.freedesktop.ScreenSaver';
 const INHIBIT = 'Inhibit';
 const UNINHIBIT = 'UnInhibit';
-const APP_NAME = 'Bunmaska'; // ponytail: every app inhibits as 'Bunmaska'; needs app.getName() from the api layer.
 
 const reasonFor = (type: PowerSaveBlockerType): string =>
   type === 'prevent-display-sleep' ? 'Preventing display sleep' : 'Preventing app suspension';
@@ -62,12 +61,12 @@ const readCookie = (reply: Pointer): number | null => {
   }
 };
 
-const acquire = (type: PowerSaveBlockerType): NativeBlocker | null => {
+const acquire = (type: PowerSaveBlockerType, appName = 'Bunmaska'): NativeBlocker | null => {
   const bus = getSessionBus();
   if (bus === null) {
     return null;
   }
-  const args = inhibitArgs(APP_NAME, reasonFor(type));
+  const args = inhibitArgs(appName, reasonFor(type));
   if (args === null) {
     return null;
   }

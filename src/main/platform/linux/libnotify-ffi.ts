@@ -30,6 +30,11 @@ export const LIBNOTIFY_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.i32,
   },
+  // (NotifyNotification*, const char* app_name) -> void; overrides notify_init's name.
+  notify_notification_set_app_name: {
+    args: [FFIType.pointer, FFIType.cstring],
+    returns: FFIType.void,
+  },
   // (NotifyNotification*, const char* key, GVariant* value) -> void; sinks the floating variant
   notify_notification_set_hint: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer],
