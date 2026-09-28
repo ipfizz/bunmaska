@@ -400,7 +400,6 @@ export type WindowResolver = {
 
 let windowResolver: WindowResolver | undefined;
 
-/** Called once at load by the BrowserWindow module. */
 let quitHandler: (() => void) | undefined;
 
 /** Called by `app` at load so the quit role can run `app.quit()` without an import cycle. @internal */
@@ -408,13 +407,17 @@ export const installQuitHandler = (handler: () => void): void => {
   quitHandler = handler;
 };
 
+let installedResolver: WindowResolver | undefined;
+
+/** Called once at load by the BrowserWindow module. */
 export const installWindowResolver = (resolver: WindowResolver): void => {
+  installedResolver = resolver;
   windowResolver = resolver;
 };
 
-/** @internal */
+/** `undefined` restores the BrowserWindow module's resolver. @internal */
 export const setWindowResolverForTesting = (fake: WindowResolver | undefined): void => {
-  windowResolver = fake;
+  windowResolver = fake ?? installedResolver;
 };
 
 /** Explicit → focused → most-recent → throw. @internal */
