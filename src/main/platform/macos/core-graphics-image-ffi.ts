@@ -8,7 +8,7 @@ import { macOSLibraryAccessor } from './objc';
  * server, so they work headless. Nothing returns a struct (D030).
  */
 
-const CORE_GRAPHICS_PATH = '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics';
+export const CORE_GRAPHICS_PATH = '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics';
 
 /** `kCGImageAlphaPremultipliedLast`: RGBA, the standard CG drawing format. */
 export const KCG_ALPHA_PREMULTIPLIED_LAST = 1;
