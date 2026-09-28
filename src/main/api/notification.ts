@@ -79,7 +79,9 @@ export class Notification extends EventEmitter {
     return getBackend().isSupported();
   }
 
+  /** Dismisses a previously shown copy first, as Electron does. */
   show(): void {
+    this.close();
     const handle = getBackend().present({
       title: this.title,
       body: this.body,

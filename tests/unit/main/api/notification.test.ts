@@ -96,11 +96,12 @@ describe('Notification.show', () => {
     expect(presented[0]?.body).toBe('body2');
   });
 
-  test('a second show presents again (re-show)', () => {
+  test('a second show dismisses the first before presenting again, as in Electron', () => {
     const n = new Notification({ title: 'T' });
     n.show();
     n.show();
     expect(presented.length).toBe(2);
+    expect(closedCalls).toBe(1);
   });
 });
 
