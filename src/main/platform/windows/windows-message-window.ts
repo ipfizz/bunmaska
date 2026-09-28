@@ -14,6 +14,7 @@ const CLASS_NAME = 'BunmaskaMessageWindow';
 /** `WS_EX_TOOLWINDOW` — keep the (never-shown) window out of the taskbar/alt-tab. */
 const WS_EX_TOOLWINDOW = 0x00000080;
 const WS_OVERLAPPED = 0x00000000;
+const WM_CLOSE = 0x0010;
 
 /** A per-window message observer: a posted/sent message and its parameters. */
 export type MessageHandler = (message: number, wParam: bigint, lParam: bigint) => void;
@@ -45,7 +46,8 @@ const ensureClassRegistered = (): void => {
           // A throwing JS handler must never propagate into the native WndProc.
         }
       }
-      return user32.DefWindowProcW(hwnd, message, wParam, lParam);
+      // An external WM_CLOSE must not destroy it; only destroy() does.
+      return message === WM_CLOSE ? 0n : user32.DefWindowProcW(hwnd, message, wParam, lParam);
     },
     { args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64], returns: FFIType.i64 },
   );
@@ -62,7 +64,9 @@ const ensureClassRegistered = (): void => {
   view.setBigUint64(8, BigInt(wndProcPtr), true); // lpfnWndProc
   view.setBigUint64(24, hInstance, true); // hInstance
   view.setBigUint64(64, BigInt(ptr(className)), true); // lpszClassName
-  user32.RegisterClassExW(ptr(wc));
+  if (user32.RegisterClassExW(ptr(wc)) === 0) {
+    throw new FFIError('RegisterClassExW failed for the Bunmaska message window class');
+  }
   // Retain the JSCallback for the whole process (the class references it forever).
   registered = { wndProc };
 };
@@ -92,10 +96,18 @@ export const createMessageWindow = (handler: MessageHandler): MessageWindow => {
     hInstance,
     null,
   );
+  if (hwnd === 0n) {
+    throw new FFIError('CreateWindowExW returned NULL for the message window');
+  }
   handlersByHwnd.set(hwnd, handler);
+  let destroyed = false;
   return {
     hwnd,
     destroy: (): void => {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
       handlersByHwnd.delete(hwnd);
       user32.DestroyWindow(hwnd);
     },
