@@ -45,7 +45,7 @@ export type PreloadBundler = {
  */
 const bunCliPath = (): string | undefined => {
   const exe = process.execPath;
-  return /(?:^|[\\/])bun(?:-[^\\/]*)?(?:\.exe)?$/i.test(exe) ? exe : undefined;
+  return /(?:^|[\\/])bunx?(?:-debug|-profile)?(?:\.exe)?$/i.test(exe) ? exe : undefined;
 };
 
 /** Production bundler: shells out to Bun's bundler. Available only under the Bun CLI. */

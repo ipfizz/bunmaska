@@ -22,6 +22,29 @@ describe('usesModuleSyntax', () => {
   });
 });
 
+describe('defaultPreloadBundler availability', () => {
+  const availableFor = (execPath: string): boolean => {
+    const original = process.execPath;
+    process.execPath = execPath;
+    try {
+      return defaultPreloadBundler.available;
+    } finally {
+      process.execPath = original;
+    }
+  };
+
+  test('is available under the Bun CLI binaries', () => {
+    for (const exe of ['/usr/local/bin/bun', 'C:\\bun\\bun.exe', '/x/bun-debug', '/x/bunx']) {
+      expect(availableFor(exe)).toBe(true);
+    }
+  });
+
+  test('is unavailable in a compiled app whose name starts with bun-', () => {
+    expect(availableFor('/Applications/bun-notes.app/Contents/MacOS/bun-notes')).toBe(false);
+    expect(availableFor('C:\\Apps\\bun-notes.exe')).toBe(false);
+  });
+});
+
 describe('defaultPreloadBundler (real Bun bundler)', () => {
   test('inlines an imported module into a single classic IIFE', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bunmaska-preload-real-'));
