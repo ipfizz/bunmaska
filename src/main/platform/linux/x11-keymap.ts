@@ -65,7 +65,10 @@ const isFunctionKey = (key: string): boolean => /^F([1-9]|1[0-9]|2[0-4])$/.test(
 export const x11KeysymName = (key: string): string | undefined => {
   const upper = key.toUpperCase();
   if (key.length === 1) {
-    return /[A-Z]/.test(upper) ? upper.toLowerCase() : key;
+    // XStringToKeysym takes names ('comma'), not characters; `U<hex>` names any character.
+    return /[A-Z0-9]/.test(upper)
+      ? upper.toLowerCase()
+      : `U${key.toLowerCase().charCodeAt(0).toString(16)}`;
   }
   if (isFunctionKey(upper)) {
     return upper;

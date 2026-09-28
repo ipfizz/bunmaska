@@ -79,6 +79,10 @@ describe.skipIf(!isLinux)('x11-global-shortcut (Linux)', () => {
       expect(linuxGlobalShortcutBackend.register('CmdOrCtrl+Shift+K', () => undefined)).toBe(true);
     });
 
+    test('register() grabs a punctuation key', () => {
+      expect(linuxGlobalShortcutBackend.register('CmdOrCtrl+,', () => undefined)).toBe(true);
+    });
+
     test('register() returns false for an unmappable key', () => {
       expect(linuxGlobalShortcutBackend.register('CmdOrCtrl+Bogus', () => undefined)).toBe(false);
     });

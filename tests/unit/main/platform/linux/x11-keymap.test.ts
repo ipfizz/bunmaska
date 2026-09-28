@@ -26,6 +26,12 @@ describe('x11KeysymName', () => {
     expect(x11KeysymName('1')).toBe('1');
   });
 
+  test('maps punctuation to the Unicode keysym form XStringToKeysym accepts', () => {
+    expect(x11KeysymName(',')).toBe('U2c');
+    expect(x11KeysymName('/')).toBe('U2f');
+    expect(x11KeysymName('`')).toBe('U60');
+  });
+
   test('maps function keys to their X names', () => {
     expect(x11KeysymName('F5')).toBe('F5');
   });
