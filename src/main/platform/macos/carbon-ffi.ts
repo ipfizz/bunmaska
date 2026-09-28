@@ -31,7 +31,7 @@ import { macOSLibraryAccessor } from './objc';
 
 const CARBON_PATH = '/System/Library/Frameworks/Carbon.framework/Carbon';
 
-const CARBON_SYMBOLS = {
+export const CARBON_FFI_SYMBOLS = {
   // (UInt32 keyCode, UInt32 modifiers, EventHotKeyID id BY VALUE as packed u64,
   //  EventTargetRef target, OptionBits options, EventHotKeyRef *outRef) -> OSStatus
   RegisterEventHotKey: {
@@ -51,7 +51,7 @@ const CARBON_SYMBOLS = {
   // (EventTargetRef, EventHandlerUPP, ItemCount numTypes, const EventTypeSpec *typeList,
   //  void *userData, EventHandlerRef *outRef) -> OSStatus
   InstallEventHandler: {
-    args: [FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+    args: [FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.i32,
   },
   // (EventRef, OSType name, OSType desiredType, OSType *actualType, ByteCount bufferSize,
@@ -62,7 +62,7 @@ const CARBON_SYMBOLS = {
       FFIType.u32,
       FFIType.u32,
       FFIType.ptr,
-      FFIType.u32,
+      FFIType.u64,
       FFIType.ptr,
       FFIType.ptr,
     ],
@@ -76,5 +76,5 @@ const CARBON_SYMBOLS = {
  * accessor) so the module stays importable everywhere.
  */
 export const loadCarbonFFI = macOSLibraryAccessor('Carbon global shortcut', () =>
-  dlopen(CARBON_PATH, CARBON_SYMBOLS),
+  dlopen(CARBON_PATH, CARBON_FFI_SYMBOLS),
 );
