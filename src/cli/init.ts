@@ -1,14 +1,9 @@
-/**
- * `bunmaska init`: scaffolds a minimal but real app — a `BrowserWindow`, an
- * isolated preload, a matching `ipcMain.handle`, and a `bunmaska.config.ts`.
- */
-
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { slugifyName } from '../common/manifest';
 import { BUNMASKA_VERSION } from '../common/version';
 
-/** A single file the scaffold writes, addressed relative to the project root. */
+/** A scaffold file; `path` is relative to the project root. */
 export type ScaffoldFile = { readonly path: string; readonly contents: string };
 
 export type TemplateVars = { readonly name: string; readonly id: string };
@@ -23,11 +18,33 @@ const packageJson = (vars: TemplateVars): string =>
       scripts: {
         start: 'bunmaska run src/main.ts',
         dev: 'bunmaska dev',
-        build: 'bunmaska build',
+        build: 'bunmaska build --out dist',
       },
       dependencies: {
         bunmaska: `^${BUNMASKA_VERSION}`,
       },
+      devDependencies: {
+        '@types/bun': 'latest',
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+const tsconfigJson = (): string =>
+  `${JSON.stringify(
+    {
+      compilerOptions: {
+        target: 'ESNext',
+        module: 'Preserve',
+        moduleResolution: 'bundler',
+        lib: ['ESNext', 'DOM'],
+        types: ['bun'],
+        strict: true,
+        skipLibCheck: true,
+        noEmit: true,
+      },
+      include: ['src', 'bunmaska.config.ts'],
     },
     null,
     2,
@@ -49,7 +66,6 @@ const mainTs = (vars: TemplateVars): string =>
 import { dirname, join } from 'node:path';
 import { app, BrowserWindow, ipcMain } from 'bunmaska';
 
-// A demo handler the preload exposes to the page as window.api.ping().
 ipcMain.handle('ping', () => 'pong');
 
 // Under \`bunmaska dev\` the assets sit next to this file; a built app ships them
@@ -72,21 +88,21 @@ const createWindow = (): void => {
 
 app.whenReady().then(createWindow);
 
-// On macOS apps usually stay alive until Cmd-Q; elsewhere, quit on last window.
+// On macOS apps usually stay alive until Cmd-Q and reopen a window from the Dock.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
+app.on('activate', (_event, hasVisibleWindows) => {
+  if (!hasVisibleWindows) {
+    createWindow();
+  }
+});
 `;
 
 const preloadJs = (): string =>
-  `// Runs in Bunmaska's isolated preload world (Electron contextIsolation). It is
-// bundled before injection, so you can import modules here — keep it browser code
-// (no Node APIs). Two globals are available here:
-//   contextBridge.exposeInMainWorld(key, api)  — expose a safe surface to the page
-//   __bunmaska.invoke(channel, ...args)          — call an ipcMain.handle handler
-// The page can then call window.api.ping(); it cannot reach Node or the bridge.
+  `// Isolated preload world, browser code only: bunmaska.org/docs/concepts/ipc
 contextBridge.exposeInMainWorld('api', {
   ping: () => __bunmaska.invoke('ping'),
 });
@@ -98,7 +114,7 @@ const indexHtml = (vars: TemplateVars): string =>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${vars.name}</title>
+    <title>${Bun.escapeHTML(vars.name)}</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -126,7 +142,7 @@ const indexHtml = (vars: TemplateVars): string =>
   </head>
   <body>
     <main>
-      <h1>${vars.name}</h1>
+      <h1>${Bun.escapeHTML(vars.name)}</h1>
       <button id="ping">Ping the main process</button>
       <p id="out"></p>
     </main>
@@ -156,7 +172,7 @@ dist/
 const readme = (vars: TemplateVars): string =>
   `# ${vars.name}
 
-A desktop app built with [Bunmaska](https://github.com/ipfizz/bunmaska) — a
+A desktop app built with [Bunmaska](https://github.com/ipfizz/bunmaska) - a
 drop-in Electron replacement on Bun + system WebKit.
 
 ## Develop
@@ -169,7 +185,7 @@ bun run dev      # bunmaska dev: runs src/main.ts and reloads on change
 ## Build a distributable
 
 \`\`\`sh
-bun run build    # bunmaska build: a macOS .app or a Linux AppDir/.deb
+bun run build    # into dist/: a .app (macOS), AppDir + .deb (Linux) or .zip (Windows)
 \`\`\`
 
 The app's name, bundle id and entry are declared in \`bunmaska.config.ts\`.
@@ -177,6 +193,7 @@ The app's name, bundle id and entry are declared in \`bunmaska.config.ts\`.
 
 export const initTemplateFiles = (vars: TemplateVars): readonly ScaffoldFile[] => [
   { path: 'package.json', contents: packageJson(vars) },
+  { path: 'tsconfig.json', contents: tsconfigJson() },
   { path: 'bunmaska.config.ts', contents: configTs(vars) },
   { path: 'src/main.ts', contents: mainTs(vars) },
   { path: 'src/preload.js', contents: preloadJs() },
@@ -201,10 +218,7 @@ const defaultDeps: ScaffoldDeps = {
   },
 };
 
-/**
- * All-or-nothing: if ANY target already exists, nothing is written and an error
- * naming that file is thrown. Returns the absolute paths written, in order.
- */
+/** All-or-nothing: throws before writing if any target exists; returns the paths written. */
 export const scaffoldProject = (
   dir: string,
   files: readonly ScaffoldFile[],
@@ -227,11 +241,8 @@ export const scaffoldProject = (
   return written;
 };
 
-/** The directory's base name, or `bunmaska-app` for `.` and empty names. */
-export const deriveProjectName = (dir: string): string => {
-  const base = basename(resolve(dir));
-  return base.length > 0 && base !== '.' ? base : 'bunmaska-app';
-};
+/** The directory's base name, or `bunmaska-app` at the filesystem root. */
+export const deriveProjectName = (dir: string): string => basename(resolve(dir)) || 'bunmaska-app';
 
 export type InitResult = {
   readonly dir: string;
@@ -239,14 +250,11 @@ export type InitResult = {
   readonly written: readonly string[];
 };
 
-/**
- * The bundle id defaults to `com.example.<slug>`. Throws if any target file
- * already exists.
- */
+/** Scaffolds a project with bundle id `com.example.<slug>`; throws if any target exists. */
 export const runInit = (
   targetDir: string,
-  deps: ScaffoldDeps = defaultDeps,
   explicitName?: string,
+  deps: ScaffoldDeps = defaultDeps,
 ): InitResult => {
   const dir = resolve(targetDir);
   const name = explicitName?.trim() || deriveProjectName(dir);

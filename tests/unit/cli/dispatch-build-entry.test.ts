@@ -2,15 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { BuildMacAppOptions } from '../../../src/cli/build-macos';
+import type { BuildLinuxAppOptions } from '../../../src/cli/build-linux';
 import { dispatch } from '../../../src/cli/index';
-import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * `bunmaska build` without an explicit entry resolves it from the project's
- * `bunmaska.config.ts` (the init scaffold declares one), mirroring `bunmaska dev`.
- * With neither an argument nor a config entry it fails loudly.
- */
 describe('dispatch resolves the build entry from bunmaska.config.ts', () => {
   const originalCwd = process.cwd();
   let dir: string | undefined;
@@ -23,6 +17,28 @@ describe('dispatch resolves the build entry from bunmaska.config.ts', () => {
     }
   });
 
+  const buildWithConfig = async (
+    entry: string | undefined,
+  ): Promise<{ code: number; captured: BuildLinuxAppOptions | undefined }> => {
+    dir = mkdtempSync(join(tmpdir(), 'bunmaska-build-entry-'));
+    writeFileSync(
+      join(dir, 'bunmaska.config.ts'),
+      "export default { name: 'Demo', entry: 'src/main.ts' };\n",
+    );
+    process.chdir(dir);
+    let captured: BuildLinuxAppOptions | undefined;
+    const code = await dispatch(
+      { kind: 'build', ...(entry === undefined ? {} : { entry }), options: { target: 'linux' } },
+      {
+        buildLinux: async (opts) => {
+          captured = opts;
+          return { appDir: '/tmp/Demo', tarball: '/tmp/Demo.tar.gz', deb: '/tmp/demo.deb' };
+        },
+      },
+    );
+    return { code, captured };
+  };
+
   test('no entry and no config entry is a loud failure', async () => {
     dir = mkdtempSync(join(tmpdir(), 'bunmaska-build-entry-'));
     process.chdir(dir);
@@ -30,54 +46,15 @@ describe('dispatch resolves the build entry from bunmaska.config.ts', () => {
     expect(code).toBe(1);
   });
 
-  test("the config's entry is used when the argument is omitted", async () => {
-    if (currentPlatform() !== 'macos') {
-      return;
-    }
-    dir = mkdtempSync(join(tmpdir(), 'bunmaska-build-entry-'));
-    writeFileSync(
-      join(dir, 'bunmaska.config.ts'),
-      "export default { name: 'Demo', entry: 'src/main.ts' };\n",
-    );
-    process.chdir(dir);
-
-    let captured: BuildMacAppOptions | undefined;
-    const code = await dispatch(
-      { kind: 'build', options: { target: 'macos' } },
-      {
-        buildMac: async (opts) => {
-          captured = opts;
-          return `/tmp/${opts.name}.app`;
-        },
-      },
-    );
+  test("the config's entry and name are used when the argument is omitted", async () => {
+    const { code, captured } = await buildWithConfig(undefined);
     expect(code).toBe(0);
     expect(captured?.entry).toBe('src/main.ts');
-    // The scaffold writes `name` into bunmaska.config.ts; build must honour it.
     expect(captured?.name).toBe('Demo');
   });
 
   test('an explicit entry still wins over the config', async () => {
-    if (currentPlatform() !== 'macos') {
-      return;
-    }
-    dir = mkdtempSync(join(tmpdir(), 'bunmaska-build-entry-'));
-    writeFileSync(
-      join(dir, 'bunmaska.config.ts'),
-      "export default { name: 'Demo', entry: 'src/main.ts' };\n",
-    );
-    process.chdir(dir);
-
-    let captured: BuildMacAppOptions | undefined;
-    const code = await dispatch(
-      { kind: 'build', entry: 'other.ts', options: { target: 'macos' } },
-      {
-        buildMac: async (opts) => {
-          captured = opts;
-          return `/tmp/${opts.name}.app`;
-        },
-      },
-    );
+    const { code, captured } = await buildWithConfig('other.ts');
     expect(code).toBe(0);
     expect(captured?.entry).toBe('other.ts');
   });

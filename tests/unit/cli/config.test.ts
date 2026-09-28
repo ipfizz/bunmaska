@@ -2,14 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { findConfigFile, loadConfig, loadConfigFile } from '../../../src/cli/config';
+import { configChannel, validateConfig } from '../../../src/common/config-schema';
 import { BunmaskaError } from '../../../src/common/errors';
-import {
-  configChannel,
-  findConfigFile,
-  loadConfig,
-  loadConfigFile,
-  validateConfig,
-} from '../../../src/cli/config';
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
