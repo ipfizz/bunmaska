@@ -8,6 +8,7 @@
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 import { runTool } from './run-tool';
@@ -78,6 +79,7 @@ export const buildCompileArgs = (
   entry: string,
   outfile: string,
   meta: WindowsMetadata,
+  host: Platform = currentPlatform(),
 ): string[] => {
   const args = ['build', entry, '--compile', '--target=bun-windows-x64', '--outfile', outfile];
   // Shrink the binary WITHOUT mangling identifiers: mangling would rename the user
@@ -86,6 +88,10 @@ export const buildCompileArgs = (
   args.push('--minify-whitespace', '--minify-syntax');
   if (meta.hideConsole) {
     args.push('--windows-hide-console');
+  }
+  // Bun rejects every other --windows-* flag unless it runs on Windows (Bun 1.4.2).
+  if (host !== 'windows') {
+    return args;
   }
   args.push('--windows-title', meta.title);
   args.push('--windows-publisher', meta.publisher);
@@ -177,6 +183,11 @@ export const buildWindowsApp = async (
 
   mkdirSync(layout.appDir, { recursive: true });
 
+  if (currentPlatform() !== 'windows') {
+    process.stderr.write(
+      'bunmaska build: only a Windows host can embed the .exe icon and version info; building without them.\n',
+    );
+  }
   const meta: WindowsMetadata = {
     title: opts.name,
     publisher: 'Bunmaska',
