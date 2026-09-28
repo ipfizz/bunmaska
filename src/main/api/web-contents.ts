@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { InvalidArgumentError } from '../../common/errors';
 import { createLogger } from '../../common/logger';
 import { decodeEnvelope, encodeEnvelope, type ReplyEnvelope } from '../ipc/ipc-protocol';
 import type {
@@ -226,8 +227,11 @@ export class WebContents extends EventEmitter {
 
   /** `1` is 100%. */
   setZoomFactor(factor: number): void {
-    this.#zoomFactor = factor;
+    if (!Number.isFinite(factor) || factor <= 0) {
+      throw new InvalidArgumentError("'zoomFactor' must be a double greater than 0.0");
+    }
     this.#native.setZoomFactor(factor);
+    this.#zoomFactor = factor;
   }
 
   getZoomFactor(): number {

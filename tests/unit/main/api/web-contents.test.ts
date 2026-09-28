@@ -194,6 +194,18 @@ describe('WebContents.setZoomFactor / getZoomFactor', () => {
     expect(wc.getZoomFactor()).toBe(1.5);
   });
 
+  test('setZoomFactor rejects a factor that is not a finite number above 0', () => {
+    const { native, zooms } = makeFakeNative();
+    const wc = new WebContents(native);
+    for (const factor of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => wc.setZoomFactor(factor)).toThrow(
+        "'zoomFactor' must be a double greater than 0.0",
+      );
+    }
+    expect(zooms).toEqual([]);
+    expect(wc.getZoomFactor()).toBe(1);
+  });
+
   test('setZoomLevel applies factor 1.2**level; getZoomLevel inverts it', () => {
     const { native, zooms } = makeFakeNative();
     const wc = new WebContents(native);
