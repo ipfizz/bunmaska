@@ -157,16 +157,24 @@ const setupNavigationClient = (
 
 type ScriptMessageApi = Pick<
   ReturnType<typeof loadWebKit2>['symbols'],
-  'WKScriptMessageGetBody' | 'WKGetTypeID' | 'WKStringGetTypeID'
+  | 'WKScriptMessageGetBody'
+  | 'WKScriptMessageGetFrameInfo'
+  | 'WKFrameInfoGetIsMainFrame'
+  | 'WKGetTypeID'
+  | 'WKStringGetTypeID'
 >;
 
-/** Forward a page-posted script message's string body to `onMessage`. */
+/** Forward a main-frame script message's string body to `onMessage`. */
 export const deliverScriptMessage = (
   message: Pointer,
   onMessage: (body: string) => void,
   wk: ScriptMessageApi = loadWebKit2().symbols,
   readString: (ref: Pointer) => string = wkStringToJs,
 ): void => {
+  // The handlers live in the page world, so any iframe could post to the bridge.
+  if (!wk.WKFrameInfoGetIsMainFrame(wk.WKScriptMessageGetFrameInfo(message))) {
+    return;
+  }
   const body = wk.WKScriptMessageGetBody(message);
   // Any page script can post a number/bool/object; reading that as a WKString faults the process.
   if (body !== null && wk.WKGetTypeID(body) === wk.WKStringGetTypeID()) {
@@ -184,7 +192,7 @@ export interface WebViewOptions {
   readonly hwnd: bigint;
   readonly width: number;
   readonly height: number;
-  /** Sources injected at document-start, in order, in all frames. */
+  /** Sources injected at document-start, in order, in the main frame only. */
   readonly userScripts: readonly string[];
   /** Renderer->main message handlers, keyed by their `messageHandlers` name. */
   readonly messageHandlers: readonly ScriptMessageHandler[];
@@ -251,7 +259,7 @@ export class WindowsWebView {
     // Inject the preload/bridge sources at document-start, in order.
     for (const source of options.userScripts) {
       const sourceRef = wkString(source);
-      const userScript = s.WKUserScriptCreateWithSource(sourceRef, WK_INJECT_AT_DOCUMENT_START, 0);
+      const userScript = s.WKUserScriptCreateWithSource(sourceRef, WK_INJECT_AT_DOCUMENT_START, 1);
       wkRelease(sourceRef);
       if (userScript !== null) {
         s.WKUserContentControllerAddUserScript(controller, userScript);

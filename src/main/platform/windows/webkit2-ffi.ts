@@ -84,6 +84,8 @@ const WEBKIT2_SYMBOLS = {
     returns: FFIType.ptr,
   },
   WKScriptMessageGetBody: { args: [FFIType.ptr], returns: FFIType.ptr },
+  WKScriptMessageGetFrameInfo: { args: [FFIType.ptr], returns: FFIType.ptr },
+  WKFrameInfoGetIsMainFrame: { args: [FFIType.ptr], returns: FFIType.bool },
 
   // ── Strings / URLs ───────────────────────────────────────────────────────
   // WKTypeID is uint32_t.

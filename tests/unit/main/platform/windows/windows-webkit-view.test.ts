@@ -9,8 +9,12 @@ const BODY = 0x20 as Pointer;
 const STRING_TYPE = 7;
 const DOUBLE_TYPE = 9;
 
-const fakeWk = (bodyType: number): ScriptMessageApi => ({
+const FRAME = 0x30 as Pointer;
+
+const fakeWk = (bodyType: number, isMainFrame = true): ScriptMessageApi => ({
   WKScriptMessageGetBody: () => BODY,
+  WKScriptMessageGetFrameInfo: () => FRAME,
+  WKFrameInfoGetIsMainFrame: (frame) => frame === FRAME && isMainFrame,
   WKGetTypeID: () => bodyType,
   WKStringGetTypeID: () => STRING_TYPE,
 });
@@ -30,6 +34,17 @@ describe('deliverScriptMessage', () => {
       throw new Error('read a non-string body as a WKString');
     };
     deliverScriptMessage(MESSAGE, (body) => received.push(body), fakeWk(DOUBLE_TYPE), readAsString);
+    expect(received).toEqual([]);
+  });
+
+  test('drops a message posted from a subframe', () => {
+    const received: string[] = [];
+    deliverScriptMessage(
+      MESSAGE,
+      (body) => received.push(body),
+      fakeWk(STRING_TYPE, false),
+      readBody,
+    );
     expect(received).toEqual([]);
   });
 });
