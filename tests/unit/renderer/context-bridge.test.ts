@@ -5,6 +5,7 @@ import {
 } from '../../../src/renderer/api/context-bridge';
 import {
   announceChannel,
+  CHANNEL_GLOBAL_KEY,
   type CustomEventCtor,
   type EventScope,
   generateIsolatedHostSource,
@@ -126,6 +127,28 @@ describe('contextBridge.exposeInMainWorld (cross-world)', () => {
     const bridge = createContextBridge(transport(doc));
     bridge.exposeInMainWorld('api', { a: () => 1 });
     expect(() => bridge.exposeInMainWorld('api', { b: () => 2 })).toThrow(/already/i);
+  });
+
+  test('shares the injected host, so a key exposed through both paths collides', () => {
+    const doc = new MockDocument();
+    const globals = {
+      __bunmaska: { exposeInMainWorld: installCrossWorldHost(CHANNEL, doc, MockCustomEvent) },
+      [CHANNEL_GLOBAL_KEY]: CHANNEL,
+      document: doc,
+      CustomEvent: MockCustomEvent,
+    };
+    const saved = Object.keys(globals).map((name) => [name, Reflect.get(globalThis, name)]);
+    Object.assign(globalThis, globals);
+    try {
+      globals.__bunmaska.exposeInMainWorld('api', { a: () => 1 });
+      expect(() => createContextBridge().exposeInMainWorld('api', { b: () => 2 })).toThrow(
+        /already/i,
+      );
+    } finally {
+      for (const [name, value] of saved) {
+        Reflect.set(globalThis, name as string, value);
+      }
+    }
   });
 
   test('page method resolves to the isolated handler return value', async () => {

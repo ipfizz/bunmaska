@@ -27,6 +27,18 @@ export type ContextBridgeTransport = {
   readonly CustomEventImpl: CustomEventCtor;
 };
 
+type ExposeFn = (key: string, api: Record<string, unknown>) => void;
+
+/** The backend-injected host; sharing it keeps one key registry per world. */
+const injectedExpose = (): ExposeFn | undefined => {
+  const bridge = Reflect.get(globalThis, '__bunmaska') as
+    | { exposeInMainWorld?: unknown }
+    | undefined;
+  return typeof bridge?.exposeInMainWorld === 'function'
+    ? (bridge.exposeInMainWorld as ExposeFn)
+    : undefined;
+};
+
 const resolveTransport = (
   override?: ContextBridgeTransport,
 ): ContextBridgeTransport | undefined => {
@@ -42,15 +54,14 @@ const resolveTransport = (
   return { channelId, scope: doc, CustomEventImpl };
 };
 
-/**
- * Create the `contextBridge`. Without an override it resolves the channel id,
- * `document`, and `CustomEvent` from the isolated world's globals, and creates the
- * host lazily on first `exposeInMainWorld` via {@link installCrossWorldHost}.
- */
+/** Create the `contextBridge`, sharing the injected host or else installing one. */
 export const createContextBridge = (override?: ContextBridgeTransport): ContextBridge => {
-  let expose: ((key: string, api: Record<string, unknown>) => void) | undefined;
+  let expose: ExposeFn | undefined;
   return {
     exposeInMainWorld(key, api) {
+      if (expose === undefined && override === undefined) {
+        expose = injectedExpose();
+      }
       if (expose === undefined) {
         const transport = resolveTransport(override);
         if (transport === undefined) {
@@ -67,7 +78,9 @@ export const createContextBridge = (override?: ContextBridgeTransport): ContextB
       try {
         expose(key, api);
       } catch (error) {
-        throw new BunmaskaError(error instanceof Error ? error.message : String(error));
+        throw new BunmaskaError(error instanceof Error ? error.message : String(error), {
+          cause: error,
+        });
       }
     },
   };
