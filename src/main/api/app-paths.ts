@@ -38,8 +38,6 @@ export type PathEnvironment = {
   readonly appName: string;
   /** `process.execPath`. */
   readonly execPath: string;
-  /** `app.getAppPath()`. */
-  readonly appPath: string;
   /** Consulted for the Linux XDG overrides. */
   readonly env: Readonly<Record<string, string | undefined>>;
 };
@@ -88,9 +86,8 @@ const resolveMacOS = (name: AppPathName, e: PathEnvironment): string => {
     case 'temp':
       return e.temp;
     case 'exe':
-      return e.execPath;
     case 'module':
-      return e.appPath;
+      return e.execPath;
     case 'desktop':
       return join(e.home, 'Desktop');
     case 'documents':
@@ -125,9 +122,8 @@ const resolveLinux = (name: AppPathName, e: PathEnvironment): string => {
     case 'temp':
       return e.temp;
     case 'exe':
-      return e.execPath;
     case 'module':
-      return e.appPath;
+      return e.execPath;
     case 'desktop':
       return xdgDir(e.env, 'XDG_DESKTOP_DIR', e.home, 'Desktop');
     case 'documents':
@@ -162,9 +158,8 @@ const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
     case 'temp':
       return e.temp;
     case 'exe':
-      return e.execPath;
     case 'module':
-      return e.appPath;
+      return e.execPath;
     case 'desktop':
       return join(e.home, 'Desktop');
     case 'documents':

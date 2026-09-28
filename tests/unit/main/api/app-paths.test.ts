@@ -9,7 +9,6 @@ const macEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => ({
   temp: '/var/folders/tmp',
   appName: 'MyApp',
   execPath: '/Applications/MyApp.app/Contents/MacOS/MyApp',
-  appPath: '/Applications/MyApp.app/Contents/Resources/app',
   env: {},
   ...overrides,
 });
@@ -20,7 +19,6 @@ const linuxEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => 
   temp: '/tmp',
   appName: 'MyApp',
   execPath: '/opt/myapp/myapp',
-  appPath: '/opt/myapp/resources/app',
   env: {},
   ...overrides,
 });
@@ -31,7 +29,6 @@ const winEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => ({
   temp: 'C:\\Users\\ada\\AppData\\Local\\Temp',
   appName: 'MyApp',
   execPath: 'C:\\Program Files\\MyApp\\MyApp.exe',
-  appPath: 'C:\\Program Files\\MyApp\\resources\\app',
   env: { APPDATA: 'C:\\Users\\ada\\AppData\\Roaming' },
   ...overrides,
 });
@@ -51,8 +48,8 @@ describe('resolveAppPath — cross-platform names', () => {
     expect(resolveAppPath('exe', macEnv())).toBe('/Applications/MyApp.app/Contents/MacOS/MyApp');
   });
 
-  test('module is the app path', () => {
-    expect(resolveAppPath('module', linuxEnv())).toBe('/opt/myapp/resources/app');
+  test('module is the executable path, as in Electron', () => {
+    expect(resolveAppPath('module', linuxEnv())).toBe('/opt/myapp/myapp');
   });
 });
 
@@ -168,7 +165,7 @@ describe('resolveAppPath — Windows conventions', () => {
 
   test('exe and module pass through', () => {
     expect(resolveAppPath('exe', winEnv())).toBe('C:\\Program Files\\MyApp\\MyApp.exe');
-    expect(resolveAppPath('module', winEnv())).toBe('C:\\Program Files\\MyApp\\resources\\app');
+    expect(resolveAppPath('module', winEnv())).toBe('C:\\Program Files\\MyApp\\MyApp.exe');
   });
 });
 

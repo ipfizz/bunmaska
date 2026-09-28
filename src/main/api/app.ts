@@ -164,7 +164,6 @@ export class App extends EventEmitter {
       temp: env.temp,
       appName: this.getName(),
       execPath: env.execPath,
-      appPath: env.appPath,
       env: env.env,
     });
   }
