@@ -12,6 +12,7 @@ import {
 import { type Arch, currentArch as hostArch, currentPlatform } from '../../common/platform';
 import { verifyArtifact } from '../../common/signature';
 import { app } from './app';
+import { DEFAULT_APP_VERSION } from './app-metadata';
 import { defaultInstall } from './update-installer';
 
 /**
@@ -235,6 +236,14 @@ export class AutoUpdaterImpl extends EventEmitter {
   async #check(): Promise<UpdateCheckResult | null> {
     const feedURL = this.#requireFeedURL();
     this.emit('checking-for-update');
+    const currentVersion = this.#deps.currentVersion();
+    if (currentVersion === DEFAULT_APP_VERSION) {
+      throw this.#emitError(
+        new Error(
+          `autoUpdater: the running app's version is unknown (${DEFAULT_APP_VERSION}), so every update would reinstall forever; set "version" in package.json`,
+        ),
+      );
+    }
     let text: string;
     let manifest: UpdateManifest;
     try {
@@ -259,7 +268,7 @@ export class AutoUpdaterImpl extends EventEmitter {
         ),
       );
     }
-    if (!isNewerVersion(manifest.version, this.#deps.currentVersion())) {
+    if (!isNewerVersion(manifest.version, currentVersion)) {
       this.#available = undefined;
       this.emit('update-not-available', toUpdateInfo(manifest));
       return null;

@@ -135,6 +135,14 @@ describe('autoUpdater.checkForUpdates', () => {
     expect(h.events).toEqual(['checking-for-update', 'update-available']);
   });
 
+  test('refuses to check while the running version is unknown (0.0.0), which would reinstall forever', async () => {
+    const h = makeUpdater({ currentVersion: () => '0.0.0' }, '2.0.0');
+    h.updater.setFeedURL(FEED);
+    await expect(h.updater.checkForUpdates()).rejects.toThrow(/version/);
+    expect(h.events).not.toContain('update-available');
+    expect(h.events).toContain('error');
+  });
+
   test('emits update-not-available and returns null for an equal/older version', async () => {
     const h = makeUpdater({}, '1.0.0');
     h.updater.setFeedURL('https://feed');
