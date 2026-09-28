@@ -3,7 +3,7 @@
  * `build --update-key` signs with and the runtime `autoUpdater` verifies against.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateSigningKeyPair } from './engine-signature';
 
@@ -21,15 +21,16 @@ export const runKeygen = (dir: string, io: KeygenIo): number => {
   const privatePath = join(dir, PRIVATE_KEY_FILE);
   const publicPath = join(dir, PUBLIC_KEY_FILE);
   for (const path of [privatePath, publicPath]) {
-    if (existsSync(path)) {
+    // lstat, not exists: a dangling symlink here would receive the private key.
+    if (lstatSync(path, { throwIfNoEntry: false }) !== undefined) {
       io.err(`bunmaska keygen: refusing to overwrite ${path}`);
       return 1;
     }
   }
   const pair = generateSigningKeyPair();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(privatePath, pair.privateKey, { mode: 0o600 });
-  writeFileSync(publicPath, pair.publicKey);
+  writeFileSync(privatePath, pair.privateKey, { mode: 0o600, flag: 'wx' });
+  writeFileSync(publicPath, pair.publicKey, { flag: 'wx' });
   io.out(privatePath);
   io.out(publicPath);
   io.out(

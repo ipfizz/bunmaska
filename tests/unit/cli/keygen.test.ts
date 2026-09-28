@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PRIVATE_KEY_FILE, PUBLIC_KEY_FILE, runKeygen } from '../../../src/cli/keygen';
@@ -53,6 +61,21 @@ describe('bunmaska keygen', () => {
     expect(readFileSync(join(dir, PRIVATE_KEY_FILE), 'utf8')).toBe('existing');
     expect(existsSync(join(dir, PUBLIC_KEY_FILE))).toBe(false);
   });
+
+  test.skipIf(process.platform === 'win32')(
+    'refuses a dangling symlink in place of either key file instead of writing through it',
+    () => {
+      for (const file of [PRIVATE_KEY_FILE, PUBLIC_KEY_FILE]) {
+        const dir = makeTmpDir();
+        const target = join(dir, 'elsewhere.pem');
+        symlinkSync(target, join(dir, file));
+        const c = io();
+        expect(runKeygen(dir, asIo(c))).toBe(1);
+        expect(existsSync(target)).toBe(false);
+        expect(readdirSync(dir)).toEqual([file]);
+      }
+    },
+  );
 });
 
 test('creates the output directory when it does not exist', () => {
