@@ -8,6 +8,10 @@ import {
   pollWindows,
 } from '../../../src/main/platform/windows/windows-native-window';
 import { createWindowsDrain } from '../../../src/main/platform/windows/windows-run-loop';
+import {
+  monitorRectsForWindow,
+  windowsScreenBackend,
+} from '../../../src/main/platform/windows/windows-screen';
 
 const SW_MAXIMIZE = 3;
 const SW_MINIMIZE = 6;
@@ -332,6 +336,10 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       expect(win.getBounds()).toEqual({ x: 120, y: 90, width: 500, height: 380 });
       loadUser32().symbols.ShowWindow(win.hwnd(), SW_MINIMIZE);
       expect(win.getBounds()).toEqual({ x: 120, y: 90, width: 500, height: 380 });
+      const rects = monitorRectsForWindow(win.hwnd());
+      const displays = windowsScreenBackend.getDisplays();
+      expect(displays.map((d) => d.bounds)).toContainEqual(rects.bounds);
+      expect(displays.map((d) => d.workArea)).toContainEqual(rects.workArea);
     } finally {
       win.destroy();
     }

@@ -141,6 +141,8 @@ const USER32_SYMBOLS = {
     args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.i64],
     returns: FFIType.i32,
   },
+  // (HWND, DWORD flags) -> HMONITOR - the monitor a window is on.
+  MonitorFromWindow: { args: [FFIType.u64, FFIType.u32], returns: FFIType.u64 },
   // (HMONITOR, LPMONITORINFO) -> BOOL - bounds, work area, and primary flag.
   GetMonitorInfoW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   // (LPPOINT) -> BOOL - the cursor position in screen coordinates.

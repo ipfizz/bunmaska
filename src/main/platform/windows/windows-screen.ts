@@ -1,5 +1,7 @@
 import { FFIType, JSCallback, ptr, read } from 'bun:ffi';
 import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import type { Rect } from '../native';
+import { readRect } from './win32';
 import { loadUser32 } from './win32-ffi';
 import { loadShcore, MDT_EFFECTIVE_DPI } from './win32-shcore-ffi';
 
@@ -10,18 +12,7 @@ const RC_WORK_OFFSET = 20;
 const DW_FLAGS_OFFSET = 36;
 const MONITORINFOF_PRIMARY = 0x1;
 const DEFAULT_DPI = 96;
-
-/** The `RECT` (4 LONGs) at `offset` in a native MONITORINFO buffer. */
-const readRect = (
-  miPtr: ReturnType<typeof ptr>,
-  offset: number,
-): { x: number; y: number; width: number; height: number } => {
-  const left = read.i32(miPtr, offset);
-  const top = read.i32(miPtr, offset + 4);
-  const right = read.i32(miPtr, offset + 8);
-  const bottom = read.i32(miPtr, offset + 12);
-  return { x: left, y: top, width: right - left, height: bottom - top };
-};
+const MONITOR_DEFAULTTONEAREST = 2;
 
 /** The device-pixel scale of a monitor (`dpi / 96`); best-effort, defaults to 1. */
 const monitorScaleFactor = (hMonitor: bigint): number => {
@@ -59,23 +50,39 @@ const enumerateMonitors = (): bigint[] => {
   return handles;
 };
 
-const describeMonitor = (hMonitor: bigint): RawDisplay => {
+/** A monitor's full rect and its taskbar-free work area, in screen pixels. */
+export type MonitorRects = { readonly bounds: Rect; readonly workArea: Rect };
+
+const readMonitorInfo = (hMonitor: bigint): MonitorRects & { readonly primary: boolean } => {
   const mi = new Uint8Array(MONITORINFO_SIZE);
   new DataView(mi.buffer).setUint32(0, MONITORINFO_SIZE, true); // cbSize
   const miPtr = ptr(mi);
   loadUser32().symbols.GetMonitorInfoW(hMonitor, miPtr);
-  const flags = read.u32(miPtr, DW_FLAGS_OFFSET);
   return {
-    // A stable per-session id derived from the monitor handle.
-    id: Number(hMonitor & 0x7fffffffn),
     bounds: readRect(miPtr, RC_MONITOR_OFFSET),
     workArea: readRect(miPtr, RC_WORK_OFFSET),
-    scaleFactor: monitorScaleFactor(hMonitor),
-    rotation: 0, // ponytail: not derived; EnumDisplaySettingsW dmDisplayOrientation has it
-    internal: false, // ponytail: not derived; needs the monitor's output technology
-    primary: (flags & MONITORINFOF_PRIMARY) !== 0,
+    primary: (read.u32(miPtr, DW_FLAGS_OFFSET) & MONITORINFOF_PRIMARY) !== 0,
   };
 };
+
+/** The rects of the monitor nearest `hwnd` (its pre-minimize rect while minimized). */
+export const monitorRectsForWindow = (hwnd: bigint): MonitorRects =>
+  readMonitorInfo(loadUser32().symbols.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
+
+/** The origin that centres a `width` x `height` window in `area`, never above or left of it. */
+export const centerIn = (area: Rect, width: number, height: number): { x: number; y: number } => ({
+  x: area.x + Math.max(0, Math.floor((area.width - width) / 2)),
+  y: area.y + Math.max(0, Math.floor((area.height - height) / 2)),
+});
+
+const describeMonitor = (hMonitor: bigint): RawDisplay => ({
+  // A stable per-session id derived from the monitor handle.
+  id: Number(hMonitor & 0x7fffffffn),
+  ...readMonitorInfo(hMonitor),
+  scaleFactor: monitorScaleFactor(hMonitor),
+  rotation: 0, // ponytail: not derived; EnumDisplaySettingsW dmDisplayOrientation has it
+  internal: false, // ponytail: not derived; needs the monitor's output technology
+});
 
 export const windowsScreenBackend: ScreenBackend = {
   getDisplays(): readonly RawDisplay[] {
