@@ -93,19 +93,24 @@ export const getCookies = (filter: CookieFilter): Promise<Cookie[]> =>
     'cookies.get',
   );
 
-/** Build a `SoupCookie*` from the normalized shape; expiration maps to max-age seconds. */
+/**
+ * Seconds until `expirationDate` for `soup_cookie_new`; -1 is a session cookie. Clamped to
+ * the i32 max: the FFI wraps a year-9999 expiry negative and libsoup drops it as expired.
+ */
+export const maxAgeFor = (expirationDate: number | undefined, nowSec: number): number =>
+  expirationDate === undefined
+    ? -1
+    : Math.min(0x7fffffff, Math.max(0, Math.round(expirationDate - nowSec)));
+
+/** Build a `SoupCookie*` from the normalized shape. */
 const buildSoupCookie = (cookie: Cookie): Pointer => {
   const soup = loadSoupFFI().symbols;
-  const maxAge =
-    cookie.expirationDate === undefined
-      ? -1
-      : Math.max(0, Math.round(cookie.expirationDate - Date.now() / 1000));
   const soupCookie = soup.soup_cookie_new(
     cstr(cookie.name),
     cstr(cookie.value),
     cstr(cookie.domain),
     cstr(cookie.path),
-    maxAge,
+    maxAgeFor(cookie.expirationDate, Date.now() / 1000),
   );
   if (soupCookie === null) {
     throw new InvalidArgumentError('cookies.set: soup_cookie_new rejected the cookie fields');

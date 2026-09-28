@@ -38,7 +38,8 @@ describe.skipIf(!isLinux)('session.cookies over the real WebKitGTK network sessi
     app.start();
     const window = app.createWindow({ width: 320, height: 240, title: 'cookies', show: true });
     const name = `bunmaska_it_${Date.now()}`;
-    const expirationDate = Math.floor(Date.now() / 1000) + 3600;
+    // Year 9999: past the i32 max-age range, so it proves the clamp.
+    const expirationDate = 253402300799;
     try {
       await settleWithPump(
         session.defaultSession.cookies.set({
