@@ -14,7 +14,6 @@ import { loadGObjectFFI } from './gobject-ffi';
 import {
   callMethodSync,
   emitSignal,
-  getUniqueName,
   nodeInfoLookupInterface,
   nodeInfoNewForXml,
   probeSessionBusUnchecked,
@@ -46,7 +45,7 @@ import {
  * in linux-dbus.ts) or the host's queries dispatch to a context nothing iterates.
  */
 
-const OBJECT_PATH = '/StatusNotifierItem';
+const OBJECT_PATH_PREFIX = '/StatusNotifierItem';
 const SNI_IFACE = 'org.kde.StatusNotifierItem';
 const WATCHER_NAME = 'org.kde.StatusNotifierWatcher';
 const WATCHER_PATH = '/StatusNotifierWatcher';
@@ -257,9 +256,13 @@ const getPropertyValue = (state: State, name: string): Pointer | null => {
   }
 };
 
+let trayCount = 0;
+
 /** Build + register the live SNI object; returns a `TrayInstance`, or null on any failure. */
 const createLive = (conn: Pointer, initialImage: string): TrayInstance | null => {
   const gdbus = loadGDBusFFI();
+  // One object path per tray: a second registration at a shared path fails on one connection.
+  const objectPath = `${OBJECT_PATH_PREFIX}/${trayCount++}`;
   const node = nodeInfoNewForXml(SNI_XML);
   if (node === null) {
     return null; // malformed XML — never crash (guard the NULL deref).
@@ -313,21 +316,19 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   vtable[1] = BigInt(gpPtr);
   vtable[2] = BigInt(spPtr);
 
-  const regId = registerObject(conn, OBJECT_PATH, iface, ptr(vtable));
+  const regId = registerObject(conn, objectPath, iface, ptr(vtable));
   if (regId === 0) {
     return null;
   }
   retained.callbacks.push(methodCall, getProp, setProp); // load-bearing: the vtable copy points here.
   retained.misc.push(node, vtable);
 
-  // Register with the watcher via the bounded method call. The watcher reads our sender's
-  // unique name, so g_bus_own_name is unnecessary. Absent watcher ⇒ fast null ⇒ icon
-  // simply doesn't appear (no hang).
-  const uniqueName = getUniqueName(conn);
+  // Registered by object path: the watcher pairs it with our sender's unique name (the
+  // libappindicator form). Absent watcher => fast null => the icon simply doesn't appear.
   const g = loadGlibFFI().symbols;
-  const nameVariant = uniqueName === null ? null : g.g_variant_new_string(cstr(uniqueName));
-  if (nameVariant !== null) {
-    const args = g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(nameVariant)])), 1n);
+  const pathVariant = g.g_variant_new_string(cstr(objectPath));
+  if (pathVariant !== null) {
+    const args = g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(pathVariant)])), 1n);
     callMethodSync(
       conn,
       WATCHER_NAME,
@@ -342,15 +343,15 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   return {
     setToolTip: (toolTip) => {
       state.toolTip = toolTip;
-      emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewToolTip', null);
+      emitSignal(conn, objectPath, SNI_IFACE, 'NewToolTip', null);
     },
     setTitle: (title) => {
       state.title = title;
-      emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewTitle', null);
+      emitSignal(conn, objectPath, SNI_IFACE, 'NewTitle', null);
     },
     setImage: (image) => {
       state.icon = decodeIcon(image);
-      emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewIcon', null); // argument-less; host re-fetches.
+      emitSignal(conn, objectPath, SNI_IFACE, 'NewIcon', null); // argument-less; host re-fetches.
     },
     setContextMenu: () => undefined, // deferred: dbusmenu is a follow-up (soft no-op, never throws).
     onClick: (callback) => {

@@ -271,12 +271,6 @@ export const unregisterObject = (conn: Pointer, registrationId: number): void =>
   loadGDBusFFI().symbols.g_dbus_connection_unregister_object(conn, registrationId);
 };
 
-/** The connection's unique bus name (e.g. `":1.42"`), or null. */
-export const getUniqueName = (conn: Pointer): string | null => {
-  const name = loadGDBusFFI().symbols.g_dbus_connection_get_unique_name(conn);
-  return name === null ? null : name.toString();
-};
-
 /**
  * Broadcast a signal from `objectPath`/`iface`. `parameters` (a floating GVariant, or null
  * for an argument-less signal) is CONSUMED.
