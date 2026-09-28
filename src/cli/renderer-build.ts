@@ -38,6 +38,7 @@ const defaultBundler: RendererBundler = async (entry, outDir, mode) => {
     // The define picks the JSX runtime too: development emits jsxDEV, production jsx.
     define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
     naming: '[dir]/[name].[ext]',
+    throw: false,
   });
   if (!result.success) {
     const messages = result.logs.map((log) => log.message).join('\n');

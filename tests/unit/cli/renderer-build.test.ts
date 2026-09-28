@@ -59,4 +59,12 @@ describe('buildRenderer', () => {
       buildRenderer(dir, { entry: 'src/renderer/main.ts', copy: ['missing.html'] }),
     ).rejects.toThrow(/renderer.copy source not found/);
   });
+
+  test('a bundle error names the entry and the parser diagnostic', async () => {
+    const dir = makeProject();
+    writeFileSync(join(dir, 'src', 'renderer', 'main.ts'), 'const x = ;\n');
+    await expect(buildRenderer(dir, { entry: 'src/renderer/main.ts' })).rejects.toThrow(
+      /renderer build failed for .*main\.ts:\nUnexpected ;/,
+    );
+  });
 });
