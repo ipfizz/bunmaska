@@ -23,14 +23,12 @@ import {
   isInstalled,
   listInstalled,
   readLinks,
-  type StoreEnv,
   verifyEngine,
 } from './engine-store';
 
 export type EngineCommandDeps = {
   /** The engine store root (the `webkit/` dir). */
   readonly root: string;
-  readonly env: StoreEnv;
   readonly out: (text: string) => void;
   readonly err: (text: string) => void;
   /** Read a project's validated config (empty `{}` when none). */
@@ -185,17 +183,7 @@ const runInstall = async (source: string, deps: EngineCommandDeps): Promise<numb
   }
   const config = await deps.readConfig('.');
   const url = isUrl ? source : engineFeedArtifactUrl(source, config.engine?.feed?.url ?? undefined);
-  const publicKey = resolveEnginePublicKey({
-    feedPublicKey: config.engine?.feed?.publicKey,
-    env: deps.env,
-  });
-  if (publicKey === undefined) {
-    deps.err(
-      'bunmaska engine install: no signing key to verify this engine. For a self-hosted feed, ' +
-        'set engine.feed.publicKey in bunmaska.config. Local engine directories install without a feed.',
-    );
-    return 1;
-  }
+  const publicKey = resolveEnginePublicKey({ feedPublicKey: config.engine?.feed?.publicKey });
   const installUrl =
     deps.installUrl ??
     ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));

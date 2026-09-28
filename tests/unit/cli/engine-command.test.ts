@@ -47,7 +47,6 @@ const capture = (root: string, config: BunmaskaConfig = {}): Captured => {
     text: () => out.join('\n'),
     deps: {
       root,
-      env: {},
       out: (t) => out.push(t),
       err: (t) => err.push(t),
       readConfig: async () => config,

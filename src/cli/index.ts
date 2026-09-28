@@ -410,7 +410,6 @@ const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => 
 
 const engineCommandDeps = (): Parameters<typeof runEngine>[1] => ({
   root: enginesPath(),
-  env: process.env,
   out,
   err,
   readConfig: async (target) => (await loadConfig(target)).config,

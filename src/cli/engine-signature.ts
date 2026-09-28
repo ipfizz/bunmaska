@@ -5,15 +5,4 @@ export const RELEASE_ENGINE_PUBKEY =
 /** A self-hosted `engine.feed.publicKey` wins, else the baked anchor (D042). */
 export const resolveEnginePublicKey = (opts: {
   readonly feedPublicKey?: string | undefined;
-  readonly env?: Record<string, string | undefined>;
-}): string | undefined => {
-  if (opts.feedPublicKey !== undefined && opts.feedPublicKey.length > 0) {
-    return opts.feedPublicKey;
-  }
-  if (RELEASE_ENGINE_PUBKEY.length > 0) {
-    return RELEASE_ENGINE_PUBKEY;
-  }
-  const env = opts.env ?? process.env; // ponytail: dead while the anchor is baked; drop with engine-command's env
-  const envKey = env['BUNMASKA_ENGINE_PUBKEY'];
-  return envKey !== undefined && envKey.length > 0 ? envKey : undefined;
-};
+}): string => opts.feedPublicKey || RELEASE_ENGINE_PUBKEY;
