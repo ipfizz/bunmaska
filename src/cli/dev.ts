@@ -322,7 +322,7 @@ export const defaultDevDeps = (
       },
     };
   },
-  watch: watchTree,
+  watch: (dir, onChange) => watchTree(dir, onChange, log),
   timers: defaultTimers,
   log,
 });
