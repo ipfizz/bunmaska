@@ -106,6 +106,7 @@ describe('bundlePreloadAssets', () => {
     writeFileSync(join(dir, 'index.html'), '<!doctype html>');
 
     const rewritten = bundlePreloadAssets(
+      join(dir, 'main.ts'),
       dir,
       ['preload.js', 'index.html'],
       fakeBundler('(() => {})();'),
@@ -113,6 +114,25 @@ describe('bundlePreloadAssets', () => {
 
     expect(rewritten).toEqual(['preload.js']);
     expect(readFileSync(join(dir, 'preload.js'), 'utf8')).toBe('(() => {})();');
+  });
+
+  test('resolves preload imports from the source directory, not the copy', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bunmaska-prebundle-'));
+    const source = join(root, 'src');
+    const destination = join(root, 'out');
+    mkdirSync(source, { recursive: true });
+    writeFileSync(join(source, 'main.ts'), '// entry');
+    writeFileSync(join(source, 'helper.ts'), "export const greet = () => 'hi-from-helper';\n");
+    writeFileSync(
+      join(source, 'preload.js'),
+      "import { greet } from './helper.ts';\nglobalThis.greeting = greet();\n",
+    );
+    const entry = join(source, 'main.ts');
+
+    const rewritten = bundlePreloadAssets(entry, destination, copyAppAssets(entry, destination));
+
+    expect(rewritten).toEqual(['preload.js']);
+    expect(readFileSync(join(destination, 'preload.js'), 'utf8')).toContain('hi-from-helper');
   });
 
   test('leaves a plain preload and any non-preload asset untouched', () => {
@@ -123,6 +143,7 @@ describe('bundlePreloadAssets', () => {
     writeFileSync(join(dir, 'app.js'), "import './x.js';\n");
 
     const rewritten = bundlePreloadAssets(
+      join(dir, 'main.ts'),
       dir,
       ['preload.js', 'app.js'],
       fakeBundler('SHOULD-NOT-APPEAR'),

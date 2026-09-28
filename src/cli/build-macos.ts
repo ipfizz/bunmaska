@@ -349,7 +349,7 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   chmodSync(layout.executablePath, 0o755);
 
   // Bundle a module-using preload so it runs as a classic script in the packaged app.
-  bundlePreloadAssets(layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
+  bundlePreloadAssets(opts.entry, layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.macosDir, 'renderer'), { recursive: true });
   }

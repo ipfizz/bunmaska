@@ -197,7 +197,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 
   // Bundle a module-using preload so it runs as a classic script in the packaged app.
   const assetsDir = dirname(layout.binPath);
-  bundlePreloadAssets(assetsDir, copyAppAssets(opts.entry, assetsDir));
+  bundlePreloadAssets(opts.entry, assetsDir, copyAppAssets(opts.entry, assetsDir));
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(assetsDir, 'renderer'), { recursive: true });
   }

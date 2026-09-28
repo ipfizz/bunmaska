@@ -188,7 +188,7 @@ export const buildWindowsApp = async (
   await compileWindowsBinary(opts.entry, layout.exePath, meta);
 
   // Bundle a module-using preload so it runs as a classic script in the packaged app.
-  bundlePreloadAssets(layout.appDir, copyAppAssets(opts.entry, layout.appDir));
+  bundlePreloadAssets(opts.entry, layout.appDir, copyAppAssets(opts.entry, layout.appDir));
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.appDir, 'renderer'), { recursive: true });
   }

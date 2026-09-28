@@ -65,6 +65,7 @@ const PRELOAD_ASSET = /^preload\.(?:js|mjs|cjs)$/i;
  * return value. Returns the names rewritten.
  */
 export const bundlePreloadAssets = (
+  entry: string,
   destination: string,
   names: readonly string[],
   bundler: PreloadBundler = defaultPreloadBundler,
@@ -78,7 +79,8 @@ export const bundlePreloadAssets = (
     if (!usesModuleSyntax(readFileSync(path, 'utf8'))) {
       continue;
     }
-    writeFileSync(path, bundler.bundle(resolve(path)));
+    // Bundle the source, not the copy: its imports (e.g. `.ts` helpers) resolve only there.
+    writeFileSync(path, bundler.bundle(resolve(dirname(entry), name)));
     rewritten.push(name);
   }
   return rewritten;
