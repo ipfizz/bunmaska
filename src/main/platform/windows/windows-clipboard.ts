@@ -330,7 +330,8 @@ export const windowsClipboardBackend: ClipboardBackend = {
   writeHTML(markup: string): void {
     withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
-      setClipboardBytes(cfHtmlFormat(), new TextEncoder().encode(buildCfHtml(markup)));
+      // NUL-terminated for readers that treat the block as a C string; EndHTML precedes it.
+      setClipboardBytes(cfHtmlFormat(), new TextEncoder().encode(`${buildCfHtml(markup)}\0`));
     });
   },
 
