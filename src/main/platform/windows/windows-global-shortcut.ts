@@ -33,6 +33,14 @@ const NAMED_VK = new Map<string, number>([
   ['PageUp', 0x21],
   ['PageDown', 0x22],
   ['Plus', 0xbb], // VK_OEM_PLUS
+  ['Insert', 0x2d],
+  ['nummult', 0x6a],
+  ['numadd', 0x6b],
+  ['numsub', 0x6d],
+  ['numdec', 0x6e],
+  ['numdiv', 0x6f],
+  ...Array.from({ length: 10 }, (_, digit): [string, number] => [`num${digit}`, 0x60 + digit]),
+  // ponytail: no media/volume keys yet; they are VK_VOLUME_MUTE (0xAD) through VK_MEDIA_PLAY_PAUSE (0xB3).
 ]);
 
 /** Common US-layout OEM punctuation virtual-key codes (layout-dependent). */

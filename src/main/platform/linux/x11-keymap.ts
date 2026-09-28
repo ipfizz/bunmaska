@@ -43,6 +43,14 @@ const KEYSYM_NAMES: ReadonlyMap<string, string> = new Map([
   ['PAGEUP', 'Prior'],
   ['PAGEDOWN', 'Next'],
   ['PLUS', 'plus'],
+  ['INSERT', 'Insert'],
+  ['NUMDEC', 'KP_Decimal'],
+  ['NUMMULT', 'KP_Multiply'],
+  ['NUMADD', 'KP_Add'],
+  ['NUMDIV', 'KP_Divide'],
+  ['NUMSUB', 'KP_Subtract'],
+  ...Array.from({ length: 10 }, (_, digit): [string, string] => [`NUM${digit}`, `KP_${digit}`]),
+  // ponytail: no media/volume keys; their XF86Audio* keysyms usually belong to the desktop.
 ]);
 
 const isFunctionKey = (key: string): boolean => /^F([1-9]|1[0-9]|2[0-4])$/.test(key);

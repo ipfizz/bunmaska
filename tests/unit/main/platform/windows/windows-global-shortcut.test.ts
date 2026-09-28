@@ -59,6 +59,19 @@ describe('acceleratorToHotkey', () => {
     expect(acceleratorToHotkey('CmdOrCtrl+Plus')?.vk).toBe(0xbb);
   });
 
+  test('maps the numeric keypad and Insert to their own virtual keys, not the top row', () => {
+    const vk = (key: string): number | undefined => acceleratorToHotkey(`CmdOrCtrl+${key}`)?.vk;
+    expect(vk('num0')).toBe(0x60);
+    expect(vk('num9')).toBe(0x69);
+    expect(vk('nummult')).toBe(0x6a);
+    expect(vk('numadd')).toBe(0x6b);
+    // VK_SEPARATOR (0x6C) sits between numadd and numsub.
+    expect(vk('numsub')).toBe(0x6d);
+    expect(vk('numdec')).toBe(0x6e);
+    expect(vk('numdiv')).toBe(0x6f);
+    expect(vk('Insert')).toBe(0x2d);
+  });
+
   test('an unparseable accelerator yields undefined', () => {
     expect(acceleratorToHotkey('')).toBeUndefined();
     expect(acceleratorToHotkey('Ctrl')).toBeUndefined(); // modifier with no key

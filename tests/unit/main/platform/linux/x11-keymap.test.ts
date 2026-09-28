@@ -42,6 +42,21 @@ describe('x11KeysymName', () => {
     expect(x11KeysymName('Plus')).toBe('plus');
   });
 
+  test('maps the numeric keypad and Insert to their own keysyms, not the top row', () => {
+    const name = (accelerator: string): string | undefined => {
+      const parsed = parseAccelerator(accelerator, 'linux');
+      return parsed === undefined ? undefined : x11KeysymName(parsed.key);
+    };
+    expect(name('num0')).toBe('KP_0');
+    expect(name('num9')).toBe('KP_9');
+    expect(name('numdec')).toBe('KP_Decimal');
+    expect(name('nummult')).toBe('KP_Multiply');
+    expect(name('numadd')).toBe('KP_Add');
+    expect(name('numdiv')).toBe('KP_Divide');
+    expect(name('numsub')).toBe('KP_Subtract');
+    expect(name('Insert')).toBe('Insert');
+  });
+
   test('returns undefined for an unmappable key', () => {
     expect(x11KeysymName('Bogus')).toBeUndefined();
   });
