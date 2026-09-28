@@ -160,6 +160,15 @@ describe('engine install', () => {
     expect(c.text()).toContain(`installed ${ID}`);
   });
 
+  test('a local dir without engine.json exits 1 with a message, not a stack', async () => {
+    const root = makeTmpDir();
+    const empty = join(root, 'empty');
+    mkdirSync(empty);
+    const c = capture(root);
+    expect(await runEngine({ action: 'install', source: empty }, c.deps)).toBe(1);
+    expect(c.err.join('\n')).toMatch(/^bunmaska engine install: .*engine\.json/);
+  });
+
   test('errors (exit 1) on a source that is neither a dir, an id, nor a URL', async () => {
     const c = capture(makeTmpDir());
     expect(await runEngine({ action: 'install', source: 'not-an-engine' }, c.deps)).toBe(1);
@@ -335,6 +344,18 @@ describe('doctor', () => {
     const c = capture(makeTmpDir(), { engine: { webkit: FOREIGN } });
     expect(await runDoctor('.', c.deps)).toBe(0);
     expect(c.text()).toMatch(/not used on this machine/);
+  });
+
+  test('exits 1 with a message when the config cannot be read', async () => {
+    const c = capture(makeTmpDir());
+    const deps = {
+      ...c.deps,
+      readConfig: async () => {
+        throw new Error('bunmaska.config is broken');
+      },
+    };
+    expect(await runDoctor('.', deps)).toBe(1);
+    expect(c.err.join('\n')).toMatch(/^bunmaska doctor: bunmaska.config is broken/);
   });
 
   test('exits 1 when the project pins an uninstalled engine', async () => {

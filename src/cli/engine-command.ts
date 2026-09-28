@@ -200,23 +200,13 @@ const runInstall = async (source: string, deps: EngineCommandDeps): Promise<numb
   const installUrl =
     deps.installUrl ??
     ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));
-  try {
-    deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
-    return 0;
-  } catch (error) {
-    deps.err(`bunmaska engine install: ${error instanceof Error ? error.message : String(error)}`);
-    return 1;
-  }
+  deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
+  return 0;
 };
 
 const runUse = (id: string, forDir: string | undefined, deps: EngineCommandDeps): number => {
   if (!isSystemEngine(id)) {
-    try {
-      parseEngineId(id);
-    } catch (error) {
-      deps.err(`bunmaska engine use: ${error instanceof Error ? error.message : String(error)}`);
-      return 1;
-    }
+    parseEngineId(id);
   }
   const where = forDir ?? '.';
   deps.out(
@@ -284,11 +274,7 @@ const runVerify = (id: string, deps: EngineCommandDeps): number => {
   return 1;
 };
 
-/** Run a `bunmaska engine <sub>` command and resolve to the process exit code. */
-export const runEngine = async (
-  sub: EngineSubcommand,
-  deps: EngineCommandDeps,
-): Promise<number> => {
+const dispatch = async (sub: EngineSubcommand, deps: EngineCommandDeps): Promise<number> => {
   switch (sub.action) {
     case 'list':
       return runList(deps);
@@ -307,14 +293,25 @@ export const runEngine = async (
   }
 };
 
-/**
- * Exits non-zero only when the project pins a full engine-id that is not
- * installed.
- */
-export const runDoctor = async (
-  target: string | undefined,
+/** Print a failure as one `bunmaska <label>: <message>` line; resolves to exit code 1. */
+const failed = (label: string, deps: EngineCommandDeps, error: unknown): number => {
+  deps.err(`bunmaska ${label}: ${error instanceof Error ? error.message : String(error)}`);
+  return 1;
+};
+
+/** Run a `bunmaska engine <sub>` command and resolve to the process exit code. */
+export const runEngine = async (
+  sub: EngineSubcommand,
   deps: EngineCommandDeps,
 ): Promise<number> => {
+  try {
+    return await dispatch(sub, deps);
+  } catch (error) {
+    return failed(`engine ${sub.action}`, deps, error);
+  }
+};
+
+const doctor = async (target: string | undefined, deps: EngineCommandDeps): Promise<number> => {
   const installed = listInstalled(deps.root);
   deps.out('Bunmaska doctor');
   deps.out(`  bun:       ${Bun.version}`);
@@ -347,5 +344,17 @@ export const runDoctor = async (
         `  project:   pins ${pin} [NOT installed ✗] — run \`bunmaska engine install ${pin}\``,
       );
       return 1;
+  }
+};
+
+/** Exits 1 when the project pins an uninstalled engine for this machine, or doctor itself fails. */
+export const runDoctor = async (
+  target: string | undefined,
+  deps: EngineCommandDeps,
+): Promise<number> => {
+  try {
+    return await doctor(target, deps);
+  } catch (error) {
+    return failed('doctor', deps, error);
   }
 };
