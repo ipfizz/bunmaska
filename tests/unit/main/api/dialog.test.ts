@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { BrowserWindow } from '../../../../src/main/api/browser-window';
 import {
   type DialogBackend,
@@ -126,9 +129,29 @@ describe('dialog.showOpenDialog', () => {
 });
 
 describe('dialog.showSaveDialog', () => {
-  test('passes the default path as the default name', async () => {
+  test('passes a bare default name through as the name', async () => {
     await dialog.showSaveDialog({ defaultPath: 'notes.md' });
     expect(lastSave).toEqual({ defaultName: 'notes.md', extensions: [] });
+  });
+
+  test('splits an absolute default file path into folder and name', async () => {
+    const path = join(tmpdir(), 'no-such-dir-bunmaska', 'notes.md');
+    await dialog.showSaveDialog({ defaultPath: path });
+    expect(lastSave).toEqual({
+      defaultDirectory: join(tmpdir(), 'no-such-dir-bunmaska'),
+      defaultName: 'notes.md',
+      extensions: [],
+    });
+  });
+
+  test('opens an existing default directory with an empty name', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-save-'));
+    try {
+      await dialog.showSaveDialog({ defaultPath: dir });
+      expect(lastSave).toEqual({ defaultDirectory: dir, defaultName: '', extensions: [] });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('forwards filter extensions', async () => {
