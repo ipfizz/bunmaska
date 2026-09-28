@@ -3,12 +3,13 @@ import { makeCancelableEvent } from '../../common/cancelable-event';
 import type { NativeWindow, WindowEventType } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
 import { startDevReload } from '../dev-reload';
-import { makeDevWindowStateWriter, readDevWindowState } from '../dev-window-state';
+import { makeDevWindowStateWriter, restoreDevBounds } from '../dev-window-state';
 import { nativeApp } from '../native-app';
 import type { Rect } from '../platform/native';
 import { app } from './app';
 import { installWindowResolver, type PopupTarget } from './menu';
 import { loadPreloadScript } from './preload';
+import { screen } from './screen';
 import { session } from './session';
 import { type LoadFileOptions, objectDestroyedError, WebContents } from './web-contents';
 
@@ -100,7 +101,10 @@ export class BrowserWindow extends EventEmitter {
     this.#resizable = options.resizable ?? true;
     // Dev only: a supervisor restart is a fresh process, so window 1 reopens at its last bounds.
     const devStatePath = process.env['BUNMASKA_DEV_STATE'];
-    const devBounds = this.id === 1 ? readDevWindowState(devStatePath) : undefined;
+    const devBounds =
+      this.id === 1
+        ? restoreDevBounds(devStatePath, () => screen.getAllDisplays().map((d) => d.workArea))
+        : undefined;
     if (devBounds !== undefined) {
       options = { ...options, width: devBounds.width, height: devBounds.height };
     }

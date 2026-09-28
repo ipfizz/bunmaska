@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { parseDevWindowState, serializeDevWindowState } from '../../../src/main/dev-window-state';
+import {
+  onAnyArea,
+  parseDevWindowState,
+  serializeDevWindowState,
+} from '../../../src/main/dev-window-state';
 
 describe('parseDevWindowState', () => {
   test('round-trips serialized bounds', () => {
@@ -15,5 +19,18 @@ describe('parseDevWindowState', () => {
     expect(
       parseDevWindowState('{"bounds":{"x":"a","y":0,"width":300,"height":200}}'),
     ).toBeUndefined();
+  });
+});
+
+describe('onAnyArea', () => {
+  const main = { x: 0, y: 0, width: 1440, height: 900 };
+
+  test('keeps bounds that overlap a display', () => {
+    expect(onAnyArea({ x: 1400, y: 850, width: 300, height: 200 }, [main])).toBe(true);
+  });
+
+  test('drops bounds left on a display that is gone', () => {
+    expect(onAnyArea({ x: 1500, y: 100, width: 300, height: 200 }, [main])).toBe(false);
+    expect(onAnyArea({ x: -400, y: 100, width: 300, height: 200 }, [main])).toBe(false);
   });
 });
