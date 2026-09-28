@@ -354,6 +354,44 @@ if (currentPlatform() === 'macos') {
       }
     });
 
+    test('the preload, bridge and dom-ready run in the main frame only', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({
+          width: 320,
+          height: 240,
+          title: 't',
+          show: true,
+          preloadScript: "window.__bunmaska.exposeInMainWorld('myApi', { v: 1 });",
+        });
+        let domReady = 0;
+        win.webContents.onNavigation((event) => {
+          if (event.type === 'dom-ready') {
+            domReady += 1;
+          }
+        });
+        win.webContents.loadHTML('<iframe srcdoc="<p>child</p>"></iframe>', 'about:blank');
+        const probe = `(() => {
+          const frame = document.querySelector('iframe');
+          if (!frame || !frame.contentDocument || frame.contentDocument.readyState !== 'complete') {
+            return null;
+          }
+          return [typeof window.myApi, typeof frame.contentWindow.myApi];
+        })()`;
+        let seen: unknown = null;
+        const deadline = performance.now() + 5_000;
+        while (seen === null && performance.now() < deadline) {
+          await Bun.sleep(20);
+          seen = await win.webContents.executeJavaScript(probe);
+        }
+        expect(seen).toEqual(['object', 'undefined']);
+        expect(domReady).toBe(1);
+      } finally {
+        app.quit();
+      }
+    });
+
     test('close fires the onClosed callback once', () => {
       const app = createMacOSApplication();
       app.start();

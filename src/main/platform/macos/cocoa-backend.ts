@@ -118,6 +118,8 @@ const nsImageToPng = (image: Handle): Uint8Array => {
 /** `NSFloatingWindowLevel` — above normal windows. */
 const NS_FLOATING_WINDOW_LEVEL = 3n;
 const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
+/** Electron runs preloads in the main frame only; an iframe must never get the bridge. */
+const FOR_MAIN_FRAME_ONLY = 1;
 const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
 /** Page-world handler name `executeJavaScript` posts its result to (D022). */
 const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
@@ -1104,7 +1106,7 @@ class MacOSApplication implements NativeApplication {
         rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:inContentWorld:'),
         nsString(source),
         WK_INJECTION_TIME_AT_DOCUMENT_START,
-        0,
+        FOR_MAIN_FRAME_ONLY,
         world,
       );
       msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
