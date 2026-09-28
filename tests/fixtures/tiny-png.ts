@@ -16,7 +16,7 @@ const chunk = (type: string, data: Uint8Array): Buffer => {
   return Buffer.concat([length, body, crc]);
 };
 
-/** Build the fixture's PNG bytes (a {@link TINY_PNG_WIDTH}×{@link TINY_PNG_HEIGHT} opaque-red image). */
+/** The fixture PNG: an opaque-red {@link TINY_PNG_WIDTH} x {@link TINY_PNG_HEIGHT} image. */
 export const makeTinyPng = (): Uint8Array => {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const ihdr = Buffer.alloc(13);

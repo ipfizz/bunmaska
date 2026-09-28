@@ -191,7 +191,7 @@ export const watchTree = (
   const watcher = fsWatch(dir, { recursive: true }, (_event, filename) => {
     handle(filename === null ? null : filename.toString());
   });
-  // Unhandled, a watch error (inotify ENOSPC, root removed) kills the supervisor and orphans the app.
+  // Unhandled, a watch error (inotify ENOSPC) kills the supervisor and orphans the app.
   watcher.on('error', (error) => {
     log(`file watching stopped (${error.message}); restart bunmaska dev`);
   });

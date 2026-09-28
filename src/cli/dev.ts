@@ -144,7 +144,7 @@ export class DevSupervisor {
     this.#deps.log('reloaded');
   }
 
-  /** Single-flight: a request mid-build reruns once after it, so the last build sees the last edit. */
+  /** Single-flight: a request mid-build reruns once after it, so the last edit gets built. */
   #rebuild(): void {
     const rebuild = this.#deps.rebuild;
     if (rebuild === undefined) {
@@ -274,7 +274,7 @@ export const defaultDevDeps = (
   log,
 });
 
-/** Supervise `entry` in `targetDir` until `awaitStop` resolves; the supervisor is torn down either way. */
+/** Supervise `entry` in `targetDir` until `awaitStop` resolves, then tear the supervisor down. */
 export const runDev = async (
   targetDir: string,
   entry: string,

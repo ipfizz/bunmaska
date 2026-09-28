@@ -17,12 +17,12 @@ type Counts = { readonly pass: number; readonly skip: number; readonly fail: num
 /**
  * Full-suite legs by `os.platform()`, within ~5% of CI at 63b4f95 (darwin 1623/76,
  * linux 1517/48), plus `windows-scoped`, the suite `validate:windows` runs (175/15).
- * ponytail: counts only; a per-OS expected-file floor would also catch a few files vanishing inside the headroom.
+ * ponytail: counts only; a per-OS file floor would catch a few files vanishing in the headroom.
  */
 export const LEGS: Readonly<Record<string, Leg>> = {
   darwin: { minPass: 1540, maxSkip: 80 },
   linux: { minPass: 1440, maxSkip: 50 },
-  // ponytail: unmeasured; the full suite is not path-portable to Windows, so CI runs windows-scoped.
+  // ponytail: unmeasured; the full suite is not path-portable to Windows yet.
   win32: { minPass: 1200, maxSkip: 130 },
   'windows-scoped': {
     minPass: 165,
