@@ -70,5 +70,124 @@
     "formatter": {
       "indentWidth": 2
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/main/api/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/platform/macos/**",
+                      "**/platform/linux/**",
+                      "**/platform/windows/**",
+                      "**/platform/cef/**"
+                    ],
+                    "message": "D024: api/ reaches a backend only through platform/index.ts, native.ts and services.ts."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/main/platform/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../api/**", "../../api/**", "**/bootstrap", "**/native-app"],
+                    "message": "D024: platform/ never imports api/; contracts live in platform/services.ts and native.ts."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/main/platform/macos/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../api/**", "../../api/**", "**/bootstrap", "**/native-app"],
+                    "message": "D024: platform/ never imports api/; contracts live in platform/services.ts and native.ts."
+                  },
+                  {
+                    "group": ["**/linux/**", "**/windows/**", "**/cef/**"],
+                    "message": "D024: a backend never imports another backend; share through a platform/ root file."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/main/platform/linux/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../api/**", "../../api/**", "**/bootstrap", "**/native-app"],
+                    "message": "D024: platform/ never imports api/; contracts live in platform/services.ts and native.ts."
+                  },
+                  {
+                    "group": ["**/macos/**", "**/windows/**", "**/cef/**"],
+                    "message": "D024: a backend never imports another backend; share through a platform/ root file."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/main/platform/windows/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../api/**", "../../api/**", "**/bootstrap", "**/native-app"],
+                    "message": "D024: platform/ never imports api/; contracts live in platform/services.ts and native.ts."
+                  },
+                  {
+                    "group": ["**/macos/**", "**/linux/**", "**/cef/**"],
+                    "message": "D024: a backend never imports another backend; share through a platform/ root file."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
