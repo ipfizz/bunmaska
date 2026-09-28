@@ -57,7 +57,7 @@ export type BunmaskaConfig = {
   readonly id?: string;
   /** The main-process entry file, relative to the project root. */
   readonly entry?: string;
-  /** App icon path: a `.icns`/`.png` on macOS, a `.png` on Linux. */
+  /** `.icns`/`.png` (macOS), `.png` (Linux), `.ico` (Windows); a build skips a type it cannot use. */
   readonly icon?: string;
   readonly updates?: BunmaskaUpdatesConfig;
   /** Pinned-WebKit engine configuration (defaults to the system WebView). */

@@ -2,7 +2,7 @@
 
 import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import {
   type BunmaskaConfig,
   CONFIG_FILE_NAMES,
@@ -115,6 +115,13 @@ const deriveName = (entry: string): string => {
   const base = entry.split(/[\\/]/).pop() ?? entry;
   const stem = base.replace(/\.[^.]+$/, '');
   return stem.length > 0 ? stem : 'BunmaskaApp';
+};
+
+/** The icon types each target's builder can ship. */
+const ICON_EXTENSIONS: Readonly<Record<BuildTarget, readonly string[]>> = {
+  macos: ['.icns', '.png'],
+  linux: ['.png'],
+  windows: ['.ico'],
 };
 
 /** Notarizes a built .app (zip, submit --wait, staple). */
@@ -259,7 +266,19 @@ const runBuild = async (
 
   const name = command.options.name ?? config.name ?? deriveName(entry);
   const id = command.options.id ?? config.id;
-  const icon = command.options.icon ?? config.icon;
+  let icon = command.options.icon ?? config.icon;
+  const iconTypes = ICON_EXTENSIONS[target];
+  if (icon !== undefined && !iconTypes.includes(extname(icon).toLowerCase())) {
+    // One config serves every target, so only an explicit --icon of the wrong type is an error.
+    if (command.options.icon !== undefined) {
+      err(`bunmaska build: --icon for ${target} must be ${iconTypes.join(' or ')} (got ${icon}).`);
+      return 1;
+    }
+    err(
+      `bunmaska build: skipping the config icon ${icon}; ${target} needs ${iconTypes.join(' or ')}.`,
+    );
+    icon = undefined;
+  }
 
   const { update, updateKey, channel } = command.options;
   if (update !== true && (updateKey !== undefined || channel !== undefined)) {
