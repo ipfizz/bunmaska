@@ -1,19 +1,10 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine/resolve';
+import { dlopenLinux } from './glib-ffi';
 
 const LIBGTK_PATH = 'libgtk-4.so.1';
 
-/**
- * The GTK 4 FFI symbol descriptor table.
- *
- * Convention (matches the existing Linux loaders): `gboolean` is modelled as
- * {@link FFIType.i32} (compare `!== 0`), NOT `bool`; all GObject/GTK handles are
- * real pointers ({@link FFIType.pointer}); `cstring` args are NUL-terminated
- * UTF-8 strings.
- */
 export const GTK_FFI_SYMBOLS = {
   gtk_init_check: {
     args: [],
@@ -27,10 +18,6 @@ export const GTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.cstring],
     returns: FFIType.void,
   },
-  gtk_window_get_title: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   gtk_window_set_default_size: {
     args: [FFIType.pointer, FFIType.i32, FFIType.i32],
     returns: FFIType.void,
@@ -40,7 +27,6 @@ export const GTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.f64],
     returns: FFIType.void,
   },
-  // (widget, min_width, min_height) -> void; constrains the window's minimum size.
   gtk_widget_set_size_request: {
     args: [FFIType.pointer, FFIType.i32, FFIType.i32],
     returns: FFIType.void,
@@ -93,10 +79,6 @@ export const GTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
-  gtk_widget_grab_focus: {
-    args: [FFIType.pointer],
-    returns: FFIType.i32,
-  },
   gtk_about_dialog_new: {
     args: [],
     returns: FFIType.pointer,
@@ -127,19 +109,11 @@ export const GTK_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GTK_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GTK_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
-/**
- * Open `libgtk-4.so.1` and expose the GTK 4 window/widget symbols Bunmaska needs.
- *
- * GTK 3 -> GTK 4 changes reflected here: `gtk_init_check`/`gtk_window_new` take
- * no arguments; `gtk_window_set_child` replaces `gtk_container_add`;
- * `gtk_widget_set_visible` replaces `gtk_widget_show`/`hide`; `minimize`/
- * `unminimize` are the GTK 4 renames of `iconify`/`deiconify`. There is no
- * `gtk_window_is_minimized` — minimized state is tracked in JS.
- */
+/** GTK 4 has no `gtk_window_is_minimized`: minimized state is tracked in JS. */
 export const loadGtkFFI = () => {
   const platform = currentPlatform();
   if (platform !== 'linux') {
@@ -150,13 +124,7 @@ export const loadGtkFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  // Share the engine resolution with the WebKitGTK loader: in pinned mode GTK
-  // must come from the SAME store `lib/` as WebKit, or two GTK symbol sets land
-  // in one process and crash. `prepareEngineForLoad` is a one-shot no-op after
-  // the first loader, so whichever fires first fixes the engine for both.
-  const engine = resolveEngine();
-  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
-  const ffi = dlopen(engineLibPath(engine, LIBGTK_PATH), GTK_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGTK_PATH, GTK_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

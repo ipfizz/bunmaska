@@ -1,20 +1,11 @@
 import { CString, FFIType, type Pointer } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine/resolve';
-
-/**
- * Loads WebKitGTK 6.0 — the Linux system-WebKit web view (the role
- * `WebKit.framework` plays on macOS).
- *
- * Convention: `gboolean` is {@link FFIType.i32} (compare `!== 0`); handles are
- * real pointers; nullable string args use {@link FFIType.pointer} (Bun's
- * `cstring` cannot encode NULL).
- */
+import { dlopenLinux } from './glib-ffi';
 
 const LIBWEBKITGTK_PATH = 'libwebkitgtk-6.0.so.4';
 
+/** `WebKitLoadEvent`: STARTED=0, REDIRECTED=1, COMMITTED=2, FINISHED=3. */
 export const WEBKIT_LOAD_STARTED = 0;
 export const WEBKIT_LOAD_COMMITTED = 2;
 export const WEBKIT_LOAD_FINISHED = 3;
@@ -27,24 +18,7 @@ export const WEBKIT_SNAPSHOT_REGION_VISIBLE = 0;
 /** `WebKitSnapshotOptions`: no selection highlight, opaque background. */
 export const WEBKIT_SNAPSHOT_OPTIONS_NONE = 0;
 
-/**
- * The WebKitGTK 6.0 FFI symbol descriptor table. Load-bearing details:
- * - `load_html` base_uri is {@link FFIType.pointer} (nullable; was wrongly
- *   `cstring` in the scaffolding) — pass a pinned NUL-terminated Buffer or 0.
- * - `evaluate_javascript` is the 8-arg WK6.0 form; length is `i64` (-1 for
- *   NUL-terminated); world_name/source_uri/cancellable/callback/user_data are
- *   pointers passable as null for fire-and-forget (D022).
- * - `register_script_message_handler` is the WK6.0 3-arg form; the trailing
- *   world_name is {@link FFIType.pointer} (nullable; 0 = default world).
- * - `webkit_user_script_new_for_world` is the named-world variant of
- *   `webkit_user_script_new`; its 4th arg (`world_name`) is {@link FFIType.cstring}
- *   (a real world name, e.g. `BunmaskaPreload`) — the isolated-world injection path.
- */
 export const WEBKITGTK_FFI_SYMBOLS = {
-  webkit_web_view_new: {
-    args: [],
-    returns: FFIType.pointer,
-  },
   webkit_web_view_get_type: {
     args: [],
     returns: FFIType.u64,
@@ -65,18 +39,16 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // (web_view) -> void; aborts any in-progress load.
   webkit_web_view_stop_loading: {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // (web_view) -> const gchar* title (BORROWED — do NOT free; NULL when none).
+  // (web_view) -> const gchar* title (BORROWED - do NOT free; NULL when none).
   webkit_web_view_get_title: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (web_view, command /*e.g. "Copy","Paste","Cut","SelectAll","Undo","Redo"*/) -> void.
-  // Non-blocking — queues into the web process. Backs Menu edit-role clicks on Linux.
+  // (web_view, command /*e.g. "Copy","Paste","SelectAll"*/) -> void; queued, non-blocking.
   webkit_web_view_execute_editing_command: {
     args: [FFIType.pointer, FFIType.cstring],
     returns: FFIType.void,
@@ -115,6 +87,8 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // WK6.0 8-arg form: (view, script, length:i64 /*-1 = NUL-terminated*/, world_name, source_uri,
+  //  cancellable, callback, user_data); null trailing pointers = fire-and-forget (D022).
   webkit_web_view_evaluate_javascript: {
     args: [
       FFIType.pointer,
@@ -128,10 +102,6 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     ],
     returns: FFIType.void,
   },
-  webkit_web_view_get_user_content_manager: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   webkit_web_view_get_settings: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
@@ -140,7 +110,7 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.i32],
     returns: FFIType.void,
   },
-  // (settings, user_agent /*cstring; null resets to default*/) -> void
+  // (settings, user_agent /*null resets to default*/) -> void
   webkit_settings_set_user_agent: {
     args: [FFIType.pointer, FFIType.cstring],
     returns: FFIType.void,
@@ -153,7 +123,6 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // (inspector) -> void; closes the inspector window.
   webkit_web_inspector_close: {
     args: [FFIType.pointer],
     returns: FFIType.void,
@@ -162,6 +131,7 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [],
     returns: FFIType.pointer,
   },
+  // WK6.0 3-arg form: (manager, name, world_name /*null = default world*/) -> gboolean.
   webkit_user_content_manager_register_script_message_handler: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer],
     returns: FFIType.i32,
@@ -185,18 +155,17 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     ],
     returns: FFIType.pointer,
   },
-  // () -> WebKitWebContext* (the process-wide default context; transfer-none).
+  // () -> WebKitWebContext* (transfer-none).
   webkit_web_context_get_default: {
     args: [],
     returns: FFIType.pointer,
   },
-  // (WebKitWebView*) -> WebKitWebContext* (the view's context; transfer-none).
+  // (WebKitWebView*) -> WebKitWebContext* (transfer-none).
   webkit_web_view_get_context: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (context, scheme, callback, user_data, destroy_notify) -> void. The callback
-  // is a `WebKitURISchemeRequestCallback`; user_data/destroy are NULL here.
+  // (context, scheme, WebKitURISchemeRequestCallback, user_data, destroy_notify) -> void.
   webkit_web_context_register_uri_scheme: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
@@ -212,12 +181,12 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.i64, FFIType.pointer],
     returns: FFIType.void,
   },
-  // (request, GError*) -> void. Completes the request with an error response.
+  // (request, GError*) -> void.
   webkit_uri_scheme_request_finish_error: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
   },
-  // () -> WebKitNetworkSession* (the process-default session; transfer-none).
+  // () -> WebKitNetworkSession* (transfer-none).
   webkit_network_session_get_default: {
     args: [],
     returns: FFIType.pointer,
@@ -228,6 +197,7 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     returns: FFIType.pointer,
   },
   // (manager, cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
+  // WebKitGTK 2.42+, and Bun resolves the whole table at dlopen: this sets the backend's floor.
   webkit_cookie_manager_get_all_cookies: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
@@ -238,7 +208,7 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (manager, SoupCookie* /*NOT consumed — caller frees after the finish*/,
+  // (manager, SoupCookie* /*NOT consumed - caller frees after the finish*/,
   //  cancellable /*null*/, GAsyncReadyCallback, user_data /*null*/) -> void.
   webkit_cookie_manager_add_cookie: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
@@ -271,15 +241,15 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     ],
     returns: FFIType.void,
   },
-  // (view, GAsyncResult*, GError** /*null ok*/) -> cairo_surface_t*
-  // (transfer-FULL: cairo_surface_destroy when done; NULL on error).
+  // (view, GAsyncResult*, GError** /*null ok*/) -> GdkTexture* (transfer-full: g_object_unref;
+  // NULL on error). Never the 4.x cairo_surface_t*: cairo_surface_destroy on it aborts.
   webkit_web_view_get_snapshot_finish: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof WEBKITGTK_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof WEBKITGTK_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -293,20 +263,11 @@ export const loadWebKitGtkFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  // Resolve the pinned engine (if any) before dlopen, so a `bunmaska build`-baked
-  // engine-id loads its own WebKitGTK from the shared store instead of the
-  // system soname. System mode (the default) passes the bare soname through.
-  const engine = resolveEngine();
-  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
-  const ffi = dlopen(engineLibPath(engine, LIBWEBKITGTK_PATH), WEBKITGTK_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBWEBKITGTK_PATH, WEBKITGTK_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };
 
-/**
- * Decode the transfer-none `const char*` returned by `webkit_web_view_get_uri`.
- * The pointer is owned by WebKit and is NULL before the first load — guard it
- * and return `''` rather than freeing or decoding a null pointer.
- */
+/** Decode `webkit_web_view_get_uri`'s borrowed string; NULL before the first load reads as `''`. */
 export const readGetUriResult = (ptr: Pointer | null): string =>
   ptr === null ? '' : new CString(ptr).toString();

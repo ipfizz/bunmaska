@@ -25,7 +25,6 @@ describe.skipIf(!isLinux)('libnotify FFI + Linux notification backend (Linux)', 
       'notify_notification_new',
       'notify_notification_show',
       'notify_notification_close',
-      'notify_notification_set_timeout',
     ] as const) {
       expect(typeof lib.symbols[name]).toBe('function');
     }

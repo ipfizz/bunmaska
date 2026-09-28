@@ -1,31 +1,82 @@
-import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
+import { type FFIFunction, FFIType } from 'bun:ffi';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import type { StoreEnv } from '../../../cli/engine-store';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-
-/**
- * Loads GLib's main-context iteration symbols plus `g_free`.
- *
- * GLib (not GTK directly) owns the main-loop primitives Bunmaska uses to pump the
- * Linux UI cooperatively, mirroring the macOS CoreFoundation pump (D020).
- * `libglib-2.0` is a hard dependency of GTK 4, so it is always present wherever
- * `libgtk-4` is.
- *
- * `g_main_context_iteration(context, may_block)` dispatches at most one set of
- * ready sources; a `NULL` context means the default one. `g_main_context_pending`
- * reports whether any sources are ready, letting us drain to quiescence without
- * ever blocking Bun's thread. `g_free` releases the transfer-full `char*`
- * returned by `jsc_value_to_string` (NULL-safe no-op).
- */
+import {
+  type EngineResolution,
+  engineEnv,
+  engineLibPath,
+  prepareEngineForLoad,
+  resolveEngine,
+} from '../../engine/resolve';
+import { cstr } from '../cstr';
+import { dlopen, type NarrowLibrary } from '../dlopen';
 
 const LIBGLIB_PATH = 'libglib-2.0.so.0';
+const LIBC_PATH = 'libc.so.6';
+const LIBC_FFI_SYMBOLS = {
+  setenv: { args: [FFIType.cstring, FFIType.cstring, FFIType.i32], returns: FFIType.i32 },
+} as const;
 
-/** The GLib FFI symbol descriptor table. */
+/** The dlopen path for `soname`: the pinned engine's bundled copy if present, else the soname. */
+export const linuxLibPath = (
+  engine: EngineResolution,
+  soname: string,
+  exists: (path: string) => boolean = existsSync,
+  cwd: string = process.cwd(),
+): string => {
+  const bundled = engineLibPath(engine, soname);
+  if (bundled !== soname && exists(bundled)) {
+    return bundled;
+  }
+  // Bun retries a failed bare-name dlopen as <cwd>/<name>, which would run a planted library.
+  if (exists(join(cwd, soname))) {
+    throw new Error(
+      `refusing to dlopen ${soname}: a file of that name is in the working directory`,
+    );
+  }
+  return soname;
+};
+
+/** Copy the pinned engine's env into libc's environ: Bun's `process.env` never reaches `getenv`. */
+export const exportEngineEnv = (
+  engine: EngineResolution,
+  env: StoreEnv,
+  setenv: (name: string, value: string) => void,
+): void => {
+  for (const name of Object.keys(engineEnv(engine, env))) {
+    const value = env[name];
+    if (value !== undefined) {
+      setenv(name, value);
+    }
+  }
+};
+
+const nativeEnv = { exported: false };
+
+/**
+ * `dlopen` for every Linux loader. A pinned engine must supply GLib, GTK and the rest of its
+ * closure to the whole process: a bare-soname load of any of them first binds the system copy,
+ * and the engine's GTK/WebKit then resolve their DT_NEEDED against it (mixed GLib, or two GTKs).
+ */
+export const dlopenLinux = <Fns extends Record<string, FFIFunction>>(
+  soname: string,
+  symbols: Fns,
+): NarrowLibrary<Fns> => {
+  const engine = resolveEngine();
+  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
+  if (!nativeEnv.exported) {
+    nativeEnv.exported = true;
+    exportEngineEnv(engine, process.env, (name, value) => {
+      dlopen(LIBC_PATH, LIBC_FFI_SYMBOLS).symbols.setenv(cstr(name), cstr(value), 1);
+    });
+  }
+  return dlopen(linuxLibPath(engine, soname), symbols);
+};
+
 export const GLIB_FFI_SYMBOLS = {
-  g_main_context_default: {
-    args: [],
-    returns: FFIType.pointer,
-  },
   g_main_context_iteration: {
     args: [FFIType.pointer, FFIType.i32],
     returns: FFIType.i32,
@@ -57,8 +108,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (string) -> GQuark (a guint32 id). Used to build an error domain for the
-  // GError handed to webkit_uri_scheme_request_finish_error.
+  // (string) -> GQuark (guint32).
   g_quark_from_string: {
     args: [FFIType.cstring],
     returns: FFIType.u32,
@@ -95,7 +145,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.u64],
     returns: FFIType.pointer,
   },
-  // (value) -> void. Drops a ref on a transfer-full GVariant.
+  // (value) -> void.
   g_variant_unref: {
     args: [FFIType.pointer],
     returns: FFIType.void,
@@ -105,7 +155,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.u32,
   },
-  // (string) -> GVariant* 's' (FLOATING). Builds a D-Bus method arg.
+  // (string) -> GVariant* 's' (FLOATING).
   g_variant_new_string: {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
@@ -126,31 +176,27 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.i32],
     returns: FFIType.pointer,
   },
-  // (value) -> GVariant* 'i' (FLOATING). Width/height for the SNI a(iiay) icon.
+  // (value) -> GVariant* 'i' (FLOATING).
   g_variant_new_int32: {
     args: [FFIType.i32],
     returns: FFIType.pointer,
   },
-  // (object_path) -> GVariant* 'o' (FLOATING). The SNI Menu property.
+  // (object_path) -> GVariant* 'o' (FLOATING).
   g_variant_new_object_path: {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
   },
-  // (type_string) -> GVariantType* (transfer-full; g_variant_type_free). Builders BORROW it.
+  // (type_string) -> GVariantType* (transfer-full). Builders BORROW it.
   g_variant_type_new: {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
-  },
-  g_variant_type_free: {
-    args: [FFIType.pointer],
-    returns: FFIType.void,
   },
   // (type:GVariantType*) -> GVariantBuilder* (heap; g_variant_builder_unref).
   g_variant_builder_new: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (builder, type:GVariantType*) -> void. Opens a nested container.
+  // (builder, type:GVariantType*) -> void.
   g_variant_builder_open: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
@@ -186,11 +232,6 @@ export const GLIB_FFI_SYMBOLS = {
     ],
     returns: FFIType.pointer,
   },
-  // (value) -> GVariant*. Sinks a floating ref + adds one full ref (so we OWN the value).
-  g_variant_ref_sink: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   // (GList*) -> void. Frees the LIST CELLS ONLY - each node's data must already
   // have been freed by its owner (e.g. soup_cookie_free), or it leaks.
   g_list_free: {
@@ -204,7 +245,7 @@ export const GLIB_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GLIB_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GLIB_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -218,7 +259,7 @@ export const loadGlibFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGLIB_PATH, GLIB_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGLIB_PATH, GLIB_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

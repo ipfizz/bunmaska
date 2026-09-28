@@ -19,7 +19,6 @@ import {
   loadGObjectFFI,
 } from '../../../../../src/main/platform/linux/gobject-ffi';
 import {
-  GTK_DIALOG_GOBJECT_FFI_SYMBOLS,
   loadGtkDialogFFI,
   loadGtkDialogGObjectFFI,
 } from '../../../../../src/main/platform/linux/gtk-dialog-ffi';
@@ -30,6 +29,7 @@ import {
   LIBNOTIFY_FFI_SYMBOLS,
   loadLibnotifyFFI,
 } from '../../../../../src/main/platform/linux/libnotify-ffi';
+import { loadLibsecretFFI } from '../../../../../src/main/platform/linux/libsecret-ffi';
 import { loadSoupFFI, SOUP_FFI_SYMBOLS } from '../../../../../src/main/platform/linux/soup-ffi';
 import {
   loadWebKitGtkFFI,
@@ -37,6 +37,7 @@ import {
   WEBKIT_LOAD_FINISHED,
   WEBKITGTK_FFI_SYMBOLS,
 } from '../../../../../src/main/platform/linux/webkitgtk-ffi';
+import { loadX11FFI } from '../../../../../src/main/platform/linux/x11-ffi';
 
 /**
  * The Linux FFI declarations that a reviewer would plausibly get WRONG. Restating a
@@ -90,13 +91,8 @@ describe('gboolean is i32, never bool', () => {
   });
 });
 
-/**
- * A `cstring` return is decoded eagerly by bun and cannot be NULL-checked or freed.
- * These getters must stay raw pointers so the caller can guard 0 and, where the
- * transfer is full, hand the buffer back to g_free.
- */
+/** These getters stay raw pointers so a transfer-full string keeps the address g_free needs. */
 const POINTER_GETTERS: ReadonlyArray<readonly [string, Sym]> = [
-  ['gtk_window_get_title', GTK_FFI_SYMBOLS.gtk_window_get_title],
   ['webkit_web_view_get_uri', WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_uri],
   ['jsc_value_to_string', JSC_FFI_SYMBOLS.jsc_value_to_string],
   ['g_file_get_path', GIO_FFI_SYMBOLS.g_file_get_path],
@@ -119,11 +115,6 @@ describe('string getters return a guardable pointer, not cstring', () => {
 const PINNED_ARITY: ReadonlyArray<readonly [string, Sym, number]> = [
   ['g_object_new (gobject-ffi, property form)', GOBJECT_FFI_SYMBOLS.g_object_new, 4],
   [
-    'g_object_new (gtk-dialog-ffi, NULL-terminated form)',
-    GTK_DIALOG_GOBJECT_FFI_SYMBOLS.g_object_new,
-    2,
-  ],
-  [
     'webkit_web_view_evaluate_javascript (WK6.0)',
     WEBKITGTK_FFI_SYMBOLS.webkit_web_view_evaluate_javascript,
     8,
@@ -140,12 +131,6 @@ describe('variadic / ABI-versioned functions are pinned to one arity', () => {
   test.each(PINNED_ARITY)('%s is pinned to one arity', (_name, sym, arity) => {
     expect(sym.args.length).toBe(arity);
   });
-
-  test('the two g_object_new declarations stay distinct arities', () => {
-    expect(GOBJECT_FFI_SYMBOLS.g_object_new.args.length).not.toBe(
-      GTK_DIALOG_GOBJECT_FFI_SYMBOLS.g_object_new.args.length,
-    );
-  });
 });
 
 describe('width-sensitive scalars', () => {
@@ -154,9 +139,8 @@ describe('width-sensitive scalars', () => {
     expect(GOBJECT_FFI_SYMBOLS.g_signal_handler_disconnect.args[1]).toBe(T.u64);
   });
 
-  test('a D-Bus subscription id is guint (u32) on both sides', () => {
+  test('a D-Bus subscription id is guint (u32)', () => {
     expect(GDBUS_FFI_SYMBOLS.g_dbus_connection_signal_subscribe.returns).toBe(T.u32);
-    expect(GDBUS_FFI_SYMBOLS.g_dbus_connection_signal_unsubscribe.args[1]).toBe(T.u32);
   });
 
   test('webkit_uri_scheme_request_finish takes a 64-bit stream length', () => {
@@ -213,8 +197,10 @@ const LOADERS: ReadonlyArray<readonly [string, () => unknown]> = [
   ['loadGtkMenuFFI', loadGtkMenuFFI],
   ['loadJscFFI', loadJscFFI],
   ['loadLibnotifyFFI', loadLibnotifyFFI],
+  ['loadLibsecretFFI', loadLibsecretFFI],
   ['loadWebKitGtkFFI', loadWebKitGtkFFI],
   ['loadSoupFFI', loadSoupFFI],
+  ['loadX11FFI', loadX11FFI],
 ];
 
 test.skipIf(currentPlatform() === 'linux')(

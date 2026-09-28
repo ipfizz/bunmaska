@@ -64,7 +64,7 @@ describe.skipIf(!isLinux)('pinned engine load (Linux, real WebKitGTK)', () => {
       if (code !== 0) {
         throw new Error(`pinned-load probe exited ${code}: ${err}`);
       }
-      expect(out).toBe('STORE_LOADED');
+      expect(out).toBe(`STORE_LOADED\nWEBKIT_EXEC_PATH=${join(store, id, 'libexec')}`);
     } finally {
       rmSync(store, { recursive: true, force: true });
     }

@@ -1,27 +1,17 @@
 import { FFIType, type Pointer } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import { cstr } from '../cstr';
+import { dlopenLinux } from './glib-ffi';
 
 /**
- * libsecret symbols behind the Linux keyring backend of `safeStorage`.
- *
- * The simple-password API stores/looks up a single secret under a `SecretSchema`.
- * We build the schema with {@link secret_schema_new} (libsecret owns the struct
- * layout — no blind offset reasoning) carrying ZERO attributes, so the schema
- * identifies one secret and the variadic attribute lists collapse to a trailing
- * `NULL`. We pass `NULL` for every `GError**` out-param (a NULL/0 return already
- * means "absent or failed"), which sidesteps GError ownership + pointer-precision
- * entirely.
- *
- * These calls are SYNCHRONOUS (blocking D-Bus). They are gated off in CI and
- * never run from unit tests (see `libsecret-keyring.ts`).
+ * The schema carries ZERO attributes, so every variadic attribute list collapses to one trailing
+ * NULL. Every `GError**` is NULL: a NULL/0 return already means absent or failed.
  */
 
 const LIBSECRET_PATH = 'libsecret-1.so.0';
 const SCHEMA_NAME = 'dev.bunmaska.safeStorage';
-/** `SECRET_SCHEMA_NONE` — the secret is tagged with the schema name, so a zero-attribute lookup finds it. */
+/** Tags the secret with the schema name, so a zero-attribute lookup still finds it. */
 const SECRET_SCHEMA_NONE = 0;
 
 export const LIBSECRET_FFI_SYMBOLS = {
@@ -56,7 +46,7 @@ export const LIBSECRET_FFI_SYMBOLS = {
 } as const;
 
 const cache: {
-  ffi: ReturnType<typeof dlopen<typeof LIBSECRET_FFI_SYMBOLS>> | undefined;
+  ffi: ReturnType<typeof dlopenLinux<typeof LIBSECRET_FFI_SYMBOLS>> | undefined;
   schema: Pointer | undefined;
 } = { ffi: undefined, schema: undefined };
 
@@ -69,13 +59,12 @@ const requireLinux = (): void => {
   }
 };
 
-/** Open `libsecret-1.so.0` and expose the simple-password symbols. */
 export const loadLibsecretFFI = () => {
   requireLinux();
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBSECRET_PATH, LIBSECRET_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBSECRET_PATH, LIBSECRET_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };
