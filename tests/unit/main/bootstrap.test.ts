@@ -79,7 +79,9 @@ describe('bootstrap native wiring', () => {
     try {
       triggers.quitRequest();
       expect(beforeQuit).toBe(0);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      for (let tick = 0; tick < 50 && beforeQuit === 0; tick += 1) {
+        await Bun.sleep(2);
+      }
       expect(beforeQuit).toBe(1);
     } finally {
       app.removeListener('before-quit', veto);

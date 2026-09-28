@@ -50,6 +50,17 @@ if (currentPlatform() === 'windows') {
       loadUser32().symbols.DestroyMenu(handle);
     });
 
+    test('the quit role keeps its click, since Windows has no native quit command', () => {
+      const realizer = createWindowsMenuRealizer();
+      let quits = 0;
+      const handle = realizer.realize([
+        item({ label: 'Quit', role: 'quit', onClick: () => quits++ }),
+      ]);
+      realizer.dispatchMenuCommand(1);
+      expect(quits).toBe(1);
+      loadUser32().symbols.DestroyMenu(handle);
+    });
+
     test('a role item stores no JS click, so its id dispatches to nothing', () => {
       const realizer = createWindowsMenuRealizer();
       let clicks = 0;

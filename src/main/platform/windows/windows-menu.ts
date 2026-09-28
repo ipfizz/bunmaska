@@ -102,7 +102,9 @@ export const createWindowsMenuRealizer = (
         continue;
       }
       // ponytail: role items other than quit are inert (no dispatch or accelerator table)
-      const id = allocateId(item.onClick);
+      const id = allocateId(
+        item.role === undefined || item.role === 'quit' ? item.onClick : undefined,
+      );
       ids.push(id);
       api.AppendMenuW(
         hmenu,
