@@ -4,10 +4,11 @@ import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import { EXEC_HANDLER_NAME } from './eval-js';
 import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
-import { loadWebKitGtkFFI, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START } from './webkitgtk-ffi';
-
-/** `WebKitUserContentInjectedFrames`: never subframes, or a third-party iframe gets every exposed API. */
-const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME = 1;
+import {
+  loadWebKitGtkFFI,
+  WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+  WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+} from './webkitgtk-ffi';
 
 /** The isolated world (Electron `contextIsolation`) the bridge and preloads run in. */
 export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
@@ -47,27 +48,35 @@ const requirePointer = (ptr: Pointer | null, what: string): Pointer => {
 /** Add `source` to the isolated `BunmaskaPreload` world at document-start. */
 const addUserScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
-  const script = webkit.symbols.webkit_user_script_new_for_world(
-    cstr(source),
-    WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-    WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-    cstr(PRELOAD_WORLD_NAME),
-    null,
-    null,
+  const script = requirePointer(
+    webkit.symbols.webkit_user_script_new_for_world(
+      cstr(source),
+      WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+      WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+      cstr(PRELOAD_WORLD_NAME),
+      null,
+      null,
+    ),
+    'user_script',
   );
-  webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script')); // ponytail: our script ref leaks; unref needs webkit_user_script_unref in webkitgtk-ffi
+  webkit.symbols.webkit_user_content_manager_add_script(ucm, script);
+  webkit.symbols.webkit_user_script_unref(script);
 };
 
 const addPageWorldScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
-  const script = webkit.symbols.webkit_user_script_new(
-    cstr(source),
-    WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-    WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-    null,
-    null,
+  const script = requirePointer(
+    webkit.symbols.webkit_user_script_new(
+      cstr(source),
+      WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+      WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+      null,
+      null,
+    ),
+    'user_script',
   );
-  webkit.symbols.webkit_user_content_manager_add_script(ucm, requirePointer(script, 'user_script')); // ponytail: our script ref leaks; unref needs webkit_user_script_unref in webkitgtk-ffi
+  webkit.symbols.webkit_user_content_manager_add_script(ucm, script);
+  webkit.symbols.webkit_user_script_unref(script);
 };
 
 /**
