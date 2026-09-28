@@ -1,6 +1,7 @@
 import { FFIType, type Pointer } from 'bun:ffi';
 import { FFIError, UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { reportCallbackError } from '../../../common/report-error';
 import { cstr } from '../cstr';
 import { dlopen } from '../dlopen';
 
@@ -23,18 +24,13 @@ export const ptrIn = (handle: Handle): Pointer => {
 export const bigIntOut = (pointer: Pointer | null): Handle =>
   pointer === null ? 0n : BigInt(pointer);
 
+let reportNativeError = reportCallbackError;
+
 /**
  * Run JS that native code called. A throw must never unwind through native frames
  * (Bun then skips every later JSCallback in that native call), so it is rethrown on
  * a microtask as an ordinary uncaught exception and `fallback` goes back to native.
  */
-const rethrowLater = (error: unknown): void => {
-  queueMicrotask(() => {
-    throw error;
-  });
-};
-let reportNativeError = rethrowLater;
-
 export const callFromNative = <T>(fallback: T, run: () => T): T => {
   try {
     return run();
@@ -48,7 +44,7 @@ export const callFromNative = <T>(fallback: T, run: () => T): T => {
 export const setNativeErrorReporterForTesting = (
   report: ((error: unknown) => void) | undefined,
 ): void => {
-  reportNativeError = report ?? rethrowLater;
+  reportNativeError = report ?? reportCallbackError;
 };
 
 /** Memoise a macOS-only resource; throws {@link UnsupportedPlatformError} at call time elsewhere. */

@@ -2,6 +2,7 @@ import { JSCallback, type Pointer, ptr } from 'bun:ffi';
 import type { GlobalShortcutBackend } from '../../api/global-shortcut';
 import { parseAccelerator } from '../../api/accelerator';
 import { currentPlatform } from '../../../common/platform';
+import { reportCallbackError } from '../../../common/report-error';
 import { loadCarbonFFI } from './carbon-ffi';
 import { carbonModifierMask, macVirtualKeyCode } from './carbon-keymap';
 
@@ -64,10 +65,7 @@ const ensureHandler = (): boolean => {
       try {
         callback();
       } catch (error) {
-        // A throw must not unwind into Carbon; surface it as an ordinary uncaught error.
-        queueMicrotask(() => {
-          throw error;
-        });
+        reportCallbackError(error); // a throw must not unwind into Carbon
       }
       return NO_ERR;
     },

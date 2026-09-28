@@ -1,4 +1,5 @@
 import { JSCallback, type Pointer } from 'bun:ffi';
+import { reportCallbackError } from '../../../common/report-error';
 import type { MenuRealizer } from '../../api/menu';
 import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { cstr } from '../cstr';
@@ -159,14 +160,12 @@ type WalkContext = {
 const gtkLabel = (label: string): string =>
   label.replace(/_/g, '__').replace(/&(&?)/g, (_match, escaped: string) => (escaped ? '&' : '_'));
 
-/** Re-throw a click's error on a microtask: unwinding into the GLib dispatch loses it. */
+/** Unwinding into the GLib dispatch would lose a click's error. */
 const guarded = (thunk: () => void) => (): void => {
   try {
     thunk();
   } catch (error) {
-    queueMicrotask(() => {
-      throw error;
-    });
+    reportCallbackError(error);
   }
 };
 
