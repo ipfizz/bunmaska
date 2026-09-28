@@ -4,7 +4,7 @@
  * the bucket's `index.json`. The index merge runs before any upload, so a
  * republished or malformed id uploads nothing.
  *
- *   bun tools/engine/publish-engine-r2.ts <feedDir> <engineId> [--bucket <name>]
+ *   bun tools/engine/publish-engine-r2.ts <feedDir> <engineId> [--bucket <name>] [--new-index]
  *
  * Requires wrangler auth in the environment (CLOUDFLARE_API_TOKEN +
  * CLOUDFLARE_ACCOUNT_ID with R2 write on the bucket).
@@ -20,10 +20,11 @@ const feedDir = args[0];
 const engineId = args[1];
 const bucketFlag = args.indexOf('--bucket');
 const bucket = bucketFlag >= 0 ? args[bucketFlag + 1] : 'bunmaska-engines';
+const newIndex = args.includes('--new-index');
 
 if (!feedDir || !engineId) {
   process.stderr.write(
-    'usage: bun tools/engine/publish-engine-r2.ts <feedDir> <engineId> [--bucket <name>]\n',
+    'usage: bun tools/engine/publish-engine-r2.ts <feedDir> <engineId> [--bucket <name>] [--new-index]\n',
   );
   process.exit(2);
 }
@@ -58,6 +59,10 @@ const work = mkdtempSync(join(tmpdir(), 'bunmaska-index-'));
 const current = join(work, 'index-current.json');
 const merged = join(work, 'index.json');
 const hadIndex = wrangler('get', `${bucket}/index.json`, '--file', current) === 0;
+if (!hadIndex && !newIndex) {
+  // Any failure (auth, 5xx, network) must not replace the live index with one entry.
+  fail(`could not read ${bucket}/index.json; pass --new-index only for a bucket with no index`);
+}
 writeFileSync(
   merged,
   mergeEngineIndex(hadIndex ? readFileSync(current, 'utf8') : undefined, manifest),
