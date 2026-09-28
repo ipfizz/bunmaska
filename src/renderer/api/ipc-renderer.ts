@@ -34,7 +34,7 @@ const getBridge = (): RendererBridge => {
   const bridge = Reflect.get(globalThis, '__bunmaska') as RendererBridge | undefined;
   if (bridge === undefined) {
     throw new BunmaskaError(
-      'Bunmaska preload bridge is not available; ensure a preload script ran before renderer code',
+      'ipcRenderer is only available in the preload (isolated world); expose what the page needs with contextBridge',
     );
   }
   return bridge;

@@ -133,8 +133,10 @@ describe('ipcRenderer.removeAllListeners', () => {
 });
 
 describe('ipcRenderer without a bridge', () => {
-  test('throws a clear error if the preload bridge is absent', () => {
+  test('throws pointing page code at contextBridge when the bridge is absent', () => {
     Reflect.deleteProperty(globalThis, '__bunmaska');
-    expect(() => createIpcRenderer().send('x')).toThrow(/preload/i);
+    expect(() => createIpcRenderer().send('x')).toThrow(
+      /only available in the preload \(isolated world\).*contextBridge/,
+    );
   });
 });
