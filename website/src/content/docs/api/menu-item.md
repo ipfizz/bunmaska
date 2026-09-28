@@ -107,6 +107,8 @@ Bunmaska supports two kinds of role. A role gives an item a default label, accel
 - `editMenu` - an "Edit" submenu (undo/redo/cut/copy/paste/paste-and-match-style/delete/select-all).
 - `windowMenu` - a "Window" submenu (minimize/zoom/close).
 
+As in Electron, a `submenu` you pass alongside a macro role replaces the standard one, and a `label` renames it.
+
 ```ts
 import { Menu } from 'bunmaska';
 
