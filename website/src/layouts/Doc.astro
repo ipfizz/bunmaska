@@ -34,9 +34,11 @@ const breadcrumbList = {
     "@type": "ListItem",
     position: i + 1,
     name: c.label,
-    item: abs(c.href),
+    ...(i < crumbs.length - 1 ? { item: abs(c.href) } : {}),
   })),
 };
+// The home page's Organization, by @id, so docs credit the same entity.
+const org = { "@type": "Organization", "@id": abs("/#org"), name: "Bunmaska", url: abs("/") };
 // Every doc is a TechArticle; dates omitted rather than faked.
 const techArticle = {
   "@context": "https://schema.org",
@@ -44,8 +46,8 @@ const techArticle = {
   headline: title,
   ...(description ? { description } : {}),
   url: abs(`/docs/${slug}`),
-  author: { "@type": "Organization", name: "bunmaska" },
-  publisher: { "@type": "Organization", name: "bunmaska" },
+  author: org,
+  publisher: org,
 };
 ---
 

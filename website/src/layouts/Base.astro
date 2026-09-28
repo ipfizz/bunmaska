@@ -52,6 +52,7 @@ const website = {
 const organization = {
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": `${Astro.site?.href}#org`,
   name: "Bunmaska",
   url: Astro.site?.href,
   logo: new URL("/logo.png", Astro.site).href,
