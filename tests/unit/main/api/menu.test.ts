@@ -92,6 +92,17 @@ describe('MenuItem roles', () => {
     expect(copy.type).toBe('normal');
   });
 
+  test('an unsupported Electron role degrades to a plain item instead of throwing', () => {
+    Menu.buildFromTemplate([{ role: 'toggleDevTools' as never }]).realize();
+    expect(realized?.[0]).toMatchObject({ label: 'toggleDevTools', type: 'normal' });
+    expect(realized?.[0]?.roleSelector).toBeUndefined();
+  });
+
+  test('roles match case-insensitively, as in Electron', () => {
+    expect(new MenuItem({ role: 'selectall' as never }).role).toBe('selectAll');
+    expect(new MenuItem({ role: 'editmenu' as never }).label).toBe('Edit');
+  });
+
   test('an app-supplied label/accelerator overrides the role defaults', () => {
     const item = new MenuItem({
       role: 'copy',

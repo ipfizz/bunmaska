@@ -178,8 +178,18 @@ const MACRO_ROLE_SUBMENUS: Record<
   },
 };
 
-const isMacroRole = (role: MenuRole | MenuMacroRole): role is MenuMacroRole =>
-  role === 'editMenu' || role === 'windowMenu';
+const isMacroRole = (role: string): role is MenuMacroRole =>
+  Object.hasOwn(MACRO_ROLE_SUBMENUS, role);
+
+const isRole = (role: string): role is MenuRole => Object.hasOwn(ROLE_DEFAULTS, role);
+
+/** Electron matches roles case-insensitively. */
+const ROLE_NAMES = new Map(
+  [...Object.keys(ROLE_DEFAULTS), ...Object.keys(MACRO_ROLE_SUBMENUS)].map((r) => [
+    r.toLowerCase(),
+    r,
+  ]),
+);
 
 /** `'CmdOrCtrl+Q'` → `'q'`; `''` when the key is not a single character. */
 const acceleratorKey = (accelerator: string | undefined): string => {
@@ -225,7 +235,8 @@ export class MenuItem {
 
   constructor(options: MenuItemOptions) {
     this.id = options.id;
-    const role = options.role;
+    const role =
+      options.role === undefined ? undefined : ROLE_NAMES.get(options.role.toLowerCase());
     if (role !== undefined && isMacroRole(role)) {
       const macro = MACRO_ROLE_SUBMENUS[role];
       this.role = undefined;
@@ -238,10 +249,10 @@ export class MenuItem {
       this.type = 'submenu';
       return;
     }
-    this.role = role;
-    const roleDefault = role !== undefined ? ROLE_DEFAULTS[role] : undefined;
-    // App-supplied label/accelerator win over the role's defaults.
-    this.label = options.label ?? roleDefault?.label ?? '';
+    // An unsupported role degrades to a plain item labelled with the role name.
+    this.role = role !== undefined && isRole(role) ? role : undefined;
+    const roleDefault = this.role !== undefined ? ROLE_DEFAULTS[this.role] : undefined;
+    this.label = options.label ?? roleDefault?.label ?? options.role ?? '';
     this.enabled = options.enabled ?? true;
     this.checked = options.checked ?? false;
     this.accelerator = options.accelerator ?? roleDefault?.accelerator;
