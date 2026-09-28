@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { linuxTrayBackend } from '../platform/linux/sni-tray';
 import { macosTrayBackend } from '../platform/macos/cocoa-tray';
 import { windowsTrayBackend } from '../platform/windows/windows-tray';
+import { app } from './app';
 import type { Menu } from './menu';
 import type { NativeImage } from './native-image';
 
@@ -27,8 +28,8 @@ export type TrayInstance = {
 };
 
 export type TrayBackend = {
-  /** `image` is a filesystem path, never a {@link NativeImage}. */
-  create(image: string, options?: TrayImageOptions): TrayInstance;
+  /** `image` is a filesystem path, never a {@link NativeImage}; `appName` is `app.getName()`. */
+  create(image: string, options?: TrayImageOptions, appName?: string): TrayInstance;
 };
 
 const macosBackend: TrayBackend = macosTrayBackend;
@@ -58,7 +59,11 @@ export class Tray extends EventEmitter {
 
   constructor(image: TrayImage) {
     super();
-    this.#instance = getBackend().create(this.#resolveImagePath(image), imageOptions(image));
+    this.#instance = getBackend().create(
+      this.#resolveImagePath(image),
+      imageOptions(image),
+      app.getName(),
+    );
     this.#instance.onClick(() => {
       this.emit('click');
     });

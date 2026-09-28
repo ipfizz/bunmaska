@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { app } from '../../../../src/main/api/app';
 import { Menu } from '../../../../src/main/api/menu';
 import {
   setTrayBackendForTesting,
@@ -55,15 +56,18 @@ const makeInstance = (image: string): FakeInstance => {
 };
 
 let createOptions: (TrayImageOptions | undefined)[] = [];
+let createAppNames: (string | undefined)[] = [];
 
 beforeEach(() => {
   created = [];
   createOptions = [];
+  createAppNames = [];
   const fake: TrayBackend = {
-    create: (image, options) => {
+    create: (image, options, appName) => {
       const instance = makeInstance(image);
       created.push(instance);
       createOptions.push(options);
+      createAppNames.push(appName);
       return instance;
     },
   };
@@ -83,6 +87,16 @@ describe('Tray construction', () => {
     new Tray('/tmp/icon.png');
     expect(created).toHaveLength(1);
     expect(created[0]?.image).toBe('/tmp/icon.png');
+  });
+
+  test("tells the backend the app's name", () => {
+    app.setName('Notes Test');
+    try {
+      new Tray('/tmp/icon.png');
+    } finally {
+      app.resetForTesting();
+    }
+    expect(createAppNames).toEqual(['Notes Test']);
   });
 
   test('starts not destroyed', () => {

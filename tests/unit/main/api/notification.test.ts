@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { app } from '../../../../src/main/api/app';
 import {
   Notification,
   type NotificationBackend,
@@ -35,6 +36,16 @@ beforeEach(() => {
     },
   };
   setNotificationBackendForTesting(fake);
+});
+
+test("show tells the backend the app's name", () => {
+  app.setName('Notes Test');
+  try {
+    new Notification({ title: 't' }).show();
+  } finally {
+    app.resetForTesting();
+  }
+  expect(presented[0]?.appName).toBe('Notes Test');
 });
 
 afterEach(() => {
@@ -74,7 +85,9 @@ describe('Notification.show', () => {
   test('presents the notification via the backend with the current fields', () => {
     const n = new Notification({ title: 'T', body: 'B', subtitle: 'S', silent: true });
     n.show();
-    expect(presented).toEqual([{ title: 'T', body: 'B', subtitle: 'S', silent: true }]);
+    expect(presented).toEqual([
+      { title: 'T', body: 'B', subtitle: 'S', silent: true, appName: app.getName() },
+    ]);
   });
 
   test('emits a show event', () => {
