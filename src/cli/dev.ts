@@ -8,7 +8,7 @@ import { extname, resolve } from 'node:path';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 import { DEV_RELOAD_COMMAND } from '../main/dev-reload';
-import { isIgnoredPath, pathParts, watchTree } from './dev-watch';
+import { DEV_STATE_FILE, isIgnoredPath, pathParts, watchTree } from './dev-watch';
 
 export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 
@@ -300,8 +300,7 @@ export const defaultDevDeps = (
         ...process.env,
         ...extraEnv,
         BUNMASKA_DEV: '1',
-        // Dot-named so the watcher never classifies the state file itself.
-        BUNMASKA_DEV_STATE: resolve(cwd, '.bunmaska-dev-state.json'),
+        BUNMASKA_DEV_STATE: resolve(cwd, DEV_STATE_FILE),
         ...(opts?.restart ? { BUNMASKA_DEV_RESTART: '1' } : {}),
       },
       stdin: 'pipe',

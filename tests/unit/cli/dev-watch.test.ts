@@ -2,7 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { editorTempDir, makeContentFilter, makeWatchHandler } from '../../../src/cli/dev-watch';
+import {
+  DEV_STATE_FILE,
+  editorTempDir,
+  makeContentFilter,
+  makeWatchHandler,
+} from '../../../src/cli/dev-watch';
 
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
@@ -111,6 +116,21 @@ describe('makeWatchHandler', () => {
     p.write('assets/a.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x9b, 0x01]));
     p.handle('assets/a.png');
     expect(p.fired).toEqual(['assets/a.png']);
+  });
+
+  test('a backslash-separated event shares the baseline of its slash-separated seed', () => {
+    // libuv reports Windows paths with backslashes; the seed walk uses slashes.
+    using p = project({ 'src/main.ts': 'v1' });
+    p.handle('src\\main.ts');
+    expect(p.fired).toEqual([]);
+  });
+
+  test('a dev window-state write does not rescan the project root', () => {
+    using p = project({ 'README.md': 'a' });
+    p.write('README.md', 'b');
+    p.write(DEV_STATE_FILE, '{}');
+    p.handle(DEV_STATE_FILE);
+    expect(p.fired).toEqual([]);
   });
 
   test('ignores edits inside dot directories', () => {

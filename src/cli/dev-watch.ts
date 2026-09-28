@@ -3,6 +3,9 @@
 import { type Dirent, readdirSync, readFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { resolve } from 'node:path';
 
+/** The dev window-state file `bunmaska dev` keeps in the project root. */
+export const DEV_STATE_FILE = '.bunmaska-dev-state.json';
+
 /**
  * Top-level output dirs of common tools. `dist` is deliberately NOT here: the
  * renderer bundle lives there, and ignoring it means a rebuild never reloads.
@@ -171,10 +174,11 @@ export const makeWatchHandler = (
     }
   };
   return (filename) => {
-    if (filename === null) {
+    if (filename === null || filename === DEV_STATE_FILE) {
       return;
     }
-    const relPath = filename;
+    // One key per file: libuv reports Windows paths with backslashes, the seed uses slashes.
+    const relPath = pathParts(filename).join('/');
     const tempDir = editorTempDir(relPath);
     if (tempDir !== undefined) {
       rescan(tempDir);
