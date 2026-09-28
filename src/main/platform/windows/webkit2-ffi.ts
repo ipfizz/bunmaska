@@ -3,7 +3,12 @@ import { dlopen } from '../dlopen';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { FFIError } from '../../../common/errors';
-import { type ResolveDeps, resolveEngineWith } from '../../engine/resolve';
+import {
+  prepareEngineForLoad,
+  type ResolveDeps,
+  resolveEngine,
+  resolveEngineWith,
+} from '../../engine/resolve';
 import { winLibraryAccessor, wstr } from './win32';
 import { loadKernel32 } from './win32-ffi';
 
@@ -146,6 +151,8 @@ export const resolveWindowsEngineDir = (
 
 /** Memoised `WebKit2.dll` symbols; the engine dir goes on the DLL search path for its closure. */
 export const loadWebKit2 = winLibraryAccessor('WebKit2', () => {
+  // Links a store pin (so prune keeps it) and prints resolver warnings, bundled engine or not.
+  prepareEngineForLoad(resolveEngine(), process.env, (text) => process.stderr.write(text));
   // Never resolveEngineWith alone: it misses the engine bundled next to the executable.
   const dir = resolveWindowsEngineDir();
   if (dir === undefined) {
