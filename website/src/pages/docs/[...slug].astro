@@ -1,9 +1,16 @@
 ---
 import { getCollection, render } from "astro:content";
 import Doc from "../../layouts/Doc.astro";
+import { findNavItem, flat } from "../../nav";
 
 export async function getStaticPaths() {
   const docs = await getCollection("docs");
+  const ids = new Set(docs.map((d) => d.id));
+  const drift = [
+    ...docs.filter((d) => !findNavItem(d.id)).map((d) => d.id),
+    ...flat.filter((item) => !ids.has(item.slug)).map((item) => item.slug),
+  ];
+  if (drift.length) throw new Error(`nav.ts and src/content/docs disagree: ${drift.join(", ")}`);
   return docs.map((entry) => ({
     params: { slug: entry.id },
     props: { entry },

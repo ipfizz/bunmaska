@@ -73,6 +73,7 @@ export const sidebar: NavGroup[] = [
       { slug: 'api/session', label: 'session' },
       { slug: 'api/auto-updater', label: 'autoUpdater' },
       { slug: 'api/native-theme', label: 'nativeTheme' },
+      { slug: 'api/errors', label: 'Errors & platform helpers' },
     ],
   },
   {
