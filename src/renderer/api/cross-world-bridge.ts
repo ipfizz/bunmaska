@@ -18,7 +18,8 @@
  *    Promise, regardless of whether the real handler is synchronous.
  *  - Arguments and return values cross via CustomEvent `detail`, i.e. they are
  *    STRUCTURED-CLONE copied. No functions as arguments, no callbacks, no live
- *    object references, no class instances with behaviour — data only.
+ *    object references, no class instances with behaviour — data only. A call
+ *    with uncloneable arguments rejects before it is sent.
  *  - Non-function values on `api` are deep-cloned + deep-frozen into the page
  *    object once at expose time; later mutations on the isolated side are NOT
  *    reflected.
@@ -29,9 +30,6 @@
 
 /** The shared globalThis key the isolated side reads the channel id from. */
 export const CHANNEL_GLOBAL_KEY = '__bunmaskaBridgeChannel';
-
-/** Default per-call timeout (ms) before a page-side method rejects. */
-export const CROSS_WORLD_CALL_TIMEOUT_MS = 30_000;
 
 /**
  * A per-window random channel id naming the cross-world DOM events. Not a security
@@ -63,15 +61,14 @@ export const announceChannel = (channelId: string): string => `${channelId}:anno
  * It re-emits `ready` now, on a microtask, AND on a later macrotask, and the host
  * replies to EVERY `ready`, so the surface materialises regardless of which
  * script's listener attached first. The target is built with `Object.create(null)`
- * + `Object.defineProperty` to neutralise `__proto__`/`constructor` traps, and a
- * per-call timeout rejects stalled calls. `channelId` must match the host's.
+ * + `Object.defineProperty` to neutralise `__proto__`/`constructor` traps. Calls
+ * have no timeout (as in Electron). `channelId` must match the host's.
  */
 export const generatePageWorldStub = (channelId: string): string => {
   const REQ = JSON.stringify(channelId);
   const REPLY = JSON.stringify(replyChannel(channelId));
   const READY = JSON.stringify(readyChannel(channelId));
   const ANNOUNCE = JSON.stringify(announceChannel(channelId));
-  const TIMEOUT = String(CROSS_WORLD_CALL_TIMEOUT_MS);
   return `(function () {
   var doc = document;
   var nextCallId = 1;
@@ -84,9 +81,6 @@ export const generatePageWorldStub = (channelId: string): string => {
       return;
     }
     pending.delete(detail.callId);
-    if (slot.timer) {
-      clearTimeout(slot.timer);
-    }
     if (detail.ok === true) {
       slot.resolve(detail.result);
     } else {
@@ -97,18 +91,22 @@ export const generatePageWorldStub = (channelId: string): string => {
   function makeMethod(key, method) {
     return function () {
       var args = Array.prototype.slice.call(arguments);
+      // An uncloneable detail reaches the host as null and is never answered.
+      try {
+        structuredClone(args);
+      } catch (error) {
+        return Promise.reject(
+          new Error(
+            'contextBridge call ' + key + '.' + method +
+              ': arguments must be structured-cloneable (no functions or DOM nodes): ' +
+              error.message
+          )
+        );
+      }
       var callId = nextCallId;
       nextCallId += 1;
       return new Promise(function (resolve, reject) {
-        var timer = setTimeout(function () {
-          if (pending.has(callId)) {
-            pending.delete(callId);
-            reject(
-              new Error('contextBridge call ' + key + '.' + method + ' timed out')
-            );
-          }
-        }, ${TIMEOUT});
-        pending.set(callId, { resolve: resolve, reject: reject, timer: timer });
+        pending.set(callId, { resolve: resolve, reject: reject });
         doc.dispatchEvent(
           new CustomEvent(${REQ}, {
             detail: { callId: callId, key: key, method: method, args: args },

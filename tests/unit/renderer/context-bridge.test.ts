@@ -62,10 +62,12 @@ type PageWorld = {
  * source, wired to the shared mock document + CustomEvent. The returned `read`
  * accessor exposes whatever `window[key]` materialises.
  */
-const makePageWorld = (doc: MockDocument, channel: string = CHANNEL): PageWorld => {
+const makePageWorld = (
+  doc: MockDocument,
+  channel: string = CHANNEL,
+  setTimeoutImpl: (fn: () => void) => unknown = setTimeout,
+): PageWorld => {
   const win: Record<string, unknown> = {};
-  // The stub references `document`, `window`, `Map`, `Promise`, `CustomEvent`,
-  // `Object`, `Array`, `setTimeout`, `clearTimeout`. Provide them via scope.
   const factory = new Function(
     'window',
     'document',
@@ -75,10 +77,9 @@ const makePageWorld = (doc: MockDocument, channel: string = CHANNEL): PageWorld 
     'Object',
     'Array',
     'setTimeout',
-    'clearTimeout',
     generatePageWorldStub(channel),
   );
-  factory(win, doc, MockCustomEvent, Map, Promise, Object, Array, setTimeout, clearTimeout);
+  factory(win, doc, MockCustomEvent, Map, Promise, Object, Array, setTimeoutImpl);
   return { read: <T>(key: string): T => win[key] as T };
 };
 
@@ -191,6 +192,36 @@ describe('contextBridge.exposeInMainWorld (cross-world)', () => {
   });
 });
 
+describe('cross-world calls', () => {
+  test('a handler slower than any page-side timer still resolves the page promise', async () => {
+    const doc = new MockDocument();
+    const timers: Array<() => void> = [];
+    const page = makePageWorld(doc, CHANNEL, (fn) => timers.push(fn));
+    let finish: (value: string) => void = () => undefined;
+    createContextBridge(transport(doc)).exposeInMainWorld('api', {
+      save: () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    const call = page.read<{ save: () => Promise<string> }>('api').save();
+    await Bun.sleep(0);
+    for (const fire of timers.splice(0)) {
+      fire();
+    }
+    finish('saved');
+    await expect(call).resolves.toBe('saved');
+  });
+
+  test('a non-cloneable argument rejects at once, naming the call', async () => {
+    const doc = new MockDocument();
+    const page = makePageWorld(doc);
+    createContextBridge(transport(doc)).exposeInMainWorld('api', { on: () => 'registered' });
+    const api = page.read<{ on: (callback: () => void) => Promise<string> }>('api');
+    await expect(api.on(() => undefined)).rejects.toThrow(/api\.on.*cloneable/);
+  });
+});
+
 describe('cross-world channel naming', () => {
   test('reply and announce channels are derived from the base id', () => {
     expect(replyChannel('c')).toBe('c:reply');
@@ -237,30 +268,6 @@ describe('resilient host<->page handshake (both orderings)', () => {
     expect(api).toBeDefined();
     expect(api.version).toBe(11);
     await expect(api.add(1, 2)).resolves.toBe(3);
-  });
-});
-
-/** FIX 3: a page-side call whose reply never arrives rejects with a timeout. */
-describe('cross-world call timeout', () => {
-  test('a call with no responding host rejects with a timeout error', async () => {
-    const doc = new MockDocument();
-    // Page stub with NO host: the request is dispatched but never answered.
-    const page = makePageWorld(doc, '__timeout_channel');
-    // Manually announce a surface so the page materialises a method, but install
-    // no request listener — the call will hang and must time out.
-    doc.dispatchEvent({
-      type: announceChannel('__timeout_channel'),
-      detail: { key: 'lonely', methods: ['ping'], values: {} },
-    });
-    const api = page.read<{ ping: () => Promise<unknown> }>('lonely');
-    expect(api).toBeDefined();
-    // Drive the fake timer-less timeout by patching setTimeout would be heavy;
-    // instead assert the proxy returns a Promise and the timeout const is wired
-    // by checking the generated source embeds a clearTimeout + timeout reject.
-    const src = generatePageWorldStub('__timeout_channel');
-    expect(src).toContain('timed out');
-    expect(src).toContain('clearTimeout');
-    void api.ping().catch(() => undefined);
   });
 });
 
