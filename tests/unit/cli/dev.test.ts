@@ -275,14 +275,78 @@ describe('DevSupervisor rebuild action', () => {
     expect(h.reloads).toBe(0);
   });
 
-  test('a restart coalesced with a rebuild wins', async () => {
-    const h = makeHarness({ classify: rendererAt, rebuild: noop, manualExit: true });
+  test('a restart coalesced with a renderer change rebuilds before spawning', async () => {
+    const builds: Array<() => void> = [];
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => new Promise<void>((r) => builds.push(r)),
+    });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fire('src/renderer/App.tsx');
     h.fire('src/main.ts');
     await h.tick();
-    expect(h.rebuilds).toBe(0);
+    expect(h.rebuilds).toBe(1);
+    // Spawning now would load the bundle built before the edit.
     expect(h.spawns).toHaveLength(1);
+    builds[0]?.();
+    await flush();
+    expect(h.spawns).toHaveLength(2);
+  });
+
+  test('a renderer change during a restart delays the spawn until it is rebuilt', async () => {
+    const builds: Array<() => void> = [];
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => new Promise<void>((r) => builds.push(r)),
+    });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/main.ts');
+    await h.tick();
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    builds[0]?.();
+    await flush();
+    expect(h.rebuilds).toBe(2);
+    expect(h.spawns).toHaveLength(1);
+    builds[1]?.();
+    await flush();
+    expect(h.spawns).toHaveLength(2);
+  });
+
+  test('a throwing rebuild is logged and does not wedge later rebuilds', async () => {
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => Promise.reject(new Error('bundler exploded')),
+    });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    expect(h.rebuilds).toBe(2);
+    expect(h.logs.join(' ')).toContain('bundler exploded');
+  });
+
+  test('rebuilds requested mid-build run once after it, never concurrently', async () => {
+    const builds: Array<() => void> = [];
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => new Promise<void>((r) => builds.push(r)),
+    });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/renderer/a.tsx');
+    await h.tick();
+    h.fire('src/renderer/b.tsx');
+    await h.tick();
+    h.fire('src/renderer/c.tsx');
+    await h.tick();
+    expect(h.rebuilds).toBe(1);
+    builds[0]?.();
+    await flush();
+    expect(h.rebuilds).toBe(2);
+    builds[1]?.();
+    await flush();
+    expect(h.rebuilds).toBe(2);
   });
 
   test('a rebuild coalesced with a reload wins', async () => {

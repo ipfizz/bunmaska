@@ -96,10 +96,7 @@ export type DevDeps = {
   readonly debounceMs?: number;
   /** Overrides {@link classifyChange} (e.g. bound to a renderer root). */
   readonly classify?: (relPath: string) => ChangeAction;
-  /**
-   * Rebuild the configured renderer. Must not throw: a broken renderer edit
-   * must never take the dev loop down with it.
-   */
+  /** Rebuild the configured renderer; also runs before every restart. A throw is logged. */
   readonly rebuild?: () => void | Promise<void>;
 };
 
@@ -113,6 +110,8 @@ export class DevSupervisor {
   #pendingAction: Exclude<ChangeAction, 'ignore'> | undefined;
   #stopped = false;
   #restarting = false;
+  #rebuilding: Promise<void> | undefined;
+  #rebuildAgain = false;
   #alive = true;
   /** Number of times the child has been (re)started, including the first spawn. */
   starts = 1;
@@ -163,7 +162,7 @@ export class DevSupervisor {
     if (action === 'rebuild') {
       // The rebuild's own output writes come back through the watcher as
       // 'reload', so the window refreshes only once the new bundle exists.
-      void this.#deps.rebuild?.();
+      this.#rebuild();
       return;
     }
     // Reloading a child that already quit silently does nothing, and logging
@@ -177,8 +176,34 @@ export class DevSupervisor {
     this.#deps.log('reloaded');
   }
 
+  /** Single-flight: a request mid-build reruns once after it, so the last build sees the last edit. */
+  #rebuild(): void {
+    const rebuild = this.#deps.rebuild;
+    if (rebuild === undefined) {
+      return;
+    }
+    if (this.#rebuilding !== undefined) {
+      this.#rebuildAgain = true;
+      return;
+    }
+    this.#rebuilding = (async () => {
+      do {
+        this.#rebuildAgain = false;
+        try {
+          await rebuild();
+        } catch (error) {
+          this.#deps.log(`renderer rebuild failed: ${String(error)}`);
+        }
+      } while (this.#rebuildAgain && !this.#stopped);
+      this.#rebuilding = undefined;
+    })();
+  }
+
   async #restart(): Promise<void> {
+    // A renderer edit coalesced into this restart must reach the new child.
+    this.#rebuild();
     if (this.#restarting) {
+      // The restart in flight has not spawned yet and waits for this rebuild.
       return;
     }
     this.#restarting = true;
@@ -186,6 +211,10 @@ export class DevSupervisor {
       const previous = this.#child;
       previous.kill();
       await previous.exited;
+      // Spawning mid-build would load a stale or half-written bundle.
+      while (this.#rebuilding !== undefined) {
+        await this.#rebuilding;
+      }
       if (this.#stopped) {
         return;
       }
