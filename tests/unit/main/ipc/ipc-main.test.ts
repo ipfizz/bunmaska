@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { IpcMainImpl } from '../../../../src/main/api/ipc-main';
+import { type IpcMainEvent, IpcMainImpl } from '../../../../src/main/api/ipc-main';
+import type { WebContents } from '../../../../src/main/api/web-contents';
 import type { InvokeEnvelope, SendEnvelope } from '../../../../src/main/ipc/ipc-protocol';
 
 const send = (channel: string, ...args: unknown[]): SendEnvelope => ({
@@ -13,7 +14,7 @@ const invoke = (id: number, channel: string, ...args: unknown[]): InvokeEnvelope
   channel,
   args,
 });
-const event = { sender: undefined };
+const event: IpcMainEvent = { sender: {} as WebContents, reply: () => undefined };
 
 let ipc: IpcMainImpl;
 beforeEach(() => {
@@ -124,5 +125,32 @@ describe('ipcMain.handle / dispatch invoke', () => {
     ipc.handle('x', () => 1);
     ipc.handle('x', () => 2);
     expect(await ipc.dispatch(invoke(6, 'x'), event)).toMatchObject({ ok: true, result: 2 });
+  });
+});
+
+describe('ipcMain dispatch containment', () => {
+  test('a throwing listener does not reject dispatch and later listeners still run', async () => {
+    let later = 0;
+    ipc.on('e', () => {
+      throw new Error('listener bug');
+    });
+    ipc.on('e', () => {
+      later += 1;
+    });
+    expect(await ipc.dispatch(send('e'), event)).toBeUndefined();
+    expect(later).toBe(1);
+  });
+
+  test('an args array too large to spread does not reject a send', async () => {
+    ipc.on('e', () => undefined);
+    const huge: SendEnvelope = { kind: 'send', channel: 'e', args: new Array(1e6) };
+    expect(await ipc.dispatch(huge, event)).toBeUndefined();
+  });
+
+  test('a handler throwing a non-printable value still replies with an error', async () => {
+    ipc.handle('odd', () => {
+      throw Object.create(null);
+    });
+    expect(await ipc.dispatch(invoke(7, 'odd'), event)).toMatchObject({ id: 7, ok: false });
   });
 });

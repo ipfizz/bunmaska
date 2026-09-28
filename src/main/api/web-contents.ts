@@ -1,8 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { InvalidArgumentError } from '../../common/errors';
 import { createLogger } from '../../common/logger';
-import { decodeEnvelope, encodeEnvelope } from '../ipc/ipc-protocol';
+import { decodeEnvelope, encodeEnvelope, type ReplyEnvelope } from '../ipc/ipc-protocol';
 import type {
   KeyboardInputEvent,
   MouseInputEvent,
@@ -12,13 +13,6 @@ import type {
 import { ipcMain } from './ipc-main';
 import { type NativeImage, nativeImage } from './native-image';
 
-/**
- * Controls and observes the content rendered inside a {@link BrowserWindow} —
- * the drop-in equivalent of Electron's `webContents`. Content methods on
- * `BrowserWindow` delegate here (D025). Construction bridges the native web view
- * to the {@link ipcMain} singleton, so there is no per-window IPC wiring.
- */
-
 const log = createLogger('web-contents');
 
 export type LoadFileOptions = {
@@ -27,6 +21,24 @@ export type LoadFileOptions = {
   readonly query?: Record<string, string>;
   /** Raw query string; takes precedence over `query`. */
   readonly search?: string;
+};
+
+/** Electron's error for a call on a destroyed window or web contents. */
+export const objectDestroyedError = (): TypeError => new TypeError('Object has been destroyed');
+
+/** An unserializable result rejects the renderer's invoke instead of leaving it pending. */
+const encodeReply = (reply: ReplyEnvelope): string => {
+  try {
+    return encodeEnvelope(reply);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown error';
+    return encodeEnvelope({
+      kind: 'reply',
+      id: reply.id,
+      ok: false,
+      error: `reply could not be serialized: ${reason}`,
+    });
+  }
 };
 
 let nextId = 1;
@@ -53,10 +65,11 @@ const buildRemoveCssScript = (key: string): string =>
     }
   })()`;
 
+/** Electron's `webContents`; construction wires its view to {@link ipcMain} (D025). */
 export class WebContents extends EventEmitter {
   /** Process-unique and never reused within a run. */
   readonly id: number;
-  readonly #native: NativeWebContents;
+  readonly #view: NativeWebContents;
   #cssCounter = 0;
   #zoomFactor = 1;
   #userAgent = '';
@@ -68,11 +81,16 @@ export class WebContents extends EventEmitter {
     super();
     this.id = nextId;
     nextId += 1;
-    this.#native = native;
-    this.#native.onRendererEnvelope((json) => {
-      void this.#handleRendererEnvelope(json);
+    this.#view = native;
+    native.onRendererEnvelope((json) => {
+      this.#handleRendererEnvelope(json).catch((error: unknown) => {
+        log.error('renderer envelope dispatch failed', error);
+      });
     });
-    this.#native.onNavigation((event) => {
+    native.onNavigation((event) => {
+      if (this.#destroyed) {
+        return;
+      }
       if (event.type === 'did-start-loading') {
         this.#isLoading = true;
       } else if (
@@ -92,14 +110,18 @@ export class WebContents extends EventEmitter {
     });
   }
 
+  get #native(): NativeWebContents {
+    if (this.#destroyed) {
+      throw objectDestroyedError();
+    }
+    return this.#view;
+  }
+
   loadURL(url: string): void {
     this.#native.loadURL(url);
   }
 
-  /**
-   * The path is percent-encoded, so spaces/`#`/`?` in the FILE NAME load
-   * correctly — pass a fragment via `options.hash`, never inside `filePath`.
-   */
+  /** `filePath` is percent-encoded, so a fragment goes in `options.hash`, never in the path. */
   loadFile(filePath: string, options?: LoadFileOptions): void {
     const absolute = isAbsolute(filePath) ? filePath : resolve(filePath);
     if (absolute.startsWith('\\\\')) {
@@ -162,22 +184,19 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * Resolves to the script's COMPLETION value; a returned Promise is awaited.
-   * Only JSON-serializable results survive (`JSON.stringify` semantics).
+   * Resolves to the script's COMPLETION value, a returned Promise awaited; a result JSON cannot
+   * encode rejects. Runs through page-world `eval`, so a CSP without 'unsafe-eval' rejects it.
    */
-  executeJavaScript(code: string): Promise<unknown> {
+  async executeJavaScript(code: string): Promise<unknown> {
     return this.#native.executeJavaScript(code);
   }
 
-  /**
-   * macOS only: neither WebKitGTK nor the WinCairo C API exposes a
-   * page-to-PDF-bytes call, so Linux and Windows reject.
-   */
+  /** macOS only; WebKitGTK and WinCairo have no page-to-PDF call, so Linux and Windows reject. */
   async printToPDF(): Promise<Buffer> {
     return Buffer.from(await this.#native.printToPDF());
   }
 
-  /** macOS and Linux; Windows rejects until its snapshot path is wired. */
+  /** macOS and Linux; Windows rejects (WinCairo has no UI-process snapshot). */
   async capturePage(): Promise<NativeImage> {
     return nativeImage.createFromBuffer(await this.#native.capturePage());
   }
@@ -196,8 +215,11 @@ export class WebContents extends EventEmitter {
 
   /** `1` is 100%. */
   setZoomFactor(factor: number): void {
-    this.#zoomFactor = factor;
+    if (!Number.isFinite(factor) || factor <= 0) {
+      throw new InvalidArgumentError("'zoomFactor' must be a double greater than 0.0");
+    }
     this.#native.setZoomFactor(factor);
+    this.#zoomFactor = factor;
   }
 
   getZoomFactor(): number {
@@ -224,11 +246,7 @@ export class WebContents extends EventEmitter {
     return this.#userAgent;
   }
 
-  /**
-   * The page receives a real `isTrusted === true` event, which a
-   * script-dispatched event cannot fake. Implemented on Windows; other backends
-   * throw `UnsupportedPlatformError`.
-   */
+  /** Delivers an `isTrusted` event through the engine; Windows only, macOS and Linux throw. */
   sendInputEvent(event: NativeInputEvent): void {
     // Validate at the boundary (Electron throws on a bad event): an unknown type
     // must not silently no-op, and non-finite coordinates must not coerce to a
@@ -251,9 +269,8 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * The native popup is ALWAYS blocked in v1, `allow` included — child-window
-   * creation is unsupported, so apps typically `shell.openExternal(url)` and
-   * return `deny`.
+   * The popup is always blocked, `allow` included (no child windows), so apps typically
+   * `shell.openExternal(url)` and return `deny`. Windows never calls the handler.
    */
   setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void {
     this.#native.setWindowOpenHandler((url) => {
@@ -310,12 +327,15 @@ export class WebContents extends EventEmitter {
       log.warn('dropping malformed renderer envelope', error);
       return;
     }
-    if (envelope.kind !== 'send' && envelope.kind !== 'invoke') {
+    if ((envelope.kind !== 'send' && envelope.kind !== 'invoke') || this.#destroyed) {
       return;
     }
-    const reply = await ipcMain.dispatch(envelope, { sender: this });
-    if (reply !== undefined) {
-      this.#native.sendEnvelopeToRenderer(encodeEnvelope(reply));
+    const reply = await ipcMain.dispatch(envelope, {
+      sender: this,
+      reply: (channel, ...args) => this.send(channel, ...args),
+    });
+    if (reply !== undefined && !this.#destroyed) {
+      this.#view.sendEnvelopeToRenderer(encodeReply(reply));
     }
   }
 }

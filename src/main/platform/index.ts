@@ -5,11 +5,7 @@ import { createMacOSApplication } from './macos/cocoa-backend';
 import type { NativeApplication } from './native';
 import { createWindowsApplication } from './windows/windows-backend';
 
-/**
- * The single runtime platform-selection point; nothing above `platform/` imports a
- * concrete backend directly (D024). Every backend's FFI loaders are lazy, so
- * importing the Windows backend on macOS (and vice versa) opens no shared object.
- */
+/** Every backend's FFI loaders are lazy, so importing another OS's backend opens no library. */
 export const createNativeApplication = (): NativeApplication => {
   const platform = currentPlatform();
   switch (platform) {
@@ -24,17 +20,14 @@ export const createNativeApplication = (): NativeApplication => {
   }
 };
 
-/**
- * One backend per platform, resolved on first use, with a test override.
- * `fallback` is for modules that degrade instead of throwing (safeStorage).
- */
+/** One backend per platform, picked on every call, with a test override. */
 export const selectBackend = <T>(
   name: string,
   backends: {
     readonly macos: () => T;
     readonly linux: () => T;
     readonly windows: () => T;
-    readonly fallback?: () => T;
+    readonly fallback?: () => T; // ponytail: unreachable, currentPlatform() throws first
   },
 ): { readonly get: () => T; readonly setForTesting: (fake: T | undefined) => void } => {
   let override: T | undefined;

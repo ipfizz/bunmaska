@@ -128,6 +128,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     },
     show: () => {
       visible = true;
+      eventCallbacks.get('show')?.();
     },
     hide: () => {
       visible = false;
@@ -316,13 +317,26 @@ describe('BrowserWindow runtime setters', () => {
 
 describe('BrowserWindow construction', () => {
   test('applies default options when none are given', () => {
-    new BrowserWindow();
-    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: true });
+    const win = new BrowserWindow();
+    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: false });
+    expect(win.isVisible()).toBe(true);
   });
 
   test('passes through provided options', () => {
-    new BrowserWindow({ width: 1024, height: 768, title: 'My App', show: false });
+    const win = new BrowserWindow({ width: 1024, height: 768, title: 'My App', show: false });
     expect(created[0]).toEqual({ width: 1024, height: 768, title: 'My App', show: false });
+    expect(win.isVisible()).toBe(false);
+  });
+
+  test('the initial show is emitted after the window is wired and announced', () => {
+    let shown = 0;
+    app.on('browser-window-created', (_event: unknown, win: BrowserWindow) => {
+      win.on('show', () => {
+        shown += 1;
+      });
+    });
+    new BrowserWindow();
+    expect(shown).toBe(1);
   });
 
   test('forwards resizable, frame, and fullscreen when provided', () => {
@@ -418,6 +432,22 @@ describe('BrowserWindow registry', () => {
 
   test('fromId returns undefined for an unknown id', () => {
     expect(BrowserWindow.fromId(9999)).toBeUndefined();
+  });
+
+  test('fromWebContents returns the owning open window, else null', () => {
+    const a = new BrowserWindow();
+    const b = new BrowserWindow();
+    expect(BrowserWindow.fromWebContents(b.webContents)).toBe(b);
+    a.close();
+    expect(BrowserWindow.fromWebContents(a.webContents)).toBeNull();
+  });
+
+  test('getFocusedWindow returns the focused window, else null', () => {
+    new BrowserWindow();
+    const b = new BrowserWindow();
+    expect(BrowserWindow.getFocusedWindow()).toBeNull();
+    b.focus();
+    expect(BrowserWindow.getFocusedWindow()).toBe(b);
   });
 });
 
@@ -555,12 +585,40 @@ describe('BrowserWindow lifecycle events', () => {
     expect(win.isDestroyed()).toBe(false);
   });
 
-  test('teardown runs exactly once across repeated close attempts (idempotent)', () => {
-    const win = new BrowserWindow();
+  test('teardown runs exactly once across repeated native close requests', () => {
+    new BrowserWindow();
     windows[0]?.fireCloseRequest();
-    win.close();
     windows[0]?.fireCloseRequest();
     expect(windows[0]?.teardownCount()).toBe(1);
+  });
+});
+
+describe('BrowserWindow after closed', () => {
+  test('methods throw Electron TypeError without reaching the native window', () => {
+    const win = new BrowserWindow({ title: 'before' });
+    win.close();
+    expect(() => win.setTitle('after')).toThrow(new TypeError('Object has been destroyed'));
+    expect(() => win.close()).toThrow(TypeError);
+    expect(windows[0]?.getTitle()).toBe('before');
+    expect(windows[0]?.teardownCount()).toBe(1);
+  });
+
+  test('isDestroyed keeps answering', () => {
+    const win = new BrowserWindow();
+    win.destroy();
+    expect(win.isDestroyed()).toBe(true);
+    expect(win.webContents.isDestroyed()).toBe(true);
+  });
+
+  test('native window events after closed are not re-emitted', () => {
+    const win = new BrowserWindow();
+    let moved = 0;
+    win.on('move', () => {
+      moved += 1;
+    });
+    win.close();
+    windows[0]?.fireEvent('move');
+    expect(moved).toBe(0);
   });
 });
 

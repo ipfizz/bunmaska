@@ -81,6 +81,11 @@ describe('filterCookies', () => {
     ]);
   });
 
+  test('a host-only cookie is not reported for a subdomain url', () => {
+    const names = filterCookies(jar, { url: 'http://api.example.com/app/x' }).map((c) => c.name);
+    expect(names).toEqual(['scoped']);
+  });
+
   test('unparsable filter url throws InvalidArgumentError', () => {
     expect(() => filterCookies(jar, { url: 'not a url' })).toThrow(InvalidArgumentError);
   });
@@ -97,6 +102,11 @@ describe('cookiesToRemove', () => {
   test('matches by name plus url host/path, across domain forms', () => {
     const hits = cookiesToRemove(jar, 'https://example.com/app/page', 'sid');
     expect(hits.map((c) => c.domain)).toEqual(['example.com', '.example.com']);
+  });
+
+  test('a subdomain url leaves the parent host-only cookie alone', () => {
+    const hits = cookiesToRemove(jar, 'https://api.example.com/app/page', 'sid');
+    expect(hits.map((c) => c.domain)).toEqual(['.example.com']);
   });
 
   test('a secure cookie is removable through a matching http url', () => {
@@ -138,6 +148,11 @@ describe('cookieFromSetDetails', () => {
     expect(c.secure).toBe(true);
     expect(c.httpOnly).toBe(true);
     expect(c.expirationDate).toBe(4102444800);
+  });
+
+  test('an explicit domain is dot-prefixed so subdomains receive it', () => {
+    const c = cookieFromSetDetails({ url: 'https://example.com/', domain: 'example.com' });
+    expect(c.domain).toBe('.example.com');
   });
 
   test('name and value default to empty strings', () => {
