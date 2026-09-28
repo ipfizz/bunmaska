@@ -2,7 +2,12 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { type EngineRef, isSystemEngine, parseEngineId } from '../../common/engine-id';
+import {
+  type EngineFamily,
+  type EngineRef,
+  isSystemEngine,
+  parseEngineId,
+} from '../../common/engine-id';
 import { isBunCli } from '../../common/preload-bundle';
 import { type Arch, currentArch, currentPlatform, type Platform } from '../../common/platform';
 import {
@@ -16,6 +21,8 @@ import {
 /** The resolved engine decision for the current process. */
 export type EngineResolution = {
   readonly mode: 'system' | 'pinned';
+  /** The pinned engine's family (store pins only); `cef` selects the Blink backend (D048). */
+  readonly family?: EngineFamily;
   /** The pinned engine's `lib/` dir (absolute). Absent in system mode. */
   readonly libDir?: string;
   /** The resolved engine-id (store pins only; absent for an explicit-dir pin/system). */
@@ -73,7 +80,12 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
   }
 
   const readBakedId = deps.readBakedId ?? (() => defaultReadBakedId(env));
-  const id = env['BUNMASKA_WEBKIT_ID']?.trim() || readBakedId()?.trim() || 'system';
+  // BUNMASKA_ENGINE_ID is the family-neutral name; BUNMASKA_WEBKIT_ID stays as its alias.
+  const id =
+    env['BUNMASKA_ENGINE_ID']?.trim() ||
+    env['BUNMASKA_WEBKIT_ID']?.trim() ||
+    readBakedId()?.trim() ||
+    'system';
 
   if (isSystemEngine(id)) {
     return { mode: 'system', warnings: [] };
@@ -113,7 +125,7 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
       ],
     };
   }
-  return { mode: 'pinned', libDir: join(dir, 'lib'), id, root, warnings: [] };
+  return { mode: 'pinned', family: ref.engine, libDir: join(dir, 'lib'), id, root, warnings: [] };
 };
 
 const cache: { value: EngineResolution | undefined } = { value: undefined };
