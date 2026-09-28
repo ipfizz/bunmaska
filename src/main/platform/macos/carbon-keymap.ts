@@ -90,6 +90,23 @@ const VIRTUAL_KEY_CODES: ReadonlyMap<string, number> = new Map([
   ['F18', 79],
   ['F19', 80],
   ['F20', 90],
+  ['INSERT', 114],
+  ['NUMDEC', 65],
+  ['NUMMULT', 67],
+  ['NUMADD', 69],
+  ['NUMDIV', 75],
+  ['NUMSUB', 78],
+  ['NUM0', 82],
+  ['NUM1', 83],
+  ['NUM2', 84],
+  ['NUM3', 85],
+  ['NUM4', 86],
+  ['NUM5', 87],
+  ['NUM6', 88],
+  ['NUM7', 89],
+  ['NUM8', 91],
+  ['NUM9', 92],
+  // ponytail: media/volume keys are NX_SYSDEFINED events Carbon cannot grab; add them via a CGEventTap.
 ]);
 
 /** The US-layout virtual key code for a parsed accelerator key, or `undefined` if unmapped. */
