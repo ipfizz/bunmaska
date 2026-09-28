@@ -11,6 +11,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import {
   type BunmaskaConfig,
   type BunmaskaRendererConfig,
+  CONFIG_FILE_NAMES,
   configChannel,
   rendererOutDir,
 } from '../common/config-schema';
@@ -432,7 +433,7 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
   });
 
 /** {@link classifyChange} with the renderer's entry and outDir resolved against `dir`. */
-export const rendererClassifier = (
+const rendererClassifier = (
   dir: string,
   renderer: BunmaskaRendererConfig,
 ): ((relPath: string) => ChangeAction) => {
@@ -443,13 +444,33 @@ export const rendererClassifier = (
     classifyChange(relPath, resolve(dir, relPath).startsWith(outDir) ? undefined : root);
 };
 
+/** The dev loop's classifier; the supervisor holds the config it started with. */
+export const devClassifier = (
+  dir: string,
+  config: BunmaskaConfig,
+  log: (message: string) => void,
+): ((relPath: string) => ChangeAction) => {
+  const classify =
+    config.renderer === undefined ? classifyChange : rendererClassifier(dir, config.renderer);
+  return (relPath) => {
+    if (CONFIG_FILE_NAMES.includes(relPath)) {
+      log(`${relPath} changed; restart bunmaska dev to apply it.`);
+      return 'ignore';
+    }
+    return classify(relPath);
+  };
+};
+
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
   const { config } = await loadConfig(process.cwd());
   const entry = resolveDevEntry(config, command.entry);
   const renderer = config.renderer;
   const dir = process.cwd();
   const log = (message: string): void => out(message);
-  const baseDeps = defaultDevDeps(dir, log, launchEngineEnv(config, 'dev'));
+  const baseDeps = {
+    ...defaultDevDeps(dir, log, launchEngineEnv(config, 'dev')),
+    classify: devClassifier(dir, config, log),
+  };
   let deps = baseDeps;
   if (renderer !== undefined) {
     const rendererConfig = renderer;
@@ -464,11 +485,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
     };
     // Build once up front so the first launch shows current code.
     await rebuild();
-    deps = {
-      ...baseDeps,
-      classify: rendererClassifier(dir, rendererConfig),
-      rebuild,
-    };
+    deps = { ...baseDeps, rebuild };
   }
   out(`bunmaska dev: running ${entry} (Ctrl-C to stop)`);
   await runDev(dir, entry, awaitInterrupt, deps);
