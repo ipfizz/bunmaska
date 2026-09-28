@@ -262,8 +262,8 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     ],
     returns: FFIType.void,
   },
-  // (view, GAsyncResult*, GError** /*null ok*/) -> cairo_surface_t*
-  // (transfer-FULL: cairo_surface_destroy when done; NULL on error).
+  // (view, GAsyncResult*, GError** /*null ok*/) -> GdkTexture* (transfer-full: g_object_unref;
+  // NULL on error). Never the 4.x cairo_surface_t*: cairo_surface_destroy on it aborts.
   webkit_web_view_get_snapshot_finish: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
