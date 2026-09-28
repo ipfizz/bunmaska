@@ -3,6 +3,7 @@ import {
   buildCfHtml,
   buildPackedDib,
   dibBitsOffset,
+  dibIsComplete,
   extractCfHtmlFragment,
   openWithRetry,
 } from '../../../../../src/main/platform/windows/windows-clipboard';
@@ -128,6 +129,42 @@ describe('dibBitsOffset', () => {
 
   test('a palettised depth honours an explicit biClrUsed entry count', () => {
     expect(dibBitsOffset(bitmapInfoHeader({ biBitCount: 8, biClrUsed: 16 }))).toBe(40 + 16 * 4);
+  });
+});
+
+describe('dibIsComplete', () => {
+  /** A 40-byte header claiming `width`x`height` at `bitCount`, followed by `pixelBytes`. */
+  const dib = (width: number, height: number, bitCount: number, pixelBytes: number) => {
+    const bytes = new Uint8Array(40 + pixelBytes);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, 40, true);
+    view.setInt32(4, width, true);
+    view.setInt32(8, height, true);
+    view.setUint16(14, bitCount, true);
+    return bytes;
+  };
+
+  test('a DIB carrying every row its header claims is complete', () => {
+    expect(dibIsComplete(buildPackedDib(2, 2, new Uint8Array(16), 8))).toBe(true);
+    expect(dibIsComplete(dib(3, -2, 24, 2 * 12))).toBe(true); // top-down, DWORD-padded rows
+  });
+
+  test('a header claiming more pixels than were copied is rejected', () => {
+    expect(dibIsComplete(dib(8000, 8000, 32, 1024))).toBe(false);
+    expect(dibIsComplete(dib(3, 2, 24, 2 * 12 - 1))).toBe(false);
+  });
+
+  test('a palette count or header size past the buffer is rejected', () => {
+    const hugePalette = dib(1, 1, 8, 4);
+    new DataView(hugePalette.buffer).setUint32(32, 0xffffffff, true);
+    expect(dibIsComplete(hugePalette)).toBe(false);
+    const hugeHeader = dib(1, 1, 32, 4);
+    new DataView(hugeHeader.buffer).setUint32(0, 4096, true);
+    expect(dibIsComplete(hugeHeader)).toBe(false);
+  });
+
+  test('a buffer shorter than the header is rejected', () => {
+    expect(dibIsComplete(new Uint8Array(12))).toBe(false);
   });
 });
 

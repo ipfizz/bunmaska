@@ -180,6 +180,8 @@ const decodeUtf8 = (bytes: Uint8Array): string =>
 
 /** Size of a `BITMAPINFOHEADER` (the smallest DIB header). */
 const BITMAPINFOHEADER_SIZE = 40;
+/** `biCompression` = `BI_RGB`: uncompressed pixels. */
+const BI_RGB = 0;
 /** `biCompression` = `BI_BITFIELDS` — 3 trailing color-mask DWORDs after a v3 header. */
 const BI_BITFIELDS = 3;
 /** `biCompression` = `BI_ALPHABITFIELDS` — 4 trailing color-mask DWORDs. */
@@ -209,6 +211,32 @@ export const dibBitsOffset = (header: Uint8Array): number => {
   const paletteEntries =
     biBitCount <= 8 ? (biClrUsed !== 0 ? biClrUsed : 1 << biBitCount) : biClrUsed;
   return biSize + masks + paletteEntries * 4;
+};
+
+/**
+ * Whether a `CF_DIB` (written by any process) holds every pixel its header claims, so
+ * GDI+ never reads past the copied buffer. Uncompressed rows are DWORD-aligned;
+ * compressed pixels must fit `biSizeImage`. Pure.
+ */
+export const dibIsComplete = (dib: Uint8Array): boolean => {
+  if (dib.length < BITMAPINFOHEADER_SIZE) {
+    return false;
+  }
+  const view = new DataView(dib.buffer, dib.byteOffset, dib.byteLength);
+  const biSize = view.getUint32(0, true);
+  const width = view.getInt32(4, true);
+  const height = view.getInt32(8, true);
+  const biCompression = view.getUint32(16, true);
+  if (biSize < BITMAPINFOHEADER_SIZE || biSize > dib.length || width <= 0 || height === 0) {
+    return false;
+  }
+  const uncompressed =
+    biCompression === BI_RGB ||
+    biCompression === BI_BITFIELDS ||
+    biCompression === BI_ALPHABITFIELDS;
+  const stride = Math.floor((width * view.getUint16(14, true) + 31) / 32) * 4;
+  const pixelBytes = uncompressed ? stride * Math.abs(height) : view.getUint32(20, true);
+  return pixelBytes > 0 && dibBitsOffset(dib) + pixelBytes <= dib.length;
 };
 
 /**
@@ -301,7 +329,7 @@ export const windowsClipboardBackend: ClipboardBackend = {
 
   readImage(): Uint8Array {
     const dib = withClipboard(undefined, () => getClipboardBytes(CF_DIB));
-    if (dib === undefined || dib.length < BITMAPINFOHEADER_SIZE) {
+    if (dib === undefined || !dibIsComplete(dib)) {
       return new Uint8Array(0);
     }
     ensureGdiplus();
