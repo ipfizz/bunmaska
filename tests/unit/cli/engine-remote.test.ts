@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
-import { generateSigningKeyPair, signArtifact } from '../../../src/cli/engine-signature';
+import { generateSigningKeyPair, signArtifact } from '../../../src/common/signature';
 import { engineDir, isInstalled } from '../../../src/cli/engine-store';
 import {
   DEFAULT_ENGINE_FEED_URL,

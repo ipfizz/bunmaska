@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generateSigningKeyPair } from '../../../src/cli/engine-signature';
+import { generateSigningKeyPair } from '../../../src/common/signature';
 import { packEngineDir } from '../../../src/cli/engine-pack';
 import { installFromUrl, type RemoteFetch, zstdTarExtract } from '../../../src/cli/engine-remote';
 import { contentHash } from '../../../src/common/manifest';

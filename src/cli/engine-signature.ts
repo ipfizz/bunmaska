@@ -1,10 +1,3 @@
-export {
-  generateSigningKeyPair,
-  signArtifact,
-  verifyArtifact,
-  type SigningKeyPair,
-} from '../common/signature';
-
 /** The baked release trust anchor for the official engine feed (D042); public, never a user knob. */
 export const RELEASE_ENGINE_PUBKEY =
   '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA9YGBi1+rnrTL0i7pap8uxxhMqNxJFucR7+qbOxe192w=\n-----END PUBLIC KEY-----\n';
