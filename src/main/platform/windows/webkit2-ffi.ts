@@ -96,7 +96,11 @@ const WEBKIT2_SYMBOLS = {
   WKStringGetTypeID: { args: [], returns: FFIType.u32 },
   WKStringCreateWithUTF8CString: { args: [FFIType.cstring], returns: FFIType.ptr },
   WKStringGetMaximumUTF8CStringSize: { args: [FFIType.ptr], returns: FFIType.u64 },
-  WKStringGetUTF8CString: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+  // NonStrict replaces a lone surrogate; the strict variant returns 0 and drops the whole string.
+  WKStringGetUTF8CStringNonStrict: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.u64],
+    returns: FFIType.u64,
+  },
   WKURLCreateWithUTF8CString: { args: [FFIType.cstring], returns: FFIType.ptr },
   WKURLCopyString: { args: [FFIType.ptr], returns: FFIType.ptr },
 

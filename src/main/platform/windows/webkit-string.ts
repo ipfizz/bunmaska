@@ -26,7 +26,9 @@ export const wkStringToJs = (ref: Pointer): string => {
   }
   const buffer = new Uint8Array(size);
   // Returns the byte count written INCLUDING the trailing NUL.
-  const written = Number(wk.symbols.WKStringGetUTF8CString(ref, ptr(buffer), BigInt(size)));
+  const written = Number(
+    wk.symbols.WKStringGetUTF8CStringNonStrict(ref, ptr(buffer), BigInt(size)),
+  );
   const length = written > 0 ? written - 1 : 0;
   return new TextDecoder().decode(buffer.subarray(0, length));
 };
