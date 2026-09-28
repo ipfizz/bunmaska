@@ -308,13 +308,14 @@ const writeBytes = (mime: string, bytes: Uint8Array): void => {
     throw new Error('g_bytes_new() returned null');
   }
   const provider = gdk.symbols.gdk_content_provider_new_for_bytes(cstr(mime), gbytes);
-  // The provider took its own ref on the GBytes; drop the local one. The provider
-  // itself is owned by the clipboard once set_content takes a ref.
+  // The provider took its own ref on the GBytes.
   glib.symbols.g_bytes_unref(gbytes);
   if (provider === null) {
     throw new Error('gdk_content_provider_new_for_bytes() returned null');
   }
+  // set_content takes its own ref; drop ours or every write leaks the provider and its payload.
   gdk.symbols.gdk_clipboard_set_content(clipboard, provider);
+  loadGObjectFFI().symbols.g_object_unref(provider);
 };
 
 /** Install `text` on the clipboard under `mime` (exact UTF-8 bytes, no trailing NUL). */
