@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { BrowserWindow } from '../../../../src/main/api/browser-window';
 import {
   type DialogBackend,
   dialog,
@@ -143,6 +144,25 @@ describe('dialog.showSaveDialog', () => {
   test('reports the chosen path when not canceled', async () => {
     saveResult = '/home/notes.md';
     expect(await dialog.showSaveDialog()).toEqual({ canceled: false, filePath: '/home/notes.md' });
+  });
+});
+
+describe("Electron's optional window first argument", () => {
+  const win = {} as BrowserWindow;
+
+  test('showMessageBox(window, options) reads the options', async () => {
+    await dialog.showMessageBox(win, { message: 'Discard?', buttons: ['Discard', 'Cancel'] });
+    expect(lastMessageBox).toMatchObject({ message: 'Discard?', buttons: ['Discard', 'Cancel'] });
+  });
+
+  test('showOpenDialog(window, options) reads the options', async () => {
+    await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+    expect(lastOpen?.canChooseDirectories).toBe(true);
+  });
+
+  test('showSaveDialog(window, options) reads the options', async () => {
+    await dialog.showSaveDialog(win, { defaultPath: 'notes.md' });
+    expect(lastSave?.defaultName).toBe('notes.md');
   });
 });
 

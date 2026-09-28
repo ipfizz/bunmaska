@@ -2,6 +2,7 @@ import { selectBackend } from '../platform/index';
 import { linuxDialogBackend } from '../platform/linux/gtk-dialog';
 import * as cocoaDialog from '../platform/macos/cocoa-dialog';
 import { windowsDialogBackend } from '../platform/windows/windows-dialog';
+import type { BrowserWindow } from './browser-window';
 
 /**
  * Native system dialogs — the drop-in equivalent of Electron's `dialog`. macOS
@@ -97,15 +98,25 @@ const { get: getBackend, setForTesting } = selectBackend<DialogBackend>('dialog'
 /** @internal */
 export const setDialogBackendForTesting = setForTesting;
 
+/** Electron's optional leading window; accepted, but dialogs are not attached as sheets. */
+type WithWindow<T> = [window: BrowserWindow, options: T];
+
 export type Dialog = {
-  showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue>;
-  showOpenDialog(options?: OpenDialogOptions): Promise<OpenDialogReturnValue>;
-  showSaveDialog(options?: SaveDialogOptions): Promise<SaveDialogReturnValue>;
+  showMessageBox(
+    ...args: [options: MessageBoxOptions] | WithWindow<MessageBoxOptions>
+  ): Promise<MessageBoxReturnValue>;
+  showOpenDialog(
+    ...args: [options?: OpenDialogOptions] | WithWindow<OpenDialogOptions>
+  ): Promise<OpenDialogReturnValue>;
+  showSaveDialog(
+    ...args: [options?: SaveDialogOptions] | WithWindow<SaveDialogOptions>
+  ): Promise<SaveDialogReturnValue>;
   showErrorBox(title: string, content: string): void;
 };
 
 export const dialog: Dialog = {
-  async showMessageBox(options) {
+  async showMessageBox(...args) {
+    const options = args.length === 2 ? args[1] : args[0];
     const response = await getBackend().showMessageBox({
       message: options.message,
       detail: options.detail ?? '',
@@ -115,7 +126,8 @@ export const dialog: Dialog = {
     return { response };
   },
 
-  async showOpenDialog(options = {}) {
+  async showOpenDialog(...args) {
+    const options = (args.length === 2 ? args[1] : args[0]) ?? {};
     const properties = options.properties ?? ['openFile'];
     const filePaths = await getBackend().showOpenDialog({
       canChooseFiles: properties.includes('openFile'),
@@ -128,7 +140,8 @@ export const dialog: Dialog = {
     return { canceled: filePaths.length === 0, filePaths };
   },
 
-  async showSaveDialog(options = {}) {
+  async showSaveDialog(...args) {
+    const options = (args.length === 2 ? args[1] : args[0]) ?? {};
     const filePath = await getBackend().showSaveDialog({
       defaultName: options.defaultPath ?? '',
       extensions: flattenFilterExtensions(options.filters),
