@@ -101,13 +101,19 @@ const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): voi
     BigInt(bytes.length),
   );
 
+  // NSURLResponse keeps MIMEType verbatim; a `; charset=x` suffix belongs in the encoding.
+  const [mimeType = '', ...params] = built.mimeType.split(';').map((part) => part.trim());
+  const charset = params
+    .find((p) => /^charset=/i.test(p))
+    ?.slice(8)
+    .replaceAll('"', '');
   const response = msgSendPtrPtrI64Ptr(
     rt.msgSend(rt.classes.get('NSURLResponse'), rt.selectors.get('alloc')),
     rt.selectors.get('initWithURL:MIMEType:expectedContentLength:textEncodingName:'),
     nsUrl(url),
-    nsString(built.mimeType),
+    nsString(mimeType),
     BigInt(bytes.length),
-    nsString('utf-8'),
+    nsString(charset || 'utf-8'),
   );
 
   msgSendPtr(task, rt.selectors.get('didReceiveResponse:'), response);

@@ -116,6 +116,12 @@ describe.skipIf(currentPlatform() !== 'macos')('BunmaskaURLSchemeHandler task se
     expect([log.finished, log.failed]).toEqual([1, 0]);
   });
 
+  test('a charset parameter becomes the text encoding, not part of the MIME type', () => {
+    serve({ bytes: new Uint8Array([65]), mimeType: 'text/html; charset="Shift_JIS"' });
+    expect(responseString('MIMEType')).toBe('text/html');
+    expect(responseString('textEncodingName')).toBe('Shift_JIS');
+  });
+
   test('the handler does not keep its own reference to the response', () => {
     serve({ bytes: new Uint8Array([1, 2, 3]), mimeType: 'application/octet-stream' });
     // Only the fake task's retain is left; a leaked +1 from alloc/init would make this 2.
