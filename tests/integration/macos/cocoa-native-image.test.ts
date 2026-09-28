@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { toArrayBuffer } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
 import { nativeImage, setNativeImageBackendForTesting } from '../../../src/main/api/native-image';
+import { cocoaNativeImageBackend } from '../../../src/main/platform/macos/cocoa-native-image';
+import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
+import { ptrIn } from '../../../src/main/platform/macos/objc';
 import {
   removeTinyPngFile,
   TINY_PNG_HEIGHT,
@@ -8,6 +12,10 @@ import {
   makeTinyPng,
   writeTinyPngFile,
 } from '../../fixtures/tiny-png';
+
+/** 1x2 RGBA PNG: an opaque red pixel above an opaque blue one. */
+const RED_OVER_BLUE_1X2_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVR4nGP4z8Dwn4GB4f9/ABH4A/3f152fAAAAAElFTkSuQmCC';
 
 /** 1x1 8-bit gray+alpha PNG; AppKit's PNG encoder fails on such a rep directly. */
 const GRAY_ALPHA_1X1_PNG =
@@ -110,6 +118,13 @@ if (currentPlatform() === 'macos') {
         .crop({ x: 0, y: 0, width: 2, height: TINY_PNG_HEIGHT });
       expect(img.getSize()).toEqual({ width: 2, height: TINY_PNG_HEIGHT });
       expect(img.toPNG().length).toBeGreaterThan(0);
+    });
+
+    test('crop measures y from the top edge', () => {
+      const source = cocoaNativeImageBackend.decode(Buffer.from(RED_OVER_BLUE_1X2_PNG, 'base64'));
+      const top = cocoaNativeImageBackend.crop(source.handle, 0, 0, 1, 1);
+      const pixels = cocoa().msgSend(top.handle, cocoa().selectors.get('bitmapData'));
+      expect([...new Uint8Array(toArrayBuffer(ptrIn(pixels), 0, 4))]).toEqual([255, 0, 0, 255]);
     });
 
     test('resize/crop of an empty image stay empty', () => {
