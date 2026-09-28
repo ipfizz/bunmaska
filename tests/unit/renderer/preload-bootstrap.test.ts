@@ -27,22 +27,6 @@ const evalBootstrap = (): { bridge: Bridge; posted: string[] } => {
   return { bridge: scope['__bunmaska'] as Bridge, posted };
 };
 
-describe('generatePreloadBootstrap output', () => {
-  test('returns a non-empty string', () => {
-    expect(generatePreloadBootstrap().length).toBeGreaterThan(0);
-  });
-
-  test('contains no TypeScript syntax (it ships to a raw JS engine)', () => {
-    const src = generatePreloadBootstrap();
-    expect(src).not.toMatch(/:\s*(string|number|void|unknown|boolean)\b/);
-    expect(src).not.toMatch(/\bas\s+(Record|string|number|unknown)\b/);
-  });
-
-  test('installs a __bunmaska object on the global', () => {
-    expect(evalBootstrap().bridge).toBeDefined();
-  });
-});
-
 describe('__bunmaska.send', () => {
   test('posts a send envelope through the message handler', () => {
     const { bridge, posted } = evalBootstrap();

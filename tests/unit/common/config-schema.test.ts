@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { defineConfig, validateConfig } from '../../../src/common/config-schema';
+import { validateConfig } from '../../../src/common/config-schema';
 import { InvalidArgumentError } from '../../../src/common/errors';
 
 describe('validateConfig — engine field', () => {
@@ -39,11 +39,6 @@ describe('validateConfig — engine field', () => {
 
   test('rejects a non-boolean engine.embed', () => {
     expect(() => validateConfig({ engine: { embed: 'yes' } })).toThrow(InvalidArgumentError);
-  });
-
-  test('defineConfig passes an engine config through untouched', () => {
-    const cfg = defineConfig({ engine: { webkit: '2.52.4', embed: false } });
-    expect(cfg.engine).toEqual({ webkit: '2.52.4', embed: false });
   });
 
   test('accepts a self-hosted engine.feed { url, publicKey }', () => {

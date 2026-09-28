@@ -5,14 +5,6 @@ import {
   type WebFrameElement,
 } from '../../../src/renderer/api/web-frame';
 
-/**
- * webFrame is proven WITHOUT a renderer: a minimal MockDocument stands in for
- * `document`, capturing created `<style>` elements and the documentElement's
- * `style.zoom`. executeJavaScript is driven through a scope-injected
- * `globalThis` whose `eval` is the real one, so completion values/throws are
- * exercised for real (the unit-under-test is never reimplemented here).
- */
-
 /** A fake element capturing the bits webFrame touches. */
 class MockElement implements WebFrameElement {
   textContent = '';

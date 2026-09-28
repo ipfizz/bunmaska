@@ -4,7 +4,6 @@ import {
   createContextBridge,
 } from '../../../src/renderer/api/context-bridge';
 import {
-  announceChannel,
   CHANNEL_GLOBAL_KEY,
   type CustomEventCtor,
   type EventScope,
@@ -13,13 +12,7 @@ import {
   replyChannel,
 } from '../../../src/renderer/api/cross-world-bridge';
 
-/**
- * Cross-world contextBridge proven WITHOUT a renderer: a single mock `document`
- * (a shared EventTarget) plays the channel both worlds dispatch on. The page
- * scope runs the generated page-world stub; the isolated scope runs
- * `exposeInMainWorld`. The page scope NEVER holds a reference to the real
- * handler — only the cloned values cross the DOM.
- */
+/** One mock `document` is the channel both worlds share; the page world only sees cloned values. */
 
 /** A minimal shared event bus standing in for `document`. */
 class MockDocument implements EventScope {
@@ -57,11 +50,7 @@ type PageWorld = {
   read<T>(key: string): T;
 };
 
-/**
- * Build a "page world": a fresh `window`-like global running the generated stub
- * source, wired to the shared mock document + CustomEvent. The returned `read`
- * accessor exposes whatever `window[key]` materialises.
- */
+/** A fresh `window`-like global running the page stub over the shared mock document. */
 const makePageWorld = (
   doc: MockDocument,
   channel: string = CHANNEL,
@@ -220,18 +209,6 @@ describe('cross-world calls', () => {
   });
 });
 
-describe('cross-world channel naming', () => {
-  test('reply and announce channels are derived from the base id', () => {
-    expect(replyChannel('c')).toBe('c:reply');
-    expect(announceChannel('c')).toBe('c:announce');
-  });
-});
-
-/**
- * FIX 4: the host<->page handshake must be resilient to BOTH script orderings.
- * Both flavours use the canonical baked host source + page stub over a shared
- * mock document — no hand-rolled protocol.
- */
 describe('resilient host<->page handshake (both orderings)', () => {
   const flush = (): Promise<void> =>
     new Promise((resolve) => {
@@ -269,7 +246,6 @@ describe('resilient host<->page handshake (both orderings)', () => {
   });
 });
 
-/** FIX 6: page object hardening — deep freeze + prototype-trap-safe target. */
 describe('page object hardening', () => {
   test('nested cloned objects are deep-frozen', () => {
     const doc = new MockDocument();

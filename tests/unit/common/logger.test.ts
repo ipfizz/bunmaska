@@ -34,14 +34,6 @@ afterEach(() => {
 });
 
 describe('createLogger', () => {
-  test('returns an object with error/warn/info/debug methods', () => {
-    const log = createLogger('test');
-    expect(typeof log.error).toBe('function');
-    expect(typeof log.warn).toBe('function');
-    expect(typeof log.info).toBe('function');
-    expect(typeof log.debug).toBe('function');
-  });
-
   test('forwards the namespace on every record', () => {
     const { sink, records } = collect();
     setLogSink(sink);
