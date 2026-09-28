@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { slugifyName } from '../common/manifest';
 import { BUNMASKA_VERSION } from '../common/version';
+import { DEV_STATE_FILE } from './dev-watch';
 
 /** A scaffold file; `path` is relative to the project root. */
 export type ScaffoldFile = { readonly path: string; readonly contents: string };
@@ -166,7 +167,7 @@ dist/
 *.tar.zst
 *.deb
 *.log
-.bunmaska-dev-state.json
+${DEV_STATE_FILE}
 `;
 
 const readme = (vars: TemplateVars): string =>
