@@ -1,3 +1,4 @@
+import { createLogger } from '../../common/logger';
 import type { InvokeEnvelope, ReplyEnvelope, SendEnvelope } from '../ipc/ipc-protocol';
 
 /**
@@ -13,6 +14,16 @@ export type IpcMainEvent = {
 
 export type IpcMainInvokeEvent = {
   readonly sender: unknown;
+};
+
+const log = createLogger('ipc-main');
+
+const describeError = (error: unknown): string => {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return 'non-printable error';
+  }
 };
 
 type Listener = (event: IpcMainEvent, ...args: readonly unknown[]) => void;
@@ -78,7 +89,11 @@ export class IpcMainImpl {
   ): Promise<ReplyEnvelope | undefined> {
     if (envelope.kind === 'send') {
       for (const listener of [...(this.#listeners.get(envelope.channel) ?? [])]) {
-        listener(event, ...envelope.args);
+        try {
+          listener(event, ...envelope.args);
+        } catch (error) {
+          log.error(`ipcMain listener for '${envelope.channel}' threw`, error);
+        }
       }
       return undefined;
     }
@@ -102,8 +117,7 @@ export class IpcMainImpl {
       const result = await handler(event, ...envelope.args);
       return { kind: 'reply', id: envelope.id, ok: true, result };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { kind: 'reply', id: envelope.id, ok: false, error: message };
+      return { kind: 'reply', id: envelope.id, ok: false, error: describeError(error) };
     }
   }
 }

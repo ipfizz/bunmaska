@@ -394,6 +394,32 @@ describe('WebContents <-> ipcMain auto-wiring', () => {
     });
   });
 
+  test('a handler result that cannot be serialized sends an error reply', async () => {
+    const { native, sent, fireRenderer } = makeFakeNative();
+    new WebContents(native);
+    ipcMain.handle('add', () => ({ id: 1n }));
+
+    fireRenderer(encodeEnvelope({ kind: 'invoke', id: 3, channel: 'add', args: [] }));
+    await flush();
+
+    const reply = decodeEnvelope(sent[0] ?? '');
+    expect(reply).toMatchObject({ kind: 'reply', id: 3, ok: false });
+    expect(reply.kind === 'reply' && !reply.ok ? reply.error : '').toContain('bigint');
+  });
+
+  test('a native failure while replying is contained', async () => {
+    const { native, fireRenderer } = makeFakeNative();
+    new WebContents({
+      ...native,
+      sendEnvelopeToRenderer: () => {
+        throw new Error('view gone');
+      },
+    });
+    ipcMain.handle('add', () => 1);
+    fireRenderer(encodeEnvelope({ kind: 'invoke', id: 4, channel: 'add', args: [] }));
+    await flush();
+  });
+
   test('a malformed renderer envelope is dropped without throwing', async () => {
     const { native, sent, fireRenderer } = makeFakeNative();
     new WebContents(native);

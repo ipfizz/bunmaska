@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createLogger } from '../../common/logger';
-import { decodeEnvelope, encodeEnvelope } from '../ipc/ipc-protocol';
+import { decodeEnvelope, encodeEnvelope, type ReplyEnvelope } from '../ipc/ipc-protocol';
 import type {
   KeyboardInputEvent,
   MouseInputEvent,
@@ -31,6 +31,21 @@ export type LoadFileOptions = {
 
 /** Electron's error for a call on a destroyed window or web contents. */
 export const objectDestroyedError = (): TypeError => new TypeError('Object has been destroyed');
+
+/** An unserializable result rejects the renderer's invoke instead of leaving it pending. */
+const encodeReply = (reply: ReplyEnvelope): string => {
+  try {
+    return encodeEnvelope(reply);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown error';
+    return encodeEnvelope({
+      kind: 'reply',
+      id: reply.id,
+      ok: false,
+      error: `reply could not be serialized: ${reason}`,
+    });
+  }
+};
 
 let nextId = 1;
 
@@ -73,7 +88,9 @@ export class WebContents extends EventEmitter {
     nextId += 1;
     this.#view = native;
     native.onRendererEnvelope((json) => {
-      void this.#handleRendererEnvelope(json);
+      this.#handleRendererEnvelope(json).catch((error: unknown) => {
+        log.error('renderer envelope dispatch failed', error);
+      });
     });
     native.onNavigation((event) => {
       if (this.#destroyed) {
@@ -328,7 +345,7 @@ export class WebContents extends EventEmitter {
     }
     const reply = await ipcMain.dispatch(envelope, { sender: this });
     if (reply !== undefined && !this.#destroyed) {
-      this.#view.sendEnvelopeToRenderer(encodeEnvelope(reply));
+      this.#view.sendEnvelopeToRenderer(encodeReply(reply));
     }
   }
 }
