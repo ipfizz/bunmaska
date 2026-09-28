@@ -257,7 +257,13 @@ export const initializeCef = (options: CefInitOptions): void => {
   const lib = cefLibrary();
   const glue = cefGlue();
   const profile = cefProfilePath(options.userDataPath);
-  lib.symbols.cef_api_hash(CEF_API_VERSION, 0);
+  // NULL = this CEF build lacks the API version; every CEF call after it is a FATAL abort.
+  if (toAddress(lib.symbols.cef_api_hash(CEF_API_VERSION, 0)) === 0) {
+    throw new BunmaskaError(
+      `Blink engine: this CEF build does not support API ${CEF_API_VERSION}; install a CEF ${CEF_API_VERSION / 100} engine`,
+      { code: 'ERR_BLINK_INIT' },
+    );
+  }
 
   let contextInitialized = false;
   const onContextInitialized = new JSCallback(

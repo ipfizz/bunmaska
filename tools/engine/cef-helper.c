@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
   api_hash_fn api_hash = (api_hash_fn)dlsym(handle, "cef_api_hash");
   execute_fn execute = (execute_fn)dlsym(handle, "cef_execute_process");
   if (api_hash == NULL || execute == NULL) return 73;
-  api_hash(BM_CEF_API_VERSION, 0);
+  if (api_hash(BM_CEF_API_VERSION, 0) == NULL) return 74;
   cef_main_args_t args = {argc, argv};
   return execute(&args, NULL, NULL);
 }

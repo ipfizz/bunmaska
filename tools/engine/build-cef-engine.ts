@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseEngineId } from '../../src/common/engine-id';
+import { compareVersions } from '../../src/common/manifest';
 import { currentArch, currentPlatform } from '../../src/common/platform';
 import { CEF_API_VERSION } from '../../src/main/platform/cef/cef-ffi';
 
@@ -32,25 +33,38 @@ type IndexVersion = {
   files?: IndexFile[];
 };
 
-/** The newest stable minimal build for `platformKey`, or the one whose CEF version starts with `wanted`. */
+/** The FFI's struct offsets are measured on this CEF branch only (see cef-ffi.ts). */
+const CEF_MAJOR = String(CEF_API_VERSION / 100);
+
+/**
+ * The highest stable minimal build of {@link CEF_MAJOR} for `platformKey`, or the one whose
+ * CEF version is `wanted`. The index is in publish order, so an older branch's patch can lead.
+ */
 export const pickCefBuild = (index: unknown, platformKey: string, wanted?: string): CefBuild => {
   const versions = ((index as Record<string, { versions?: IndexVersion[] } | undefined>)[
     platformKey
   ]?.versions ?? []) as IndexVersion[];
+  const builds: CefBuild[] = [];
   for (const v of versions) {
     const cef = String(v.cef_version ?? '');
     const matches = wanted === undefined ? v.channel === 'stable' : cef.startsWith(`${wanted}+`);
     const minimal = v.files?.find((f) => f.type === 'minimal');
-    if (matches && minimal !== undefined) {
-      return {
+    if (matches && minimal !== undefined && cef.split('.')[0] === CEF_MAJOR) {
+      builds.push({
         cefVersion: cef,
         chromiumVersion: String(v.chromium_version ?? ''),
         file: String(minimal.name),
         sha1: String(minimal.sha1),
-      };
+      });
     }
   }
-  throw new Error(`no CEF minimal build for ${platformKey}${wanted ? ` ${wanted}` : ''}`);
+  const newest = builds.sort((a, b) => compareVersions(b.cefVersion, a.cefVersion))[0];
+  if (newest === undefined) {
+    throw new Error(
+      `no CEF minimal build for ${platformKey}${wanted ? ` ${wanted}` : ''} on CEF ${CEF_MAJOR}`,
+    );
+  }
+  return newest;
 };
 
 /** `154.0.28+g564dd6c+chromium-154.0.8037.58` -> `cef-154.0.28-154.0.8037.58-bunmaska1-macos-arm64`. */
