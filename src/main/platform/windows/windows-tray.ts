@@ -1,5 +1,4 @@
 import { ptr, read } from 'bun:ffi';
-import type { Menu } from '../../api/menu';
 import type { TrayBackend, TrayInstance } from '../services';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
@@ -119,7 +118,7 @@ export const windowsTrayBackend: TrayBackend = {
         sync(NIM_MODIFY);
         releaseIcon(previous);
       },
-      setContextMenu(_menu: Menu | null): void {
+      setContextMenu(): void {
         // ponytail: no tray context menu; TrackPopupMenu on the message window adds it
       },
       onClick(callback: () => void): void {

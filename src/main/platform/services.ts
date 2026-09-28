@@ -1,7 +1,6 @@
 // Every OS-service backend contract (D024): api/ and each backend import these, never each other.
 
 import type { Cookie, CookieFilter } from '../../common/cookie-util';
-import type { Menu } from '../api/menu';
 import type { Rect } from './native';
 
 export type ClipboardBackend = {
@@ -237,8 +236,8 @@ export type TrayInstance = {
   setToolTip(toolTip: string): void;
   setTitle(title: string): void;
   setImage(image: string, options?: TrayImageOptions): void;
-  /** `null` clears the installed menu. */
-  setContextMenu(menu: Menu | null): void;
+  /** `null` clears the installed menu; a backend that shows none never calls `realize`. */
+  setContextMenu(menu: { realize(): bigint } | null): void;
   onClick(callback: () => void): void;
   /** Must be idempotent. */
   destroy(): void;

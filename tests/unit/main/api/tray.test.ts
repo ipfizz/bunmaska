@@ -14,7 +14,7 @@ type FakeInstance = TrayInstance & {
   toolTips: string[];
   titles: string[];
   images: string[];
-  menus: Array<Menu | null>;
+  menus: unknown[];
   destroyed: boolean;
   click: (() => void) | undefined;
 };

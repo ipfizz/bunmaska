@@ -1,4 +1,3 @@
-import type { Menu } from '../../api/menu';
 import type { TrayBackend, TrayInstance, TrayImageOptions } from '../services';
 import { nsString } from './cocoa-foundation';
 import { disposeMenu } from './cocoa-menu';
@@ -98,7 +97,7 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
     setImage: (path, options) => {
       applyImage(path, options?.template === true);
     },
-    setContextMenu: (menu: Menu | null) => {
+    setContextMenu: (menu) => {
       const nsMenu: Handle = menu === null ? 0n : menu.realize();
       msgSendPtr(item, rt.selectors.get('setMenu:'), nsMenu);
       disposeMenu(contextMenu);
