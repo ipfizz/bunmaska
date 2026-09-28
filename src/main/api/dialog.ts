@@ -29,7 +29,7 @@ export type FileFilter = {
 };
 
 export type OpenDialogOptions = {
-  /** Defaults to `['openFile']`. Linux v1 always picks one file; `createDirectory` is macOS only. */
+  /** Defaults to `['openFile']`; off macOS `openDirectory` wins over `openFile`; `createDirectory` is macOS only. */
   readonly properties?: ReadonlyArray<
     'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'
   >;
