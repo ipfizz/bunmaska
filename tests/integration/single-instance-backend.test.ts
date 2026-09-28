@@ -14,7 +14,7 @@ import { createLockBackend } from '../../src/main/api/single-instance-backend';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-describe('createLockBackend — pidfile', () => {
+describe('createLockBackend - pidfile', () => {
   let dir: string;
   let lockPath: string;
 
@@ -87,7 +87,7 @@ describe('createLockBackend — pidfile', () => {
   });
 });
 
-describe('createLockBackend — socket hand-off', () => {
+describe('createLockBackend - socket hand-off', () => {
   let dir: string;
   let socketPath: string;
   let lockPath: string;

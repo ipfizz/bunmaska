@@ -30,7 +30,7 @@ const deps = (overrides: Partial<EnvironmentDeps> = {}): EnvironmentDeps => ({
 const build = (overrides: Partial<EnvironmentDeps> = {}): AppEnvironment =>
   buildAppEnvironment(deps(overrides));
 
-describe('buildAppEnvironment — manifest & appPath', () => {
+describe('buildAppEnvironment - manifest & appPath', () => {
   test('finds the manifest by walking up from the main script dir', () => {
     const env = build();
     expect(env.manifest?.name).toBe('demo');
@@ -81,7 +81,7 @@ describe('buildAppEnvironment - compiled binary', () => {
   });
 });
 
-describe('buildAppEnvironment — locale & languages', () => {
+describe('buildAppEnvironment - locale & languages', () => {
   test('normalizes the raw locale', () => {
     expect(build({ locale: 'en_US.UTF-8' }).locale).toBe('en-US');
   });
@@ -105,7 +105,7 @@ describe('buildAppEnvironment — locale & languages', () => {
   });
 });
 
-describe('buildAppEnvironment — isPackaged', () => {
+describe('buildAppEnvironment - isPackaged', () => {
   test('is false when launched via the bun dev runner', () => {
     expect(build({ execPath: '/opt/homebrew/bin/bun' }).isPackaged).toBe(false);
   });
@@ -129,7 +129,7 @@ describe('buildAppEnvironment — isPackaged', () => {
   });
 });
 
-describe('buildAppEnvironment — passthrough', () => {
+describe('buildAppEnvironment - passthrough', () => {
   test('carries home/temp/execPath/env/exit through', () => {
     let exited = -1;
     const env = build({

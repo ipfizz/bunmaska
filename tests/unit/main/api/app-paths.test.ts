@@ -33,7 +33,7 @@ const winEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => ({
   ...overrides,
 });
 
-describe('resolveAppPath — cross-platform names', () => {
+describe('resolveAppPath - cross-platform names', () => {
   test('home is the home dir on both platforms', () => {
     expect(resolveAppPath('home', macEnv())).toBe('/Users/ada');
     expect(resolveAppPath('home', linuxEnv())).toBe('/home/ada');
@@ -53,7 +53,7 @@ describe('resolveAppPath — cross-platform names', () => {
   });
 });
 
-describe('resolveAppPath — macOS conventions', () => {
+describe('resolveAppPath - macOS conventions', () => {
   test('appData is ~/Library/Application Support', () => {
     expect(resolveAppPath('appData', macEnv())).toBe('/Users/ada/Library/Application Support');
   });
@@ -94,7 +94,7 @@ describe('resolveAppPath — macOS conventions', () => {
   });
 });
 
-describe('resolveAppPath — Linux XDG conventions', () => {
+describe('resolveAppPath - Linux XDG conventions', () => {
   test('appData defaults to ~/.config', () => {
     expect(resolveAppPath('appData', linuxEnv())).toBe('/home/ada/.config');
   });
@@ -125,7 +125,7 @@ describe('resolveAppPath — Linux XDG conventions', () => {
   });
 });
 
-describe('resolveAppPath — Windows conventions', () => {
+describe('resolveAppPath - Windows conventions', () => {
   test('home and temp pass through', () => {
     expect(resolveAppPath('home', winEnv())).toBe('C:\\Users\\ada');
     expect(resolveAppPath('temp', winEnv())).toBe('C:\\Users\\ada\\AppData\\Local\\Temp');
@@ -169,9 +169,9 @@ describe('resolveAppPath — Windows conventions', () => {
   });
 });
 
-describe('resolveAppPath — errors', () => {
+describe('resolveAppPath - errors', () => {
   test('throws InvalidArgumentError on an unknown name', () => {
-    // @ts-expect-error — exercising the runtime guard with an invalid name
+    // @ts-expect-error - exercising the runtime guard with an invalid name
     expect(() => resolveAppPath('nope', macEnv())).toThrow(InvalidArgumentError);
   });
 });
