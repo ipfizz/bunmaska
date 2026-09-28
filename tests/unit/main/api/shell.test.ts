@@ -42,6 +42,13 @@ describe('shell.openExternal', () => {
     expect(calls).toEqual(['openExternal:https://example.com']);
   });
 
+  test('resolves false for a path or program name without reaching the backend', async () => {
+    for (const notAUrl of ['calc', 'C:\\Users\\x\\payload.exe', 'c:/x.exe', '/etc/passwd']) {
+      expect(await shell.openExternal(notAUrl)).toBe(false);
+    }
+    expect(calls).toEqual([]);
+  });
+
   test('resolves false when the backend reports failure', async () => {
     openExternalResult = false;
     expect(await shell.openExternal('bad:')).toBe(false);

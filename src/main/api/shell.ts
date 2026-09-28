@@ -47,9 +47,16 @@ export type Shell = {
   beep(): void;
 };
 
+/**
+ * An absolute URL only, as Electron requires. Windows `ShellExecuteW` would otherwise run a
+ * bare path or program name (`C:\x\payload.exe`, `calc`), and a one-letter scheme is a drive.
+ */
+const isExternalUrl = (url: string): boolean =>
+  URL.canParse(url) && new URL(url).protocol.length > 2;
+
 export const shell: Shell = {
   openExternal(url) {
-    return Promise.resolve(getBackend().openExternal(url));
+    return Promise.resolve(isExternalUrl(url) && getBackend().openExternal(url));
   },
   openPath(path) {
     const ok = getBackend().openPath(path);
