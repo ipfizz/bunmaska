@@ -172,7 +172,7 @@ const cefString = (value: string, keep: unknown[]): Pointer => {
   return ptr(buf);
 };
 
-const appendChromiumSwitches = (commandLine: number, userDataPath: string): void => {
+const appendChromiumSwitches = (commandLine: number, profile: string): void => {
   const keep: unknown[] = [];
   const call = (method: number, returns: FFIType, ...values: string[]): unknown =>
     callMethod(
@@ -199,7 +199,7 @@ const appendChromiumSwitches = (commandLine: number, userDataPath: string): void
   }
   // The on-device AI model manifest registers with the component updater and downloads on
   // every launch, --disable-component-update or not; an empty local override skips it.
-  const manifest = join(userDataPath, 'bunmaska-model-manifest.json');
+  const manifest = join(profile, 'bunmaska-model-manifest.json');
   writeFileSync(manifest, '{}');
   append('optimization-guide-manifest-override', manifest);
   // Chrome POSTs accounts.google.com/ListAccounts at every launch and no switch, feature or
@@ -231,9 +231,16 @@ const setGlobalPreference = (name: string, value: string): void => {
 export type CefInitOptions = {
   /** The CEF engine's `lib/` (framework + helper apps). */
   readonly libDir: string;
-  /** The app's `userData`: Chromium's profile (cookies, storage, caches) lives here. */
+  /** The app's `userData`; Chromium's profile lives in {@link cefProfilePath} inside it. */
   readonly userDataPath: string;
 };
+
+/**
+ * Chromium's profile dir, never `userData` itself: its process-singleton files are named
+ * SingletonLock/SingletonSocket, like requestSingleInstanceLock's, and sharing the names
+ * stalls cef_initialize ~20s on our socket, then Chromium takes over our lock.
+ */
+export const cefProfilePath = (userDataPath: string): string => join(userDataPath, 'Blink');
 
 /**
  * `cef_initialize` with the external message pump: CEF asks for work through
@@ -243,6 +250,7 @@ export type CefInitOptions = {
 export const initializeCef = (options: CefInitOptions): void => {
   const lib = cefLibrary();
   const glue = cefGlue();
+  const profile = cefProfilePath(options.userDataPath);
   lib.symbols.cef_api_hash(CEF_API_VERSION, 0);
 
   let contextInitialized = false;
@@ -268,7 +276,7 @@ export const initializeCef = (options: CefInitOptions): void => {
   const onCommandLine = new JSCallback(
     (_self: unknown, processType: unknown, commandLine: unknown) => {
       if (readCefString(toAddress(processType)) === '') {
-        appendChromiumSwitches(toAddress(commandLine), options.userDataPath);
+        appendChromiumSwitches(toAddress(commandLine), profile);
       }
       release(toAddress(commandLine));
     },
@@ -289,7 +297,7 @@ export const initializeCef = (options: CefInitOptions): void => {
   mainArgs.writeInt32LE(1, 0);
   setPtr(mainArgs, 8, ptr(argv));
 
-  mkdirSync(options.userDataPath, { recursive: true });
+  mkdirSync(profile, { recursive: true });
   const settings = Buffer.alloc(SIZE.settings);
   setPtr(settings, 0, SIZE.settings);
   settings.writeInt32LE(1, SETTINGS.noSandbox);
@@ -297,8 +305,8 @@ export const initializeCef = (options: CefInitOptions): void => {
   writeCefString(settings, SETTINGS.frameworkDirPath, cefFrameworkPath(options.libDir), keep);
   writeCefString(settings, SETTINGS.mainBundlePath, mainBundlePath(), keep);
   settings.writeInt32LE(1, SETTINGS.externalMessagePump);
-  writeCefString(settings, SETTINGS.rootCachePath, options.userDataPath, keep);
-  writeCefString(settings, SETTINGS.cachePath, options.userDataPath, keep);
+  writeCefString(settings, SETTINGS.rootCachePath, profile, keep);
+  writeCefString(settings, SETTINGS.cachePath, profile, keep);
   settings.writeInt32LE(LOG_SEVERITY_ERROR, SETTINGS.logSeverity);
   glue.pumpInit();
   const ok = lib.symbols.cef_initialize(ptr(mainArgs), ptr(settings), app.at, null);
