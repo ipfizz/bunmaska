@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { currentPlatform } from '../../../src/common/platform';
 import { Tray } from '../../../src/main/api/tray';
-import { windowsTrayBackend } from '../../../src/main/platform/windows/windows-tray';
+import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
+import { loadTrayIcon, windowsTrayBackend } from '../../../src/main/platform/windows/windows-tray';
 
 /**
  * Windows tray against the real Shell_NotifyIcon API. A non-existent icon path is
@@ -12,6 +16,11 @@ import { windowsTrayBackend } from '../../../src/main/platform/windows/windows-t
  * Runs only on a Windows host; inert elsewhere.
  */
 const BAD_ICON = 'C:\\bunmaska_no_such_icon_zzz.ico';
+/** A 1x1 PNG, the format `Tray` hands the backend for every NativeImage. */
+const PNG_1x1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 if (currentPlatform() === 'windows') {
   describe('Windows tray backend', () => {
@@ -20,6 +29,21 @@ if (currentPlatform() === 'windows') {
       expect(tray.isDestroyed()).toBe(false);
       tray.destroy();
       expect(tray.isDestroyed()).toBe(true);
+    });
+
+    test('a PNG loads as an owned icon; a missing file falls back to the shared default', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bunmaska-tray-'));
+      const path = join(dir, 'icon.png');
+      writeFileSync(path, PNG_1x1);
+      try {
+        const icon = loadTrayIcon(path);
+        expect(icon.owned).toBe(true);
+        expect(icon.handle).not.toBe(0n);
+        loadUser32().symbols.DestroyIcon(icon.handle);
+        expect(loadTrayIcon(BAD_ICON).owned).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
 
     test('destroy is idempotent', () => {

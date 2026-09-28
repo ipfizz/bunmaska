@@ -70,6 +70,8 @@ const GDIPLUS_SYMBOLS = {
   },
   // (GpBitmap*, BitmapData*) -> Status — release a lock taken by GdipBitmapLockBits.
   GdipBitmapUnlockBits: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  // (GpBitmap*, HICON* out) -> Status; the caller owns the icon (DestroyIcon).
+  GdipCreateHICONFromBitmap: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** `Ok` GDI+ status. */

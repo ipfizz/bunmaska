@@ -1,10 +1,12 @@
-import { ptr } from 'bun:ffi';
+import { ptr, read } from 'bun:ffi';
 import type { Menu } from '../../api/menu';
 import type { TrayBackend, TrayInstance } from '../../api/tray';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
+import { GDIP_OK, loadGdiplus } from './win32-gdiplus-ffi';
 import { loadShell32 } from './win32-shell-ffi';
 import { createMessageWindow } from './windows-message-window';
+import { windowsNativeImageBackend } from './windows-native-image';
 
 /**
  * `Shell_NotifyIcon` adds/updates/removes the icon; its callback message is delivered to a
@@ -53,11 +55,14 @@ export const isTrayActivation = (
   uid: number,
 ): boolean => message === WM_TRAYICON && wParam === uid && (lParam & 0xffff) === WM_LBUTTONUP;
 
-/** Load a `.ico` from `path`, falling back to the default application icon. */
-const loadTrayIcon = (path: string): bigint => {
+/** An HICON plus whether we own it (the stock default icon is shared and never destroyed). */
+type TrayIcon = { readonly handle: bigint; readonly owned: boolean };
+
+/** Load `path` as the tray icon: `.ico` natively, PNG and friends via GDI+, else the default. */
+export const loadTrayIcon = (path: string): TrayIcon => {
   const user32 = loadUser32().symbols;
   const nameBuf = wstr(path);
-  const icon = user32.LoadImageW(
+  const ico = user32.LoadImageW(
     0n,
     ptr(nameBuf),
     IMAGE_ICON,
@@ -65,7 +70,22 @@ const loadTrayIcon = (path: string): bigint => {
     0,
     LR_LOADFROMFILE | LR_DEFAULTSIZE,
   );
-  return icon !== 0n ? icon : user32.LoadIconW(0n, IDI_APPLICATION);
+  if (ico !== 0n) {
+    return { handle: ico, owned: true };
+  }
+  const image = windowsNativeImageBackend.decode(path);
+  if (!image.empty) {
+    const gdip = loadGdiplus().symbols;
+    const out = new Uint8Array(8);
+    const outPtr = ptr(out);
+    const status = gdip.GdipCreateHICONFromBitmap(image.handle, outPtr);
+    gdip.GdipDisposeImage(image.handle);
+    const hIcon = status === GDIP_OK ? read.u64(outPtr, 0) : 0n;
+    if (hIcon !== 0n) {
+      return { handle: hIcon, owned: true };
+    }
+  }
+  return { handle: user32.LoadIconW(0n, IDI_APPLICATION), owned: false };
 };
 
 /** Build a NOTIFYICONDATAW for `Shell_NotifyIcon`. `hIcon`/`tip` are omitted for a delete. */
@@ -83,9 +103,9 @@ const notifyIconData = (hwnd: bigint, uid: number, hIcon: bigint, tip: string): 
   return nid;
 };
 
-const destroyIconSafely = (hIcon: bigint): void => {
-  if (hIcon !== 0n) {
-    loadUser32().symbols.DestroyIcon(hIcon);
+const releaseIcon = (icon: TrayIcon): void => {
+  if (icon.owned) {
+    loadUser32().symbols.DestroyIcon(icon.handle);
   }
 };
 
@@ -94,7 +114,7 @@ export const windowsTrayBackend: TrayBackend = {
     const uid = nextUid++;
     const shell32 = loadShell32().symbols;
     let clickCallback: (() => void) | undefined;
-    let hIcon = loadTrayIcon(image);
+    let icon = loadTrayIcon(image);
     let toolTip = '';
     let destroyed = false;
 
@@ -105,7 +125,10 @@ export const windowsTrayBackend: TrayBackend = {
     });
 
     const sync = (operation: number): void => {
-      shell32.Shell_NotifyIconW(operation, ptr(notifyIconData(window.hwnd, uid, hIcon, toolTip)));
+      shell32.Shell_NotifyIconW(
+        operation,
+        ptr(notifyIconData(window.hwnd, uid, icon.handle, toolTip)),
+      );
     };
     sync(NIM_ADD);
 
@@ -118,10 +141,10 @@ export const windowsTrayBackend: TrayBackend = {
         // The Windows tray has no inline title text (a macOS NSStatusItem feature).
       },
       setImage(path: string): void {
-        const previous = hIcon;
-        hIcon = loadTrayIcon(path);
+        const previous = icon;
+        icon = loadTrayIcon(path);
         sync(NIM_MODIFY);
-        destroyIconSafely(previous);
+        releaseIcon(previous);
       },
       setContextMenu(_menu: Menu | null): void {
         // ponytail: deferred — needs TrackPopupMenu on the tray's message window;
@@ -137,7 +160,7 @@ export const windowsTrayBackend: TrayBackend = {
         destroyed = true;
         sync(NIM_DELETE);
         window.destroy();
-        destroyIconSafely(hIcon);
+        releaseIcon(icon);
       },
       isDestroyed(): boolean {
         return destroyed;
