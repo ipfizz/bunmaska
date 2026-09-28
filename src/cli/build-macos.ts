@@ -353,6 +353,8 @@ export type BuildMacAppOptions = {
   readonly signApp?: SignApp;
   readonly convertIcon?: ConvertIcon;
   readonly buildDmg?: BuildDmg;
+  /** Notarize and staple the signed bundle; runs before the `.dmg` is built. */
+  readonly notarize?: (appPath: string) => Promise<void>;
   /** The app's own version for Info.plist; defaults to the framework version. */
   readonly version?: string;
 };
@@ -406,8 +408,11 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
     const signApp = opts.signApp ?? codesignApp;
     await signApp(opts.sign, layout.appDir);
   }
+  if (opts.notarize !== undefined) {
+    await opts.notarize(layout.appDir);
+  }
 
-  // The .dmg packages the signed bundle, so it is produced after signing.
+  // The .dmg packages the final bundle, so it comes after signing and stapling.
   if (opts.dmg === true) {
     const dmg = opts.buildDmg ?? buildDmg;
     await dmg({ appDir: layout.appDir, name: opts.name, outDmg: join(out, `${opts.name}.dmg`) });

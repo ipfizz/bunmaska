@@ -55,5 +55,26 @@ if (currentPlatform() === 'macos') {
       const verify = spawnSync('hdiutil', ['verify', dmgPath], { encoding: 'utf8' });
       expect(verify.status).toBe(0);
     });
+
+    test('notarizes the signed app before packaging it, so the dmg holds the stapled app', async () => {
+      const order: string[] = [];
+      await buildMacApp({
+        entry,
+        name: 'Order App',
+        out: join(workDir, 'order'),
+        sign: '-',
+        dmg: true,
+        signApp: async () => {
+          order.push('sign');
+        },
+        notarize: async () => {
+          order.push('notarize');
+        },
+        buildDmg: async () => {
+          order.push('dmg');
+        },
+      });
+      expect(order).toEqual(['sign', 'notarize', 'dmg']);
+    }, 30000);
   });
 }
