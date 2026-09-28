@@ -83,6 +83,11 @@ describe.skipIf(!isLinux)('x11-global-shortcut (Linux)', () => {
       expect(linuxGlobalShortcutBackend.register('CmdOrCtrl+,', () => undefined)).toBe(true);
     });
 
+    test('register() refuses a second spelling of a held combo', () => {
+      expect(linuxGlobalShortcutBackend.register('Ctrl+K', () => undefined)).toBe(true);
+      expect(linuxGlobalShortcutBackend.register('Control+K', () => undefined)).toBe(false);
+    });
+
     test('register() returns false for an unmappable key', () => {
       expect(linuxGlobalShortcutBackend.register('CmdOrCtrl+Bogus', () => undefined)).toBe(false);
     });

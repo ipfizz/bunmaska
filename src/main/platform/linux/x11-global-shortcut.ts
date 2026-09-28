@@ -112,6 +112,9 @@ const resolveGrab = (accelerator: string, dpy: Pointer): Grab | undefined => {
   return keycode === 0 ? undefined : { keycode, modifiers: x11ModifierMask(parsed) };
 };
 
+const findRegistration = (grab: Grab): number =>
+  registrations.findIndex((r) => r.keycode === grab.keycode && r.modifiers === grab.modifiers);
+
 const ungrab = (dpy: Pointer, grab: Grab): void => {
   const x11 = loadX11FFI();
   for (const lockBits of GRAB_VARIANTS) {
@@ -122,7 +125,7 @@ const ungrab = (dpy: Pointer, grab: Grab): void => {
 const register = (accelerator: string, callback: () => void): boolean => {
   const dpy = ensureDisplay();
   const grab = dpy === null ? undefined : resolveGrab(accelerator, dpy);
-  if (dpy === null || grab === undefined) {
+  if (dpy === null || grab === undefined || findRegistration(grab) !== -1) {
     return false;
   }
   const x11 = loadX11FFI();
@@ -142,13 +145,12 @@ const unregister = (accelerator: string): void => {
   if (dpy === null || dpy === undefined || grab === undefined) {
     return;
   }
-  for (let i = registrations.length - 1; i >= 0; i -= 1) {
-    const reg = registrations[i];
-    if (reg !== undefined && reg.keycode === grab.keycode && reg.modifiers === grab.modifiers) {
-      ungrab(dpy, reg);
-      registrations.splice(i, 1);
-    }
+  const index = findRegistration(grab);
+  if (index === -1) {
+    return;
   }
+  registrations.splice(index, 1);
+  ungrab(dpy, grab);
   loadX11FFI().symbols.XFlush(dpy);
 };
 
