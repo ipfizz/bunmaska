@@ -52,6 +52,34 @@ describe('buildAppEnvironment — manifest & appPath', () => {
   });
 });
 
+describe('buildAppEnvironment - compiled binary', () => {
+  const exeDir = '/Applications/Demo.app/Contents/MacOS';
+  const compiled = (files: Record<string, string>): AppEnvironment =>
+    build({
+      execPath: `${exeDir}/Demo`,
+      mainScript: '/$bunfs/root/Demo',
+      cwd: '/',
+      readFile: (path) => files[slash(path)],
+    });
+
+  test('reads the package.json beside the executable', () => {
+    const env = compiled({
+      [`${exeDir}/package.json`]: JSON.stringify({ productName: 'Demo', version: '1.2.0' }),
+    });
+    expect(env.manifest?.productName).toBe('Demo');
+    expect(env.manifest?.version).toBe('1.2.0');
+  });
+
+  test('uses the executable directory as appPath', () => {
+    expect(slash(compiled({}).appPath)).toBe(exeDir);
+  });
+
+  test('never adopts a package.json above the executable directory', () => {
+    const env = compiled({ '/Applications/package.json': JSON.stringify({ version: '9.9.9' }) });
+    expect(env.manifest).toBeUndefined();
+  });
+});
+
 describe('buildAppEnvironment — locale & languages', () => {
   test('normalizes the raw locale', () => {
     expect(build({ locale: 'en_US.UTF-8' }).locale).toBe('en-US');

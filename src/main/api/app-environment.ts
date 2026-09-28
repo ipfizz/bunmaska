@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname } from 'node:path';
 import { currentPlatform, type Platform } from '../../common/platform';
-import { findManifest, type Manifest, type ManifestReader } from './app-metadata';
+import { findManifest, type Manifest, type ManifestReader, readManifest } from './app-metadata';
 import { normalizeLocale, parsePreferredLanguages } from './app-locale';
 
 /**
@@ -32,7 +32,7 @@ export type AppEnvironment = {
   readonly home: string;
   readonly temp: string;
   readonly execPath: string;
-  /** Directory of the nearest `package.json`, else cwd. */
+  /** A compiled binary's own directory, else the nearest `package.json` directory, else cwd. */
   readonly appPath: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly manifest: Manifest | undefined;
@@ -61,18 +61,32 @@ const computePreferredLanguages = (
   return normalizedLocale.length > 0 ? [normalizedLocale] : [];
 };
 
-export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
+/** A `bun build --compile` binary runs its entry from Bun's embedded filesystem. */
+const COMPILED_ENTRY = /^(?:\/\$bunfs\/|[A-Za-z]:[\\/]~BUN[\\/])/;
+
+const locateApp = (deps: EnvironmentDeps): { dir: string; manifest: Manifest | undefined } => {
+  if (COMPILED_ENTRY.test(deps.mainScript)) {
+    // The build ships assets and package.json beside the binary; walking above it
+    // would adopt whatever package.json the install location happens to sit under.
+    const dir = dirname(deps.execPath);
+    return { dir, manifest: readManifest(dir, deps.readFile) };
+  }
   const startDir = deps.mainScript.length > 0 ? dirname(deps.mainScript) : deps.cwd;
   const found = findManifest(startDir, deps.readFile);
+  return { dir: found?.dir ?? deps.cwd, manifest: found?.manifest };
+};
+
+export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
+  const app = locateApp(deps);
   const locale = normalizeLocale(deps.locale);
   return {
     platform: deps.platform,
     home: deps.home,
     temp: deps.temp,
     execPath: deps.execPath,
-    appPath: found?.dir ?? deps.cwd,
+    appPath: app.dir,
     env: deps.env,
-    manifest: found?.manifest,
+    manifest: app.manifest,
     locale,
     preferredLanguages: computePreferredLanguages(deps.env, locale),
     isPackaged: computeIsPackaged(deps.execPath),

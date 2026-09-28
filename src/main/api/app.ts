@@ -140,7 +140,7 @@ export class App extends EventEmitter {
     this.#userAgentFallback = value;
   }
 
-  /** The nearest directory with a `package.json`, else cwd. */
+  /** A compiled binary's own directory, else the nearest `package.json` directory, else cwd. */
   getAppPath(): string {
     return this.#environment().appPath;
   }

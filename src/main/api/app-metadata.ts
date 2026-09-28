@@ -47,6 +47,12 @@ const parseManifest = (contents: string): Manifest | undefined => {
   };
 };
 
+/** The PARSEABLE `package.json` in `dir`, else `undefined`. */
+export const readManifest = (dir: string, read: ManifestReader): Manifest | undefined => {
+  const contents = read(join(dir, 'package.json'));
+  return contents === undefined ? undefined : parseManifest(contents);
+};
+
 /**
  * The first directory at or above `startDir` with a PARSEABLE `package.json`;
  * a malformed manifest is skipped and the walk continues upward.
@@ -54,12 +60,9 @@ const parseManifest = (contents: string): Manifest | undefined => {
 export const findManifest = (startDir: string, read: ManifestReader): FoundManifest | undefined => {
   let dir = startDir;
   for (;;) {
-    const contents = read(join(dir, 'package.json'));
-    if (contents !== undefined) {
-      const manifest = parseManifest(contents);
-      if (manifest !== undefined) {
-        return { dir, manifest };
-      }
+    const manifest = readManifest(dir, read);
+    if (manifest !== undefined) {
+      return { dir, manifest };
     }
     const parent = dirname(dir);
     if (parent === dir) {
