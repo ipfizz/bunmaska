@@ -1,13 +1,4 @@
-/**
- * Launch-time WebKit engine resolution: whether THIS process loads the OS WebView
- * (the default) or a pinned engine from the shared store.
- *
- * Precedence: `BUNMASKA_WEBKIT_PATH` (explicit dir) > `BUNMASKA_WEBKIT_ID` (env
- * id) > the baked `engine.id` next to the executable > the `system` sentinel.
- * A pinned id whose store dir lacks its `INSTALLATION_COMPLETE` marker degrades
- * to the system WebView with a loud warning — the app must still launch, but the
- * tested==shipped guarantee is explicitly flagged as broken.
- */
+// Launch-time engine choice: the OS WebView (default) or a pinned engine from the store.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -34,7 +25,6 @@ export type EngineResolution = {
   readonly warnings: readonly string[];
 };
 
-/** Injectable seams for {@link resolveEngineWith}. */
 export type ResolveDeps = {
   readonly env?: StoreEnv;
   /** Existence check for the marker (default: real fs). */
@@ -47,11 +37,7 @@ export type ResolveDeps = {
   readonly host?: { readonly os: Platform; readonly arch: Arch };
 };
 
-/**
- * Candidate paths for the baked `engine.id`, in priority order: the explicit env
- * override, then the install layout `usr/share/<slug>/engine.id` (relative to the
- * executable at `usr/bin/<slug>`), then a flat sibling fallback.
- */
+/** Where the baked `engine.id` may live, highest priority first. */
 export const bakedIdCandidates = (execPath: string, env: StoreEnv): string[] => {
   const explicit = env['BUNMASKA_ENGINE_ID_FILE'];
   if (explicit !== undefined && explicit.length > 0) {
@@ -63,7 +49,6 @@ export const bakedIdCandidates = (execPath: string, env: StoreEnv): string[] => 
   return usrBin ? [join(dir, '..', 'share', basename(execPath), 'engine.id'), sibling] : [sibling];
 };
 
-/** Default reader for the baked `engine.id`: env override, else beside the executable. */
 const defaultReadBakedId = (env: StoreEnv): string | null => {
   const candidates = bakedIdCandidates(process.execPath, env);
   for (const path of candidates) {
@@ -73,13 +58,13 @@ const defaultReadBakedId = (env: StoreEnv): string | null => {
         return value;
       }
     } catch {
-      // No baked id at this candidate — try the next.
+      // Absent here; try the next candidate.
     }
   }
   return null;
 };
 
-/** Resolve the engine decision from explicit deps. */
+/** The engine to load; a bad or foreign pin degrades to `system` with a warning, never a throw. */
 export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
   const env = deps.env ?? process.env;
   const exists = deps.exists ?? existsSync;
@@ -136,9 +121,9 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
 const cache: { value: EngineResolution | undefined } = { value: undefined };
 
 /**
- * The process-singleton engine resolution. Cached so both Linux loaders (GTK +
- * WebKitGTK) agree on ONE engine — mixing a system GTK with a pinned WebKit (or
- * vice-versa) would double-load GTK symbols and crash.
+ * The memoized resolution. Every Linux loader of an engine-closure library must dlopen
+ * through `engineLibPath(resolveEngine(), ...)`: a system GTK or glib beside a pinned
+ * WebKitGTK double-loads their symbols and crashes.
  */
 export const resolveEngine = (): EngineResolution => {
   if (cache.value === undefined) {
@@ -165,23 +150,18 @@ export const appIdentity = (execPath: string, main: string): string =>
 
 const prep: { done: boolean } = { done: false };
 
-/** Injectable seams for {@link prepareEngineForLoad}'s auto-link side effect. */
 export type PrepareDeps = {
   /** This app's stable identity (default: {@link appIdentity}). */
   readonly appPath?: string;
-  /** Register an app→engine refcount link (default: the store's `linkApp`). */
+  /** Default: the store's `linkApp`. */
   readonly link?: (root: string, appPath: string, engineId: string) => void;
 };
 
 /**
- * Apply a resolution before the first `dlopen`: print fallback warnings and, for a
- * STORE pin, register this app in the store's `.links` refcount so prune keeps the
- * engine. Runs once per process; later loaders' calls are no-ops.
- *
- * It exports no env: Bun's `process.env` writes never reach native `getenv` (so
- * WebKit's helper spawns never see them) yet leak into every `child_process` child.
- * ponytail: a pinned Linux engine's helper processes come from its build's compiled-in
- * PKGLIBEXECDIR; relocating them needs a from-source build (DEVELOPER_MODE or a dladdr patch).
+ * Once per process, before the first `dlopen`: print the warnings and link a store pin
+ * so prune keeps its engine. Never set env here: Bun's `process.env` writes never reach
+ * native `getenv` (WebKit's helper spawns miss them) but leak into `child_process` children.
+ * ponytail: pinned Linux helpers run from the build's PKGLIBEXECDIR; needs a from-source engine
  */
 export const prepareEngineForLoad = (
   resolution: EngineResolution,
@@ -196,8 +176,6 @@ export const prepareEngineForLoad = (
   for (const warning of resolution.warnings) {
     write(`${warning}\n`);
   }
-  // Auto-link only a STORE pin (it has an id + root); an explicit-dir pin and
-  // system mode have nothing to refcount.
   if (
     resolution.mode === 'pinned' &&
     resolution.id !== undefined &&
