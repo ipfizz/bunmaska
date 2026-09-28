@@ -16,11 +16,7 @@ const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 const SWP_NOZORDER_NOACTIVATE = 0x0004 | 0x0010;
 const SWP_NOSIZE_NOZORDER_NOACTIVATE = 0x0001 | 0x0004 | 0x0010;
 
-/**
- * Windows-only. Drives REAL native-WndProc top-level windows (the kind that can
- * host WebKit) and proves the preventable close is routed from the message PUMP
- * (a posted `WM_SYSCOMMAND`/`SC_CLOSE`), not a JSCallback WndProc.
- */
+/** Windows-only: real frame windows, with every close path routed through the veto. */
 const isWindows = currentPlatform() === 'windows';
 const WM_CLOSE = 0x0010;
 const GWL_STYLE = -16;

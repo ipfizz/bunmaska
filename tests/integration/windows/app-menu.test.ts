@@ -7,7 +7,7 @@ import { createWindowsMenuRealizer } from '../../../src/main/platform/windows/wi
 import { NativeWin32Window } from '../../../src/main/platform/windows/windows-native-window';
 
 /**
- * The application menu BAR on Windows — pure Win32 (no WebKit engine needed). A
+ * The application menu BAR on Windows - pure Win32 (no WebKit engine needed). A
  * realizer mirrors the menu onto each registered window via a real `CreateMenu`
  * bar + `SetMenu`; a menu click arrives as `WM_COMMAND` on the window's JSCallback
  * frame proc, which routes it to the realizer's stored `onClick`. These tests drive
@@ -68,7 +68,7 @@ describe.skipIf(!isWindows)('Windows application menu bar', () => {
       user32.SendMessageW(native.hwnd(), WM_COMMAND, BigInt(quitId), 0n);
       expect(clicked).toBe(1);
 
-      // Position 1 is the "Help" submenu — popups have no command id.
+      // Position 1 is the "Help" submenu - popups have no command id.
       expect(user32.GetMenuItemID(bar, 1) >>> 0).toBe(0xffffffff);
     } finally {
       native.destroy();
@@ -127,7 +127,7 @@ describe.skipIf(!isWindows)('Windows application menu bar', () => {
 // Engine-gated: the menu bar coexisting with a LIVE WebKit view (the JSCallback
 // frame proc must keep driving the runtime; the menu-bar client-area shrink must
 // not disturb the hosted WKView). Spawned in a subprocess like the other engine
-// probes — WebKit's multi-process IPC does not coexist with the bun:test host.
+// probes - WebKit's multi-process IPC does not coexist with the bun:test host.
 const hasEngine = isWindows && resolveWindowsEngineDir() !== undefined;
 describe.skipIf(!hasEngine)('application menu bar with a live engine', () => {
   test('executeJavaScript still works with an application menu attached', async () => {
