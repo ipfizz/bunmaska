@@ -764,12 +764,12 @@ export class LinuxApplication implements NativeApplication {
     }
     this.#started = true;
     this.#ready = true;
-    for (const callback of this.#readyCallbacks) {
-      callback();
-    }
-    this.#readyCallbacks.length = 0;
+    // Pump first: a throwing 'ready' listener must not leave GTK unpumped.
     this.#pump = new CooperativePump(createLinuxDrain());
     this.#pump.start();
+    for (const callback of this.#readyCallbacks.splice(0)) {
+      callback();
+    }
   }
 
   onReady(callback: () => void): void {
