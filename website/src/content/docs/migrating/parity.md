@@ -348,7 +348,7 @@ There is one session, `session.defaultSession`. Partitions (`fromPartition`, `fr
   - `cookies.set` defaults `path` to `/`, not the URL's directory.
 - **Windows:** every `cookies` method rejects with `UnsupportedPlatformError`. WinCairo has no way to read or write a single cookie; it can only delete them all.
 - **`clearStorageData()`:**
-  - macOS clears all website data: cookies, caches, local storage, IndexedDB and the rest.
+  - macOS clears all website data: cookies, caches, local storage, IndexedDB and the rest. Pages that are still open keep their in-memory cache until they reload.
   - Windows clears cookies and Cache API storage (`caches`) only, not the HTTP cache, local storage or IndexedDB.
   - Linux rejects with `UnsupportedPlatformError`. It is not wired up yet.
   - On every OS, passing the `origin` or `storages` options rejects rather than quietly clearing everything.
