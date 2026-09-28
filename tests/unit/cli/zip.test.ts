@@ -89,6 +89,14 @@ describe('buildZipArchive', () => {
     expect(readEntry(zip, 'My App/engine.id')).toEqual(new Uint8Array([]));
   });
 
+  test('refuses more entries than a ZIP32 archive can count instead of wrapping', () => {
+    const entries = Array.from({ length: 0x10000 }, (_, i) => ({
+      name: `f${i}`,
+      content: new Uint8Array(),
+    }));
+    expect(() => buildZipArchive(entries)).toThrow(/ZIP64/);
+  });
+
   test('marks names UTF-8 (general-purpose bit 11) so non-ASCII paths survive', () => {
     const zip = buildZipArchive([{ name: 'café/x', content: new Uint8Array([1]) }]);
     // Local header general-purpose flags at offset 6.

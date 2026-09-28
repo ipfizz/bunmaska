@@ -144,6 +144,16 @@ export const buildZipArchive = (entries: readonly ZipEntry[]): Uint8Array => {
 
   const centralChunks = prepared.map(centralHeader);
   const cdSize = centralChunks.reduce((n, chunk) => n + chunk.length, 0);
+  // DataView wraps silently past these, producing a corrupt archive that "built" fine.
+  if (
+    prepared.length > 0xffff ||
+    offset + cdSize > 0xffffffff ||
+    prepared.some((item) => item.uncompressedSize > 0xffffffff)
+  ) {
+    throw new Error(
+      'bunmaska build: the zip exceeds 65,535 files or 4 GiB, which needs ZIP64 (unsupported).',
+    );
+  }
   const eocd = endOfCentralDir(prepared.length, cdSize, offset);
 
   return concat([...localChunks, ...centralChunks, eocd]);
