@@ -28,6 +28,16 @@ export const encodeEnvelope = (envelope: IpcEnvelope): string => {
       if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
         throw new InvalidArgumentError(`IPC payload contains a non-serializable ${typeof value}`);
       }
+      // JSON turns these into {} or index maps, so the renderer rejects them too (preload-bootstrap).
+      if (
+        value instanceof Map ||
+        value instanceof Set ||
+        value instanceof ArrayBuffer ||
+        ArrayBuffer.isView(value)
+      ) {
+        const type = Object.prototype.toString.call(value).slice(8, -1);
+        throw new InvalidArgumentError(`IPC payload contains a ${type}, which JSON cannot carry`);
+      }
       return value;
     });
     if (json === undefined) {
