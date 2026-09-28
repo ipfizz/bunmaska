@@ -13,7 +13,7 @@ import {
 import { join } from 'node:path';
 import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
-import { bundlePreloadAssets, copyAppAssets } from './app-assets';
+import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
 import { bundleIdSlug, numericVersion } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
@@ -176,6 +176,7 @@ export const buildWindowsApp = async (
   await compileWindowsBinary(opts.entry, layout.exePath, meta);
 
   bundlePreloadAssets(opts.entry, layout.appDir, copyAppAssets(opts.entry, layout.appDir));
+  writeAppManifest(layout.appDir, opts.name, opts.version ?? BUNMASKA_VERSION);
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.appDir, 'renderer'), { recursive: true });
   }

@@ -13,7 +13,7 @@ import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { type Arch, currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
-import { bundlePreloadAssets, copyAppAssets } from './app-assets';
+import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
 import { bundleIdSlug } from './build-macos';
 
@@ -206,6 +206,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   }
   const maintainer = `${opts.id ?? `com.bunmaska.${layout.slug}`} <noreply@bunmaska.dev>`;
   const description = `${opts.name} built with Bunmaska`;
+  const version = opts.version ?? BUNMASKA_VERSION;
 
   // Start clean (everything the build writes is under usr/): cpSync merges into stale trees.
   rmSync(join(layout.appDir, 'usr'), { recursive: true, force: true });
@@ -218,6 +219,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 
   const assetsDir = dirname(layout.binPath);
   bundlePreloadAssets(opts.entry, assetsDir, copyAppAssets(opts.entry, assetsDir));
+  writeAppManifest(assetsDir, opts.name, version);
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(assetsDir, 'renderer'), { recursive: true });
   }
@@ -244,7 +246,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   const deb = await packageDeb({
     layout,
     out,
-    version: opts.version ?? BUNMASKA_VERSION,
+    version,
     arch,
     name: opts.name,
     maintainer,

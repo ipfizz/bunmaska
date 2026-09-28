@@ -55,6 +55,8 @@ if (currentPlatform() === 'macos') {
 
       const exe = join(appPath, 'Contents', 'MacOS', name);
       expect(existsSync(exe)).toBe(true);
+      const manifest = JSON.parse(readFileSync(join(dirname(exe), 'package.json'), 'utf8'));
+      expect(manifest).toEqual({ productName: name, version: '2.3.0' });
       const mode = statSync(exe).mode;
       // Executable bit set for owner/group/other.
       expect(mode & 0o111).not.toBe(0);

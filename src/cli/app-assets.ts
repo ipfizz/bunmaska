@@ -52,6 +52,14 @@ export const copyAppAssets = (entry: string, destination: string): string[] => {
   return copied;
 };
 
+/** The runtime reads a compiled app's name and version only from `package.json` beside it. */
+export const writeAppManifest = (destination: string, name: string, version: string): void => {
+  writeFileSync(
+    join(destination, 'package.json'),
+    `${JSON.stringify({ productName: name, version })}\n`,
+  );
+};
+
 const PRELOAD_ASSET = /^preload\.(?:js|mjs|cjs)$/i;
 
 /**
