@@ -106,10 +106,11 @@ describe('screen.getDisplayNearestPoint', () => {
     expect(screen.getDisplayNearestPoint({ x: -500, y: 400 }).id).toBe(1);
   });
 
-  test('treats a point on the shared edge as inside one display', () => {
+  test('a point on a shared edge goes to the first display that contains it', () => {
     setScreenBackendForTesting(fakeBackend([PRIMARY, SECONDARY]));
-    const d = screen.getDisplayNearestPoint({ x: 1920, y: 400 });
-    expect([1, 2]).toContain(d.id);
+    expect(screen.getDisplayNearestPoint({ x: 1920, y: 400 }).id).toBe(1);
+    setScreenBackendForTesting(fakeBackend([SECONDARY, PRIMARY]));
+    expect(screen.getDisplayNearestPoint({ x: 1920, y: 400 }).id).toBe(2);
   });
 });
 

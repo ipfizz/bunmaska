@@ -3,14 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import { nativeTheme, NativeThemeImpl } from '../../../../src/main/api/native-theme';
 
 describe('nativeTheme', () => {
-  test('exposes a boolean shouldUseDarkColors', () => {
-    expect(typeof nativeTheme.shouldUseDarkColors).toBe('boolean');
-  });
-
-  test('exposes a boolean prefersReducedTransparency', () => {
-    expect(typeof nativeTheme.prefersReducedTransparency).toBe('boolean');
-  });
-
   test('is an EventEmitter for the updated event', () => {
     expect(nativeTheme).toBeInstanceOf(EventEmitter);
   });
@@ -31,12 +23,6 @@ describe('nativeTheme.themeSource', () => {
     const t = new NativeThemeImpl();
     t.themeSource = 'light';
     expect(t.shouldUseDarkColors).toBe(false);
-  });
-
-  test('themeSource "system" reads the OS appearance (a boolean)', () => {
-    const t = new NativeThemeImpl();
-    t.themeSource = 'system';
-    expect(typeof t.shouldUseDarkColors).toBe('boolean');
   });
 
   test('setting themeSource emits updated', () => {

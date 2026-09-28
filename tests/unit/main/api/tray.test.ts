@@ -187,8 +187,6 @@ describe('Tray lifecycle', () => {
     expect(() => tray.setTitle('x')).not.toThrow();
     expect(() => tray.setImage('/tmp/x.png')).not.toThrow();
     expect(() => tray.setContextMenu(null)).not.toThrow();
-    // Nothing should have been forwarded post-destroy.
-    expect(created[0]?.toolTips).toEqual([]);
-    expect(created[0]?.titles).toEqual([]);
+    expect(created[0]).toMatchObject({ toolTips: [], titles: [], images: [], menus: [] });
   });
 });

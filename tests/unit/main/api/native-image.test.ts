@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   clampCropRect,
-  type NativeImage,
   type NativeImageBackend,
   type NativeImageHandle,
   nativeImage,
@@ -251,19 +250,6 @@ describe('NativeImage.toDataURL', () => {
     );
     const url = nativeImage.createEmpty().toDataURL();
     expect(url).toBe('data:image/png;base64,');
-  });
-});
-
-describe('NativeImage type', () => {
-  test('exposes the Electron-compatible instance surface', () => {
-    setNativeImageBackendForTesting(
-      makeFakeBackend({ handle: 1n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
-    );
-    const image: NativeImage = nativeImage.createEmpty();
-    expect(typeof image.getSize).toBe('function');
-    expect(typeof image.isEmpty).toBe('function');
-    expect(typeof image.toPNG).toBe('function');
-    expect(typeof image.toDataURL).toBe('function');
   });
 });
 

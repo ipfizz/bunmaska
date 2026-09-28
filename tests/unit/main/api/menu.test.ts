@@ -216,7 +216,9 @@ describe('Menu.insert / getMenuItemById', () => {
   test('insert places an item at the given position (clamped)', () => {
     const menu = Menu.buildFromTemplate([{ label: 'A' }, { label: 'C' }]);
     menu.insert(1, new MenuItem({ label: 'B' }));
-    expect(menu.items.map((i) => i.label)).toEqual(['A', 'B', 'C']);
+    menu.insert(99, new MenuItem({ label: 'D' }));
+    menu.insert(-5, new MenuItem({ label: '0' }));
+    expect(menu.items.map((i) => i.label)).toEqual(['0', 'A', 'B', 'C', 'D']);
   });
 
   test('getMenuItemById finds an item by id, including inside submenus', () => {

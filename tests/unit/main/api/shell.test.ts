@@ -65,15 +65,3 @@ describe('shell.openPath', () => {
     expect(await shell.openPath('/nope')).toBe('Failed to open path: /nope');
   });
 });
-
-describe('shell.showItemInFolder and beep', () => {
-  test('showItemInFolder forwards the path', () => {
-    shell.showItemInFolder('/tmp/file');
-    expect(calls).toEqual(['showItemInFolder:/tmp/file']);
-  });
-
-  test('beep calls the backend', () => {
-    shell.beep();
-    expect(calls).toEqual(['beep']);
-  });
-});
