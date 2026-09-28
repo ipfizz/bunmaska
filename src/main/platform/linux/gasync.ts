@@ -1,27 +1,17 @@
 import { JSCallback, type Pointer } from 'bun:ffi';
 
-/**
- * Shared one-shot `GAsyncReadyCallback` runner (dialogs, cookies, snapshots).
- *
- * JSCallback lifecycle safety (a past SIGSEGV regression): the thunk MUST stay
- * reachable until GLib fires it, and MUST NOT be `close()`d synchronously inside
- * its own invocation (that frees the native trampoline the caller is about to
- * return into). Each in-flight callback is retained in {@link inFlight} and its
- * `close()` is deferred to a later tick.
- */
-
 /** ABI shape for `GAsyncReadyCallback`: `(source, result, user_data) -> void`. */
 export const GASYNC_READY_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
-/** Every JSCallback awaiting a GLib async settle. Retained so Bun can't GC it. */
+/** Retained so Bun cannot GC a thunk GLib still holds. */
 const inFlight = new Set<JSCallback>();
 
 /**
- * Kick off one async GLib operation and settle a Promise from its
- * `GAsyncReadyCallback`. `settle` runs inside the callback (call the matching
- * `*_finish` there); a thrown `settle` rejects. The thunk is closed on a
- * deferred tick after it fires; if the operation never completes the thunk
- * stays retained (never close a callback native code may still invoke).
+ * Start one async GLib operation and settle a Promise from its `GAsyncReadyCallback`.
+ * `settle` runs inside the callback (call the matching `*_finish` there); a throw
+ * rejects. The thunk closes on a later tick, never inside its own invocation
+ * (D022b); if the operation never completes it stays retained, because native
+ * code may still invoke it.
  */
 export const runAsyncReady = <T>(
   start: (callbackPtr: Pointer) => void,

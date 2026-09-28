@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { requireGtkDisplay } from '../../helpers/require-gtk-display';
 import { protocol } from '../../../src/main/api/protocol';
-import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
 import { createLinuxApplication } from '../../../src/main/platform/linux/linux-backend';
 import type { NativeApplication, NativeWebContents } from '../../../src/main/platform/native';
 
@@ -34,9 +34,7 @@ const SERVED_HTML = '<html><body><h1 id=x>HELLO</h1></body></html>';
 
 describe.skipIf(!isLinux)('custom app:// scheme over real WebKitGTK', () => {
   test('loads app://host/index.html and reads the served DOM back', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
 
     protocol.handle('app', (request) => {
       if (request.url === 'app://host/index.html') {

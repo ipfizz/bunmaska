@@ -1,74 +1,47 @@
-import type { Pointer } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
 import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
-import { EXEC_HANDLER_NAME, evalInPageWorld } from './webkit-ipc';
-
-/**
- * `WebContents.executeJavaScript` on Linux (WebKitGTK 6.0).
- *
- * The result returns out-of-band through a PAGE-world `bunmaskaExec`
- * script-message handler — EXACTLY mirroring the macOS implementation. A
- * per-call `GAsyncReadyCallback` (a `bun:ffi` {@link JSCallback}) cannot be used:
- * closing it during its own invocation frees the native trampoline WebKit is
- * still returning into → SIGSEGV. Instead a wrapper runs the user code and posts
- * `{ execId, ok, result?, error? }` to the `bunmaskaExec` handler (registered once
- * in `createWebViewWithIpc` and closed only on window teardown), which settles
- * the matching pending Promise here.
- *
- * The wrapper is injected via the EXISTING fire-and-forget page-world eval path
- * ({@link evalInPageWorld}) — NO native callback, so there is nothing to free.
- */
+import { EXEC_HANDLER_NAME } from './webkit-ipc';
 
 const log = createLogger('linux-eval-js');
 
-/** A pending `executeJavaScript` awaiting its page-world result message. */
+/** Unguessable, because every frame can post to the page-world `bunmaskaExec` handler. */
+const randomExecId = (): number => {
+  const [high = 0, low = 0] = crypto.getRandomValues(new Uint32Array(2));
+  return (high >>> 11) * 2 ** 32 + low;
+};
+
 type PendingExec = {
   readonly resolve: (value: unknown) => void;
   readonly reject: (reason: Error) => void;
   readonly timer: ReturnType<typeof setTimeout>;
 };
 
-/**
- * Per-`LinuxWebContents` registry of in-flight `executeJavaScript` calls. Issues
- * a monotonic `execId`, injects the wrapper, and settles each Promise when the
- * matching `bunmaskaExec` message arrives (or on timeout / teardown). There is NO
- * native callback to close — the page-world handler is shared and torn down with
- * the window — so this is SAFE.
- */
+/** In-flight `executeJavaScript` calls, settled by the execId the page-world wrapper posts back. */
 export class ExecResultChannel {
-  readonly #view: Pointer;
+  readonly #evalInPage: (source: string) => void;
   readonly #pending = new Map<number, PendingExec>();
-  #nextExecId = 1;
   #destroyed = false;
 
-  constructor(view: Pointer) {
-    this.#view = view;
+  constructor(evalInPage: (source: string) => void) {
+    this.#evalInPage = evalInPage;
   }
 
-  /**
-   * Evaluate `code` in the PAGE world and resolve to its completion value
-   * (Electron semantics). The outcome arrives via {@link deliverExecResult}.
-   */
   executeJavaScript(code: string): Promise<unknown> {
     if (this.#destroyed) {
       return Promise.reject(new Error('executeJavaScript failed: web contents destroyed'));
     }
-    const execId = this.#nextExecId;
-    this.#nextExecId += 1;
+    const execId = randomExecId();
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(execId);
         reject(new Error(`executeJavaScript timed out after ${EXEC_TIMEOUT_MS}ms`));
       }, EXEC_TIMEOUT_MS);
       this.#pending.set(execId, { resolve, reject, timer });
-      evalInPageWorld(this.#view, buildExecWrapper(execId, EXEC_HANDLER_NAME, code));
+      this.#evalInPage(buildExecWrapper(execId, EXEC_HANDLER_NAME, code));
     });
   }
 
-  /**
-   * Settle the pending exec for the `{ execId, ok, result?, error? }` JSON the
-   * page-world `bunmaskaExec` handler posted. Malformed / unknown ids are dropped.
-   */
+  /** Settle the exec named by a posted `{ execId, ok, result?, error? }`; malformed or unknown ids are dropped. */
   deliverExecResult(json: string): void {
     let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
     try {
@@ -94,13 +67,10 @@ export class ExecResultChannel {
   }
 
   /**
-   * Mark destroyed and settle every still-pending exec; called on window close
-   * BEFORE the view is finalized. In-flight execs resolve to `undefined` — a
-   * normally closed window is not a hard error and a fire-and-forget caller must
-   * not receive an unhandled rejection. Any later `executeJavaScript` is rejected
-   * by the `#destroyed` guard without touching the freed view.
+   * Block new execs and resolve in-flight ones to `undefined`: a rejection here
+   * would reach fire-and-forget callers as an unhandled rejection, which kills Bun.
    */
-  rejectPending(): void {
+  destroy(): void {
     this.#destroyed = true;
     for (const [, pending] of this.#pending) {
       clearTimeout(pending.timer);
