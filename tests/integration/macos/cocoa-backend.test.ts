@@ -554,6 +554,44 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
     }
   });
 
+  test('only a frameless window mirrors --app-region, as Electron ignores it when framed', () => {
+    const app = createMacOSApplication();
+    app.start();
+    const mirrorsAppRegion = (title: string): boolean => {
+      const rt = cocoa();
+      const webview = rt.msgSend(nsWindowTitled(title), rt.selectors.get('contentView'));
+      const configuration = rt.msgSend(webview, rt.selectors.get('configuration'));
+      const controller = rt.msgSend(configuration, rt.selectors.get('userContentController'));
+      const scripts = rt.msgSend(controller, rt.selectors.get('userScripts'));
+      const count = msgSendReturnsI64(scripts, rt.selectors.get('count'));
+      for (let i = 0n; i < count; i += 1n) {
+        const script = msgSendI64(scripts, rt.selectors.get('objectAtIndex:'), i);
+        if (
+          nsStringToString(rt.msgSend(script, rt.selectors.get('source'))).includes('--app-region')
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    try {
+      const framed = app.createWindow({ width: 200, height: 100, title: 'framed', show: false });
+      const frameless = app.createWindow({
+        width: 200,
+        height: 100,
+        title: 'frameless-region',
+        show: false,
+        frame: false,
+      });
+      expect(mirrorsAppRegion('framed')).toBe(false);
+      expect(mirrorsAppRegion('frameless-region')).toBe(true);
+      framed.destroy();
+      frameless.destroy();
+    } finally {
+      app.quit();
+    }
+  });
+
   test('protocol.handle rejects every scheme WebKit serves natively', () => {
     const rt = cocoa();
     loadWebKit();

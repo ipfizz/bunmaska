@@ -1059,8 +1059,11 @@ class MacOSApplication implements NativeApplication {
     }
     addUserScript(generatePageWorldStub(channelId), pageWorld());
     // Never put __bunmaska in the page world: it would defeat context isolation.
+    // Electron ignores drag regions in a framed window, so only a frameless one pays for the scan.
     // ponytail: --app-region mirror only; window-op controls wait for the isolated bridge (D045)
-    addUserScript(windowControlsScript(), pageWorld());
+    if (options.frame === false) {
+      addUserScript(windowControlsScript(), pageWorld());
+    }
     addUserScript(generateDomReadyScript(), pageWorld());
 
     const webview = msgSendInitWithFrameConfig(
