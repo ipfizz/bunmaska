@@ -420,30 +420,24 @@ export class WindowsWebView {
     }
   }
 
-  /** Idempotent. */
+  /**
+   * Idempotent. The WKView is never released (D043: that re-enters a JSCallback mid-teardown),
+   * so blank the page to stop its scripts, media and sockets until process exit.
+   */
   dispose(): void {
     if (this.#disposed) {
       return;
     }
     this.#disposed = true;
-    const wk = loadWebKit2();
-    // The owning window is hidden, not destroyed (see `commitClose`), so the view
-    // persists until process exit. Silence it: stop loading and clear its clients
-    // so a closed webContents emits nothing further, and drop our controller ref
-    // (the shared WKContext is process-lifetime). The live WKView itself is NOT released — doing so through
-    // raw FFI re-enters a bun:ffi JSCallback during WebKit's multi-process
-    // teardown and crashes — so it and its WebProcess are reclaimed by the OS at
-    // exit. A clean async teardown is a documented follow-up (`.admin/WINDOWS.md`).
-    // Clear WebKit's clients FIRST — before any other WebKit or window operation.
-    // Once the window is hidden/torn down, WebKit synchronously processes those
-    // messages and would call our nav/message trampolines in a context that
-    // crashes bun:ffi; with the clients cleared it has nothing to call. (Doing any
-    // other WebKit call first — e.g. stop-loading — re-fires a nav callback before
-    // the clear and crashes.)
-    wk.symbols.WKPageSetPageNavigationClient(this.#page, null);
-    wk.symbols.WKUserContentControllerRemoveAllUserMessageHandlers(this.#retainedController);
+    const wk = loadWebKit2().symbols;
+    // Clear WebKit's clients FIRST: any earlier WebKit call (even stop-loading) re-fires a
+    // nav callback into a trampoline mid-teardown and crashes bun:ffi.
+    wk.WKPageSetPageNavigationClient(this.#page, null);
+    wk.WKUserContentControllerRemoveAllUserMessageHandlers(this.#retainedController);
+    // So the blank page runs no preload.
+    wk.WKUserContentControllerRemoveAllUserScripts(this.#retainedController);
+    this.loadURL('about:blank');
     wkRelease(this.#retainedController);
-    // The shared WKContext is process-lifetime — never released here (it outlives this view).
     retainTrampolines(this.#callbacks);
   }
 }

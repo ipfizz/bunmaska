@@ -3,7 +3,8 @@
  * the WebKit-view teardown on window close is crash-free. The `window-all-closed`
  * listener keeps the app alive so this isolates the window close from app-exit
  * (synchronous WebKit shutdown at process exit is a separate, documented item).
- * Prints `CLOSE_OK` if the process survives the close. Requires BUNMASKA_WEBKIT_PATH.
+ * Prints `CLOSE_OK url=<page url after close>` if the process survives the close.
+ * Requires BUNMASKA_WEBKIT_PATH.
  */
 import { app, BrowserWindow } from '../../../../src/index';
 
@@ -23,7 +24,7 @@ app.whenReady().then(() => {
   win.webContents.once('did-finish-load', () => {
     win.close();
     // If close tore down the live WebKit view cleanly, we get here without a crash.
-    setTimeout(() => finish('CLOSE_OK', 0), 600);
+    setTimeout(() => finish(`CLOSE_OK url=${win.webContents.getURL()}`, 0), 600);
   });
   win.loadURL('data:text/html,<!doctype html><html><body>bye</body></html>');
 });
