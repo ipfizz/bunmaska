@@ -43,17 +43,28 @@ describe('inputEventToMessage', () => {
     expect(msg?.wParam).toBe(0n);
   });
 
-  test('a named key maps to its virtual-key code (Escape)', () => {
+  test('a named key maps to its virtual-key code and scan code (Escape)', () => {
     expect(inputEventToMessage({ type: 'keyDown', keyCode: 'Escape' })).toEqual({
       message: WM_KEYDOWN,
       wParam: 0x1bn,
-      lParam: 0x1n,
+      lParam: 0x00010001n,
     });
     expect(inputEventToMessage({ type: 'keyUp', keyCode: 'Escape' })).toEqual({
       message: WM_KEYUP,
       wParam: 0x1bn,
-      lParam: 0xc0000001n,
+      lParam: 0xc0010001n,
     });
+  });
+
+  test('a key carries its US-layout scan code in lParam bits 16-23 (so event.code is set)', () => {
+    expect(inputEventToMessage({ type: 'keyDown', keyCode: 'a' })?.lParam).toBe(0x001e0001n);
+    expect(inputEventToMessage({ type: 'keyDown', keyCode: '1' })?.lParam).toBe(0x00020001n);
+    expect(inputEventToMessage({ type: 'char', keyCode: 'x' })?.lParam).toBe(0x002d0001n);
+  });
+
+  test('a navigation-cluster key sets the extended bit (not a numpad key)', () => {
+    expect(inputEventToMessage({ type: 'keyDown', keyCode: 'Left' })?.lParam).toBe(0x014b0001n);
+    expect(inputEventToMessage({ type: 'keyUp', keyCode: 'Delete' })?.lParam).toBe(0xc1530001n);
   });
 
   test('a single letter maps to its VK code, case-insensitively', () => {
