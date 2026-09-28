@@ -5,8 +5,11 @@ import { InvalidArgumentError } from './errors';
 import { compareVersions } from './manifest';
 import type { Arch } from './platform';
 
-/** Which web-engine family a build belongs to (`webkit` covers WinCairo + macOS; D044). */
-export type EngineFamily = 'webkitgtk' | 'webkit';
+/**
+ * `webkit` covers WinCairo + macOS (D044). `cef` is the opt-in Blink engine (D048): its `api`
+ * is the CEF version and its `upstream` the Chromium version.
+ */
+export type EngineFamily = 'webkitgtk' | 'webkit' | 'cef';
 
 export type EngineOs = 'linux' | 'macos' | 'windows';
 
@@ -26,7 +29,7 @@ export type EngineRef = {
 /** The reserved sentinel meaning "use the OS WebView" (the default). */
 export const SYSTEM_ENGINE = 'system';
 
-const ENGINE_FAMILIES: ReadonlySet<string> = new Set(['webkitgtk', 'webkit']);
+const ENGINE_FAMILIES: ReadonlySet<string> = new Set(['webkitgtk', 'webkit', 'cef']);
 const ENGINE_OSES: ReadonlySet<string> = new Set(['linux', 'macos', 'windows']);
 const ENGINE_ARCHES: ReadonlySet<string> = new Set(['x64', 'arm64']);
 
