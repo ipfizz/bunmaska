@@ -3,7 +3,7 @@
  * plus the `update.json` manifest the runtime `autoUpdater` consumes.
  */
 
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import {
   type ArtifactOs,
@@ -68,19 +68,17 @@ export type UpdateArtifactResult = {
 };
 
 const tarThenZstd = async (bundlePath: string, outPath: string): Promise<void> => {
-  // tar with the system tar (portable), then compress the tar bytes with Bun's
-  // zstd — avoids depending on `tar --zstd` being present.
-  const tarPath = outPath.replace(/\.zst$/, '');
-  const proc = Bun.spawn(['tar', '-cf', tarPath, '-C', dirname(bundlePath), basename(bundlePath)], {
-    stdio: ['ignore', 'ignore', 'inherit'],
+  // A relative entry from cwd, never an absolute path: GNU tar on Windows reads C:\... as a remote host.
+  const proc = Bun.spawn(['tar', '-cf', '-', basename(bundlePath)], {
+    cwd: dirname(bundlePath),
+    stdio: ['ignore', 'pipe', 'inherit'],
   });
+  const tarBytes = await new Response(proc.stdout).bytes();
   const code = await proc.exited;
   if (code !== 0) {
     throw new Error(`update-artifact: tar exited with code ${code}`);
   }
-  const tarBytes = readFileSync(tarPath);
   writeFileSync(outPath, Bun.zstdCompressSync(tarBytes));
-  rmSync(tarPath, { force: true });
 };
 
 const defaultDeps: UpdateArtifactDeps = {

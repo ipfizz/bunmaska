@@ -72,40 +72,37 @@ describe('emitUpdateArtifact (injected seams)', () => {
 });
 
 describe('emitUpdateArtifact (real tar + zstd)', () => {
-  // Skipped on Windows: src spawns GNU `tar -cf C:\...` which reads the drive-letter
-  // path as rsh `host:path` ("Cannot connect to C: resolve failed"). The src tar
-  // invocation is out of scope to change here, so this real-tar path can't run.
-  test.skipIf(process.platform === 'win32')(
-    'produces a .tar.zst + update.json whose hash verifies',
-    async () => {
-      const root = makeTmpDir();
-      const bundle = join(root, 'Demo.app');
-      mkdirSync(bundle, { recursive: true });
-      writeFileSync(join(bundle, 'payload.txt'), 'hello bunmaska update');
-      const outDir = join(root, 'out');
-      mkdirSync(outDir);
+  test('produces a .tar.zst + update.json whose hash verifies', async () => {
+    const root = makeTmpDir();
+    const bundle = join(root, 'Demo.app');
+    mkdirSync(bundle, { recursive: true });
+    writeFileSync(join(bundle, 'payload.txt'), 'hello bunmaska update');
+    const outDir = join(root, 'out');
+    mkdirSync(outDir);
 
-      const result = await emitUpdateArtifact({
-        bundlePath: bundle,
-        outDir,
-        name: 'Demo',
-        version: '1.2.3',
-        channel: 'stable',
-        os: 'macos',
-        arch: 'arm64',
-      });
+    const result = await emitUpdateArtifact({
+      bundlePath: bundle,
+      outDir,
+      name: 'Demo',
+      version: '1.2.3',
+      channel: 'stable',
+      os: 'macos',
+      arch: 'arm64',
+    });
 
-      expect(existsSync(result.artifactPath)).toBe(true);
-      expect(existsSync(result.manifestPath)).toBe(true);
-      // The on-disk artifact's hash + size match what update.json claims.
-      const bytes = readFileSync(result.artifactPath);
-      expect(result.manifest.size).toBe(bytes.length);
-      expect(result.manifest.hash).toBe(contentHash(bytes));
-      expect(result.manifest.artifact).toBe('demo-stable-macos-arm64.tar.zst');
-      // No stray uncompressed .tar left behind.
-      expect(existsSync(result.artifactPath.replace(/\.zst$/, ''))).toBe(false);
-    },
-  );
+    expect(existsSync(result.artifactPath)).toBe(true);
+    expect(existsSync(result.manifestPath)).toBe(true);
+    // The on-disk artifact's hash + size match what update.json claims.
+    const bytes = readFileSync(result.artifactPath);
+    expect(result.manifest.size).toBe(bytes.length);
+    expect(result.manifest.hash).toBe(contentHash(bytes));
+    expect(result.manifest.artifact).toBe('demo-stable-macos-arm64.tar.zst');
+    // No stray uncompressed .tar left behind.
+    expect(existsSync(result.artifactPath.replace(/\.zst$/, ''))).toBe(false);
+    // The installer expects the bundle dir itself as the tar's top-level entry.
+    const list = Bun.spawnSync(['tar', '-tf', '-'], { stdin: Bun.zstdDecompressSync(bytes) });
+    expect(list.stdout.toString()).toContain('Demo.app/payload.txt');
+  });
 });
 
 describe('emitUpdateArtifact signing', () => {
