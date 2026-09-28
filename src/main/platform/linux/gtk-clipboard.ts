@@ -394,6 +394,16 @@ const readImage = (): Promise<Uint8Array> => {
   });
 };
 
+/** Electron-style MIME names from `gdk_content_formats_to_string` (GType names dropped). */
+export const formatsFromGdk = (text: string): string[] => [
+  ...new Set(
+    text
+      .split(/\s+/)
+      .filter((token) => token.includes('/'))
+      .map((mime) => mime.split(';')[0] as string),
+  ),
+];
+
 /** The MIME types currently advertised by the clipboard (Electron's `availableFormats`). */
 const availableFormats = (): string[] => {
   const gdk = loadGdkFFI();
@@ -408,10 +418,7 @@ const availableFormats = (): string[] => {
   }
   const text = new CString(cstrPtr).toString();
   glib.symbols.g_free(cstrPtr);
-  return text
-    .split(/\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  return formatsFromGdk(text);
 };
 
 const clear = (): void => {

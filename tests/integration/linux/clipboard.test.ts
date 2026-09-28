@@ -212,4 +212,9 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
     linuxClipboardBackend.writeImage(PNG_1x1);
     expect(linuxClipboardBackend.availableFormats()).toContain('image/png');
   });
+
+  test.skipIf(!hasDisplay)('availableFormats reports text/plain after writing text', () => {
+    linuxClipboardBackend.writeText('bunmaska-clip-formats');
+    expect(linuxClipboardBackend.availableFormats()).toContain('text/plain');
+  });
 });

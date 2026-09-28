@@ -4,6 +4,7 @@ import {
   type AsyncStreamReader,
   CLIPBOARD_READ_CB_DEF,
   drainStreamAsync,
+  formatsFromGdk,
   linuxClipboardBackend,
   settleReadStreamAsync,
   settleReadText,
@@ -23,6 +24,17 @@ describe('linuxClipboardBackend shape', () => {
     expect(typeof linuxClipboardBackend.readHTML).toBe('function');
     expect(typeof linuxClipboardBackend.writeHTML).toBe('function');
     expect(typeof linuxClipboardBackend.clear).toBe('function');
+  });
+});
+
+describe('formatsFromGdk', () => {
+  it('reports MIME names without parameters, drops GType names and dedupes', () => {
+    const gdk = 'gchararray GdkTexture text/plain;charset=utf-8 text/plain image/png';
+    expect(formatsFromGdk(gdk)).toEqual(['text/plain', 'image/png']);
+  });
+
+  it('returns no formats for an empty clipboard', () => {
+    expect(formatsFromGdk('')).toEqual([]);
   });
 });
 
