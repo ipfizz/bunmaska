@@ -225,14 +225,20 @@ export const nativeImage = {
   createFromDataURL(dataURL: string): NativeImage {
     const comma = dataURL.indexOf(',');
     if (comma === -1 || !dataURL.startsWith('data:')) {
-      return this.createEmpty();
+      return nativeImage.createEmpty();
     }
     const meta = dataURL.slice('data:'.length, comma);
     const payload = dataURL.slice(comma + 1);
+    // Percent-escapes are raw bytes: decodeURIComponent throws on non-UTF-8 like `%89`.
     const bytes = meta.includes(';base64')
-      ? new Uint8Array(Buffer.from(payload, 'base64'))
-      : new TextEncoder().encode(decodeURIComponent(payload));
-    return this.createFromBuffer(bytes);
+      ? Buffer.from(payload, 'base64')
+      : Buffer.from(
+          payload.replace(/%([0-9a-f]{2})/gi, (_, hex: string) =>
+            String.fromCharCode(Number.parseInt(hex, 16)),
+          ),
+          'latin1',
+        );
+    return nativeImage.createFromBuffer(new Uint8Array(bytes));
   },
   /** No native decode is performed. */
   createEmpty(): NativeImage {

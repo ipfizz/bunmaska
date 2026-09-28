@@ -305,4 +305,20 @@ describe('nativeImage.createFromDataURL', () => {
     expect(nativeImage.createFromDataURL('not-a-data-url').isEmpty()).toBe(true);
     expect(decodeCalls).toHaveLength(0);
   });
+
+  test('a percent-encoded payload decodes byte-wise, including non-UTF-8 bytes', () => {
+    setNativeImageBackendForTesting(
+      makeFakeBackend({ handle: 1n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
+    );
+    nativeImage.createFromDataURL('data:image/png,%89PNG%0D%0A');
+    expect(decodeCalls[0]?.source).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));
+  });
+
+  test('works when destructured off the module, as Electron code does', () => {
+    setNativeImageBackendForTesting(
+      makeFakeBackend({ handle: 1n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
+    );
+    const { createFromDataURL } = nativeImage;
+    expect(createFromDataURL('nope').isEmpty()).toBe(true);
+  });
 });
