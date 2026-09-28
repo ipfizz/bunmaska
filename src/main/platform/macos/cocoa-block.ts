@@ -60,9 +60,8 @@ const descriptorPtr = (): Pointer => {
   return ptr(sharedDescriptor);
 };
 
-type RetainedBlock = { readonly literal: Uint8Array; readonly cb: JSCallback };
-const retained = new Set<RetainedBlock>();
-const cancelable = new Map<Handle, RetainedBlock>();
+type RetainedBlock = { readonly literal: Uint8Array; readonly cb: JSCallback; cancelled: boolean };
+const retained = new Map<Handle, RetainedBlock>();
 
 /** Number of blocks still awaiting their callback. Test-only. */
 export const retainedBlockCount = (): number => retained.size;
@@ -84,29 +83,21 @@ export const makeOneShotBlock = (
   handler: (...args: BlockArg[]) => void,
   argTypes: readonly FFIType[] = [],
 ): Handle => {
-  let entry: RetainedBlock | undefined;
+  let blockPtr = 0n;
   const cb = new JSCallback(
     (...all: BlockArg[]) => {
+      const entry = retained.get(blockPtr);
       try {
-        // Drop the leading block pointer; hand the real args to the caller.
-        handler(...all.slice(1));
+        if (entry !== undefined && !entry.cancelled) {
+          // Drop the leading block pointer; hand the real args to the caller.
+          handler(...all.slice(1));
+        }
       } finally {
         // Deferred close: never free the trampoline inside its own invocation.
-        const settle = setTimeout(() => {
-          if (entry !== undefined) {
-            retained.delete(entry);
-            for (const [key, value] of cancelable) {
-              if (value === entry) {
-                cancelable.delete(key);
-              }
-            }
-          }
+        setTimeout(() => {
+          retained.delete(blockPtr);
           cb.close();
-        }, 0);
-        // Don't let the cleanup timer keep the process alive on its own.
-        if (typeof settle === 'object' && settle !== null && 'unref' in settle) {
-          (settle as { unref: () => void }).unref();
-        }
+        }, 0).unref();
       }
     },
     { args: [FFIType.ptr, ...argTypes], returns: FFIType.void },
@@ -125,30 +116,19 @@ export const makeOneShotBlock = (
   view.setBigUint64(16, BigInt(invokePtr), true); // invoke
   view.setBigUint64(24, BigInt(descriptorPtr()), true); // descriptor
 
-  entry = { literal, cb };
-  retained.add(entry);
-  const blockPtr = BigInt(ptr(literal));
-  cancelable.set(blockPtr, entry);
+  blockPtr = BigInt(ptr(literal));
+  retained.set(blockPtr, { literal, cb, cancelled: false });
   return blockPtr;
 };
 
 /**
- * Release a one-shot block that will never fire (a timed-out completion).
- * Without this, every timeout leaked the retained literal AND its JSCallback.
- * Deferred close, same discipline as the fired path: the native side may still
- * be mid-call with the trampoline.
+ * Silence a block whose caller gave up on it (a timed-out completion). The callee
+ * still holds the pointer and may invoke it later, so it stays retained until it
+ * fires and is then freed as usual; freeing it now would be a use-after-free.
  */
 export const cancelOneShotBlock = (blockPtr: Handle): void => {
-  const entry = cancelable.get(blockPtr);
-  if (entry === undefined) {
-    return;
-  }
-  cancelable.delete(blockPtr);
-  const settle = setTimeout(() => {
-    retained.delete(entry);
-    entry.cb.close();
-  }, 0);
-  if (typeof settle === 'object' && settle !== null && 'unref' in settle) {
-    (settle as { unref: () => void }).unref();
+  const entry = retained.get(blockPtr);
+  if (entry !== undefined) {
+    entry.cancelled = true;
   }
 };
