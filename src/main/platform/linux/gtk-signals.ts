@@ -1,4 +1,4 @@
-import { CString, JSCallback, type Pointer } from 'bun:ffi';
+import { CString, JSCallback, type Pointer, read } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
 import type { NativeNavigationEvent } from '../native';
 import { cstr } from '../cstr';
@@ -113,41 +113,46 @@ export const makeDestroyCallback = (onClosed: () => void): JSCallback =>
     onClosed();
   }, DESTROY_CB_DEF);
 
-export const makeLoadChangedCallback = (
+/**
+ * `load-changed` + `load-failed` handlers sharing one failed flag: WebKitGTK always
+ * emits `load-changed` FINISHED right after `load-failed`, and that FINISHED must
+ * not report `did-finish-load`. `load-failed` returns 0 so WebKit shows its error page.
+ */
+export const makeLoadCallbacks = (
   onNavigation: (event: NativeNavigationEvent) => void,
-): JSCallback =>
-  new JSCallback(
+): { readonly changed: JSCallback; readonly failed: JSCallback } => {
+  let failed = false;
+  const changed = new JSCallback(
     guarded((_self: Pointer, loadEvent: number, _userData: Pointer): void => {
       if (loadEvent === WEBKIT_LOAD_STARTED) {
+        failed = false;
         onNavigation({ type: 'did-start-loading' });
       } else if (loadEvent === WEBKIT_LOAD_COMMITTED) {
         onNavigation({ type: 'did-navigate' });
-      } else if (loadEvent === WEBKIT_LOAD_FINISHED) {
+      } else if (loadEvent === WEBKIT_LOAD_FINISHED && !failed) {
         onNavigation({ type: 'did-finish-load' });
         onNavigation({ type: 'did-stop-loading' });
       }
     }, undefined),
     LOAD_CHANGED_CB_DEF,
   );
-
-/**
- * `WebKitWebView::load-failed` handler. Emits `did-fail-load` then
- * `did-stop-loading`. Returns 0 so WebKit still shows its default error page.
- * Error detail is not parsed from the `GError` yet (best-effort on Linux).
- */
-export const makeLoadFailedCallback = (
-  onNavigation: (event: NativeNavigationEvent) => void,
-): JSCallback =>
-  new JSCallback(
+  const failedCallback = new JSCallback(
     guarded(
       (
         _self: Pointer,
         _loadEvent: number,
         _uri: Pointer,
-        _error: Pointer,
+        error: Pointer | null,
         _userData: Pointer,
       ): number => {
-        onNavigation({ type: 'did-fail-load', errorCode: -1, errorDescription: '' });
+        failed = true;
+        // GError { GQuark domain @0; gint code @4; gchar *message @8 }.
+        const message = error === null ? 0 : read.ptr(error, 8);
+        onNavigation({
+          type: 'did-fail-load',
+          errorCode: error === null ? -1 : read.i32(error, 4),
+          errorDescription: message === 0 ? '' : new CString(message as Pointer).toString(),
+        });
         onNavigation({ type: 'did-stop-loading' });
         return 0;
       },
@@ -155,6 +160,8 @@ export const makeLoadFailedCallback = (
     ),
     LOAD_FAILED_CB_DEF,
   );
+  return { changed, failed: failedCallback };
+};
 
 /**
  * `WebKitWebView::create` handler (`window.open` / `target=_blank`). Reads the

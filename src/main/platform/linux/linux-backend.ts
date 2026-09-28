@@ -29,8 +29,7 @@ import { createLinuxDrain } from './gtk-run-loop';
 import {
   makeCloseRequestCallback,
   makeCreateCallback,
-  makeLoadChangedCallback,
-  makeLoadFailedCallback,
+  makeLoadCallbacks,
   makeNotifyCallback,
   SignalRegistry,
 } from './gtk-signals';
@@ -109,26 +108,19 @@ class LinuxWebContents implements NativeWebContents {
       webkit.symbols.webkit_web_view_get_settings(this.#view),
       GTK_TRUE,
     );
-    this.#registry.connect(
-      this.#view,
-      'load-changed',
-      makeLoadChangedCallback((event) => {
-        if (event.type === 'did-finish-load') {
-          this.#didFinishLoad = true;
-          const queued = [...this.#pendingEnvelopes];
-          this.#pendingEnvelopes.length = 0;
-          for (const json of queued) {
-            sendToRenderer(this.#view, json);
-          }
+    const load = makeLoadCallbacks((event) => {
+      if (event.type === 'did-finish-load') {
+        this.#didFinishLoad = true;
+        const queued = [...this.#pendingEnvelopes];
+        this.#pendingEnvelopes.length = 0;
+        for (const json of queued) {
+          sendToRenderer(this.#view, json);
         }
-        this.#dispatchNavigation(event);
-      }),
-    );
-    this.#registry.connect(
-      this.#view,
-      'load-failed',
-      makeLoadFailedCallback((event) => this.#dispatchNavigation(event)),
-    );
+      }
+      this.#dispatchNavigation(event);
+    });
+    this.#registry.connect(this.#view, 'load-changed', load.changed);
+    this.#registry.connect(this.#view, 'load-failed', load.failed);
     this.#registry.connect(
       this.#view,
       'create',
