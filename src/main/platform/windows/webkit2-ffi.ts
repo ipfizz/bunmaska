@@ -154,12 +154,14 @@ export const bundledEngineDir = (
  * `lib/`, or the verbatim `BUNMASKA_WEBKIT_PATH`), then a {@link bundledEngineDir}
  * shipped next to the executable. `deps` is a test seam.
  */
-export const resolveWindowsEngineDir = (deps: ResolveDeps = {}): string | undefined => {
+export const resolveWindowsEngineDir = (
+  deps: ResolveDeps & { readonly execPath?: string } = {},
+): string | undefined => {
   const resolution = resolveEngineWith(deps);
   if (resolution.mode === 'pinned') {
     return resolution.libDir;
   }
-  return bundledEngineDir(process.execPath, existsSync);
+  return bundledEngineDir(deps.execPath ?? process.execPath, deps.exists ?? existsSync);
 };
 
 /**
