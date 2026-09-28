@@ -8,11 +8,8 @@ import { loadComdlg32 } from './win32-dialog-ffi';
 import { loadOle32, loadUser32 } from './win32-ffi';
 import { loadShell32 } from './win32-shell-ffi';
 
-/**
- * Windows `dialog` backend. Every dialog here is MODAL — it spins its own message loop and
- * blocks until the user dismisses it — so, exactly as the macOS `runModal` path, the
- * native calls cannot run on CI.
- */
+// Every dialog here runs its own modal loop until dismissed, so (like macOS runModal) the
+// native calls cannot run on CI; only the pure mapping below is tested.
 
 // MessageBoxW button sets + icons.
 const MB_OK = 0x0;
@@ -54,7 +51,7 @@ const BI_DISPLAY_NAME_OFFSET = 16; // pszDisplayName
 const BI_TITLE_OFFSET = 24; // lpszTitle
 const BI_FLAGS_OFFSET = 32; // ulFlags
 
-/** Output buffer size (WCHARs) — large enough for a multi-select result list. */
+/** In WCHARs: room for a multi-select result list. */
 const FILE_BUFFER_WCHARS = 32768;
 const MAX_PATH_WCHARS = 260;
 

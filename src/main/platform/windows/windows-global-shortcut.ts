@@ -3,10 +3,7 @@ import type { GlobalShortcutBackend } from '../../api/global-shortcut';
 import { loadUser32 } from './win32-ffi';
 import { createMessageWindow, type MessageHandler } from './windows-message-window';
 
-// WM_HOTKEY is posted to a hidden message window: the pump's inspector consumes it via
-// dispatchHotkeyMessage, and a modal loop dispatches it to the window's handler instead.
-
-/** `WM_HOTKEY` — posted when a registered hot key fires; `wParam` is the hot-key id. */
+/** `wParam` is the hot-key id. */
 export const WM_HOTKEY = 0x0312;
 
 // RegisterHotKey `fsModifiers` flags.
@@ -59,7 +56,6 @@ const FUNCTION_KEY = /^F([1-9]|1[0-9]|2[0-4])$/;
 const keyToVirtualKey = (key: string): number | undefined => {
   if (key.length === 1) {
     const code = key.charCodeAt(0);
-    // A–Z (0x41–0x5A) and 0–9 (0x30–0x39) map to their character code directly.
     if ((code >= 0x41 && code <= 0x5a) || (code >= 0x30 && code <= 0x39)) {
       return code;
     }
@@ -117,10 +113,6 @@ type HotkeyApi = Pick<
   'RegisterHotKey' | 'UnregisterHotKey'
 >;
 
-/**
- * Build a Windows globalShortcut backend. A factory (not just a singleton) so
- * tests get an isolated id space; production uses {@link windowsGlobalShortcutBackend}.
- */
 export const createWindowsGlobalShortcutBackend = (
   user32: () => HotkeyApi = () => loadUser32().symbols,
   createWindow: (handler: MessageHandler) => { readonly hwnd: bigint } = createMessageWindow,
@@ -140,8 +132,9 @@ export const createWindowsGlobalShortcutBackend = (
     return true;
   };
 
-  // Hot keys target a window, not the thread queue: a modal loop (message box, menu,
-  // window drag) dispatches window messages but drops thread messages.
+  // Never register against the thread (hwnd NULL): a modal loop (message box, menu,
+  // window drag) drops thread messages. Posted to this window, WM_HOTKEY reaches the pump's
+  // inspector normally and the window's handler while a modal loop runs.
   let window: { readonly hwnd: bigint } | undefined;
   const hotkeyWindow = (): bigint => {
     window ??= createWindow((message, wParam) => {

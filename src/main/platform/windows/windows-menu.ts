@@ -5,12 +5,8 @@ import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 
-/**
- * Windows has no global menu, so `setApplicationMenu` installs a per-window menu BAR,
- * built with `CreateMenu` (vs `CreatePopupMenu` for context menus); a fresh HMENU is built
- * PER window, because an HMENU can only belong to one window. Menu clicks reach us as
- * `WM_COMMAND` on the window's JSCallback frame proc.
- */
+// The application menu is a bar per window (an HMENU belongs to one window); bar clicks
+// arrive as WM_COMMAND on the window's JSCallback frame proc (D043).
 
 // AppendMenuW flags.
 const MF_STRING = 0x0;
@@ -138,7 +134,6 @@ export const createWindowsMenuRealizer = (
       if (menu === null) {
         appMenuItems = null;
       } else if (lastRealized?.handle === menu) {
-        // Each window gets its own bar, so the realized popup tree is only a key to its items.
         appMenuItems = lastRealized.items;
         release(lastRealized.ids);
         user32().DestroyMenu(menu);
