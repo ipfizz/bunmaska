@@ -215,15 +215,18 @@ describe('engine install', () => {
   test('a bare engine-id resolves to the official feed artifact url', async () => {
     const c = capture(makeTmpDir());
     let seenUrl: string | undefined;
+    let seenId: string | undefined;
     const deps = {
       ...c.deps,
-      installUrl: async (_root: string, url: string, _key: string) => {
+      installUrl: async (_root: string, url: string, _key: string, expectedId?: string) => {
         seenUrl = url;
+        seenId = expectedId;
         return { id: ID, installed: true };
       },
     };
     expect(await runEngine({ action: 'install', source: ID }, deps)).toBe(0);
     expect(seenUrl).toBe(`https://engines.bunmaska.org/${ID}.tar.zst`);
+    expect(seenId).toBe(ID);
     expect(c.text()).toContain(`installed ${ID}`);
   });
 

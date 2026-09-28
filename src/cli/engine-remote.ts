@@ -71,6 +71,8 @@ export const zstdTarExtract = async (bytes: Uint8Array, destDir: string): Promis
 export type RemoteInstallDeps = {
   readonly fetch: RemoteFetch;
   readonly extract?: (bytes: Uint8Array, destDir: string) => Promise<void>;
+  /** The id the user asked for; a feed serving another one fails before the download. */
+  readonly expectedId?: string;
 };
 
 /**
@@ -83,10 +85,16 @@ export const installFromUrl = async (
   publicKeyPem: string,
   deps: RemoteInstallDeps,
 ): Promise<InstallResult> => {
-  const bytes = await deps.fetch(baseUrl);
   const manifest = parseRemoteManifest(
     new TextDecoder().decode(await deps.fetch(`${baseUrl}.json`)),
   );
+  if (deps.expectedId !== undefined && manifest.id !== deps.expectedId) {
+    throw new BunmaskaError(
+      `engine ${deps.expectedId}: the feed serves ${JSON.stringify(manifest.id)} instead`,
+      { code: 'ERR_ENGINE_MANIFEST' },
+    );
+  }
+  const bytes = await deps.fetch(baseUrl);
   const signature = new TextDecoder().decode(await deps.fetch(`${baseUrl}.sig`)).trim();
   if (!verifyArtifact(publicKeyPem, bytes, signature)) {
     throw new BunmaskaError(`engine ${manifest.id}: signature verification failed`, {

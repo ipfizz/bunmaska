@@ -36,7 +36,12 @@ export type EngineCommandDeps = {
   /** Defaults to {@link installFromDir}. */
   readonly installDir?: (root: string, sourceDir: string) => Promise<InstallResult>;
   /** Defaults to {@link installFromUrl} over the real fetch. */
-  readonly installUrl?: (root: string, url: string, publicKeyPem: string) => Promise<InstallResult>;
+  readonly installUrl?: (
+    root: string,
+    url: string,
+    publicKeyPem: string,
+    expectedId: string | undefined,
+  ) => Promise<InstallResult>;
   /** Defaults to {@link fetchEngineIndex} over the real fetch. */
   readonly fetchIndex?: (feedBase: string) => Promise<EngineIndexEntry[]>;
 };
@@ -186,8 +191,14 @@ const runInstall = async (source: string, deps: EngineCommandDeps): Promise<numb
   const publicKey = resolveEnginePublicKey({ feedPublicKey: config.engine?.feed?.publicKey });
   const installUrl =
     deps.installUrl ??
-    ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));
-  deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
+    ((root, u, key, expectedId) =>
+      installFromUrl(root, u, key, {
+        fetch: defaultRemoteFetch,
+        ...(expectedId === undefined ? {} : { expectedId }),
+      }));
+  deps.out(
+    installedMessage(await installUrl(deps.root, url, publicKey, isUrl ? undefined : source)),
+  );
   return 0;
 };
 
