@@ -116,6 +116,14 @@ describe('resolveResizeDimensions / clampCropRect (pure)', () => {
     });
     expect(clampCropRect(100, 50, { x: 200, y: 0, width: 10, height: 10 })).toBeUndefined();
   });
+  test('clamp: a negative origin clips to the intersection instead of shifting', () => {
+    expect(clampCropRect(100, 50, { x: -10, y: -5, width: 20, height: 10 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 5,
+    });
+  });
 });
 
 describe('NativeImage.getAspectRatio', () => {

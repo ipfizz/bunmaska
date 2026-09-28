@@ -73,16 +73,16 @@ export const resolveResizeDimensions = (
   return { width: srcW, height: srcH }; // both omitted → unchanged size
 };
 
-/** `undefined` when the clamped rect is empty. */
+/** The rect's intersection with the image; `undefined` when empty. */
 export const clampCropRect = (
   imgW: number,
   imgH: number,
   rect: { x: number; y: number; width: number; height: number },
 ): { x: number; y: number; width: number; height: number } | undefined => {
-  const x = Math.max(0, Math.min(Math.round(rect.x), imgW));
-  const y = Math.max(0, Math.min(Math.round(rect.y), imgH));
-  const width = Math.min(Math.round(rect.width), imgW - x);
-  const height = Math.min(Math.round(rect.height), imgH - y);
+  const x = Math.max(0, Math.round(rect.x));
+  const y = Math.max(0, Math.round(rect.y));
+  const width = Math.min(imgW, Math.round(rect.x) + Math.round(rect.width)) - x;
+  const height = Math.min(imgH, Math.round(rect.y) + Math.round(rect.height)) - y;
   if (width <= 0 || height <= 0) {
     return undefined;
   }
