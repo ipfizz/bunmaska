@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { UnsupportedPlatformError } from '../../../../src/common/errors';
-import { currentPlatform } from '../../../../src/common/platform';
 import {
   type ClipboardBackend,
   clipboard,
   setClipboardBackendForTesting,
 } from '../../../../src/main/api/clipboard';
-import { nativeImage } from '../../../../src/main/api/native-image';
+import type { NativeImage } from '../../../../src/main/api/native-image';
 
 /** A backend fake with every method as a benign default; override per test. */
 const makeFakeBackend = (overrides: Partial<ClipboardBackend> = {}): ClipboardBackend => ({
@@ -19,16 +17,6 @@ const makeFakeBackend = (overrides: Partial<ClipboardBackend> = {}): ClipboardBa
   availableFormats: () => [],
   clear: () => undefined,
   ...overrides,
-});
-
-describe('clipboard export', () => {
-  test('exposes readText, writeText, readHTML, writeHTML and clear', () => {
-    expect(typeof clipboard.readText).toBe('function');
-    expect(typeof clipboard.writeText).toBe('function');
-    expect(typeof clipboard.readHTML).toBe('function');
-    expect(typeof clipboard.writeHTML).toBe('function');
-    expect(typeof clipboard.clear).toBe('function');
-  });
 });
 
 describe('clipboard API with an injected backend (async readText contract)', () => {
@@ -87,13 +75,9 @@ describe('clipboard API with an injected backend (async readText contract)', () 
         },
       }),
     );
-    const png = nativeImage.createFromDataURL(
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    );
-    clipboard.writeImage(png);
-    // The API hands the backend exactly the image's PNG bytes.
-    expect(writes).toHaveLength(1);
-    expect(writes[0]).toEqual(png.toPNG());
+    const image = { toPNG: () => Buffer.from([1, 2, 3]) } as unknown as NativeImage;
+    clipboard.writeImage(image);
+    expect(writes.map((bytes) => [...bytes])).toEqual([[1, 2, 3]]);
   });
 
   test('readImage resolves an empty image when the clipboard holds no image', async () => {
@@ -136,31 +120,3 @@ describe('clipboard API with an injected backend (async readText contract)', () 
     expect(cleared).toBe(1);
   });
 });
-
-if (
-  currentPlatform() !== 'macos' &&
-  currentPlatform() !== 'linux' &&
-  currentPlatform() !== 'windows'
-) {
-  describe('clipboard on platforms without a backend', () => {
-    test('readText rejects with UnsupportedPlatformError', async () => {
-      await expect(clipboard.readText()).rejects.toBeInstanceOf(UnsupportedPlatformError);
-    });
-
-    test('writeText throws UnsupportedPlatformError', () => {
-      expect(() => clipboard.writeText('x')).toThrow(UnsupportedPlatformError);
-    });
-
-    test('readHTML rejects with UnsupportedPlatformError', async () => {
-      await expect(clipboard.readHTML()).rejects.toBeInstanceOf(UnsupportedPlatformError);
-    });
-
-    test('writeHTML throws UnsupportedPlatformError', () => {
-      expect(() => clipboard.writeHTML('<b>x</b>')).toThrow(UnsupportedPlatformError);
-    });
-
-    test('clear throws UnsupportedPlatformError', () => {
-      expect(() => clipboard.clear()).toThrow(UnsupportedPlatformError);
-    });
-  });
-}

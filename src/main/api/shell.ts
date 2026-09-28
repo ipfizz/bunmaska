@@ -3,11 +3,6 @@ import * as gtkShell from '../platform/linux/gtk-shell';
 import * as cocoaShell from '../platform/macos/cocoa-shell';
 import { windowsShellBackend } from '../platform/windows/windows-shell';
 
-/**
- * Desktop integration — the drop-in equivalent of Electron's `shell`.
- * `openExternal` returns a Promise, matching Electron; the rest are synchronous.
- */
-
 export type ShellBackend = {
   openExternal(url: string): boolean;
   openPath(path: string): boolean;
@@ -39,7 +34,7 @@ const { get: getBackend, setForTesting } = selectBackend<ShellBackend>('shell', 
 export const setShellBackendForTesting = setForTesting;
 
 export type Shell = {
-  /** Resolves with whether the launch succeeded. */
+  /** Resolves `false` for a non-URL or a failed launch. */
   openExternal(url: string): Promise<boolean>;
   /** Resolves `''` on success, else an error string. */
   openPath(path: string): Promise<string>;
@@ -47,9 +42,16 @@ export type Shell = {
   beep(): void;
 };
 
+/**
+ * An absolute URL only, as Electron requires. Windows `ShellExecuteW` would otherwise run a
+ * bare path or program name (`C:\x\payload.exe`, `calc`), and a one-letter scheme is a drive.
+ */
+const isExternalUrl = (url: string): boolean =>
+  URL.canParse(url) && new URL(url).protocol.length > 2;
+
 export const shell: Shell = {
   openExternal(url) {
-    return Promise.resolve(getBackend().openExternal(url));
+    return Promise.resolve(isExternalUrl(url) && getBackend().openExternal(url));
   },
   openPath(path) {
     const ok = getBackend().openPath(path);

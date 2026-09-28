@@ -19,9 +19,7 @@ if (currentPlatform() === 'windows') {
   describe('Windows nativeTheme (registry)', () => {
     test('reading AppsUseLightTheme yields 0, 1, or undefined', () => {
       const value = readRegistryDwordCurrentUser(PERSONALIZE, 'AppsUseLightTheme');
-      if (value !== undefined) {
-        expect([0, 1]).toContain(value);
-      }
+      expect([0, 1, undefined]).toContain(value);
     });
 
     test('a missing value reads cleanly as undefined (not a throw)', () => {

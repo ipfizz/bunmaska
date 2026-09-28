@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { BrowserWindow } from '../../../../src/main/api/browser-window';
 import {
   type DialogBackend,
   dialog,
@@ -146,6 +147,25 @@ describe('dialog.showSaveDialog', () => {
   });
 });
 
+describe("Electron's optional window first argument", () => {
+  const win = {} as BrowserWindow;
+
+  test('showMessageBox(window, options) reads the options', async () => {
+    await dialog.showMessageBox(win, { message: 'Discard?', buttons: ['Discard', 'Cancel'] });
+    expect(lastMessageBox).toMatchObject({ message: 'Discard?', buttons: ['Discard', 'Cancel'] });
+  });
+
+  test('showOpenDialog(window, options) reads the options', async () => {
+    await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+    expect(lastOpen?.canChooseDirectories).toBe(true);
+  });
+
+  test('showSaveDialog(window, options) reads the options', async () => {
+    await dialog.showSaveDialog(win, { defaultPath: 'notes.md' });
+    expect(lastSave?.defaultName).toBe('notes.md');
+  });
+});
+
 describe('dialog.showErrorBox', () => {
   test('routes the title and content through an error-styled message box', () => {
     dialog.showErrorBox('Boom', 'Something failed');
@@ -155,6 +175,25 @@ describe('dialog.showErrorBox', () => {
       buttons: ['OK'],
       type: 'error',
     });
+  });
+});
+
+describe('dialog.showErrorBox on a rejecting backend', () => {
+  test('leaves no unhandled rejection behind', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    setDialogBackendForTesting({
+      showMessageBox: () => Promise.reject(new Error('alert failed to start')),
+      showOpenDialog: () => [],
+      showSaveDialog: () => '',
+    });
+    dialog.showErrorBox('Boom', 'Something failed');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    process.off('unhandledRejection', onUnhandled);
+    expect(unhandled).toEqual([]);
   });
 });
 

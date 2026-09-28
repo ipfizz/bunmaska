@@ -5,21 +5,9 @@ import { macosGlobalShortcutBackend } from '../platform/macos/carbon-global-shor
 import { windowsGlobalShortcutBackend } from '../platform/windows/windows-global-shortcut';
 import { parseAccelerator } from './accelerator';
 
-/**
- * System-wide keyboard shortcuts — the drop-in equivalent of Electron's
- * `globalShortcut`. Backends: Carbon (macOS), X11 `XGrabKey` (Linux),
- * `RegisterHotKey` (Windows).
- *
- * Linux is X11-only. Wayland is unsupported in v1 — it needs the
- * `org.freedesktop.portal.GlobalShortcuts` desktop portal.
- */
-
-/**
- * The API owns accelerator parsing and the `isRegistered` registry; the backend
- * owns the OS grab and dispatching `callback` when the hot key fires.
- */
+/** The API owns parsing and the registry; the backend owns the OS grab and firing `callback`. */
 export type GlobalShortcutBackend = {
-  /** The HONEST per-platform answer to whether global shortcuts can be claimed. */
+  /** `false` where no grab is possible, e.g. Linux without an X11 display. */
   isSupported(): boolean;
   /** `false` when the OS refused the grab, e.g. the key is already taken. */
   register(accelerator: string, callback: () => void): boolean;
@@ -29,7 +17,7 @@ export type GlobalShortcutBackend = {
 };
 
 const macosBackend: GlobalShortcutBackend = macosGlobalShortcutBackend;
-const linuxBackend: GlobalShortcutBackend = linuxGlobalShortcutBackend;
+const linuxBackend: GlobalShortcutBackend = linuxGlobalShortcutBackend; // ponytail: X11 only; Wayland needs the GlobalShortcuts portal
 
 const { get: getBackend, setForTesting } = selectBackend<GlobalShortcutBackend>('globalShortcut', {
   macos: () => macosBackend,
@@ -40,11 +28,14 @@ const { get: getBackend, setForTesting } = selectBackend<GlobalShortcutBackend>(
 /** @internal */
 export const setGlobalShortcutBackendForTesting = setForTesting;
 
-/** Keyed by the LITERAL accelerator string, not the parsed form. */
-const registry = new Set<string>();
+/** Canonical form to the literal the backend was given, which is what it keys its grab by. */
+const registry = new Map<string, string>();
 
-const isParseable = (accelerator: string): boolean =>
-  parseAccelerator(accelerator, currentPlatform()) !== undefined;
+/** `CmdOrCtrl+K` and `CommandOrControl+k` share one key; `undefined` if unparseable. */
+const canonical = (accelerator: string): string | undefined => {
+  const p = parseAccelerator(accelerator, currentPlatform());
+  return p && [p.ctrl, p.alt, p.shift, p.meta, p.super].map(Number).join('') + p.key;
+};
 
 export type GlobalShortcut = {
   register(accelerator: string, callback: () => void): boolean;
@@ -54,17 +45,15 @@ export type GlobalShortcut = {
   unregisterAll(): void;
 };
 
-/**
- * `false` — without touching the backend — when the accelerator is unparseable
- * or already registered, and when the OS refuses the grab.
- */
+/** `false` when the OS refuses the grab, or, without touching the backend, when unparseable or taken. */
 const register = (accelerator: string, callback: () => void): boolean => {
-  if (!isParseable(accelerator) || registry.has(accelerator)) {
+  const key = canonical(accelerator);
+  if (key === undefined || registry.has(key)) {
     return false;
   }
   const ok = getBackend().register(accelerator, callback);
   if (ok) {
-    registry.add(accelerator);
+    registry.set(key, accelerator);
   }
   return ok;
 };
@@ -76,14 +65,16 @@ const registerAll = (accelerators: string[], callback: () => void): void => {
   }
 };
 
-const isRegistered = (accelerator: string): boolean => registry.has(accelerator);
+const isRegistered = (accelerator: string): boolean => registry.has(canonical(accelerator) ?? '');
 
 const unregister = (accelerator: string): void => {
-  if (!registry.has(accelerator)) {
+  const key = canonical(accelerator) ?? '';
+  const registered = registry.get(key);
+  if (registered === undefined) {
     return;
   }
-  registry.delete(accelerator);
-  getBackend().unregister(accelerator);
+  registry.delete(key);
+  getBackend().unregister(registered);
 };
 
 const unregisterAll = (): void => {
@@ -94,7 +85,6 @@ const unregisterAll = (): void => {
   getBackend().unregisterAll();
 };
 
-/** The drop-in `globalShortcut` singleton. */
 export const globalShortcut: GlobalShortcut = {
   register,
   registerAll,

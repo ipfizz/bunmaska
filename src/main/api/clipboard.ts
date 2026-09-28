@@ -4,13 +4,7 @@ import * as macosClipboard from '../platform/macos/cocoa-clipboard';
 import { windowsClipboardBackend } from '../platform/windows/windows-clipboard';
 import { type NativeImage, nativeImage } from './native-image';
 
-/**
- * System clipboard access — the drop-in equivalent of Electron's `clipboard`.
- *
- * Reads are async on every platform even though only GDK 4's read is async-only:
- * a deliberate uniform contract, so app code does not branch per OS.
- */
-
+/** Reads are async everywhere because GDK 4 can only read async (D033); Electron's are sync. */
 export type Clipboard = {
   /** `''` if the clipboard holds no text. */
   readText(): Promise<string>;
@@ -60,8 +54,6 @@ const { get: getBackend, setForTesting } = selectBackend<ClipboardBackend>('clip
 export const setClipboardBackendForTesting = setForTesting;
 
 export const clipboard: Clipboard = {
-  // `Promise.resolve` flattens a sync string (macOS) or a Promise (Linux/macOS
-  // wrapper) uniformly into the async contract without double-wrapping.
   readText() {
     return Promise.resolve(getBackend().readText());
   },

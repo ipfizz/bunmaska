@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
 import type { BrowserWindow } from '../../../../src/main/api/browser-window';
 import {
+  installDefaultApplicationMenu,
   Menu,
   MenuItem,
   type MenuRealizer,
@@ -81,6 +82,29 @@ describe('Menu checkbox/radio items', () => {
     menu.realize();
     expect(realized?.[0]).toMatchObject({ type: 'radio', checked: false });
   });
+
+  test('clicking a checkbox flips checked before click sees the item', () => {
+    let seen: boolean | undefined;
+    const menu = Menu.buildFromTemplate([
+      { label: 'Wrap', type: 'checkbox', checked: true, click: (item) => (seen = item.checked) },
+    ]);
+    menu.realize();
+    realized?.[0]?.onClick?.();
+    expect(seen).toBe(false);
+    expect(menu.items[0]?.checked).toBe(false);
+  });
+
+  test('clicking a radio checks it and clears the rest of its separator-bounded group', () => {
+    const menu = Menu.buildFromTemplate([
+      { label: 'A', type: 'radio', checked: true },
+      { label: 'B', type: 'radio' },
+      { type: 'separator' },
+      { label: 'C', type: 'radio', checked: true },
+    ]);
+    menu.realize();
+    realized?.[1]?.onClick?.();
+    expect(menu.items.map((i) => i.checked)).toEqual([false, true, false, true]);
+  });
 });
 
 describe('MenuItem roles', () => {
@@ -90,6 +114,17 @@ describe('MenuItem roles', () => {
     expect(copy.label).toBe('Copy');
     expect(copy.accelerator).toBe('CommandOrControl+C');
     expect(copy.type).toBe('normal');
+  });
+
+  test('an unsupported Electron role degrades to a plain item instead of throwing', () => {
+    Menu.buildFromTemplate([{ role: 'toggleDevTools' as never }]).realize();
+    expect(realized?.[0]).toMatchObject({ label: 'toggleDevTools', type: 'normal' });
+    expect(realized?.[0]?.roleSelector).toBeUndefined();
+  });
+
+  test('roles match case-insensitively, as in Electron', () => {
+    expect(new MenuItem({ role: 'selectall' as never }).role).toBe('selectAll');
+    expect(new MenuItem({ role: 'editmenu' as never }).label).toBe('Edit');
   });
 
   test('an app-supplied label/accelerator overrides the role defaults', () => {
@@ -135,6 +170,11 @@ describe('Menu macro roles', () => {
     ]);
   });
 
+  test('a macro role keeps an explicitly supplied submenu', () => {
+    const item = new MenuItem({ role: 'editMenu', submenu: [{ label: 'Mine' }] });
+    expect(item.submenu?.items.map((i) => i.label)).toEqual(['Mine']);
+  });
+
   test('a macro role accepts a custom label', () => {
     expect(new MenuItem({ role: 'editMenu', label: 'Edit…' }).label).toBe('Edit…');
   });
@@ -176,7 +216,9 @@ describe('Menu.insert / getMenuItemById', () => {
   test('insert places an item at the given position (clamped)', () => {
     const menu = Menu.buildFromTemplate([{ label: 'A' }, { label: 'C' }]);
     menu.insert(1, new MenuItem({ label: 'B' }));
-    expect(menu.items.map((i) => i.label)).toEqual(['A', 'B', 'C']);
+    menu.insert(99, new MenuItem({ label: 'D' }));
+    menu.insert(-5, new MenuItem({ label: '0' }));
+    expect(menu.items.map((i) => i.label)).toEqual(['0', 'A', 'B', 'C', 'D']);
   });
 
   test('getMenuItemById finds an item by id, including inside submenus', () => {
@@ -297,10 +339,46 @@ describe('Menu realization spec', () => {
     expect(realized?.[0]?.keyEquivalent).toBe('q');
   });
 
-  test('carries the click handler through to the spec', () => {
-    const click = (): void => undefined;
-    Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Go', click }]));
-    expect(realized?.[0]?.onClick).toBe(click);
+  test('maps named keys to AppKit key equivalents (NSEvent.h function-key unicodes)', () => {
+    const cases: Array<[string, string]> = [
+      ['CmdOrCtrl+Plus', '+'],
+      ['F1', ''],
+      ['F11', ''],
+      ['Up', ''],
+      ['Right', ''],
+      ['Delete', ''],
+      ['Backspace', '\b'],
+      ['Escape', '\u001b'],
+      ['PageDown', ''],
+    ];
+    Menu.buildFromTemplate(cases.map(([accelerator]) => ({ label: 'x', accelerator }))).realize();
+    expect(realized?.map((spec) => spec.keyEquivalent)).toEqual(cases.map(([, key]) => key));
+  });
+
+  test('a modifier-less accelerator sends an explicit empty mask, not AppKit Command', () => {
+    Menu.buildFromTemplate([{ label: 'Full Screen', accelerator: 'F11' }]).realize();
+    expect(realized?.[0]?.modifierMask).toBe(0n);
+  });
+
+  test('Super lands on Command in the macOS mask', () => {
+    Menu.buildFromTemplate([{ label: 'x', accelerator: 'Super+K' }]).realize();
+    expect(realized?.[0]?.modifierMask).toBe(1n << 20n);
+  });
+
+  test('click receives the item, the focused window and an event, as in Electron', () => {
+    const focused = {} as BrowserWindow;
+    setWindowResolverForTesting({
+      focused: () => undefined,
+      mostRecent: () => undefined,
+      resolve: () => undefined,
+      focusedWindow: () => focused,
+    });
+    const calls: unknown[][] = [];
+    const menu = Menu.buildFromTemplate([{ label: 'Go', click: (...args) => calls.push(args) }]);
+    Menu.setApplicationMenu(menu);
+    realized?.[0]?.onClick?.();
+    setWindowResolverForTesting(undefined);
+    expect(calls).toEqual([[menu.items[0], focused, {}]]);
   });
 
   test('nests submenu specs', () => {
@@ -314,6 +392,22 @@ describe('Menu realization spec', () => {
   test('separators become separator specs', () => {
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ type: 'separator' }]));
     expect(realized?.[0]?.type).toBe('separator');
+  });
+});
+
+describe('installDefaultApplicationMenu', () => {
+  test('installs App, File, Edit and Window menus when the app set none', () => {
+    installDefaultApplicationMenu('Notes');
+    expect(realized?.map((spec) => spec.label)).toEqual(['Notes', 'File', 'Edit', 'Window']);
+    expect(realized?.[0]?.submenu?.at(-1)).toMatchObject({ label: 'Quit Notes', role: 'quit' });
+    expect(Menu.getApplicationMenu()).not.toBeNull();
+  });
+
+  test('leaves an app-set menu, including null, alone', () => {
+    Menu.setApplicationMenu(null);
+    installDefaultApplicationMenu('Notes');
+    expect(installed).toBe(1);
+    expect(Menu.getApplicationMenu()).toBeNull();
   });
 });
 

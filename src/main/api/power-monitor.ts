@@ -7,14 +7,6 @@ import {
 } from '../platform/macos/cocoa-power';
 import { observePowerEvents as windowsObservePowerEvents } from '../platform/windows/windows-power-monitor';
 
-/**
- * System power + screen-lock events — a drop-in subset of Electron's
- * `powerMonitor`. An {@link EventEmitter} (D023) emitting `suspend`, `resume`,
- * `lock-screen` and `unlock-screen`. macOS screen-lock rides the shared
- * distributed observer (D034); the Linux logind leg is gated behind
- * `BUNMASKA_ENABLE_LINUX_POWER` and no-ops without a system bus.
- */
-
 const observePower = (handlers: PowerEventHandlers): void => {
   const platform = currentPlatform();
   if (platform === 'macos') {
@@ -26,10 +18,14 @@ const observePower = (handlers: PowerEventHandlers): void => {
   }
 };
 
+/**
+ * Emits `suspend`, `resume`, `lock-screen` and `unlock-screen`. Linux listens only with
+ * `BUNMASKA_ENABLE_LINUX_POWER=1` and a system bus (D037).
+ */
 export class PowerMonitorImpl extends EventEmitter {
   #observing = false;
 
-  /** Idempotent: only the first call attaches the native observers. */
+  /** Called once from bootstrap `onReady` (D034); later calls are no-ops. */
   startObserving(observe: (handlers: PowerEventHandlers) => void = observePower): void {
     if (this.#observing) {
       return;
@@ -57,6 +53,5 @@ export class PowerMonitorImpl extends EventEmitter {
   }
 }
 
-/** The system power monitor singleton — Electron's `powerMonitor`. */
 export const powerMonitor = new PowerMonitorImpl();
 export type PowerMonitor = PowerMonitorImpl;

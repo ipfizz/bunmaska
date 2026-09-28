@@ -12,14 +12,6 @@ import {
 } from '../platform/macos/cocoa-native-theme';
 import { windowsShouldUseDarkColors } from '../platform/windows/windows-native-theme';
 
-/**
- * System appearance — a drop-in equivalent of Electron's `nativeTheme`. Extends
- * {@link EventEmitter} for the `updated` event (D023).
- * {@link NativeThemeImpl.startObserving}, wired once at startup, makes `updated`
- * also fire when the OS appearance changes underneath the app (macOS/Linux; a
- * Windows appearance watcher is a follow-up).
- */
-
 export type ThemeSource = 'system' | 'light' | 'dark';
 
 const osShouldUseDark = (): boolean => {
@@ -46,6 +38,7 @@ const osPrefersReducedTransparency = (): boolean =>
   currentPlatform() === 'macos' ? macosPrefersReducedTransparency() : false;
 
 const observeOsAppearance = (onChange: () => void): void => {
+  // ponytail: no Windows appearance watcher
   const platform = currentPlatform();
   if (platform === 'macos') {
     macosObserveAppearance(onChange);
@@ -69,12 +62,12 @@ export class NativeThemeImpl extends EventEmitter {
     return osShouldUseDark();
   }
 
-  /** macOS Accessibility "Reduce transparency"; always `false` on Linux. */
+  /** macOS Accessibility "Reduce transparency"; always `false` elsewhere. */
   get prefersReducedTransparency(): boolean {
     return osPrefersReducedTransparency();
   }
 
-  /** `'system'` follows the OS; setting this re-themes web views and emits `updated`. */
+  /** `'system'` follows the OS. Setting it emits `updated`; only macOS also re-themes its windows. */
   get themeSource(): ThemeSource {
     return this.#themeSource;
   }
@@ -85,7 +78,7 @@ export class NativeThemeImpl extends EventEmitter {
     this.emit('updated');
   }
 
-  /** Idempotent: only the first call registers an observer. */
+  /** Called once from bootstrap `onReady` (D034); later calls are no-ops. */
   startObserving(observe: (onChange: () => void) => void = observeOsAppearance): void {
     if (this.#observing) {
       return;
@@ -100,6 +93,5 @@ export class NativeThemeImpl extends EventEmitter {
   }
 }
 
-/** The application appearance singleton — Electron's `nativeTheme`. */
 export const nativeTheme = new NativeThemeImpl();
 export type NativeTheme = NativeThemeImpl;

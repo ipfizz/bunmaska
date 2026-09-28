@@ -14,7 +14,6 @@ describe('parseAccelerator', () => {
   test('parses a bare single key', () => {
     expect(onMac('K')).toEqual({
       key: 'K',
-      cmdOrCtrl: false,
       shift: false,
       alt: false,
       ctrl: false,
@@ -29,14 +28,12 @@ describe('parseAccelerator', () => {
 
   test('CmdOrCtrl resolves to Cmd (meta) on macOS', () => {
     const parsed = onMac('CmdOrCtrl+K');
-    expect(parsed?.cmdOrCtrl).toBe(true);
     expect(parsed?.meta).toBe(true);
     expect(parsed?.ctrl).toBe(false);
   });
 
   test('CmdOrCtrl resolves to Ctrl on Linux', () => {
     const parsed = onLinux('CmdOrCtrl+K');
-    expect(parsed?.cmdOrCtrl).toBe(true);
     expect(parsed?.ctrl).toBe(true);
     expect(parsed?.meta).toBe(false);
   });
@@ -65,7 +62,6 @@ describe('parseAccelerator', () => {
     const parsed = onMac('Cmd+Ctrl+Alt+Shift+Super+X');
     expect(parsed).toEqual({
       key: 'X',
-      cmdOrCtrl: false,
       shift: true,
       alt: true,
       ctrl: true,
@@ -90,6 +86,52 @@ describe('parseAccelerator', () => {
   test('parses named keys', () => {
     expect(onMac('Space')?.key).toBe('Space');
     expect(onMac('CmdOrCtrl+Return')?.key).toBe('Return');
+  });
+
+  test('accepts every key name in Electron keyboard-shortcuts.md', () => {
+    const electronKeys = [
+      ...'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      'F1',
+      'F24',
+      ...')!@#$%^&*(:;=<,_->.?/~`{][|\\}"',
+      'Plus',
+      'Space',
+      'Tab',
+      'Capslock',
+      'Numlock',
+      'Scrolllock',
+      'Backspace',
+      'Delete',
+      'Insert',
+      'Return',
+      'Enter',
+      'Up',
+      'Down',
+      'Left',
+      'Right',
+      'Home',
+      'End',
+      'PageUp',
+      'PageDown',
+      'Escape',
+      'Esc',
+      'VolumeUp',
+      'VolumeDown',
+      'VolumeMute',
+      'MediaNextTrack',
+      'MediaPreviousTrack',
+      'MediaStop',
+      'MediaPlayPause',
+      'PrintScreen',
+      'num0',
+      'num9',
+      'numdec',
+      'numadd',
+      'numsub',
+      'nummult',
+      'numdiv',
+    ];
+    expect(electronKeys.filter((key) => onMac(`Shift+${key}`) === undefined)).toEqual([]);
   });
 
   test('returns undefined for an empty string', () => {
