@@ -30,5 +30,5 @@ export const createElectronShim = (
  */
 export * from './index';
 
-const electron = createElectronShim();
+const electron = createElectronShim() as typeof bunmaska;
 export default electron;
