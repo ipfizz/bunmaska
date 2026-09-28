@@ -1,12 +1,10 @@
 import { parseAccelerator } from '../../api/accelerator';
 import type { GlobalShortcutBackend } from '../../api/global-shortcut';
 import { loadUser32 } from './win32-ffi';
+import { createMessageWindow, type MessageHandler } from './windows-message-window';
 
-/**
- * `RegisterHotKey(NULL, id, …)` claims a system-wide hot key and posts `WM_HOTKEY` to the
- * calling (Bun main) thread's queue; the cooperative pump's message inspector routes that
- * message back here via {@link WindowsGlobalShortcutBackend.dispatchHotkeyMessage}.
- */
+// WM_HOTKEY is posted to a hidden message window: the pump's inspector consumes it via
+// dispatchHotkeyMessage, and a modal loop dispatches it to the window's handler instead.
 
 /** `WM_HOTKEY` — posted when a registered hot key fires; `wParam` is the hot-key id. */
 export const WM_HOTKEY = 0x0312;
@@ -125,9 +123,32 @@ type HotkeyApi = Pick<
  */
 export const createWindowsGlobalShortcutBackend = (
   user32: () => HotkeyApi = () => loadUser32().symbols,
+  createWindow: (handler: MessageHandler) => { readonly hwnd: bigint } = createMessageWindow,
 ): WindowsGlobalShortcutBackend => {
   const idByAccelerator = new Map<string, number>();
   const callbackById = new Map<number, () => void>();
+
+  const dispatchHotkeyMessage = (message: number, wParam: bigint): boolean => {
+    if (message !== WM_HOTKEY) {
+      return false;
+    }
+    const callback = callbackById.get(Number(wParam));
+    if (callback === undefined) {
+      return false;
+    }
+    callback();
+    return true;
+  };
+
+  // Hot keys target a window, not the thread queue: a modal loop (message box, menu,
+  // window drag) dispatches window messages but drops thread messages.
+  let window: { readonly hwnd: bigint } | undefined;
+  const hotkeyWindow = (): bigint => {
+    window ??= createWindow((message, wParam) => {
+      dispatchHotkeyMessage(message, wParam);
+    });
+    return window.hwnd;
+  };
 
   return {
     isSupported: (): boolean => true,
@@ -142,7 +163,7 @@ export const createWindowsGlobalShortcutBackend = (
       while (callbackById.has(id)) {
         id += 1;
       }
-      if (user32().RegisterHotKey(0n, id, hotkey.modifiers, hotkey.vk) === 0) {
+      if (user32().RegisterHotKey(hotkeyWindow(), id, hotkey.modifiers, hotkey.vk) === 0) {
         return false; // the OS refused the grab (reserved/already taken)
       }
       idByAccelerator.set(accelerator, id);
@@ -155,7 +176,7 @@ export const createWindowsGlobalShortcutBackend = (
       if (id === undefined) {
         return;
       }
-      user32().UnregisterHotKey(0n, id);
+      user32().UnregisterHotKey(hotkeyWindow(), id);
       idByAccelerator.delete(accelerator);
       callbackById.delete(id);
     },
@@ -163,23 +184,13 @@ export const createWindowsGlobalShortcutBackend = (
     unregisterAll(): void {
       const api = user32();
       for (const id of callbackById.keys()) {
-        api.UnregisterHotKey(0n, id);
+        api.UnregisterHotKey(hotkeyWindow(), id);
       }
       idByAccelerator.clear();
       callbackById.clear();
     },
 
-    dispatchHotkeyMessage(message: number, wParam: bigint): boolean {
-      if (message !== WM_HOTKEY) {
-        return false;
-      }
-      const callback = callbackById.get(Number(wParam));
-      if (callback === undefined) {
-        return false;
-      }
-      callback();
-      return true;
-    },
+    dispatchHotkeyMessage,
   };
 };
 

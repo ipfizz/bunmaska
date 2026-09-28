@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   acceleratorToHotkey,
   createWindowsGlobalShortcutBackend,
+  WM_HOTKEY,
 } from '../../../../../src/main/platform/windows/windows-global-shortcut';
+import type { MessageHandler } from '../../../../../src/main/platform/windows/windows-message-window';
 
 /**
  * Pure accelerator → Windows hot key translation (virtual-key code + RegisterHotKey
@@ -71,14 +73,39 @@ describe('acceleratorToHotkey', () => {
 describe('createWindowsGlobalShortcutBackend', () => {
   test('reuses a freed hot-key id, so a register/unregister cycle stays in the app id range', () => {
     const ids: number[] = [];
-    const backend = createWindowsGlobalShortcutBackend(() => ({
-      RegisterHotKey: (_hwnd: unknown, id: unknown) => ids.push(Number(id)),
-      UnregisterHotKey: () => 1,
-    }));
+    const backend = createWindowsGlobalShortcutBackend(
+      () => ({
+        RegisterHotKey: (_hwnd: unknown, id: unknown) => ids.push(Number(id)),
+        UnregisterHotKey: () => 1,
+      }),
+      () => ({ hwnd: 1n }),
+    );
     for (let i = 0; i < 3; i += 1) {
       backend.register('Ctrl+Alt+K', () => undefined);
       backend.unregister('Ctrl+Alt+K');
     }
     expect(ids).toEqual([1, 1, 1]);
+  });
+
+  test('grabs hot keys for its own window, so a modal loop still delivers WM_HOTKEY', () => {
+    const hwnds: unknown[] = [];
+    let windowHandler: MessageHandler | undefined;
+    const backend = createWindowsGlobalShortcutBackend(
+      () => ({
+        RegisterHotKey: (hwnd: unknown) => hwnds.push(hwnd),
+        UnregisterHotKey: () => 1,
+      }),
+      (handler) => {
+        windowHandler = handler;
+        return { hwnd: 42n };
+      },
+    );
+    let fired = 0;
+    backend.register('Ctrl+Alt+K', () => {
+      fired += 1;
+    });
+    windowHandler?.(WM_HOTKEY, 1n, 0n);
+    expect(hwnds).toEqual([42n]);
+    expect(fired).toBe(1);
   });
 });
