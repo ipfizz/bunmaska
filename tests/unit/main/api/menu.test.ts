@@ -313,6 +313,32 @@ describe('Menu realization spec', () => {
     expect(realized?.[0]?.keyEquivalent).toBe('q');
   });
 
+  test('maps named keys to AppKit key equivalents (NSEvent.h function-key unicodes)', () => {
+    const cases: Array<[string, string]> = [
+      ['CmdOrCtrl+Plus', '+'],
+      ['F1', ''],
+      ['F11', ''],
+      ['Up', ''],
+      ['Right', ''],
+      ['Delete', ''],
+      ['Backspace', '\b'],
+      ['Escape', '\u001b'],
+      ['PageDown', ''],
+    ];
+    Menu.buildFromTemplate(cases.map(([accelerator]) => ({ label: 'x', accelerator }))).realize();
+    expect(realized?.map((spec) => spec.keyEquivalent)).toEqual(cases.map(([, key]) => key));
+  });
+
+  test('a modifier-less accelerator sends an explicit empty mask, not AppKit Command', () => {
+    Menu.buildFromTemplate([{ label: 'Full Screen', accelerator: 'F11' }]).realize();
+    expect(realized?.[0]?.modifierMask).toBe(0n);
+  });
+
+  test('Super lands on Command in the macOS mask', () => {
+    Menu.buildFromTemplate([{ label: 'x', accelerator: 'Super+K' }]).realize();
+    expect(realized?.[0]?.modifierMask).toBe(1n << 20n);
+  });
+
   test('carries the click handler through to the spec', () => {
     const click = (): void => undefined;
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Go', click }]));

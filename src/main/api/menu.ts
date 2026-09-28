@@ -191,10 +191,39 @@ const ROLE_NAMES = new Map(
   ]),
 );
 
-/** `'CmdOrCtrl+Q'` → `'q'`; `''` when the key is not a single character. */
+/** AppKit key equivalents for named keys; `\uf7xx` are NSEvent.h's function-key unicodes. */
+const MAC_NAMED_KEYS = new Map([
+  ['Plus', '+'],
+  ['Space', ' '],
+  ['Tab', '\t'],
+  ['Return', '\r'],
+  ['Escape', '\u001b'],
+  ['Backspace', '\b'],
+  ['Insert', '\uf727'],
+  ['Delete', '\uf728'],
+  ['Up', '\uf700'],
+  ['Down', '\uf701'],
+  ['Left', '\uf702'],
+  ['Right', '\uf703'],
+  ['Home', '\uf729'],
+  ['End', '\uf72b'],
+  ['PageUp', '\uf72c'],
+  ['PageDown', '\uf72d'],
+]);
+
+/** `'CmdOrCtrl+Q'` is `'q'`; `''` when AppKit has no key equivalent for the key. */
 const acceleratorKey = (accelerator: string | undefined): string => {
-  const parsed = accelerator ? parseAccelerator(accelerator, 'macos') : undefined;
-  return parsed !== undefined && parsed.key.length === 1 ? parsed.key.toLowerCase() : '';
+  const key = accelerator ? parseAccelerator(accelerator, 'macos')?.key : undefined;
+  if (key === undefined) {
+    return '';
+  }
+  if (key.length === 1) {
+    return key.toLowerCase();
+  }
+  if (/^F\d+$/.test(key)) {
+    return String.fromCharCode(0xf704 + Number(key.slice(1)) - 1); // NSF1FunctionKey + n - 1
+  }
+  return MAC_NAMED_KEYS.get(key) ?? '';
 };
 
 // NSEventModifierFlags bits (macOS): only the modifier portion matters here.
@@ -288,14 +317,15 @@ export const setMenuRealizerForTesting = (fake: MenuRealizer | undefined): void 
 };
 
 const toSpec = (item: MenuItem): NativeMenuItemSpec => {
-  const mask = acceleratorModifierMask(item.accelerator);
+  const keyEquivalent = acceleratorKey(item.accelerator);
   const base = {
     label: item.label,
     type: item.type,
     enabled: item.enabled,
     checked: item.checked,
-    keyEquivalent: acceleratorKey(item.accelerator),
-    ...(mask !== 0n ? { modifierMask: mask } : {}),
+    keyEquivalent,
+    // Always explicit: an absent mask makes AppKit assume Command, so `F11` would need Cmd.
+    ...(keyEquivalent !== '' ? { modifierMask: acceleratorModifierMask(item.accelerator) } : {}),
     ...(item.role !== undefined
       ? {
           role: item.role,
