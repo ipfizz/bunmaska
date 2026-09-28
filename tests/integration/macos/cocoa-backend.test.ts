@@ -8,6 +8,7 @@ import { nsString, nsStringToString } from '../../../src/main/platform/macos/coc
 import {
   msgSendI64,
   msgSendPtr,
+  msgSendPtrI64,
   msgSendReturnsI64,
   msgSendReturnsU8,
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
@@ -56,6 +57,15 @@ const weakRefs = (): {
     },
     forget: (slot) => objc.objc_destroyWeak(ptr(slot)),
   };
+};
+
+/** An object's KVC `frame` (NSRect) in Cocoa's bottom-left space. */
+const kvcRect = (object: bigint): { x: number; y: number; width: number; height: number } => {
+  const rt = cocoa();
+  const value = msgSendPtr(object, rt.selectors.get('valueForKey:'), nsString('frame'));
+  const out = new Float64Array(4);
+  msgSendPtrI64(value, rt.selectors.get('getValue:size:'), BigInt(ptr(out)), 32n);
+  return { x: out[0] ?? 0, y: out[1] ?? 0, width: out[2] ?? 0, height: out[3] ?? 0 };
 };
 
 const waitFor = async (predicate: () => boolean, ms = 3_000): Promise<void> => {
@@ -111,13 +121,47 @@ if (currentPlatform() === 'macos') {
       }
     });
 
-    test('setSize updates the reported bounds', () => {
+    test('setSize keeps the top-left corner', () => {
       const app = createMacOSApplication();
       app.start();
       try {
         const win = app.createWindow({ width: 400, height: 300, title: 't', show: false });
+        const before = win.getBounds();
         win.setSize(640, 480);
-        expect(win.getBounds()).toEqual({ x: 0, y: 0, width: 640, height: 480 });
+        expect(win.getBounds()).toEqual({ x: before.x, y: before.y, width: 640, height: 480 });
+        win.destroy();
+      } finally {
+        app.quit();
+      }
+    });
+
+    test('a never-shown window opens centered and reports its real frame', () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({
+          width: 320,
+          height: 240,
+          title: 'hidden-frame',
+          show: false,
+        });
+        const content = kvcRect(
+          cocoa().msgSend(nsWindowTitled('hidden-frame'), cocoa().selectors.get('contentView')),
+        );
+        const bounds = win.getBounds();
+        expect(bounds.x).toBeGreaterThan(0);
+        expect(bounds.width).toBe(320);
+        expect(bounds.height).toBeGreaterThan(content.height);
+        win.setPosition(100, 120);
+        expect(win.getBounds()).toEqual({ ...bounds, x: 100, y: 120 });
+        win.center();
+        expect(win.getBounds()).toEqual(bounds);
+        expect(
+          kvcRect(
+            cocoa().msgSend(nsWindowTitled('hidden-frame'), cocoa().selectors.get('contentView')),
+          ).height,
+        ).toBe(240);
+        win.destroy();
       } finally {
         app.quit();
       }

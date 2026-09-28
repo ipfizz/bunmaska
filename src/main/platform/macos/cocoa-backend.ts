@@ -1,4 +1,4 @@
-import { FFIType } from 'bun:ffi';
+import { FFIType, ptr } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
 import {
@@ -40,6 +40,7 @@ import {
   msgSendPtr3,
   msgSendPtr4,
   msgSendPtrI64U8Ptr,
+  msgSendPtrI64,
   msgSendPtrPtr,
   msgSendPtrReturnsU8,
   msgSendReturnsI64,
@@ -52,7 +53,6 @@ import { createNavigationDelegate } from './cocoa-navigation-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { primaryDisplayHeight } from './cocoa-screen';
 import { msgSendRectU8 } from './cocoa-msgsend-variants';
-import { readWindowBounds } from './cocoa-window-bounds';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
@@ -599,8 +599,6 @@ class MacOSWindow implements NativeWindow {
   readonly #contents: MacOSWebContents;
   readonly #teardown: () => void;
   readonly #releaseNative: () => void;
-  #bounds: Rect;
-  #frameKnown = false;
   #tornDown = false;
   #onClosed: (() => void) | undefined;
   #onClose: (() => boolean) | undefined;
@@ -610,7 +608,6 @@ class MacOSWindow implements NativeWindow {
   constructor(
     window: Handle,
     contents: MacOSWebContents,
-    bounds: Rect,
     teardown: () => void,
     releaseNative: () => void,
   ) {
@@ -618,7 +615,6 @@ class MacOSWindow implements NativeWindow {
     this.#contents = contents;
     this.#teardown = teardown;
     this.#releaseNative = releaseNative;
-    this.#bounds = bounds;
   }
 
   get webContents(): NativeWebContents {
@@ -672,16 +668,6 @@ class MacOSWindow implements NativeWindow {
         this.emitEvent(zoomed ? 'maximize' : 'unmaximize');
       }
     }
-    // A user drag/resize is the one path that moves the frame without going
-    // through our setters; the delegate fires AFTER the window server settles,
-    // so this is the safe moment to trust its answer.
-    if (type === 'move' || type === 'resize') {
-      const real = readWindowBounds(this.#window);
-      if (real !== undefined) {
-        this.#bounds = real;
-        this.#frameKnown = true;
-      }
-    }
     this.#eventHandlers.get(type)?.();
   }
 
@@ -702,26 +688,39 @@ class MacOSWindow implements NativeWindow {
       [rect.x, bottomLeftY, rect.width, rect.height],
       true,
     );
-    this.#bounds = { ...rect };
-    this.#frameKnown = true;
   }
 
-  /** Anchor for a setter: tracked once known, else the server, else tracked. */
-  #currentFrame(): Rect {
-    if (this.#frameKnown) {
-      return this.#bounds;
+  /**
+   * The FRAME rect in top-left global space. `-frame` returns a struct by value
+   * (D018), so it is read through KVC into an out buffer: AppKit's own model,
+   * current right after setFrame: and for never-shown windows, unlike the
+   * asynchronously updated window-server list.
+   */
+  #frame(): Rect {
+    if (this.#tornDown) {
+      return { x: 0, y: 0, width: 0, height: 0 };
     }
-    return readWindowBounds(this.#window) ?? this.#bounds;
+    const rt = cocoa();
+    const value = msgSendPtr(this.#window, rt.selectors.get('valueForKey:'), nsString('frame'));
+    const out = new Float64Array(4);
+    msgSendPtrI64(
+      value,
+      rt.selectors.get('getValue:size:'),
+      BigInt(ptr(out)),
+      BigInt(out.byteLength),
+    );
+    const [x = 0, y = 0, width = 0, height = 0] = out;
+    return { x, y: primaryDisplayHeight() - y - height, width, height };
   }
 
   setSize(width: number, height: number): void {
     // Electron's setSize is the WINDOW (frame) size; keep the top-left anchored.
-    const current = this.#currentFrame();
+    const current = this.#frame();
     this.#setFrameTopLeft({ x: current.x, y: current.y, width, height });
   }
 
   setPosition(x: number, y: number): void {
-    const current = this.#currentFrame();
+    const current = this.#frame();
     this.#setFrameTopLeft({ x, y, width: current.width, height: current.height });
   }
 
@@ -730,19 +729,7 @@ class MacOSWindow implements NativeWindow {
   }
 
   getBounds(): Rect {
-    // The tracked rect is authoritative once a frame was set or observed: the
-    // window server updates ASYNCHRONOUSLY, so reading it right after our own
-    // setFrame would return the stale pre-set rect. Until then (a never-moved
-    // window whose tracked rect is the creation CONTENT size), one server read
-    // upgrades to the real frame.
-    if (!this.#frameKnown) {
-      const real = readWindowBounds(this.#window);
-      if (real !== undefined) {
-        this.#bounds = real;
-        this.#frameKnown = true;
-      }
-    }
-    return { ...this.#bounds };
+    return this.#frame();
   }
 
   setResizable(resizable: boolean): void {
@@ -1046,6 +1033,8 @@ class MacOSApplication implements NativeApplication {
     // close would dealloc it while we still hold the handle (use-after-free). We
     // own the lifetime — release explicitly in teardown instead.
     msgSendU8(window, rt.selectors.get('setReleasedWhenClosed:'), 0);
+    // Electron's default placement.
+    rt.msgSend(window, rt.selectors.get('center'));
 
     const configuration = rt.msgSend(
       rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
@@ -1234,18 +1223,7 @@ class MacOSApplication implements NativeApplication {
       cocoa().msgSend(window, rt.selectors.get('release'));
     };
 
-    nativeWindow = new MacOSWindow(
-      window,
-      contents,
-      {
-        x: 0,
-        y: 0,
-        width: options.width,
-        height: options.height,
-      },
-      teardown,
-      releaseNative,
-    );
+    nativeWindow = new MacOSWindow(window, contents, teardown, releaseNative);
 
     // Set the NSWindowDelegate: it routes `windowShouldClose:` (the preventable
     // veto) and `windowWillClose:` (teardown + `closed`) plus the key/resize/
