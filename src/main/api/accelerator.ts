@@ -10,8 +10,6 @@ import type { Platform } from '../../common/platform';
 export type ParsedAccelerator = {
   /** Normalised: single letters are upper-cased. */
   readonly key: string;
-  /** Whether the original string used the platform-relative `CmdOrCtrl` token. */
-  readonly cmdOrCtrl: boolean;
   readonly shift: boolean;
   readonly alt: boolean;
   readonly ctrl: boolean;
@@ -165,7 +163,6 @@ export const parseAccelerator = (
 
   return {
     key,
-    cmdOrCtrl: mods.cmdOrCtrl,
     shift: mods.shift,
     alt: mods.alt,
     ctrl,

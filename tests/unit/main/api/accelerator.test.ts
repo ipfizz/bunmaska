@@ -14,7 +14,6 @@ describe('parseAccelerator', () => {
   test('parses a bare single key', () => {
     expect(onMac('K')).toEqual({
       key: 'K',
-      cmdOrCtrl: false,
       shift: false,
       alt: false,
       ctrl: false,
@@ -29,14 +28,12 @@ describe('parseAccelerator', () => {
 
   test('CmdOrCtrl resolves to Cmd (meta) on macOS', () => {
     const parsed = onMac('CmdOrCtrl+K');
-    expect(parsed?.cmdOrCtrl).toBe(true);
     expect(parsed?.meta).toBe(true);
     expect(parsed?.ctrl).toBe(false);
   });
 
   test('CmdOrCtrl resolves to Ctrl on Linux', () => {
     const parsed = onLinux('CmdOrCtrl+K');
-    expect(parsed?.cmdOrCtrl).toBe(true);
     expect(parsed?.ctrl).toBe(true);
     expect(parsed?.meta).toBe(false);
   });
@@ -65,7 +62,6 @@ describe('parseAccelerator', () => {
     const parsed = onMac('Cmd+Ctrl+Alt+Shift+Super+X');
     expect(parsed).toEqual({
       key: 'X',
-      cmdOrCtrl: false,
       shift: true,
       alt: true,
       ctrl: true,
