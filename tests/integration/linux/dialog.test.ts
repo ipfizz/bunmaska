@@ -19,6 +19,7 @@ import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
  * construction + setter dispatch; it CANNOT verify a real click/pick round-trip.
  */
 const isLinux = currentPlatform() === 'linux';
+const hasDisplay = isLinux && loadGtkFFI().symbols.gtk_init_check() !== 0;
 
 describe.skipIf(!isLinux)('GTK dialog FFI + construction (Linux)', () => {
   test('loadGtkDialogFFI resolves every dialog symbol without throwing', () => {
@@ -49,35 +50,33 @@ describe.skipIf(!isLinux)('GTK dialog FFI + construction (Linux)', () => {
     expect(typeof gobject.symbols.g_object_new).toBe('function');
   });
 
-  test('constructs a GtkAlertDialog and calls every setter without crashing', () => {
-    const gtk = loadGtkFFI();
-    if (gtk.symbols.gtk_init_check() === 0) {
-      return; // No display; symbol-resolution assertions above already proved dispatch.
-    }
-    const dialogLib = loadGtkDialogFFI();
-    const gobject = loadGtkDialogGObjectFFI();
-    const dialog = gobject.symbols.g_object_new(
-      dialogLib.symbols.gtk_alert_dialog_get_type(),
-      null,
-    );
-    expect(dialog).not.toBeNull();
-    dialogLib.symbols.gtk_alert_dialog_set_message(dialog, cstr('Hello'));
-    dialogLib.symbols.gtk_alert_dialog_set_detail(dialog, cstr('Details here'));
-    dialogLib.symbols.gtk_alert_dialog_set_modal(dialog, 1);
-    const buttons = buildButtonsArray(['OK', 'Cancel']);
-    dialogLib.symbols.gtk_alert_dialog_set_buttons(dialog, ptr(buttons.array.buffer));
-  });
+  test.skipIf(!hasDisplay)(
+    'constructs a GtkAlertDialog and calls every setter without crashing',
+    () => {
+      const dialogLib = loadGtkDialogFFI();
+      const gobject = loadGtkDialogGObjectFFI();
+      const dialog = gobject.symbols.g_object_new(
+        dialogLib.symbols.gtk_alert_dialog_get_type(),
+        null,
+      );
+      expect(dialog).not.toBeNull();
+      dialogLib.symbols.gtk_alert_dialog_set_message(dialog, cstr('Hello'));
+      dialogLib.symbols.gtk_alert_dialog_set_detail(dialog, cstr('Details here'));
+      dialogLib.symbols.gtk_alert_dialog_set_modal(dialog, 1);
+      const buttons = buildButtonsArray(['OK', 'Cancel']);
+      dialogLib.symbols.gtk_alert_dialog_set_buttons(dialog, ptr(buttons.array.buffer));
+    },
+  );
 
-  test('constructs a GtkFileDialog and calls set_title/set_modal/set_initial_name', () => {
-    const gtk = loadGtkFFI();
-    if (gtk.symbols.gtk_init_check() === 0) {
-      return;
-    }
-    const dialogLib = loadGtkDialogFFI();
-    const fileDialog = dialogLib.symbols.gtk_file_dialog_new();
-    expect(fileDialog).not.toBeNull();
-    dialogLib.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Open'));
-    dialogLib.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
-    dialogLib.symbols.gtk_file_dialog_set_initial_name(fileDialog, cstr('untitled.txt'));
-  });
+  test.skipIf(!hasDisplay)(
+    'constructs a GtkFileDialog and calls set_title/set_modal/set_initial_name',
+    () => {
+      const dialogLib = loadGtkDialogFFI();
+      const fileDialog = dialogLib.symbols.gtk_file_dialog_new();
+      expect(fileDialog).not.toBeNull();
+      dialogLib.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Open'));
+      dialogLib.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
+      dialogLib.symbols.gtk_file_dialog_set_initial_name(fileDialog, cstr('untitled.txt'));
+    },
+  );
 });

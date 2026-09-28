@@ -35,6 +35,7 @@ import type { NativeWindow } from '../../../src/main/platform/native';
  */
 
 const isLinux = currentPlatform() === 'linux';
+const hasDisplay = isLinux && loadGtkFFI().symbols.gtk_init_check() !== 0;
 
 const pump = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -109,90 +110,92 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
     expect(firedOther).toBe(1);
   });
 
-  test('constructs a GtkPopoverMenuBar + box from a model without crashing', () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return; // No display; symbol-resolution + activate routing above proved dispatch.
-    }
-    setBindingsForTesting(undefined);
-    const handle = linuxMenuRealizer.realize([
-      {
-        label: 'File',
-        type: 'submenu',
-        enabled: true,
-        keyEquivalent: '',
-        submenu: [
-          {
-            label: 'New',
-            type: 'normal',
-            enabled: true,
-            keyEquivalent: 'n',
-            onClick: () => undefined,
-          },
-        ],
-      },
-    ]);
-    const entry = getMenuEntry(handle);
-    const gtk = loadGtkMenuFFI();
-    const asPtr = (h: bigint): import('bun:ffi').Pointer =>
-      Number(h) as unknown as import('bun:ffi').Pointer;
-    const menuBar = gtk.symbols.gtk_popover_menu_bar_new_from_model(asPtr(entry?.model as bigint));
-    expect(menuBar).not.toBeNull();
-    const box = gtk.symbols.gtk_box_new(1 /* GTK_ORIENTATION_VERTICAL */, 0);
-    expect(box).not.toBeNull();
-    gtk.symbols.gtk_box_append(box, menuBar);
-  });
+  test.skipIf(!hasDisplay)(
+    'constructs a GtkPopoverMenuBar + box from a model without crashing',
+    () => {
+      setBindingsForTesting(undefined);
+      const handle = linuxMenuRealizer.realize([
+        {
+          label: 'File',
+          type: 'submenu',
+          enabled: true,
+          keyEquivalent: '',
+          submenu: [
+            {
+              label: 'New',
+              type: 'normal',
+              enabled: true,
+              keyEquivalent: 'n',
+              onClick: () => undefined,
+            },
+          ],
+        },
+      ]);
+      const entry = getMenuEntry(handle);
+      const gtk = loadGtkMenuFFI();
+      const asPtr = (h: bigint): import('bun:ffi').Pointer =>
+        Number(h) as unknown as import('bun:ffi').Pointer;
+      const menuBar = gtk.symbols.gtk_popover_menu_bar_new_from_model(
+        asPtr(entry?.model as bigint),
+      );
+      expect(menuBar).not.toBeNull();
+      const box = gtk.symbols.gtk_box_new(1 /* GTK_ORIENTATION_VERTICAL */, 0);
+      expect(box).not.toBeNull();
+      gtk.symbols.gtk_box_append(box, menuBar);
+    },
+  );
 
-  test('a window created AFTER setApplicationMenu builds without throwing (menu-bar path)', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    setBindingsForTesting(undefined);
-    resetCurrentAppMenuForTesting();
-    const handle = linuxMenuRealizer.realize([
-      {
-        label: 'App',
-        type: 'submenu',
-        enabled: true,
-        keyEquivalent: '',
-        submenu: [
-          {
-            label: 'Quit',
-            type: 'normal',
-            enabled: true,
-            keyEquivalent: 'q',
-            onClick: () => undefined,
-          },
-        ],
-      },
-    ]);
-    linuxMenuRealizer.setApplicationMenu(handle);
-    expect(getCurrentAppMenu()).toBeDefined();
+  test.skipIf(!hasDisplay)(
+    'a window created AFTER setApplicationMenu builds without throwing (menu-bar path)',
+    async () => {
+      setBindingsForTesting(undefined);
+      resetCurrentAppMenuForTesting();
+      const handle = linuxMenuRealizer.realize([
+        {
+          label: 'App',
+          type: 'submenu',
+          enabled: true,
+          keyEquivalent: '',
+          submenu: [
+            {
+              label: 'Quit',
+              type: 'normal',
+              enabled: true,
+              keyEquivalent: 'q',
+              onClick: () => undefined,
+            },
+          ],
+        },
+      ]);
+      linuxMenuRealizer.setApplicationMenu(handle);
+      expect(getCurrentAppMenu()).toBeDefined();
 
-    const app = createLinuxApplication();
-    app.start();
-    let window: NativeWindow | undefined;
-    expect(() => {
-      window = app.createWindow({ width: 320, height: 240, title: 'MenuBar', show: true });
-    }).not.toThrow();
-    await pump(100);
-    window?.close();
-    app.quit();
-    resetCurrentAppMenuForTesting();
-  });
+      const app = createLinuxApplication();
+      app.start();
+      let window: NativeWindow | undefined;
+      expect(() => {
+        window = app.createWindow({ width: 320, height: 240, title: 'MenuBar', show: true });
+      }).not.toThrow();
+      await pump(100);
+      window?.close();
+      app.quit();
+      resetCurrentAppMenuForTesting();
+    },
+  );
 
-  test('the default (no app menu) window path still builds without throwing', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    resetCurrentAppMenuForTesting();
-    const app = createLinuxApplication();
-    app.start();
-    let window: NativeWindow | undefined;
-    expect(() => {
-      window = app.createWindow({ width: 320, height: 240, title: 'NoMenu', show: true });
-    }).not.toThrow();
-    await pump(100);
-    window?.close();
-    app.quit();
-  });
+  test.skipIf(!hasDisplay)(
+    'the default (no app menu) window path still builds without throwing',
+    async () => {
+      resetCurrentAppMenuForTesting();
+      const app = createLinuxApplication();
+      app.start();
+      let window: NativeWindow | undefined;
+      expect(() => {
+        window = app.createWindow({ width: 320, height: 240, title: 'NoMenu', show: true });
+      }).not.toThrow();
+      await pump(100);
+      window?.close();
+      app.quit();
+    },
+  );
 });
