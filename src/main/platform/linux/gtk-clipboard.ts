@@ -271,10 +271,10 @@ const realAsyncStreamReader = (stream: Pointer): AsyncStreamReader => {
   };
 };
 
-const readText = (): Promise<string> => {
-  const gdk = loadGdkFFI();
-  const clipboard = getClipboard();
-  return new Promise<string>((resolve) => {
+const readText = (): Promise<string> =>
+  new Promise<string>((resolve) => {
+    const gdk = loadGdkFFI();
+    const clipboard = getClipboard();
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
       const value = settleReadText({
         result,
@@ -295,7 +295,6 @@ const readText = (): Promise<string> => {
     }
     gdk.symbols.gdk_clipboard_read_text_async(clipboard, null, cbPtr, null);
   });
-};
 
 /** Install raw `bytes` on the clipboard under `mime` via a `GdkContentProvider`. */
 const writeBytes = (mime: string, bytes: Uint8Array): void => {
@@ -328,10 +327,10 @@ const writeHTML = (markup: string): void => writeBytesAs(HTML_MIME, markup);
 
 const writeImage = (png: Uint8Array): void => writeBytes(IMAGE_PNG_MIME, png);
 
-const readHTML = (): Promise<string> => {
-  const gdk = loadGdkFFI();
-  const clipboard = getClipboard();
-  return new Promise<string>((resolve) => {
+const readHTML = (): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    const gdk = loadGdkFFI();
+    const clipboard = getClipboard();
     // NUL-terminated array of mime-type C strings: ["text/html", NULL].
     const mime = new TextEncoder().encode(`${HTML_MIME}\0`);
     const mimeArray = new BigUint64Array([BigInt(ptr(mime)), 0n]);
@@ -342,7 +341,7 @@ const readHTML = (): Promise<string> => {
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
         drain: (stream) => drainStreamAsync(realAsyncStreamReader(stream)),
-      }).then(resolve);
+      }).then(resolve, reject);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);
@@ -359,12 +358,11 @@ const readHTML = (): Promise<string> => {
     }
     gdk.symbols.gdk_clipboard_read_async(clipboard, ptr(mimeArray), 0, null, cbPtr, null);
   });
-};
 
-const readImage = (): Promise<Uint8Array> => {
-  const gdk = loadGdkFFI();
-  const clipboard = getClipboard();
-  return new Promise<Uint8Array>((resolve) => {
+const readImage = (): Promise<Uint8Array> =>
+  new Promise<Uint8Array>((resolve, reject) => {
+    const gdk = loadGdkFFI();
+    const clipboard = getClipboard();
     // NUL-terminated array of mime-type C strings: ["image/png", NULL].
     const mime = new TextEncoder().encode(`${IMAGE_PNG_MIME}\0`);
     const mimeArray = new BigUint64Array([BigInt(ptr(mime)), 0n]);
@@ -373,7 +371,7 @@ const readImage = (): Promise<Uint8Array> => {
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
         drain: (stream) => drainStreamBytesAsync(realAsyncStreamReader(stream)),
-      }).then(resolve);
+      }).then(resolve, reject);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);
@@ -392,7 +390,6 @@ const readImage = (): Promise<Uint8Array> => {
     }
     gdk.symbols.gdk_clipboard_read_async(clipboard, ptr(mimeArray), 0, null, cbPtr, null);
   });
-};
 
 /** Electron-style MIME names from `gdk_content_formats_to_string` (GType names dropped). */
 export const formatsFromGdk = (text: string): string[] => [

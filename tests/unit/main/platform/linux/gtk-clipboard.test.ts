@@ -1,5 +1,6 @@
 import type { Pointer } from 'bun:ffi';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
+import { currentPlatform } from '../../../../../src/common/platform';
 import {
   type AsyncStreamReader,
   CLIPBOARD_READ_CB_DEF,
@@ -25,6 +26,27 @@ describe('linuxClipboardBackend shape', () => {
     expect(typeof linuxClipboardBackend.writeHTML).toBe('function');
     expect(typeof linuxClipboardBackend.clear).toBe('function');
   });
+});
+
+describe('linuxClipboardBackend reads', () => {
+  // On Linux the shared test process may hold a real display, where a read would await a pump.
+  test.skipIf(currentPlatform() === 'linux')(
+    'reject instead of throwing synchronously when GDK is unavailable',
+    async () => {
+      const reads = [
+        linuxClipboardBackend.readText,
+        linuxClipboardBackend.readHTML,
+        linuxClipboardBackend.readImage,
+      ];
+      for (const read of reads) {
+        let pending: Promise<unknown> = Promise.resolve();
+        expect(() => {
+          pending = Promise.resolve(read());
+        }).not.toThrow();
+        await expect(pending).rejects.toThrow();
+      }
+    },
+  );
 });
 
 describe('formatsFromGdk', () => {
