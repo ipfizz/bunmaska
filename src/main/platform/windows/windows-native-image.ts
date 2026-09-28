@@ -1,5 +1,6 @@
 import { CFunction, FFIType, type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { readFileSync } from 'node:fs';
+import { FFIError } from '../../../common/errors';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
 import { loadKernel32, loadOle32 } from './win32-ffi';
 import {
@@ -34,7 +35,10 @@ export const ensureGdiplus = (): void => {
   const token = new Uint8Array(HANDLE_SIZE);
   const input = new Uint8Array(24); // GdiplusStartupInput
   new DataView(input.buffer).setUint32(0, 1, true); // GdiplusVersion = 1
-  loadGdiplus().symbols.GdiplusStartup(ptr(token), ptr(input), null);
+  const status = loadGdiplus().symbols.GdiplusStartup(ptr(token), ptr(input), null);
+  if (status !== GDIP_OK) {
+    throw new FFIError(`nativeImage: GdiplusStartup failed (status ${status})`);
+  }
   gdiplusStarted = true;
 };
 
@@ -126,7 +130,10 @@ const encode = (handle: NativeImageHandle, encoderClsid: Uint8Array): Uint8Array
   const ole32 = loadOle32().symbols;
   const kernel32 = loadKernel32().symbols;
   const streamOut = handleOut();
-  ole32.CreateStreamOnHGlobal(0n, 1, streamOut.pointer); // fDeleteOnRelease = TRUE
+  // fDeleteOnRelease = TRUE: releasing the stream frees its HGLOBAL.
+  if (ole32.CreateStreamOnHGlobal(0n, 1, streamOut.pointer) !== 0) {
+    return new Uint8Array(0);
+  }
   const stream = read.u64(streamOut.pointer, 0);
   if (gdip.GdipSaveImageToStream(handle, stream, ptr(encoderClsid), null) !== GDIP_OK) {
     releaseStream(stream);
