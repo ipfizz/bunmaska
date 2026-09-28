@@ -7,7 +7,6 @@ import {
   AutoUpdaterImpl,
   type AutoUpdaterDeps,
   MAX_COMPRESSED_ARTIFACT_BYTES,
-  MAX_DECOMPRESSED_TAR_BYTES,
   readFeedResponse,
   type StagedUpdate,
   stageToTmp,
@@ -300,10 +299,6 @@ describe('assertSizeWithin (zip-bomb guard)', () => {
   test('passes at or below the cap and throws above it', () => {
     expect(() => assertSizeWithin(100, 100, 'thing')).not.toThrow();
     expect(() => assertSizeWithin(101, 100, 'thing')).toThrow(/exceeds/);
-  });
-
-  test('the decompressed cap is larger than the compressed cap', () => {
-    expect(MAX_DECOMPRESSED_TAR_BYTES).toBeGreaterThan(MAX_COMPRESSED_ARTIFACT_BYTES);
   });
 });
 

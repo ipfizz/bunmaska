@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { dispatch } from '../../../src/cli/index';
 import { runKeygen } from '../../../src/cli/keygen';
 import { verifyArtifact } from '../../../src/common/signature';
-import { currentPlatform } from '../../../src/common/platform';
+import { currentArch, currentPlatform } from '../../../src/common/platform';
 
 /**
  * `--update` routing through dispatch with the macOS builder stubbed to a REAL
@@ -14,6 +14,7 @@ import { currentPlatform } from '../../../src/common/platform';
  * other dispatch build tests.
  */
 const onlyMac = currentPlatform() === 'macos';
+const ARTIFACT = `demo-stable-macos-${currentArch()}.tar.zst`;
 
 const originalCwd = process.cwd();
 let dir: string | undefined;
@@ -63,10 +64,7 @@ const setupProject = (): { root: string; bundle: string } => {
 };
 
 describe('dispatch build --update signing', () => {
-  test('without --update-key it loudly warns the feed is unsigned', async () => {
-    if (!onlyMac) {
-      return;
-    }
+  test.skipIf(!onlyMac)('without --update-key it loudly warns the feed is unsigned', async () => {
     const { root, bundle } = setupProject();
     let code = -1;
     const streams = await captured(async () => {
@@ -83,40 +81,40 @@ describe('dispatch build --update signing', () => {
     const stderr = streams.err.join('');
     expect(stderr).toContain('UNSIGNED');
     expect(stderr).toContain('--update-key');
-    expect(existsSync(join(root, 'demo-stable-macos-arm64.tar.zst.sig'))).toBe(false);
+    expect(existsSync(join(root, `${ARTIFACT}.sig`))).toBe(false);
   });
 
-  test('with --update-key it writes a .sig the public key verifies and prints its path', async () => {
-    if (!onlyMac) {
-      return;
-    }
-    const { root, bundle } = setupProject();
-    const keysDir = join(root, 'keys');
-    mkdirSync(keysDir);
-    runKeygen(keysDir, { out: () => undefined, err: () => undefined });
-    let code = -1;
-    const streams = await captured(async () => {
-      code = await dispatch(
-        {
-          kind: 'build',
-          entry: 'app.ts',
-          options: {
-            target: 'macos',
-            name: 'Demo',
-            update: true,
-            updateKey: join(keysDir, 'update-signing-key.pem'),
+  test.skipIf(!onlyMac)(
+    'with --update-key it writes a .sig the public key verifies and prints its path',
+    async () => {
+      const { root, bundle } = setupProject();
+      const keysDir = join(root, 'keys');
+      mkdirSync(keysDir);
+      runKeygen(keysDir, { out: () => undefined, err: () => undefined });
+      let code = -1;
+      const streams = await captured(async () => {
+        code = await dispatch(
+          {
+            kind: 'build',
+            entry: 'app.ts',
+            options: {
+              target: 'macos',
+              name: 'Demo',
+              update: true,
+              updateKey: join(keysDir, 'update-signing-key.pem'),
+            },
           },
-        },
-        { buildMac: async () => bundle },
-      );
-    });
-    expect(code).toBe(0);
-    const sigPath = join(root, 'demo-stable-macos-arm64.tar.zst.sig');
-    expect(streams.out.join('')).toContain(sigPath);
-    expect(streams.err.join('')).not.toContain('UNSIGNED');
-    const artifact = readFileSync(join(root, 'demo-stable-macos-arm64.tar.zst'));
-    const publicPem = readFileSync(join(keysDir, 'update-public-key.pem'), 'utf8');
-    const sig = readFileSync(sigPath, 'utf8').trim();
-    expect(verifyArtifact(publicPem, artifact, sig)).toBe(true);
-  });
+          { buildMac: async () => bundle },
+        );
+      });
+      expect(code).toBe(0);
+      const sigPath = join(root, `${ARTIFACT}.sig`);
+      expect(streams.out.join('')).toContain(sigPath);
+      expect(streams.err.join('')).not.toContain('UNSIGNED');
+      const artifact = readFileSync(join(root, ARTIFACT));
+      const publicPem = readFileSync(join(keysDir, 'update-public-key.pem'), 'utf8');
+      const sig = readFileSync(sigPath, 'utf8').trim();
+      expect(verifyArtifact(publicPem, artifact, sig)).toBe(true);
+    },
+  );
 });
