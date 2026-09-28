@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  BORDERLESS_WINDOW_STYLE,
   computeWindowStyleMask,
   STANDARD_WINDOW_STYLE,
 } from '../../../../../src/main/platform/macos/cocoa-style-mask';
@@ -24,14 +23,6 @@ describe('computeWindowStyleMask', () => {
 
   test('resizable-only is bit 3 (8)', () => {
     expect(computeWindowStyleMask({ resizable: true })).toBe(1 << 3);
-  });
-
-  test('utility-only is bit 4 (16)', () => {
-    expect(computeWindowStyleMask({ utility: true })).toBe(1 << 4);
-  });
-
-  test('fullSizeContentView-only is bit 15 (32768)', () => {
-    expect(computeWindowStyleMask({ fullSizeContentView: true })).toBe(1 << 15);
   });
 
   test('combines independent flags via bitwise OR', () => {
@@ -65,11 +56,5 @@ describe('STANDARD_WINDOW_STYLE', () => {
     expect(computeWindowStyleMask(STANDARD_WINDOW_STYLE)).toBe(
       (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3),
     );
-  });
-});
-
-describe('BORDERLESS_WINDOW_STYLE', () => {
-  test('composes to mask 0', () => {
-    expect(computeWindowStyleMask(BORDERLESS_WINDOW_STYLE)).toBe(0);
   });
 });

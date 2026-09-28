@@ -1,14 +1,6 @@
 import { createLogger } from '../common/logger';
 
-/**
- * Cooperative run-loop pump.
- *
- * Bun owns the main thread and its event loop; native UI toolkits (AppKit, GTK)
- * need their own run loop pumped to process window events and render. Blocking the
- * thread to do that crashes Bun (D019/D020), so the thread is instead lent to the
- * native loop for a non-blocking drain (`CFRunLoopRunInMode` on macOS,
- * `g_main_context_iteration` on Linux) on a fast timer.
- */
+// Bun owns the main thread; the pumps lend it to the native UI loop between turns (D020, D047).
 
 const log = createLogger('run-loop');
 
@@ -45,7 +37,7 @@ export class CooperativePump {
     return this.#cancel !== undefined;
   }
 
-  /** Begin pumping. Idempotent — a second call while running is a no-op. */
+  /** Begin pumping; a no-op while running. */
   start(): void {
     if (this.#cancel !== undefined) {
       return;
@@ -53,7 +45,7 @@ export class CooperativePump {
     this.#cancel = this.#ticker(() => this.#drainTick(), this.#intervalMs);
   }
 
-  /** Stop pumping. Idempotent — safe to call when not running. */
+  /** Stop pumping; a no-op when stopped. */
   stop(): void {
     if (this.#cancel === undefined) {
       return;
@@ -92,15 +84,8 @@ const defaultScheduler: TickScheduler = (tick) => {
 };
 
 /**
- * Adaptive blocking run-loop pump.
- *
- * Drives a native drain that sleeps until a UI event or a timeout (see the
- * platform `createDrain`). Each tick the drain blocks for the current timeout
- * and reports whether it handled events; the pump then resets the timeout to
- * its minimum (input is flowing — stay responsive) or doubles it toward the
- * maximum (idle — sleep deeper for near-zero CPU). Between ticks it yields to
- * Bun's loop so JS timers, microtasks and IO run. A UI event wakes the drain
- * immediately, so input latency stays ~0 regardless of the idle backoff.
+ * Drives a drain that blocks until a UI event or its timeout (D047): the timeout
+ * resets to the minimum after a busy tick and doubles toward the maximum while idle.
  */
 export class AdaptiveBlockingPump {
   readonly #drain: (timeoutMs: number) => boolean;
@@ -109,6 +94,8 @@ export class AdaptiveBlockingPump {
   readonly #schedule: TickScheduler;
   #timeoutMs: number;
   #running = false;
+  /** Bumped by stop(), so a tick scheduled before a stop()/start() pair dies. */
+  #generation = 0;
 
   constructor(drain: (timeoutMs: number) => boolean, options?: AdaptiveBlockingPumpOptions) {
     this.#drain = drain;
@@ -127,22 +114,23 @@ export class AdaptiveBlockingPump {
     return this.#timeoutMs;
   }
 
-  /** Begin pumping. Idempotent — a second call while running is a no-op. */
+  /** Begin pumping; a no-op while running. */
   start(): void {
     if (this.#running) {
       return;
     }
     this.#running = true;
-    this.#tick();
+    this.#tick(this.#generation);
   }
 
-  /** Stop pumping. Idempotent — safe to call when not running. */
+  /** Stop pumping; a no-op when stopped. */
   stop(): void {
     this.#running = false;
+    this.#generation += 1;
   }
 
-  #tick(): void {
-    if (!this.#running) {
+  #tick(generation: number): void {
+    if (generation !== this.#generation) {
       return;
     }
     let active = false;
@@ -155,6 +143,6 @@ export class AdaptiveBlockingPump {
     this.#timeoutMs = active
       ? this.#minTimeoutMs
       : Math.min(this.#timeoutMs * 2, this.#maxTimeoutMs);
-    this.#schedule(() => this.#tick());
+    this.#schedule(() => this.#tick(generation));
   }
 }

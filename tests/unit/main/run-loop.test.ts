@@ -44,7 +44,7 @@ describe('CooperativePump.start / stop', () => {
     expect(m.cancelled()).toBe(true);
   });
 
-  test('start is idempotent — a second start does not schedule a second ticker', () => {
+  test('a second start does not schedule a second ticker', () => {
     let schedules = 0;
     const ticker: Ticker = () => {
       schedules += 1;
@@ -159,7 +159,7 @@ describe('AdaptiveBlockingPump start / stop', () => {
     expect(pump.isRunning).toBe(true);
   });
 
-  test('start is idempotent — a second start does not drain twice', () => {
+  test('a second start does not drain twice', () => {
     let drains = 0;
     const pump = new AdaptiveBlockingPump(
       () => {
@@ -188,6 +188,28 @@ describe('AdaptiveBlockingPump start / stop', () => {
     s.run();
     expect(drains).toBe(1);
     expect(pump.isRunning).toBe(false);
+  });
+});
+
+describe('AdaptiveBlockingPump restart', () => {
+  test('stop then start in the same turn keeps a single tick chain', () => {
+    const queue: Array<() => void> = [];
+    let drains = 0;
+    const pump = new AdaptiveBlockingPump(
+      () => {
+        drains += 1;
+        return false;
+      },
+      { schedule: (tick) => queue.push(tick) },
+    );
+    pump.start();
+    pump.stop();
+    pump.start();
+    drains = 0;
+    for (const tick of queue.splice(0)) {
+      tick();
+    }
+    expect(drains).toBe(1);
   });
 });
 
