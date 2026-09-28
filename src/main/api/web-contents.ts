@@ -13,13 +13,6 @@ import type {
 import { ipcMain } from './ipc-main';
 import { type NativeImage, nativeImage } from './native-image';
 
-/**
- * Controls and observes the content rendered inside a {@link BrowserWindow} —
- * the drop-in equivalent of Electron's `webContents`. Content methods on
- * `BrowserWindow` delegate here (D025). Construction bridges the native web view
- * to the {@link ipcMain} singleton, so there is no per-window IPC wiring.
- */
-
 const log = createLogger('web-contents');
 
 export type LoadFileOptions = {
@@ -72,6 +65,7 @@ const buildRemoveCssScript = (key: string): string =>
     }
   })()`;
 
+/** Electron's `webContents`; construction wires its view to {@link ipcMain} (D025). */
 export class WebContents extends EventEmitter {
   /** Process-unique and never reused within a run. */
   readonly id: number;
@@ -127,10 +121,7 @@ export class WebContents extends EventEmitter {
     this.#native.loadURL(url);
   }
 
-  /**
-   * The path is percent-encoded, so spaces/`#`/`?` in the FILE NAME load
-   * correctly — pass a fragment via `options.hash`, never inside `filePath`.
-   */
+  /** `filePath` is percent-encoded, so a fragment goes in `options.hash`, never in the path. */
   loadFile(filePath: string, options?: LoadFileOptions): void {
     const absolute = isAbsolute(filePath) ? filePath : resolve(filePath);
     if (absolute.startsWith('\\\\')) {
@@ -193,22 +184,19 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * Resolves to the script's COMPLETION value; a returned Promise is awaited.
-   * Only JSON-serializable results survive (`JSON.stringify` semantics).
+   * Resolves to the script's COMPLETION value, a returned Promise awaited; a result JSON cannot
+   * encode rejects. Runs through page-world `eval`, so a CSP without 'unsafe-eval' rejects it.
    */
   async executeJavaScript(code: string): Promise<unknown> {
     return this.#native.executeJavaScript(code);
   }
 
-  /**
-   * macOS only: neither WebKitGTK nor the WinCairo C API exposes a
-   * page-to-PDF-bytes call, so Linux and Windows reject.
-   */
+  /** macOS only; WebKitGTK and WinCairo have no page-to-PDF call, so Linux and Windows reject. */
   async printToPDF(): Promise<Buffer> {
     return Buffer.from(await this.#native.printToPDF());
   }
 
-  /** macOS and Linux; Windows rejects until its snapshot path is wired. */
+  /** macOS and Linux; Windows rejects (WinCairo has no UI-process snapshot). */
   async capturePage(): Promise<NativeImage> {
     return nativeImage.createFromBuffer(await this.#native.capturePage());
   }
@@ -258,11 +246,7 @@ export class WebContents extends EventEmitter {
     return this.#userAgent;
   }
 
-  /**
-   * The page receives a real `isTrusted === true` event, which a
-   * script-dispatched event cannot fake. Implemented on Windows; other backends
-   * throw `UnsupportedPlatformError`.
-   */
+  /** Delivers an `isTrusted` event through the engine; Windows only, macOS and Linux throw. */
   sendInputEvent(event: NativeInputEvent): void {
     // Validate at the boundary (Electron throws on a bad event): an unknown type
     // must not silently no-op, and non-finite coordinates must not coerce to a
@@ -285,9 +269,8 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * The native popup is ALWAYS blocked in v1, `allow` included — child-window
-   * creation is unsupported, so apps typically `shell.openExternal(url)` and
-   * return `deny`.
+   * The popup is always blocked, `allow` included (no child windows), so apps typically
+   * `shell.openExternal(url)` and return `deny`. Windows never calls the handler.
    */
   setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void {
     this.#native.setWindowOpenHandler((url) => {

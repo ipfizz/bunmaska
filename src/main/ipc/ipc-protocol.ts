@@ -1,11 +1,6 @@
 import { InvalidArgumentError } from '../../common/errors';
 
-/**
- * Wire protocol for Bunmaska IPC (D021) — JSON envelopes crossing renderer ⇄ main.
- * - `send`   — fire-and-forget event on a channel (either direction).
- * - `invoke` — request expecting a `reply`, correlated by `id` (renderer→main).
- * - `reply`  — response to an `invoke` (main→renderer).
- */
+// JSON wire format for IPC (D021): send (either way) | invoke (id-correlated) | reply.
 
 export type SendEnvelope = {
   readonly kind: 'send';

@@ -2,12 +2,6 @@ import { createLogger } from '../../common/logger';
 import type { InvokeEnvelope, ReplyEnvelope, SendEnvelope } from '../ipc/ipc-protocol';
 import type { WebContents } from './web-contents';
 
-/**
- * Main-process IPC — the drop-in equivalent of Electron's `ipcMain`. At most one
- * `handle` handler per channel; the transport calls
- * {@link IpcMainImpl.dispatch}.
- */
-
 export type IpcMainInvokeEvent = {
   readonly sender: WebContents;
 };
@@ -79,11 +73,7 @@ export class IpcMainImpl {
     this.#handlers.delete(channel);
   }
 
-  /**
-   * Returns a reply envelope for `invoke` (success or error), `undefined` for
-   * `send`.
-   * @internal Called by the IPC transport.
-   */
+  /** @internal The transport's entry: a reply envelope for `invoke`, `undefined` for `send`. */
   async dispatch(
     envelope: SendEnvelope | InvokeEnvelope,
     event: IpcMainEvent,
@@ -123,5 +113,5 @@ export class IpcMainImpl {
   }
 }
 
-/** The main-process IPC singleton — Electron's `ipcMain`. */
+/** Electron's `ipcMain`. */
 export const ipcMain = new IpcMainImpl();

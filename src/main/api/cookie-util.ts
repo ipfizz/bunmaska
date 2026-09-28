@@ -1,6 +1,6 @@
 import { InvalidArgumentError } from '../../common/errors';
 
-/** Pure cookie matching/normalization shared by the session API and every backend. */
+// Pure cookie matching/normalization shared by the session API and every backend.
 
 /** Electron's `Cookie` subset: `expirationDate` is unix seconds; absent = session cookie. */
 export type Cookie = {
@@ -35,7 +35,7 @@ export type CookieSetDetails = {
 
 const stripDot = (domain: string): string => (domain.startsWith('.') ? domain.slice(1) : domain);
 
-/** RFC 6265 domain-match: `host` equals `cookieDomain` or is a subdomain of it. */
+/** `host` equals `cookieDomain` or is a subdomain of it, a leading dot ignored. */
 export const domainMatches = (cookieDomain: string, host: string): boolean => {
   const domain = stripDot(cookieDomain);
   return host === domain || host.endsWith(`.${domain}`);
@@ -77,9 +77,8 @@ export const filterCookies = (cookies: ReadonlyArray<Cookie>, filter: CookieFilt
 };
 
 /**
- * The cookies `cookies.remove(url, name)` deletes: name equal, url host within the
- * cookie domain, url path within the cookie path. `secure` is deliberately ignored
- * so an http url can remove a secure cookie (removal is not a send).
+ * What `cookies.remove(url, name)` deletes: same name, sent to `url`'s host and path. `secure`
+ * is ignored on purpose so an http url can remove a secure cookie (removal is not a send).
  */
 export const cookiesToRemove = (
   cookies: ReadonlyArray<Cookie>,

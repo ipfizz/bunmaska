@@ -1,17 +1,6 @@
 import { InvalidArgumentError } from '../../common/errors';
 
-/**
- * Custom URL-scheme registration — the drop-in equivalent of Electron's
- * `protocol` module (v1). Custom schemes MUST be registered on the web-view
- * config BEFORE the view exists; the backends read
- * {@link protocol.getRegisteredSchemes} at web-view creation.
- */
-
-/**
- * What a protocol handler returns for a request. `data` is the response body
- * (a `string` is UTF-8 encoded; a `Uint8Array` is served verbatim). `mimeType`
- * defaults to `text/html`.
- */
+/** String `data` is UTF-8 encoded, bytes go out verbatim; `mimeType` defaults to `text/html`. */
 export type ProtocolResponse = {
   readonly data: string | Uint8Array;
   readonly mimeType?: string;
@@ -29,7 +18,6 @@ export type BuiltProtocolResponse = {
   readonly mimeType: string;
 };
 
-/** The default MIME type when a handler does not specify one. */
 export const DEFAULT_MIME_TYPE = 'text/html';
 
 /** Canonical registry key: lowercased, trimmed, trailing `:` or `://` stripped. */
@@ -39,11 +27,7 @@ export const normalizeScheme = (scheme: string): string =>
     .toLowerCase()
     .replace(/:(\/\/)?$/, '');
 
-/**
- * Extract the (lowercased) scheme from a full URL, or `undefined` if the URL has
- * no `scheme:` prefix. Does not depend on `URL` so a custom scheme parses even
- * where the WHATWG parser would reject it.
- */
+/** Lowercased scheme of `url`, or `undefined`; avoids `URL`, which rejects some custom schemes. */
 export const schemeOfUrl = (url: string): string | undefined => {
   const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url);
   return match?.[1]?.toLowerCase();
@@ -86,10 +70,8 @@ const ENGINE_SCHEMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Register `handler` to serve requests for `scheme`; re-registering replaces it.
- *
- * Schemes must be registered BEFORE the window/web view that serves them is
- * created — the backends read {@link getRegisteredSchemes} at view creation.
+ * Re-registering replaces the handler. Register BEFORE creating the window that serves the
+ * scheme: the backends read {@link getRegisteredSchemes} only at web-view creation.
  */
 const handle = (scheme: string, handler: ProtocolHandler): void => {
   const normalized = normalizeScheme(scheme);
@@ -104,21 +86,15 @@ const handle = (scheme: string, handler: ProtocolHandler): void => {
   registry.set(normalized, handler);
 };
 
-/** Remove the handler for `scheme`. No-op if it was not registered. */
 const unhandle = (scheme: string): void => {
   registry.delete(normalizeScheme(scheme));
 };
 
-/** Whether `scheme` currently has a registered handler. */
 const isProtocolHandled = (scheme: string): boolean => registry.has(normalizeScheme(scheme));
 
-/** Every currently registered scheme, normalized. */
 const getRegisteredSchemes = (): string[] => [...registry.keys()];
 
-/**
- * Serve `url`. Returns `undefined` for an unregistered scheme, an unparseable
- * URL, or a handler that declined.
- */
+/** `undefined` for an unregistered scheme, an unparseable URL, or a handler that declined. */
 const dispatch = (url: string): BuiltProtocolResponse | undefined => {
   const scheme = schemeOfUrl(url);
   if (scheme === undefined) {
@@ -131,7 +107,7 @@ const dispatch = (url: string): BuiltProtocolResponse | undefined => {
   return buildProtocolResponse(handler, { url });
 };
 
-/** The `protocol` module — Electron-compatible custom URL-scheme registration. */
+/** Electron's `protocol`, for custom schemes only. */
 export const protocol = {
   handle,
   unhandle,

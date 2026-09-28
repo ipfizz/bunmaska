@@ -12,24 +12,11 @@ import { loadPreloadScript } from './preload';
 import { session } from './session';
 import { type LoadFileOptions, objectDestroyedError, WebContents } from './web-contents';
 
-/**
- * A top-level application window — the drop-in equivalent of Electron's
- * `BrowserWindow`. Extends Node {@link EventEmitter} (D023). Content operations
- * delegate to {@link WebContents} (D025); a process-wide registry backs the
- * `getAllWindows` / `fromId` statics.
- */
-
 export type WebPreferences = {
   /**
-   * Path to a JavaScript file run before the page's own scripts, after the
-   * built-in `window.__bunmaska` bridge. Read synchronously at window
-   * construction.
-   *
-   * Runs in a dedicated ISOLATED world (Electron `contextIsolation: true`): it
-   * shares the page's DOM but has its own global, so `window.__bunmaska`,
-   * `ipcRenderer`, and anything the preload defines are invisible to page
-   * scripts. Use `contextBridge.exposeInMainWorld` to expose a controlled,
-   * async, structured-clone-copyable surface to the page.
+   * Script run before the page's own, in an isolated world (`contextIsolation: true`); expose
+   * to the page with `contextBridge.exposeInMainWorld`. Windows has no isolated world yet: the
+   * preload and `__bunmaska` are page-visible there, so treat loaded content as trusted.
    */
   readonly preload?: string;
 };
@@ -53,7 +40,7 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const DEFAULT_TITLE = 'Bunmaska';
 
-/** Non-preventable — re-emitted verbatim from the seam. */
+/** Non-preventable, re-emitted verbatim from the seam. */
 const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
   'focus',
   'blur',
@@ -69,7 +56,6 @@ const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
 ];
 
 const registry = new Map<number, BrowserWindow>();
-/** So `Menu.popup` can anchor to a window without a menu→window import cycle. */
 const popupTargets = new WeakMap<BrowserWindow, PopupTarget>();
 let nextId = 1;
 
@@ -82,6 +68,7 @@ export const resetWindowRegistryForTesting = (): void => {
   nextId = 1;
 };
 
+/** Electron's `BrowserWindow`; content methods delegate to {@link WebContents} (D023, D025). */
 export class BrowserWindow extends EventEmitter {
   /** Process-unique and never reused within a run. */
   readonly id: number;
@@ -96,8 +83,6 @@ export class BrowserWindow extends EventEmitter {
   constructor(options: BrowserWindowOptions = {}) {
     super();
     ensureNativeStarted();
-    // In dev, the first window installs the stdin reload listener so a renderer
-    // change refreshes the page in place instead of restarting the whole app.
     if (process.env['BUNMASKA_DEV'] === '1' && !devReloadInstalled) {
       devReloadInstalled = true;
       startDevReload(() => {
@@ -110,8 +95,7 @@ export class BrowserWindow extends EventEmitter {
     nextId += 1;
 
     this.#resizable = options.resizable ?? true;
-    // Dev only: a supervisor restart is a fresh process, so the first window
-    // seeds its bounds from the state file to reopen where the developer left it.
+    // Dev only: a supervisor restart is a fresh process, so window 1 reopens at its last bounds.
     const devStatePath = process.env['BUNMASKA_DEV_STATE'];
     const devBounds = this.id === 1 ? readDevWindowState(devStatePath) : undefined;
     if (devBounds !== undefined) {
@@ -133,8 +117,6 @@ export class BrowserWindow extends EventEmitter {
       popupMenu: (handle, x, y) => this.#native.popupMenu(handle, x, y),
       closePopupMenu: () => this.#native.closePopupMenu(),
     });
-    // Apply the effective default User-Agent before this window's first
-    // navigation: a per-session override wins, else the app-wide fallback.
     const sessionUserAgent = session.defaultSession.getUserAgent();
     const effectiveUserAgent = sessionUserAgent !== '' ? sessionUserAgent : app.userAgentFallback;
     if (effectiveUserAgent !== '') {
@@ -191,11 +173,7 @@ export class BrowserWindow extends EventEmitter {
     return this.#window;
   }
 
-  /**
-   * When the last window closes, emit `app`'s `window-all-closed`. Replicating
-   * Electron's default: if no listener handles it, quit the app (a subscriber
-   * takes over the decision by listening).
-   */
+  /** Electron's default: the last close quits unless `window-all-closed` has a listener. */
   #emitWindowAllClosedIfLast(): void {
     if (registry.size > 0) {
       return;
@@ -280,7 +258,7 @@ export class BrowserWindow extends EventEmitter {
     return [this.#minWidth, this.#minHeight];
   }
 
-  /** Best-effort on Linux/Wayland. */
+  /** No-op on Linux (GTK4 has no client-side positioning). */
   center(): void {
     this.#native.center();
   }
@@ -372,8 +350,7 @@ export class BrowserWindow extends EventEmitter {
   }
 }
 
-// Let Menu.popup resolve a target window (focused → most-recent) without importing
-// BrowserWindow into menu.ts (which would cycle). The registry is creation-ordered.
+// Menu.popup resolves its window through this, so menu.ts never imports this module (a cycle).
 installWindowResolver({
   focused: () => {
     const window = BrowserWindow.getFocusedWindow();
