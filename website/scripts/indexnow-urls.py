@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Map changed repo paths to the site URLs worth an IndexNow ping.
+"""Print the sitemap URLs whose source changed; IndexNow wants changed URLs, never the whole sitemap.
 
 usage: indexnow-urls.py <dist-dir> < changed-files.txt
-
-Prints one URL per line. A change under a site-wide file (layout, component,
-stylesheet, nav/site data, config) prints every sitemap URL; a change to one
-docs page or one route prints just that URL; anything else prints nothing, so
-the caller can skip the ping. IndexNow asks for changed URLs only, never the
-whole sitemap on every deploy.
+       indexnow-urls.py --self-test
 """
 
 import glob
@@ -16,41 +11,43 @@ import sys
 
 SITE = "https://bunmaska.org"
 SITEWIDE = (
+    "website/src/assets/",
     "website/src/components/",
     "website/src/layouts/",
     "website/src/styles/",
     "website/src/nav.ts",
     "website/src/site.ts",
+    "website/src/fonts.ts",
+    "website/src/content.config.ts",
     "website/src/rehype-copy-button.mjs",
     "website/astro.config.mjs",
     "website/package.json",
 )
-# Data files that feed exactly one route.
 ROUTE_DATA = {
-    "website/src/faq.ts": SITE,
-    "website/src/roadmap-data.ts": f"{SITE}/roadmap",
+    "website/src/faq.ts": (SITE, f"{SITE}/alternatives"),
+    "website/src/roadmap-data.ts": (f"{SITE}/roadmap",),
 }
+DOCS_ROUTE = "website/src/pages/docs/[...slug].astro"
 
 
 def sitemap_urls(dist: str) -> list[str]:
-    urls: list[str] = []
+    locs: list[str] = []
     for path in sorted(glob.glob(f"{dist}/sitemap-*.xml")):
         with open(path, encoding="utf-8") as f:
-            urls += re.findall(r"<loc>([^<]+)</loc>", f.read())
-    return [u for u in urls if not u.endswith(".xml")]
+            locs += re.findall(r"<loc>([^<]+)</loc>", f.read())
+    return [u for u in locs if not u.endswith(".xml")]
 
 
-def main() -> None:
-    dist = sys.argv[1]
-    known = sitemap_urls(dist)
-    changed = [line.strip() for line in sys.stdin if line.strip()]
+def urls(changed: list[str], known: list[str]) -> list[str]:
     wanted: set[str] = set()
     for path in changed:
         if path.startswith(SITEWIDE):
-            print("\n".join(known))
-            return
+            return known
         if path in ROUTE_DATA:
-            wanted.add(ROUTE_DATA[path])
+            wanted.update(ROUTE_DATA[path])
+            continue
+        if path == DOCS_ROUTE:
+            wanted.update(url for url in known if url.startswith(f"{SITE}/docs/"))
             continue
         doc = re.match(r"website/src/content/docs/(.+)\.mdx?$", path)
         if doc:
@@ -62,9 +59,31 @@ def main() -> None:
             if name.startswith("docs/") or name == "404":
                 continue
             wanted.add(SITE if name == "index" else f"{SITE}/{name}")
-    for url in known:
-        if url in wanted:
-            print(url)
+    return [url for url in known if url in wanted]
+
+
+def self_test() -> None:
+    docs = [f"{SITE}/docs/introduction", f"{SITE}/docs/api/app"]
+    known = [SITE, f"{SITE}/about", f"{SITE}/alternatives", f"{SITE}/roadmap", *docs]
+    assert urls(["website/src/faq.ts"], known) == [SITE, f"{SITE}/alternatives"]
+    assert urls(["website/src/pages/docs/[...slug].astro"], known) == docs
+    assert urls(["website/src/fonts.ts"], known) == known
+    assert urls(["website/src/content.config.ts"], known) == known
+    assert urls(["website/src/content/docs/api/app.md", "website/src/pages/about.astro"], known) == [
+        f"{SITE}/about",
+        f"{SITE}/docs/api/app",
+    ]
+    assert urls(["README.md", "website/src/pages/404.astro"], known) == []
+    print("indexnow-urls self-test ok")
+
+
+def main() -> None:
+    if sys.argv[1] == "--self-test":
+        self_test()
+        return
+    changed = [line.strip() for line in sys.stdin if line.strip()]
+    for url in urls(changed, sitemap_urls(sys.argv[1])):
+        print(url)
 
 
 if __name__ == "__main__":
