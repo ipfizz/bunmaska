@@ -15,27 +15,8 @@ import {
   XKEY_STATE_OFFSET,
 } from './x11-keymap';
 
-/**
- * Linux `globalShortcut` backend via Xlib `XGrabKey` (X11 only, BEST-EFFORT).
- *
- * On X11 we open a DEDICATED display connection, grab each accelerator's
- * keycode+modifier on the root window, and poll that connection for `KeyPress`
- * events from {@link pollX11ShortcutsOnce} (wired into the Linux cooperative
- * pump's drain). A fired `KeyPress` is matched back to its registration by
- * keycode+modifier and the JS callback is dispatched.
- *
- * HONEST LIMITS:
- * - WAYLAND IS UNSUPPORTED in v1. `XGrabKey` only governs the X server; under a
- *   Wayland compositor (even via XWayland) a global grab does not see keys routed
- *   to native Wayland clients. True global shortcuts on Wayland require the
- *   `org.freedesktop.portal.GlobalShortcuts` portal — a separate, deferred path.
- * - If `XOpenDisplay` fails (no X server / headless without xvfb), the backend
- *   reports `isSupported() === false` and `register` returns `false` — it does
- *   NOT fake success.
- * - `XGrabKey` here grabs ONLY the exact modifier combo; it does not add the
- *   Lock/NumLock variants, so a shortcut may not fire while CapsLock/NumLock is
- *   on. That refinement is deferred.
- */
+// X11 only: grabs live on a dedicated display that gtk-run-loop polls; Wayland sessions report
+// unsupported. ponytail: Wayland needs the org.freedesktop.portal.GlobalShortcuts portal.
 
 type Grab = { readonly keycode: number; readonly modifiers: number };
 type Registration = Grab & { readonly callback: () => void };
@@ -70,7 +51,6 @@ const installErrorTrap = (x11: ReturnType<typeof loadX11FFI>): void => {
 export const isWaylandSession = (env: Readonly<Record<string, string | undefined>>): boolean =>
   Boolean(env['WAYLAND_DISPLAY']) || env['XDG_SESSION_TYPE'] === 'wayland';
 
-/** Open (once) the dedicated X display for grabs, or record that it is unavailable. */
 const ensureDisplay = (): Pointer | null => {
   if (display !== undefined) {
     return display;
@@ -165,11 +145,7 @@ const unregisterAll = (): void => {
   registrations.length = 0;
 };
 
-/**
- * Drain pending `KeyPress` events from the dedicated grab connection and fire the
- * matching callbacks. Wired into the Linux cooperative pump so registered hot
- * keys dispatch without blocking. No-op when no display is open.
- */
+/** Dispatch pending grab `KeyPress` events; called from the gtk-run-loop drain. */
 export const pollX11ShortcutsOnce = (): void => {
   const dpy = display;
   if (dpy === null || dpy === undefined) {
@@ -186,7 +162,6 @@ export const pollX11ShortcutsOnce = (): void => {
     const keycode = eventView.getUint32(XKEY_KEYCODE_OFFSET, true);
     const state = eventView.getUint32(XKEY_STATE_OFFSET, true);
     for (const reg of registrations) {
-      // Keycode alone once dispatched here, so Ctrl+K fired Ctrl+Shift+K too.
       if (reg.keycode === keycode && x11StateMatches(state, reg.modifiers)) {
         reg.callback();
       }
@@ -194,10 +169,8 @@ export const pollX11ShortcutsOnce = (): void => {
   }
 };
 
-/** Linux is supported only when a real X display connection can be opened. */
 const isSupported = (): boolean => ensureDisplay() !== null;
 
-/** The Linux X11 global-shortcut backend (X11 only; Wayland deferred). */
 export const linuxGlobalShortcutBackend: GlobalShortcutBackend = {
   isSupported,
   register,
