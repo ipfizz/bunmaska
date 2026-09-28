@@ -385,7 +385,7 @@ const notarizeCredentials = ():
 };
 
 const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => {
-  const result = runInit(command.dir, undefined, command.name);
+  const result = runInit(command.dir, command.name);
   out(`Scaffolded ${result.name} in ${result.dir}`);
   for (const path of result.written) {
     out(`  create ${path}`);

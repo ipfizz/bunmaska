@@ -111,7 +111,7 @@ describe('runInit with an explicit name', () => {
         }
       },
     };
-    const result = runInit('/tmp/some-dir', deps, 'my-app');
+    const result = runInit('/tmp/some-dir', 'my-app', deps);
     expect(result.name).toBe('my-app');
     expect(written.length).toBeGreaterThan(0);
   });

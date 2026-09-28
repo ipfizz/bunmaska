@@ -253,8 +253,8 @@ export type InitResult = {
 /** Scaffolds a project with bundle id `com.example.<slug>`; throws if any target exists. */
 export const runInit = (
   targetDir: string,
-  deps: ScaffoldDeps = defaultDeps,
   explicitName?: string,
+  deps: ScaffoldDeps = defaultDeps,
 ): InitResult => {
   const dir = resolve(targetDir);
   const name = explicitName?.trim() || deriveProjectName(dir);
