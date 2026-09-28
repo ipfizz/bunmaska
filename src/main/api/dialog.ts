@@ -1,3 +1,4 @@
+import { createLogger } from '../../common/logger';
 import { selectBackend } from '../platform/index';
 import { linuxDialogBackend } from '../platform/linux/gtk-dialog';
 import * as cocoaDialog from '../platform/macos/cocoa-dialog';
@@ -98,6 +99,8 @@ const { get: getBackend, setForTesting } = selectBackend<DialogBackend>('dialog'
 /** @internal */
 export const setDialogBackendForTesting = setForTesting;
 
+const log = createLogger('dialog');
+
 /** Electron's optional leading window; accepted, but dialogs are not attached as sheets. */
 type WithWindow<T> = [window: BrowserWindow, options: T];
 
@@ -149,13 +152,15 @@ export const dialog: Dialog = {
     return { canceled: filePath.length === 0, filePath };
   },
 
-  // Electron's showErrorBox is sync/void, so this is fire-and-forget on Linux.
+  // Electron's showErrorBox is sync and void, so an async failure is logged, never thrown.
   showErrorBox(title, content) {
-    void getBackend().showMessageBox({
-      message: title,
-      detail: content,
-      buttons: ['OK'],
-      type: 'error',
-    });
+    Promise.resolve(
+      getBackend().showMessageBox({
+        message: title,
+        detail: content,
+        buttons: ['OK'],
+        type: 'error',
+      }),
+    ).catch((error: unknown) => log.warn('showErrorBox failed', error));
   },
 };

@@ -178,6 +178,25 @@ describe('dialog.showErrorBox', () => {
   });
 });
 
+describe('dialog.showErrorBox on a rejecting backend', () => {
+  test('leaves no unhandled rejection behind', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    setDialogBackendForTesting({
+      showMessageBox: () => Promise.reject(new Error('alert failed to start')),
+      showOpenDialog: () => [],
+      showSaveDialog: () => '',
+    });
+    dialog.showErrorBox('Boom', 'Something failed');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    process.off('unhandledRejection', onUnhandled);
+    expect(unhandled).toEqual([]);
+  });
+});
+
 describe('async DialogBackend (Promise-returning, e.g. Linux GTK)', () => {
   test('flattens a Promise<number> from showMessageBox without double-wrapping', async () => {
     const asyncBackend: DialogBackend = {
