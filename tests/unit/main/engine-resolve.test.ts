@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
+  appIdentity,
   bakedIdCandidates,
   type EngineResolution,
   engineLibPath,
@@ -119,6 +120,21 @@ describe('bakedIdCandidates', () => {
     expect(
       bakedIdCandidates('/opt/app/usr/bin/my-app', { BUNMASKA_ENGINE_ID_FILE: '/x/id' }),
     ).toEqual(['/x/id']);
+  });
+});
+
+describe('appIdentity', () => {
+  test('under the Bun CLI, each project links by its own entry script', () => {
+    expect(appIdentity('/home/u/.bun/bin/bun', '/work/a/src/main.ts')).toBe('/work/a/src/main.ts');
+    expect(appIdentity('C:\\Users\\u\\.bun\\bin\\bun.exe', 'C:\\b\\main.ts')).toBe(
+      'C:\\b\\main.ts',
+    );
+  });
+
+  test('a compiled app links by its executable', () => {
+    expect(appIdentity('/opt/MyApp/usr/bin/my-app', '/$bunfs/root/my-app')).toBe(
+      '/opt/MyApp/usr/bin/my-app',
+    );
   });
 });
 

@@ -158,11 +158,16 @@ export const engineLibPath = (resolution: EngineResolution, soname: string): str
     ? join(resolution.libDir, soname)
     : soname;
 
+/** The path prune checks for this app: the entry script under the Bun CLI, else the executable. */
+export const appIdentity = (execPath: string, main: string): string =>
+  // ponytail: same test as preload-bundle's bunCliPath; share it once that is exported
+  /(?:^|[\\/])bun(?:-[^\\/]*)?(?:\.exe)?$/i.test(execPath) ? main : execPath;
+
 const prep: { done: boolean } = { done: false };
 
 /** Injectable seams for {@link prepareEngineForLoad}'s auto-link side effect. */
 export type PrepareDeps = {
-  /** This installed app's stable identity (default: `process.execPath`). */
+  /** This app's stable identity (default: {@link appIdentity}). */
   readonly appPath?: string;
   /** Register an app→engine refcount link (default: the store's `linkApp`). */
   readonly link?: (root: string, appPath: string, engineId: string) => void;
@@ -198,7 +203,7 @@ export const prepareEngineForLoad = (
     resolution.id !== undefined &&
     resolution.root !== undefined
   ) {
-    const appPath = deps.appPath ?? process.execPath;
+    const appPath = deps.appPath ?? appIdentity(process.execPath, Bun.main);
     const link = deps.link ?? linkApp;
     try {
       link(resolution.root, appPath, resolution.id);
