@@ -65,5 +65,6 @@ describe('editorTempDir', () => {
     expect(editorTempDir('src/main.ts')).toBeUndefined();
     expect(editorTempDir('node_modules/.cache/x')).toBeUndefined();
     expect(editorTempDir('MyApp.app/.hidden')).toBeUndefined();
+    expect(editorTempDir('.idea/.workspace.xml.tmp')).toBeUndefined();
   });
 });

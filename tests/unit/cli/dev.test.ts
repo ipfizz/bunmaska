@@ -57,9 +57,19 @@ describe('classifyChange', () => {
 
   test('ignores the app bundles bunmaska build writes into the project root', () => {
     expect(classifyChange('MyApp.app/Contents/MacOS/index.html')).toBe('ignore');
-    expect(classifyChange('MyApp.AppDir/usr/bin/myapp')).toBe('ignore');
     expect(classifyChange('build/x.js')).toBe('ignore');
     expect(classifyChange('out/x.js')).toBe('ignore');
+  });
+
+  test('watches source folders that merely share a build-output name', () => {
+    expect(classifyChange('src/build/config.ts')).toBe('restart');
+    expect(classifyChange('src/renderer/out/x.tsx', 'src/renderer')).toBe('rebuild');
+  });
+
+  test('ignores tool state in dot directories', () => {
+    // JetBrains rewrites .idea/workspace.xml on focus changes.
+    expect(classifyChange('.idea/workspace.xml')).toBe('ignore');
+    expect(classifyChange('.vscode/generated.ts')).toBe('ignore');
   });
 });
 

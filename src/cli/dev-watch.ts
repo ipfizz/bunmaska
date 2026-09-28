@@ -4,28 +4,22 @@ import { type Dirent, readdirSync, readFileSync, statSync, watch as fsWatch } fr
 import { resolve } from 'node:path';
 
 /**
- * Dependency, VCS and OUR-OWN-BUILD-OUTPUT directories. `dist` is deliberately NOT
- * here: an app's renderer bundle lives there, and ignoring it meant a rebuilt
- * bundle could never trigger a reload. The app bundles `bunmaska build` writes are
- * ignored by suffix instead, because it defaults its output to the project root.
+ * Top-level output dirs of common tools. `dist` is deliberately NOT here: the
+ * renderer bundle lives there, and ignoring it means a rebuild never reloads.
  */
-const IGNORED_SEGMENTS: ReadonlySet<string> = new Set([
-  'node_modules',
-  '.git',
-  'build',
-  'out',
-  'coverage',
-]);
+const IGNORED_ROOT_DIRS: ReadonlySet<string> = new Set(['build', 'out', 'coverage']);
 
 /**
- * Directory suffixes `bunmaska build` produces inside the watched root.
- * ponytail: the Linux AppDir is a bare `<Name>/` with no suffix to match, so a
- * Linux build during `dev` still churns; `--out` outside the root avoids it.
+ * Dependencies, dot directories (VCS, editor state), `.app` bundles `bunmaska build`
+ * writes into the root, and the root output dirs.
+ * ponytail: a Linux or Windows build writes a bare `<Name>/` into the root, which
+ * stays watched; `--out` outside the root avoids the churn.
  */
-const IGNORED_SEGMENT_SUFFIXES: readonly string[] = ['.app', '.AppDir'];
-
-const isIgnoredSegment = (p: string): boolean =>
-  IGNORED_SEGMENTS.has(p) || IGNORED_SEGMENT_SUFFIXES.some((suffix) => p.endsWith(suffix));
+const isIgnoredSegment = (name: string, depth: number): boolean =>
+  name === 'node_modules' ||
+  name.startsWith('.') ||
+  name.endsWith('.app') ||
+  (depth === 0 && IGNORED_ROOT_DIRS.has(name));
 
 /** Split a watcher or config path on either separator, dropping `.` segments. */
 export const pathParts = (relPath: string): string[] =>
@@ -34,8 +28,7 @@ export const pathParts = (relPath: string): string[] =>
 /** True for a path `bunmaska dev` never reacts to: ignored trees and dotfiles. */
 export const isIgnoredPath = (relPath: string): boolean => {
   const parts = pathParts(relPath);
-  const base = parts[parts.length - 1] ?? '';
-  return parts.some(isIgnoredSegment) || base.length === 0 || base.startsWith('.');
+  return parts.length === 0 || parts.some(isIgnoredSegment);
 };
 
 /** The two content-comparison modes the watcher needs. Same seen-map underneath. */
@@ -103,14 +96,9 @@ export const makeContentFilter = (
  */
 export const editorTempDir = (relPath: string): string | undefined => {
   const parts = pathParts(relPath);
-  if (parts.length === 0 || parts.some(isIgnoredSegment)) {
-    return undefined;
-  }
+  const dirs = parts.slice(0, -1);
   const base = parts[parts.length - 1] ?? '';
-  if (!base.startsWith('.')) {
-    return undefined;
-  }
-  return parts.slice(0, -1).join('/');
+  return base.startsWith('.') && !dirs.some(isIgnoredSegment) ? dirs.join('/') : undefined;
 };
 
 /** Files bigger than this are not hashed at seed time (first-sight then applies). */
@@ -128,15 +116,12 @@ const seedContentFilter = (root: string, filter: ContentFilter, relDir = ''): vo
     return;
   }
   for (const entry of entries) {
-    const name = entry.name;
-    if (name.startsWith('.')) {
+    const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
+    if (isIgnoredPath(rel)) {
       continue;
     }
-    const rel = relDir === '' ? name : `${relDir}/${name}`;
     if (entry.isDirectory()) {
-      if (!isIgnoredSegment(name)) {
-        seedContentFilter(root, filter, rel);
-      }
+      seedContentFilter(root, filter, rel);
       continue;
     }
     if (!entry.isFile()) {
@@ -179,11 +164,8 @@ export const makeWatchHandler = (
       return;
     }
     for (const entry of entries) {
-      if (!entry.isFile() || entry.name.startsWith('.')) {
-        continue;
-      }
       const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
-      if (!isIgnoredPath(rel) && filter.changedIfSeen(rel)) {
+      if (entry.isFile() && !isIgnoredPath(rel) && filter.changedIfSeen(rel)) {
         onChange(rel);
       }
     }
