@@ -31,7 +31,7 @@ describe('dispatch error boundary', () => {
     inProjectWithConfig('export default { name: 42 };\n');
     let code = -1;
     const streams = await captureStdio(async () => {
-      code = await dispatch(command);
+      code = await dispatch(command, { runApp: async () => 0 });
     });
     expect(code).toBe(1);
     expect(streams.err.join('')).toMatch(/^[^\n]*"name" must be a string[^\n]*\n$/);

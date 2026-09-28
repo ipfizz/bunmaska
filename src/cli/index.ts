@@ -9,6 +9,7 @@ import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import {
+  type BunmaskaConfig,
   type BunmaskaRendererConfig,
   configChannel,
   rendererOutDir,
@@ -122,6 +123,7 @@ export type DispatchDeps = {
   readonly buildMac?: (opts: BuildMacAppOptions) => Promise<string>;
   readonly buildLinux?: typeof buildLinuxApp;
   readonly buildWindows?: typeof buildWindowsApp;
+  readonly runApp?: typeof runApp;
   readonly signApp?: SignApp;
   readonly notarize?: NotarizeHook;
   readonly convertIcon?: ConvertIcon;
@@ -179,22 +181,26 @@ const maybeEmitUpdate = async (
   }
 };
 
-/**
- * Warns when a bare upstream version cannot yet resolve to a full id. Shared by
- * the Linux and Windows build branches.
- */
-const resolveProjectEngine = async (): Promise<{ engineId: string; embed: boolean }> => {
-  const { config } = await loadConfig(process.cwd());
+/** The project's engine pin; a bare version warns and falls back to the system WebKit. */
+const resolveProjectEngine = (
+  config: BunmaskaConfig,
+  command: string,
+): { engineId: string; embed: boolean } => {
   const webkitPin = config.engine?.webkit;
   const engineId = resolveBuildEngineId(webkitPin);
   if (webkitPin !== undefined && engineId === 'system' && webkitPin !== 'system') {
     err(
-      `bunmaska build: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
-        'resolving it to a full engine-id needs the engine catalog (a follow-up). ' +
-        'Baking the system WebKit for now.',
+      `bunmaska ${command}: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
+        'use a full engine id (see bunmaska engine available). Using the system WebKit.',
     );
   }
   return { engineId, embed: config.engine?.embed === true };
+};
+
+/** dev and run must forward the pin, or on Windows the app launches with no engine. */
+const launchEngineEnv = (config: BunmaskaConfig, command: string): Record<string, string> => {
+  const { engineId } = resolveProjectEngine(config, command);
+  return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
 };
 
 const runBuild = async (
@@ -279,7 +285,7 @@ const runBuild = async (
   }
 
   if (target === 'linux') {
-    const { engineId, embed } = await resolveProjectEngine();
+    const { engineId, embed } = resolveProjectEngine(config, 'build');
     if (embed) {
       // Dropping the .deb dependency without shipping an engine would crash on a
       // clean box; refuse until Linux embedding exists.
@@ -304,7 +310,7 @@ const runBuild = async (
   }
 
   if (target === 'windows') {
-    const { engineId, embed } = await resolveProjectEngine();
+    const { engineId, embed } = resolveProjectEngine(config, 'build');
     let embedEngine = command.options.embedEngine;
     if (embedEngine === undefined && embed) {
       const root = enginesPath();
@@ -421,17 +427,6 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
     process.once('SIGTERM', onSignal);
   });
 
-/**
- * The engine env a launched app needs to resolve its `engine.webkit` pin. Only
- * `build`/`doctor` used to read the pin, so `dev` and `run` silently launched on
- * the system WebKit — which on Windows means no engine at all.
- */
-const launchEngineEnv = async (): Promise<Record<string, string>> => {
-  const { config } = await loadConfig(process.cwd());
-  const engineId = resolveBuildEngineId(config.engine?.webkit);
-  return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
-};
-
 /** {@link classifyChange} with the renderer's entry and outDir resolved against `dir`. */
 export const rendererClassifier = (
   dir: string,
@@ -450,7 +445,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
   const renderer = config.renderer;
   const dir = process.cwd();
   const log = (message: string): void => out(message);
-  const baseDeps = defaultDevDeps(dir, log, await launchEngineEnv());
+  const baseDeps = defaultDevDeps(dir, log, launchEngineEnv(config, 'dev'));
   let deps = baseDeps;
   if (renderer !== undefined) {
     const rendererConfig = renderer;
@@ -488,8 +483,11 @@ const runCommand = async (command: Command, deps: DispatchDeps): Promise<number>
       return runInitCommand(command);
     case 'dev':
       return await runDevCommand(command);
-    case 'run':
-      return await runApp(command.entry, command.args, { extraEnv: await launchEngineEnv() });
+    case 'run': {
+      const { config } = await loadConfig(process.cwd());
+      const extraEnv = launchEngineEnv(config, 'run');
+      return await (deps.runApp ?? runApp)(command.entry, command.args, { extraEnv });
+    }
     case 'build':
       return await runBuild(command, deps);
     case 'engine':
