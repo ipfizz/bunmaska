@@ -119,8 +119,6 @@ const endOfCentralDir = (count: number, cdSize: number, cdOffset: number): Uint8
   return eocd;
 };
 
-const concat = (chunks: readonly Uint8Array[]): Uint8Array => Buffer.concat(chunks);
-
 /** Entry names use `/` separators. */
 export const buildZipArchive = (entries: readonly ZipEntry[]): Uint8Array => {
   const localChunks: Uint8Array[] = [];
@@ -148,5 +146,5 @@ export const buildZipArchive = (entries: readonly ZipEntry[]): Uint8Array => {
   }
   const eocd = endOfCentralDir(prepared.length, cdSize, offset);
 
-  return concat([...localChunks, ...centralChunks, eocd]);
+  return Buffer.concat([...localChunks, ...centralChunks, eocd]);
 };
