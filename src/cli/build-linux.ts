@@ -7,7 +7,7 @@
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
-import { type Arch, currentArch } from '../common/platform';
+import { type Arch, currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 import { runTool } from './run-tool';
@@ -146,6 +146,26 @@ export const buildArArchive = (
   ]);
 };
 
+/**
+ * dpkg installs files with the archived owner and paths, so members must be
+ * root-owned, xattr-free and without macOS bsdtar's AppleDouble `._*` twins
+ * (which also collide across packages). The flags work in bsdtar and GNU tar.
+ */
+const tarGz = (archive: string, dir: string, member: string): Promise<void> =>
+  runTool('tar', [
+    ...(currentPlatform() === 'macos' ? ['env', 'COPYFILE_DISABLE=1'] : []),
+    'tar',
+    '--no-xattrs',
+    '--owner=0',
+    '--group=0',
+    '--numeric-owner',
+    '-czf',
+    archive,
+    '-C',
+    dir,
+    member,
+  ]);
+
 const compileLinuxBinary = async (entry: string, outfile: string, arch: Arch): Promise<void> => {
   await runTool('bun build --compile', [
     'bun',
@@ -221,7 +241,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 
   // -C keeps the archived paths relative to <out>.
   const tarball = join(out, tarballName(opts.name, arch));
-  await runTool('tar', ['tar', '-czf', tarball, '-C', out, opts.name]);
+  await tarGz(tarball, out, opts.name);
 
   // An embedded engine ships its own WebKitGTK, so it needs no system Depends.
   const depends = opts.embedEngine === true ? [] : DEFAULT_LINUX_DEPENDS;
@@ -271,10 +291,10 @@ const packageDeb = async (args: {
   );
 
   const controlTar = join(staging, 'control.tar.gz');
-  await runTool('tar', ['tar', '-czf', controlTar, '-C', controlDir, 'control']);
+  await tarGz(controlTar, controlDir, 'control');
 
   const dataTar = join(staging, 'data.tar.gz');
-  await runTool('tar', ['tar', '-czf', dataTar, '-C', layout.appDir, 'usr']);
+  await tarGz(dataTar, layout.appDir, 'usr');
 
   const debPath = join(out, debFileName(name, version, arch));
   const archive = buildArArchive([
