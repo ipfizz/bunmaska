@@ -284,6 +284,26 @@ describe('page object hardening', () => {
     expect(Object.isFrozen(api.data.nested)).toBe(true);
   });
 
+  test('a typed-array value materialises intact', () => {
+    const doc = new MockDocument();
+    const page = makePageWorld(doc);
+    createContextBridge(transport(doc)).exposeInMainWorld('myApi', {
+      bytes: new Uint8Array([1, 2]),
+    });
+    expect(page.read<{ bytes: Uint8Array }>('myApi').bytes).toEqual(new Uint8Array([1, 2]));
+  });
+
+  test('a cyclic value materialises with its cycle', () => {
+    const doc = new MockDocument();
+    const page = makePageWorld(doc);
+    const tree: { name: string; self?: unknown } = { name: 'root' };
+    tree.self = tree;
+    createContextBridge(transport(doc)).exposeInMainWorld('myApi', { tree });
+    const copy = page.read<{ tree: { self: unknown } }>('myApi').tree;
+    expect(copy.self).toBe(copy);
+    expect(Object.isFrozen(copy)).toBe(true);
+  });
+
   test('the materialised target has a null prototype (no __proto__ trap)', () => {
     const doc = new MockDocument();
     const page = makePageWorld(doc);

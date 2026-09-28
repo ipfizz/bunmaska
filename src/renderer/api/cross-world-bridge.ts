@@ -116,15 +116,22 @@ export const generatePageWorldStub = (channelId: string): string => {
     };
   }
 
+  // Freeze before recursing so a cycle terminates; typed arrays cannot be frozen.
   function deepFreeze(value) {
-    if (value === null || typeof value !== 'object') {
+    if (
+      value === null ||
+      typeof value !== 'object' ||
+      Object.isFrozen(value) ||
+      ArrayBuffer.isView(value)
+    ) {
       return value;
     }
+    Object.freeze(value);
     var names = Object.getOwnPropertyNames(value);
     for (var i = 0; i < names.length; i += 1) {
       deepFreeze(value[names[i]]);
     }
-    return Object.freeze(value);
+    return value;
   }
 
   function materialise(detail) {
