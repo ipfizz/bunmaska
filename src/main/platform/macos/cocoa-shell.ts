@@ -52,6 +52,10 @@ export const showItemInFolder = (path: string): void => {
     rt.selectors.get('fileURLWithPath:'),
     nsString(path),
   );
+  // arrayWithObject:nil raises and aborts the process; an empty path yields a nil URL.
+  if (fileUrl === 0n) {
+    return;
+  }
   const urls = msgSendPtr(rt.classes.get('NSArray'), rt.selectors.get('arrayWithObject:'), fileUrl);
   msgSendPtr(sharedWorkspace(), rt.selectors.get('activateFileViewerSelectingURLs:'), urls);
 };
