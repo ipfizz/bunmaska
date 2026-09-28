@@ -4,7 +4,9 @@ description: "Honest Bunmaska API reference for the clipboard module: async read
 order: 10
 ---
 
-Perform copy and paste operations on the system clipboard. In Bunmaska the `clipboard` module is a process-wide singleton (not tied to any window) available in both the main and renderer processes, backed by Cocoa (`NSPasteboard`) on macOS, GTK 4 / GDK on Linux, and the Win32 clipboard (`CF_*` formats with GDI+) on Windows.
+Perform copy and paste operations on the system clipboard. In Bunmaska the `clipboard` module is a process-wide singleton (not tied to any window), backed by Cocoa (`NSPasteboard`) on macOS, GTK 4 / GDK on Linux, and the Win32 clipboard (`CF_*` formats with GDI+) on Windows.
+
+Process: Main. Unlike Electron, it is not available in a preload or page (it calls native APIs through `bun:ffi`); expose what the page needs with an `ipcMain.handle` and [`contextBridge`](/docs/api/context-bridge).
 
 One deliberate difference from Electron: all **read** methods are asynchronous and return a `Promise`. GDK 4's clipboard read is async-only, so Bunmaska adopts the same async contract on macOS for a uniform cross-platform API. Writes (and `clear`) stay synchronous everywhere. On platforms without a backend, methods throw `UnsupportedPlatformError` rather than silently doing nothing.
 
@@ -70,7 +72,7 @@ clipboard.writeHTML('<b>Hi</b>');
 
 `readImage(): Promise<NativeImage>`
 
-Reads the image on the clipboard, resolving to a [`NativeImage`](native-image.md). If the clipboard holds no image, resolves to an empty `NativeImage` (`nativeImage.createEmpty()`). Asynchronous on every platform.
+Reads the image on the clipboard, resolving to a [`NativeImage`](/docs/api/native-image). If the clipboard holds no image, resolves to an empty `NativeImage` (`nativeImage.createEmpty()`). Asynchronous on every platform.
 
 ```ts
 import { clipboard } from 'bunmaska';
@@ -108,7 +110,7 @@ console.log(clipboard.availableFormats());
 // [ 'text/plain', ... ]
 ```
 
-Note: Bunmaska reports MIME-style format names (e.g. `text/plain`, `text/html`, `image/png`), matching Electron's Linux output rather than the macOS `public.*` UTI naming. (The Linux backend currently leaks raw GDK format strings here - a known drift, still on the normalization list.)
+Note: Bunmaska reports MIME-style format names (e.g. `text/plain`, `text/html`, `image/png`) on every platform, matching Electron's Linux output rather than the macOS `public.*` UTI naming.
 
 ### `clipboard.clear()`
 

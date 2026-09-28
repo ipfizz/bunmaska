@@ -4,7 +4,9 @@ description: "Open files and URLs in their default applications, reveal items in
 order: 16
 ---
 
-The `shell` module handles desktop integration: open URLs and files in their default applications, reveal a file in the OS file manager, and play the system beep. It works on macOS, Linux, and Windows (where `openExternal`/`openPath`/`showItemInFolder`/`beep` go through `ShellExecuteW` and `MessageBeep`), and is exposed in both the main and renderer processes.
+The `shell` module handles desktop integration: open URLs and files in their default applications, reveal a file in the OS file manager, and play the system beep. It works on macOS, Linux, and Windows (where `openExternal`/`openPath`/`showItemInFolder`/`beep` go through `ShellExecuteW` and `MessageBeep`).
+
+Process: Main. Unlike Electron, `shell` is not available in a preload or page - it drives native APIs through `bun:ffi` - so expose the narrow piece you need with an `ipcMain.handle` and [`contextBridge`](/docs/api/context-bridge).
 
 ```ts
 import { shell } from 'bunmaska';
@@ -12,13 +14,13 @@ import { shell } from 'bunmaska';
 await shell.openExternal('https://github.com');
 ```
 
-A note on shapes: `openExternal` and `openPath` return Promises (matching Electron), while `showItemInFolder` and `beep` are synchronous. Bunmaska does not have a sandboxed renderer, so unlike Electron there is no "won't work in a sandbox" caveat to worry about here.
+A note on shapes: `openExternal` and `openPath` return Promises (matching Electron), while `showItemInFolder` and `beep` are synchronous.
 
 ## Methods
 
 ### `shell.openExternal(url)`
 
-Returns `Promise<boolean>` - resolves to whether the URL was successfully handed off to the OS.
+Returns `Promise<boolean>` - resolves to whether the URL was successfully handed off to the OS. Anything that is not an absolute URL (a bare path, a program name, a one-letter "scheme" that is really a drive letter) resolves `false` without reaching the OS, on every platform.
 
 Opens an external URL in the desktop's default manner - `https:` in the default browser, `mailto:` in the default mail client, and so on. On macOS this goes through `NSWorkspace`; on Linux through the GTK/GIO launcher; on Windows through `ShellExecuteW`.
 
@@ -50,7 +52,7 @@ if (error) {
 
 ### `shell.showItemInFolder(path)`
 
-Reveals a file or folder in the OS file manager, selecting it if possible (Finder on macOS, Explorer on Windows). On Linux it opens the parent folder without selecting the item. Synchronous, returns `void`.
+Reveals a file or folder in the OS file manager, selecting it if possible (Finder on macOS, Explorer on Windows). On Linux it opens the parent folder without selecting the item. Synchronous, returns `void`. It quietly does nothing for a path it cannot use: on macOS one with no file URL, on Windows a relative or quoted path.
 
 ```ts
 import { shell } from 'bunmaska';

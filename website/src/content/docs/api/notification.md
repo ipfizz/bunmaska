@@ -14,7 +14,7 @@ Process: Main
 
 `show(): void`
 
-Displays the notification and synchronously emits the `show` event. As in Electron, constructing a `Notification` does not display anything; you must call `show()`. Calling it again re-presents the notification.
+Displays the notification and synchronously emits the `show` event. As in Electron, constructing a `Notification` does not display anything; you must call `show()`. Calling it again dismisses the copy already on screen and shows a fresh one, as Electron does. On macOS the banner shows even while your app is frontmost.
 
 ```ts
 import { Notification } from 'bunmaska';

@@ -10,6 +10,8 @@ Process: Main
 
 Unlike Electron, every Bunmaska dialog method is async and returns a Promise. There are no `*Sync` variants - the macOS backend happens to run its panels modally under the hood, but the public API is Promise-only so your code reads the same on every platform.
 
+Each method also accepts Electron's optional leading window - `dialog.showOpenDialog(win, options)` - so ported code runs unchanged. The window is ignored, though: dialogs open as independent panels, not sheets attached to it.
+
 ```ts
 import { dialog } from 'bunmaska';
 
@@ -25,7 +27,7 @@ console.log(canceled, filePaths);
 
 * `options` Object (optional)
   * `properties` string[] (optional) - Defaults to `['openFile']`. Supported values: `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS). Linux ignores `openDirectory` and `multiSelections`; Windows honours `openDirectory` only when `openFile` is not also set.
-  * `defaultPath` string (optional) - The directory or file the panel opens on. Honoured on macOS.
+  * `defaultPath` string (optional) - The directory the panel opens in (a file path opens its folder). Honoured on macOS and by the Windows file picker; the Windows folder picker and Linux ignore it.
   * `filters` [FileFilter[]](#filefilter) (optional) - File-type filters; the selectable extensions are the union of every filter's `extensions`.
 
 Returns `Promise<Object>`:
@@ -54,7 +56,7 @@ if (!result.canceled) {
 ### `dialog.showSaveDialog([options])`
 
 * `options` Object (optional)
-  * `defaultPath` string (optional) - The suggested file name shown in the panel.
+  * `defaultPath` string (optional) - The suggested file name shown in the panel. Unlike Electron, it is a **name**, not a path, on macOS and Linux; Windows also accepts a full path.
   * `filters` [FileFilter[]](#filefilter) (optional) - File-type filters; the allowed extensions are the union of every filter's `extensions`.
 
 Returns `Promise<Object>`:
@@ -89,7 +91,7 @@ Returns `Promise<Object>`:
 
 * `response` number - The index of the clicked button.
 
-Shows a message box and resolves with the index of the button the user clicked.
+Shows a message box and resolves with the index of the button the user clicked. On Linux and Windows, dismissing the box without a click resolves to Electron's default `cancelId`: the first button labelled "Cancel" or "No" (any case), else `0`.
 
 ```ts
 import { dialog } from 'bunmaska';
@@ -113,7 +115,7 @@ if (response === 1) {
 
 Returns `void`.
 
-Displays an error-styled alert. Under the hood this is a fire-and-forget call into the message-box backend with `type: 'error'` - unlike Electron's truly synchronous `showErrorBox`, Bunmaska does not block, and on _Linux_ the dialog is shown asynchronously and the call returns immediately. There is no special pre-`ready` / stderr fallback: it always goes through the same native backend.
+Displays an error-styled alert. Under the hood this is a fire-and-forget call into the message-box backend with `type: 'error'` - unlike Electron's truly synchronous `showErrorBox`, Bunmaska does not block, and on _Linux_ the dialog is shown asynchronously and the call returns immediately. There is no special pre-`ready` / stderr fallback: it always goes through the same native backend, and if that fails the failure is logged rather than thrown.
 
 ```ts
 import { dialog } from 'bunmaska';
@@ -136,8 +138,8 @@ The following Electron `dialog` members are not implemented in the Bunmaska sour
 
 - **Synchronous variants** - `showOpenDialogSync`, `showSaveDialogSync`, and `showMessageBoxSync` do not exist. Use the Promise-returning methods above.
 - **`showCertificateTrustDialog`** - no certificate trust/import dialog.
-- **The `window` (parent) argument** - no method accepts a `BrowserWindow`/`BaseWindow`, so dialogs are not attached as macOS sheets or made window-modal; they appear as independent panels. The whole "Sheets" and `setSheetOffset` story does not apply.
+- **A working `window` (parent) argument** - every method accepts the leading `BrowserWindow`, but ignores it, so dialogs are not attached as macOS sheets or made window-modal; they appear as independent panels. The whole "Sheets" and `setSheetOffset` story does not apply.
 - **macOS security-scoped bookmarks** - no `securityScopedBookmarks` option and no `bookmarks`/`bookmark` fields in the results.
 - **Most option fields** - `title`, `buttonLabel`, `message`/`detail` on file dialogs, `nameFieldLabel`, `showsTagField`, `defaultId`, `cancelId`, `signal` (AbortSignal), `icon`, `textWidth`, `checkboxLabel`/`checkboxChecked`, `noLink`, and `normalizeAccessKeys` are all unsupported. `showMessageBox` resolves with only `{ response }` - there is no `checkboxChecked` in the result.
-- **Open-dialog `properties` beyond the basics** - only `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS) are honored. `showHiddenFiles`, `promptToCreate`, `noResolveAliases`, `treatPackageAsDirectory`, and `dontAddToRecent` are not.
+- **Open-dialog `properties` beyond the basics** - only `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS) are honored (and Linux picks a single file whatever you pass). `showHiddenFiles`, `promptToCreate`, `noResolveAliases`, `treatPackageAsDirectory`, and `dontAddToRecent` are not.
 - **Per-filter file-type dropdown** - filters are merged into one flat extension list rather than presented as selectable groups.
