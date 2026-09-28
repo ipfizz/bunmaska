@@ -109,6 +109,24 @@ describe('parseArgs', () => {
   });
 });
 
+describe('parseArgs keygen', () => {
+  test('bare keygen has no out dir', () => {
+    expect(parseArgs(['keygen'])).toEqual({ kind: 'keygen' });
+  });
+
+  test('keygen --out <dir> carries the directory', () => {
+    expect(parseArgs(['keygen', '--out', 'keys'])).toEqual({ kind: 'keygen', out: 'keys' });
+  });
+
+  test('keygen --out without a value is an error', () => {
+    expect(parseArgs(['keygen', '--out']).kind).toBe('error');
+  });
+
+  test('keygen rejects stray arguments', () => {
+    expect(parseArgs(['keygen', 'extra']).kind).toBe('error');
+  });
+});
+
 describe('parseArgs rejects arguments a command does not take', () => {
   test.each(
     [
