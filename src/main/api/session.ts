@@ -7,7 +7,7 @@ import {
   type CookieFilter,
   type CookieSetDetails,
   cookieFromSetDetails,
-} from './cookie-util';
+} from '../../common/cookie-util';
 import type { SessionBackend } from '../platform/services';
 
 const { get: getBackend, setForTesting } = service('session');

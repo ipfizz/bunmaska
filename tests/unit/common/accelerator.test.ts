@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { Platform } from '../../../../src/common/platform';
-import { parseAccelerator } from '../../../../src/main/api/accelerator';
+import type { Platform } from '../../../src/common/platform';
+import { parseAccelerator } from '../../../src/common/accelerator';
 
 /**
  * Pure, platform-parameterised accelerator parsing. No FFI: we pass the target

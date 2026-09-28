@@ -1,4 +1,4 @@
-import type { Platform } from '../../common/platform';
+import type { Platform } from './platform';
 
 export type ParsedAccelerator = {
   /** Normalised: single letters are upper-cased. */

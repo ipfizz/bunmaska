@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { InvalidArgumentError, UnsupportedPlatformError } from '../../../../src/common/errors';
-import type { Cookie, CookieFilter } from '../../../../src/main/api/cookie-util';
+import type { Cookie, CookieFilter } from '../../../../src/common/cookie-util';
 import { Session, session, setSessionBackendForTesting } from '../../../../src/main/api/session';
 import type { SessionBackend } from '../../../../src/main/platform/services';
 

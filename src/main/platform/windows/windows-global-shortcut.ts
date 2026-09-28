@@ -1,4 +1,4 @@
-import { parseAccelerator } from '../../api/accelerator';
+import { parseAccelerator } from '../../../common/accelerator';
 import type { GlobalShortcutBackend } from '../services';
 import { loadUser32 } from './win32-ffi';
 import { createMessageWindow, type MessageHandler } from './windows-message-window';

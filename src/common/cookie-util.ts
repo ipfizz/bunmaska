@@ -1,4 +1,4 @@
-import { InvalidArgumentError } from '../../common/errors';
+import { InvalidArgumentError } from './errors';
 
 // Pure cookie matching/normalization shared by the session API and every backend.
 

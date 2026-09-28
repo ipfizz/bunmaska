@@ -1,6 +1,6 @@
 import { currentPlatform } from '../../common/platform';
 import { service } from '../platform/index';
-import { parseAccelerator } from './accelerator';
+import { parseAccelerator } from '../../common/accelerator';
 
 const { get: getBackend, setForTesting } = service('globalShortcut');
 

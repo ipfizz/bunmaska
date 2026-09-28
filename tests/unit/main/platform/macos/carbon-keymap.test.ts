@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseAccelerator } from '../../../../../src/main/api/accelerator';
+import { parseAccelerator } from '../../../../../src/common/accelerator';
 import {
   carbonModifierMask,
   CMD_KEY,

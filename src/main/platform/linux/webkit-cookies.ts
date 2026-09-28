@@ -5,7 +5,7 @@ import {
   type CookieFilter,
   cookiesToRemove,
   filterCookies,
-} from '../../api/cookie-util';
+} from '../../../common/cookie-util';
 import { cstr } from '../cstr';
 import { runAsyncReady, withDeadline } from './gasync';
 import { loadGlibFFI } from './glib-ffi';

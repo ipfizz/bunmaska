@@ -1,6 +1,6 @@
 import { JSCallback, type Pointer, ptr } from 'bun:ffi';
 import type { GlobalShortcutBackend } from '../services';
-import { parseAccelerator } from '../../api/accelerator';
+import { parseAccelerator } from '../../../common/accelerator';
 import { currentPlatform } from '../../../common/platform';
 import { reportCallbackError } from '../../../common/report-error';
 import { loadCarbonFFI } from './carbon-ffi';

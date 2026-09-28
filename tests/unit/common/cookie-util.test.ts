@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { InvalidArgumentError } from '../../../../src/common/errors';
+import { InvalidArgumentError } from '../../../src/common/errors';
 import {
   type Cookie,
   cookieFromSetDetails,
   cookiesToRemove,
   domainMatches,
   filterCookies,
-} from '../../../../src/main/api/cookie-util';
+} from '../../../src/common/cookie-util';
 
 const cookie = (overrides: Partial<Cookie>): Cookie => ({
   name: 'a',

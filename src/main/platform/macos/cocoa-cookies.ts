@@ -5,7 +5,7 @@ import {
   type CookieFilter,
   cookiesToRemove,
   filterCookies,
-} from '../../api/cookie-util';
+} from '../../../common/cookie-util';
 import { makeOneShotBlock } from './cocoa-block';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import {

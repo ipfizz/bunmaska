@@ -1,4 +1,4 @@
-import type { ParsedAccelerator } from '../../api/accelerator';
+import type { ParsedAccelerator } from '../../../common/accelerator';
 
 /** X11 modifier mask bits (`X.h`). */
 export const SHIFT_MASK = 1 << 0;

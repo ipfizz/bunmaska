@@ -50,7 +50,7 @@ export {
 } from './api/protocol';
 export { type SafeStorage, safeStorage } from './api/safe-storage';
 export { type Display, screen, type Size } from './api/screen';
-export type { Cookie, CookieFilter, CookieSetDetails } from './api/cookie-util';
+export type { Cookie, CookieFilter, CookieSetDetails } from '../common/cookie-util';
 export { Cookies, Session, session } from './api/session';
 export { shell, type Shell } from './api/shell';
 export { Tray } from './api/tray';

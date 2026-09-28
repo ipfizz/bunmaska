@@ -1,6 +1,6 @@
 import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
 import { service } from '../platform/index';
-import { parseAccelerator } from './accelerator';
+import { parseAccelerator } from '../../common/accelerator';
 import type { MenuWindowAction, NativeMenuItemSpec } from '../platform/services';
 import type { BrowserWindow } from './browser-window';
 

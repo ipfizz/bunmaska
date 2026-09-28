@@ -1,4 +1,4 @@
-import type { ParsedAccelerator } from '../../api/accelerator';
+import type { ParsedAccelerator } from '../../../common/accelerator';
 
 /** Carbon modifier mask bits (Events.h `cmdKey`, `shiftKey`, `optionKey`, `controlKey`). */
 export const CMD_KEY = 0x100;

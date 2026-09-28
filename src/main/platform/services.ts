@@ -1,6 +1,6 @@
 // Every OS-service backend contract (D024): api/ and each backend import these, never each other.
 
-import type { Cookie, CookieFilter } from '../api/cookie-util';
+import type { Cookie, CookieFilter } from '../../common/cookie-util';
 import type { Menu } from '../api/menu';
 import type { Rect } from './native';
 
