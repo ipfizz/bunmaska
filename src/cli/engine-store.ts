@@ -222,7 +222,7 @@ export const installFromSource = async (
   const actual = contentHash(source.bytes);
   if (actual !== source.expectedHash) {
     throw new BunmaskaError(
-      `engine ${source.id}: integrity check failed — hash ${actual} != expected ${source.expectedHash}`,
+      `engine ${source.id}: integrity check failed: hash ${actual} != expected ${source.expectedHash}`,
       { code: 'ERR_ENGINE_INTEGRITY' },
     );
   }

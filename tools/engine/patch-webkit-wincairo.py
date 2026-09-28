@@ -106,7 +106,7 @@ def main(webkit: Path) -> None:
     cml = webkit / "Source/WebKit/CMakeLists.txt"
     for p in (gen, cml):
         if not p.exists():
-            raise SystemExit(f"FATAL: {p} not found — is this a WebKit checkout?")
+            raise SystemExit(f"FATAL: {p} not found; is this a WebKit checkout?")
     patch_generator(gen)
     patch_cmake(cml)
 

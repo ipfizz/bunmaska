@@ -78,7 +78,7 @@ const pinState = (pin: string, root: string): PinState => {
 const runList = (deps: EngineCommandDeps): number => {
   const installed = listInstalled(deps.root);
   if (installed.length === 0) {
-    deps.out('No engines installed — apps use the system WebKit by default.');
+    deps.out('No engines installed: apps use the system WebKit by default.');
     return 0;
   }
   const refs = new Map<string, number>();
@@ -129,7 +129,7 @@ const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Pr
   const pin = configPin(config);
   switch (pinState(pin, deps.root)) {
     case 'system':
-      deps.out('system — uses the OS WebView (no pinned engine)');
+      deps.out('system: uses the OS WebView (no pinned engine)');
       break;
     case 'bare':
       deps.out(`${pin}  (bare version, not resolved yet: builds bake \`system\`; pin a full id)`);
@@ -141,7 +141,7 @@ const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Pr
       deps.out(`${pin}  [installed]`);
       break;
     case 'missing':
-      deps.out(`${pin}  [NOT installed — run \`bunmaska engine install\`]`);
+      deps.out(`${pin}  [NOT installed: run \`bunmaska engine install\`]`);
       break;
   }
   return 0;
@@ -235,14 +235,14 @@ const runPrune = async (
   if (!dryRun && !force && installed.length > 0 && readLinks(deps.root).length === 0) {
     deps.out(
       `Refusing to prune: no app has registered a dependency yet, so all ${installed.length} ` +
-        'installed engine(s) look unreferenced. Apps register on launch — re-run with --force ' +
+        'installed engine(s) look unreferenced. Apps register on launch; re-run with --force ' +
         'to prune anyway, or --dry-run to preview.',
     );
     return 0;
   }
   const result = await gc(deps.root, { dryRun });
   if (result.removed.length === 0) {
-    deps.out('Nothing to prune — every installed engine is still referenced.');
+    deps.out('Nothing to prune: every installed engine is still referenced.');
   } else {
     deps.out(
       `${dryRun ? 'Would remove' : 'Removed'} ${result.removed.length} unreferenced engine(s):`,
@@ -256,7 +256,7 @@ const runPrune = async (
   }
   deps.out(`Kept ${result.kept.length} referenced engine(s).`);
   if (dryRun) {
-    deps.out('(dry run — nothing was deleted)');
+    deps.out('(dry run: nothing was deleted)');
   }
   return 0;
 };
@@ -342,7 +342,7 @@ const doctor = async (target: string | undefined, deps: EngineCommandDeps): Prom
       return 0;
     case 'missing':
       deps.err(
-        `  project:   pins ${pin} [NOT installed ✗] — run \`bunmaska engine install ${pin}\``,
+        `  project:   pins ${pin} [NOT installed ✗]: run \`bunmaska engine install ${pin}\``,
       );
       return 1;
   }
