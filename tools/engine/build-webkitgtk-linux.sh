@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-#
-# Build a RELOCATABLE WebKitGTK 6.0 engine directory for the Bunmaska engine
-# store. It relocates the system WebKitGTK + GTK + their shared-object closure
-# into a self-contained tree whose libraries find each other via `$ORIGIN`, so
-# the engine can be `dlopen`ed from `~/.bunmaska/webkit/<id>/` independent of the
-# distro's own WebKitGTK.
-#
-# This is the apt-relocate path (proves the mechanism + produces a usable engine
-# on a matching/newer glibc). A truly cross-distro build compiles on an old-glibc
-# base; that is a later refinement — the structure here is the same.
-#
-# Usage: build-webkitgtk-linux.sh <out-dir> <engine-id>
-# Produces: <out-dir>/<engine-id>/{lib/,libexec/,engine.json}
-#
+# Relocates the system WebKitGTK + GTK closure into <out-dir>/<engine-id>/{lib,libexec,engine.json},
+# libs finding each other via $ORIGIN. Usage: build-webkitgtk-linux.sh <out-dir> <engine-id>
+# ponytail: apt-relocated, so matching/newer glibc only; cross-distro needs an old-glibc build
 set -euo pipefail
 
 OUT_DIR="${1:?usage: build-webkitgtk-linux.sh <out-dir> <engine-id>}"
@@ -28,7 +17,6 @@ log() { printf '  • %s\n' "$*"; }
 
 command -v patchelf >/dev/null || { echo "patchelf is required (apt install patchelf)"; exit 1; }
 
-# Resolve a soname to its absolute path via ldconfig.
 resolve_soname() {
   ldconfig -p | grep -F "$1" | head -1 | sed -E 's/.*=>\s*//'
 }
@@ -57,7 +45,7 @@ is_kept() {
   esac
 }
 
-# Collect the full transitive .so closure of both roots (ldd is transitive).
+# ldd is transitive: this is the full closure.
 collect_closure() {
   ldd "$1" 2>/dev/null | awk '{ for (i=1;i<=NF;i++) if ($i ~ /^\//) print $i }'
 }
@@ -72,7 +60,7 @@ copy_lib() {
 }
 
 log "Bundling the shared-object closure…"
-# Copy the two roots first (preserve their sonames), then the closure.
+# The two roots first, under their sonames.
 cp -L "$WEBKIT_PATH" "$LIB_DIR/$SONAME"; chmod u+w "$LIB_DIR/$SONAME"
 cp -L "$GTK_PATH" "$LIB_DIR/$GTK_SONAME"; chmod u+w "$LIB_DIR/$GTK_SONAME"
 { collect_closure "$WEBKIT_PATH"; collect_closure "$GTK_PATH"; } | sort -u | while IFS= read -r so; do
@@ -87,7 +75,7 @@ find "$LIB_DIR" -name '*.so*' -type f | while IFS= read -r so; do
   patchelf --set-rpath '$ORIGIN' "$so" 2>/dev/null || true
 done
 
-# WebKit spawns helper processes; copy them best-effort so render works later.
+# WebKit spawns these helpers; nothing renders without them.
 log "Copying WebKit helper processes (best-effort)…"
 HELPER_SRC="$(dirname "$WEBKIT_PATH")/webkitgtk-6.0"
 for helper in WebKitNetworkProcess WebKitWebProcess WebKitGPUProcess; do

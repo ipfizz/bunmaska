@@ -1,13 +1,8 @@
 name: watch-webkit
 
-# Weekly upstream watch: compare the newest STABLE WPE WebKit tag against the
-# engines the live feed serves, and open an issue when a newer engine should be
-# built. Policy: hosted engines track the STABLE train only (even minor —
-# 2.52.x; odd minors are development and security advisories land on stable),
-# so development tags are filtered out here. The issue is the tracking record;
-# building stays a human call (dispatch build-engine-windows.yml with the new
-# tag — pack/sign/publish then run unattended off the repo secrets). Skips if
-# an engine-update issue is already open, so it never stacks duplicates.
+# Weekly: open an engine-update issue when upstream has a newer STABLE WPE WebKit than
+# the feed serves. Hosted engines track the stable train only (even minor, e.g. 2.52.x:
+# odd minors are development, and security advisories land on stable).
 on:
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC

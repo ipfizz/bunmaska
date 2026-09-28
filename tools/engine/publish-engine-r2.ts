@@ -1,14 +1,6 @@
-/**
- * Publish a packed engine feed dir (`<id>.tar.zst` + `.json` + `.sig` from
- * `pack-engine.ts`) to the R2 bucket behind engines.bunmaska.org and add it to
- * the bucket's `index.json`. The index merge runs before any upload, so a
- * republished or malformed id uploads nothing.
- *
- *   bun tools/engine/publish-engine-r2.ts <feedDir> <engineId> [--bucket <name>] [--new-index]
- *
- * Requires wrangler auth in the environment (CLOUDFLARE_API_TOKEN +
- * CLOUDFLARE_ACCOUNT_ID with R2 write on the bucket).
- */
+// Uploads a `pack-engine.ts` feed dir to R2 and merges it into index.json; the merge runs
+// first, so a republished or malformed id uploads nothing. Needs wrangler auth:
+// CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID with R2 write on the bucket.
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,13 +46,13 @@ if (manifest.id !== engineId) {
   fail(`manifest id ${manifest.id} does not match ${engineId}`);
 }
 
-// Read the CURRENT index from the bucket (not the CDN), so the merge sees every engine.
+// From the bucket, not the CDN, so the merge sees every engine.
 const work = mkdtempSync(join(tmpdir(), 'bunmaska-index-'));
 const current = join(work, 'index-current.json');
 const merged = join(work, 'index.json');
 const hadIndex = wrangler('get', `${bucket}/index.json`, '--file', current) === 0;
 if (!hadIndex && !newIndex) {
-  // Any failure (auth, 5xx, network) must not replace the live index with one entry.
+  // A failed read (auth, 5xx, network) must never replace the live index with one entry.
   fail(`could not read ${bucket}/index.json; pass --new-index only for a bucket with no index`);
 }
 writeFileSync(
