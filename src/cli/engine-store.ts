@@ -1,12 +1,6 @@
-/**
- * Content-addressed engine store: many WebKit versions live side by side under
- * `~/.bunmaska/webkit/<engine-id>/` and each app resolves the exact id it was
- * built against — there is no global "current" engine. A store dir is kept iff
- * some installed app (a `.links/*` refcount entry) still needs it. A fully
- * installed engine is the one with an `INSTALLATION_COMPLETE` marker, written
- * LAST after the content hash verifies — a half-download has no marker and is
- * re-fetched.
- */
+// The engine store: `<root>/<engine-id>/`, side by side, refcounted by `.links/`. An engine
+// is installed iff its INSTALLATION_COMPLETE marker exists, so the marker is written last
+// and removed first; a half-written or half-deleted engine never looks installed.
 
 import {
   cpSync,
@@ -41,10 +35,6 @@ export type StoreEnv = Record<string, string | undefined>;
 const defaultHome = (env: StoreEnv): string =>
   env['BUNMASKA_HOME'] ?? join(env['HOME'] ?? env['USERPROFILE'] ?? homedir(), '.bunmaska');
 
-/**
- * `$BUNMASKA_ENGINES_PATH`, else `<home>/webkit`. The single env-reading
- * function; every other op takes an explicit `root`.
- */
 export const enginesPath = (env: StoreEnv = process.env): string =>
   env['BUNMASKA_ENGINES_PATH'] ?? join(defaultHome(env), 'webkit');
 
@@ -58,12 +48,9 @@ const isEngineId = (name: string): boolean => {
 };
 
 /**
- * Reject an engine id that is not a single, contained directory segment under
- * `root`. An id reaches the store from an untrusted source — a remote feed
- * manifest (`engine-remote.ts`) or an `engine.json` — and is used verbatim to
- * build a directory that install then `rm`s and `rename`s over. Without this an
- * id like `../../x` or an absolute path is a traversal + arbitrary-delete. Bars
- * separators, absolute paths, `.`/`..`, and anything resolving outside `root`.
+ * Reject an id that is not one contained dir segment under `root`, or that no app could pin.
+ * Ids arrive untrusted (feed manifest, engine.json) and name dirs install `rm`s and renames
+ * over: `../../x` or an absolute path would be traversal plus arbitrary delete.
  */
 export const assertSafeEngineId = (root: string, id: string): void => {
   const base = resolve(root);
@@ -73,7 +60,7 @@ export const assertSafeEngineId = (root: string, id: string): void => {
     id.includes('/') ||
     id.includes('\\') ||
     id.includes('\0') ||
-    id.startsWith('.') || // .links, .tmp-*, dotfiles — reserved store internals
+    id.startsWith('.') || // .links, .tmp-*: store internals
     id === LOCK_FILE ||
     id === INSTALLATION_COMPLETE ||
     isAbsolute(id) ||
@@ -118,7 +105,7 @@ export const listInstalled = (root: string): string[] => {
 /** A refcount entry: which engine id an installed app needs. */
 export type EngineLink = { readonly app: string; readonly engine: string };
 
-/** Register an app as needing `engineId`; written via rename, so a crash never leaves a torn link. */
+/** Register an app as needing `engineId`; renamed into place, so a crash never tears it. */
 export const linkApp = (root: string, appPath: string, engineId: string): void => {
   mkdirSync(join(root, LINKS_DIR), { recursive: true });
   const path = linkPath(root, appPath);
@@ -174,11 +161,7 @@ export type InstallDeps = {
 
 export type InstallResult = { readonly id: string; readonly installed: boolean };
 
-/**
- * Move a populated staging dir into place, then write the marker LAST. Only the
- * swap holds the store lock (a concurrent install or gc must not race the rename);
- * the slow extract/copy already ran on private staging, outside it.
- */
+/** Swap populated staging into place under the store lock; the slow extract/copy ran outside it. */
 const swapIn = async (
   root: string,
   id: string,
@@ -205,11 +188,7 @@ const swapIn = async (
   });
 };
 
-/**
- * Idempotent: a fully-installed id is left untouched. The marker is written
- * LAST, after the hash verifies and the staging dir is swapped in. A hash
- * mismatch throws and leaves no engine dir behind.
- */
+/** Idempotent; a hash mismatch throws and leaves no engine dir behind. */
 export const installFromSource = async (
   root: string,
   source: InstallSource,
@@ -259,7 +238,7 @@ export type EngineManifest = {
 export const readEngineManifest = (dir: string): EngineManifest => {
   let raw: unknown;
   try {
-    // strip a UTF-8 BOM — Windows tooling (PowerShell 5.1) writes one
+    // PowerShell 5.1 writes a UTF-8 BOM.
     raw = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8').replace(/^\uFEFF/, ''));
   } catch {
     throw new BunmaskaError(`engine: no readable engine.json in ${dir}`, {
@@ -280,11 +259,7 @@ export const readEngineManifest = (dir: string): EngineManifest => {
   };
 };
 
-/**
- * Install from a local, already-extracted engine tree (`lib/` + `engine.json`).
- * Idempotent, marker written last. Signed remote installs go through
- * {@link ../cli/engine-remote installFromUrl} instead.
- */
+/** Install a local, already-extracted engine tree; unsigned, unlike feed installs. Idempotent. */
 export const installFromDir = async (
   root: string,
   sourceDir: string,
@@ -313,10 +288,7 @@ export type VerifyResult = {
   readonly problems: string[];
 };
 
-/**
- * Structural check only: marker present, `engine.json` id matches the dir, and
- * the declared `soname` exists in `lib/`.
- */
+/** Structural check only: the marker, the engine.json id, and its soname in `lib/`. */
 export const verifyEngine = (root: string, id: string): VerifyResult => {
   const problems: string[] = [];
   const dir = engineDir(root, id);
@@ -356,9 +328,8 @@ export type GcResult = {
 };
 
 /**
- * An engine is kept iff some live app still links it. Links whose app no longer
- * exists are dropped first, freeing their engines. `dryRun` mutates nothing and
- * reports what WOULD be removed.
+ * Keep the engines a live app links; drop dead links, then remove every other engine
+ * and interrupted-install leftovers. `dryRun` only reports.
  */
 export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => {
   const exists = deps.exists ?? existsSync;
@@ -453,9 +424,9 @@ const releaseLock = (lock: string, pid: string): void => {
 };
 
 /**
- * Run `fn` under the store's cross-process lock, a pidfile. A stale lock is stolen;
- * the lock is released even if `fn` throws, but only while it still holds our pid.
- * ponytail: two contenders stealing one stale lock at once can both enter; add a steal lock if that bites.
+ * Run `fn` under the store's cross-process pidfile lock, stealing a stale one. Released
+ * even if `fn` throws, but only while it still holds our pid.
+ * ponytail: two contenders stealing one stale lock can both enter; add a steal lock if it bites
  */
 export const withLock = async <T>(root: string, fn: () => Promise<T>): Promise<T> => {
   mkdirSync(root, { recursive: true });
