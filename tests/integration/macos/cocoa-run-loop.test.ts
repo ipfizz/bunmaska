@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import { createMacOSDrain } from '../../../src/main/platform/macos/cocoa-run-loop';
+import {
+  createMacOSDrain,
+  withAutoreleasePool,
+} from '../../../src/main/platform/macos/cocoa-run-loop';
 import {
   msgSendI64,
   msgSendInitWithContentRect,
@@ -24,6 +27,52 @@ if (currentPlatform() === 'macos') {
         drain(0);
       }
       expect(typeof drain).toBe('function');
+    });
+
+    test('each tick of any drain releases what JS autoreleased since the last tick', () => {
+      const rt = cocoa();
+      const retainCount = (handle: bigint): bigint =>
+        rt.msgSend(handle, rt.selectors.get('retainCount'));
+      const first = createMacOSDrain();
+      const second = createMacOSDrain();
+      const object = rt.msgSend(
+        rt.msgSend(rt.classes.get('NSObject'), rt.selectors.get('alloc')),
+        rt.selectors.get('init'),
+      );
+      try {
+        for (const drain of [first, second, first, second]) {
+          rt.msgSend(
+            rt.msgSend(object, rt.selectors.get('retain')),
+            rt.selectors.get('autorelease'),
+          );
+          expect(retainCount(object)).toBe(2n);
+          drain(0);
+          expect(retainCount(object)).toBe(1n);
+        }
+      } finally {
+        rt.msgSend(object, rt.selectors.get('release'));
+      }
+    });
+
+    test('withAutoreleasePool releases what its callback autoreleased and returns its value', () => {
+      const rt = cocoa();
+      const object = rt.msgSend(
+        rt.msgSend(rt.classes.get('NSObject'), rt.selectors.get('alloc')),
+        rt.selectors.get('init'),
+      );
+      try {
+        const count = withAutoreleasePool(() => {
+          rt.msgSend(
+            rt.msgSend(object, rt.selectors.get('retain')),
+            rt.selectors.get('autorelease'),
+          );
+          return rt.msgSend(object, rt.selectors.get('retainCount'));
+        });
+        expect(count).toBe(2n);
+        expect(rt.msgSend(object, rt.selectors.get('retainCount'))).toBe(1n);
+      } finally {
+        rt.msgSend(object, rt.selectors.get('release'));
+      }
     });
 
     test('pumping the drain makes a real NSWindow visible', () => {

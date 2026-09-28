@@ -1,4 +1,4 @@
-import { FFIType } from 'bun:ffi';
+import { FFIType, type Pointer } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import { cstr } from '../cstr';
 import { bigIntOut, LIBOBJC_PATH, macOSLibraryAccessor, ptrIn } from './objc';
@@ -44,6 +44,23 @@ const getAutoreleasePool = macOSLibraryAccessor('libobjc autorelease pool', () =
   }),
 );
 
+/** Run `fn` in its own autorelease pool, releasing what it autoreleased when it returns. */
+export const withAutoreleasePool = <T>(fn: () => T): T => {
+  const pool = getAutoreleasePool();
+  const token = pool.symbols.objc_autoreleasePoolPush();
+  try {
+    return fn();
+  } finally {
+    pool.symbols.objc_autoreleasePoolPop(token);
+  }
+};
+
+// Bun's thread has no ambient pool, so everything JS autoreleases between ticks
+// lands in this rolling pool, which each tick drains the way NSApp drains one pool
+// per event. One token for every drain: a per-drain token is popped by another
+// drain's tick first, and popping it again is an objc fatal abort.
+let jsPool: Pointer | null | undefined;
+
 /**
  * Create the macOS drain function. Throws {@link UnsupportedPlatformError} on
  * any non-macOS host (via the lazy accessors). The returned function is cheap
@@ -60,7 +77,11 @@ export const createMacOSDrain = (pumpEvents?: () => void): ((timeoutMs: number) 
     ),
   );
 
+  jsPool ??= pool.symbols.objc_autoreleasePoolPush();
   return (timeoutMs: number) => {
+    if (jsPool !== undefined) {
+      pool.symbols.objc_autoreleasePoolPop(jsPool);
+    }
     const poolToken = pool.symbols.objc_autoreleasePoolPush();
     try {
       pumpEvents?.();
@@ -80,6 +101,7 @@ export const createMacOSDrain = (pumpEvents?: () => void): ((timeoutMs: number) 
       return handled;
     } finally {
       pool.symbols.objc_autoreleasePoolPop(poolToken);
+      jsPool = pool.symbols.objc_autoreleasePoolPush();
     }
   };
 };
