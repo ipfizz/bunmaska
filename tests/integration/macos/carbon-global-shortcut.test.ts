@@ -40,16 +40,8 @@ const pressHotKey = (signature: number, id: number): number => {
   return status;
 };
 
-/**
- * macOS-only. Exercises the REAL Carbon `RegisterEventHotKey` path on the host.
- *
- * Triggering a genuine system hot-key press headlessly is not reliably possible,
- * so — like the dialog/notification construction tests — this asserts the
- * register/unregister LIFECYCLE runs cleanly with no crash (no SIGSEGV from the
- * retained handler JSCallback or the packed-u64 EventHotKeyID), and that state is
- * tracked correctly. The packed-u64 struct-by-value workaround returning `noErr`
- * is what makes `register` return `true` here.
- */
+// A real key press cannot be injected headlessly, so hot-key events are synthesized and sent
+// straight to the application event target, which runs the same handler.
 const isMac = currentPlatform() === 'macos';
 
 describe.skipIf(!isMac)('carbon-global-shortcut (macOS)', () => {
