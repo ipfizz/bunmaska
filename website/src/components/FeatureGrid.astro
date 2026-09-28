@@ -7,7 +7,7 @@ import BundleSizeCounter from "./ui/BundleSizeCounter";
   <div class="bento">
     <div class="cell col-span-6 md:col-span-3">
       <p class="eyebrow">Bundle size</p>
-      <BundleSizeCounter client:visible />
+      <BundleSizeCounter client:visible={{ rootMargin: "300px" }} />
       <p class="body mt-auto">
         The whole app, not a browser you re-ship with it. Downloads in seconds;
         updates are a fraction of the size.

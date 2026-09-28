@@ -11,13 +11,16 @@ export default function BundleCounter({
   to = 16,
   duration = 2400,
 }: BundleCounterProps) {
-  const [value, setValue] = useState(from);
-  const [progress, setProgress] = useState(0);
+  // SSR the real number: crawlers and no-JS readers must never see `from`.
+  const [value, setValue] = useState(to);
+  const [progress, setProgress] = useState(1);
 
   const ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setValue(from);
+    setProgress(0);
 
     const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
 
@@ -26,13 +29,6 @@ export default function BundleCounter({
         if (!entry?.isIntersecting) return;
 
         observer.disconnect();
-
-        // Respect reduced-motion: jump straight to the final value, no animation.
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          setProgress(1);
-          setValue(to);
-          return;
-        }
 
         const start = performance.now();
 
