@@ -11,7 +11,8 @@ import {
 } from '../common/config-schema';
 import { type Arch, currentArch, currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
-import { buildLinuxApp, debMaintainer, resolveBuildEngineId } from './build-linux';
+import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
+import { debMaintainer } from './deb';
 import {
   type BuildDmg,
   type BuildMacAppOptions,
