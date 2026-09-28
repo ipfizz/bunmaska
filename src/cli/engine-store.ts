@@ -48,6 +48,15 @@ const defaultHome = (env: StoreEnv): string =>
 export const enginesPath = (env: StoreEnv = process.env): string =>
   env['BUNMASKA_ENGINES_PATH'] ?? join(defaultHome(env), 'webkit');
 
+const isEngineId = (name: string): boolean => {
+  try {
+    parseEngineId(name);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Reject an engine id that is not a single, contained directory segment under
  * `root`. An id reaches the store from an untrusted source — a remote feed
@@ -74,6 +83,12 @@ export const assertSafeEngineId = (root: string, id: string): void => {
       code: 'ERR_ENGINE_ID',
     });
   }
+  if (!isEngineId(id)) {
+    throw new BunmaskaError(
+      `engine store: ${JSON.stringify(id)} is not a valid engine-id, so no app could pin it`,
+      { code: 'ERR_ENGINE_ID' },
+    );
+  }
 };
 
 export const engineDir = (root: string, id: string): string => join(root, id);
@@ -87,15 +102,6 @@ export const linkPath = (root: string, appPath: string): string =>
 export const lockPath = (root: string): string => join(root, LOCK_FILE);
 
 export const isInstalled = (root: string, id: string): boolean => existsSync(markerPath(root, id));
-
-const isEngineId = (name: string): boolean => {
-  try {
-    parseEngineId(name);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 /** The installed (marker-complete) engine ids in the store, sorted. */
 export const listInstalled = (root: string): string[] => {
@@ -169,6 +175,37 @@ export type InstallDeps = {
 export type InstallResult = { readonly id: string; readonly installed: boolean };
 
 /**
+ * Move a populated staging dir into place, then write the marker LAST. Only the
+ * swap holds the store lock (a concurrent install or gc must not race the rename);
+ * the slow extract/copy already ran on private staging, outside it.
+ */
+const swapIn = async (
+  root: string,
+  id: string,
+  staging: string,
+  soname: string,
+  onMarker?: () => void,
+): Promise<InstallResult> => {
+  if (!existsSync(join(staging, 'lib', soname))) {
+    throw new BunmaskaError(`engine ${id}: no lib/${soname} (its engine.json soname)`, {
+      code: 'ERR_ENGINE_MANIFEST',
+    });
+  }
+  return withLock(root, async () => {
+    if (isInstalled(root, id)) {
+      rmSync(staging, { recursive: true, force: true });
+      return { id, installed: false };
+    }
+    const dest = engineDir(root, id);
+    rmSync(dest, { recursive: true, force: true }); // clear a partial prior install
+    renameSync(staging, dest);
+    writeFileSync(markerPath(root, id), `${new Date().toISOString()}\n`);
+    onMarker?.();
+    return { id, installed: true };
+  });
+};
+
+/**
  * Idempotent: a fully-installed id is left untouched. The marker is written
  * LAST, after the hash verifies and the staging dir is swapped in. A hash
  * mismatch throws and leaves no engine dir behind.
@@ -203,21 +240,7 @@ export const installFromSource = async (
         { code: 'ERR_ENGINE_INTEGRITY' },
       );
     }
-    // Swap-into-place + marker under the store lock so a concurrent install or gc
-    // in another process can't race the rename (extract already ran on a private
-    // staging dir, so the slow part is NOT inside the lock).
-    return await withLock(root, async () => {
-      if (isInstalled(root, source.id)) {
-        rmSync(staging, { recursive: true, force: true });
-        return { id: source.id, installed: false };
-      }
-      const dest = engineDir(root, source.id);
-      rmSync(dest, { recursive: true, force: true }); // clear any partial prior install
-      renameSync(staging, dest);
-      writeFileSync(markerPath(root, source.id), `${new Date().toISOString()}\n`);
-      deps.onMarker?.();
-      return { id: source.id, installed: true };
-    });
+    return await swapIn(root, source.id, staging, extracted.soname, deps.onMarker);
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     throw error;
@@ -277,17 +300,7 @@ export const installFromDir = async (
   const staging = mkdtempSync(join(root, '.tmp-'));
   try {
     copyTree(sourceDir, staging);
-    return await withLock(root, async () => {
-      if (isInstalled(root, manifest.id)) {
-        rmSync(staging, { recursive: true, force: true });
-        return { id: manifest.id, installed: false };
-      }
-      const dest = engineDir(root, manifest.id);
-      rmSync(dest, { recursive: true, force: true });
-      renameSync(staging, dest);
-      writeFileSync(markerPath(root, manifest.id), `${new Date().toISOString()}\n`);
-      return { id: manifest.id, installed: true };
-    });
+    return await swapIn(root, manifest.id, staging, manifest.soname);
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     throw error;

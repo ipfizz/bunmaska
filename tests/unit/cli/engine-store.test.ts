@@ -170,6 +170,16 @@ describe('installFromSource', () => {
     expect(extracted).toBe(false);
   });
 
+  test('refuses an artifact missing its declared soname, leaving nothing installed', async () => {
+    const root = makeTmpDir();
+    const extract = async (bytes: Uint8Array, dest: string): Promise<void> => {
+      await fakeExtract(bytes, dest);
+      rmSync(join(dest, 'lib'), { recursive: true });
+    };
+    await expect(installFromSource(root, fakeSource(ID), { extract })).rejects.toThrow(/soname/);
+    expect(isInstalled(root, ID)).toBe(false);
+  });
+
   test('rejects a substituted engine — extracted engine.json id must match the claimed id', async () => {
     const root = makeTmpDir();
     // A genuinely-signed OLDER artifact (its engine.json says ID2) served under ID's URL.
@@ -207,6 +217,10 @@ describe('assertSafeEngineId', () => {
 
   test('accepts a well-formed engine id', () => {
     expect(() => assertSafeEngineId(root, ID)).not.toThrow();
+  });
+
+  test('rejects a name no app could pin', () => {
+    expect(() => assertSafeEngineId(root, 'webkit-local')).toThrow(/not a valid engine-id/);
   });
 
   test('rejects separators, absolute paths, dot segments, and empties', () => {
@@ -336,6 +350,14 @@ describe('installFromDir', () => {
 
     const second = await installFromDir(root, src);
     expect(second).toEqual({ id: ID, installed: false });
+  });
+
+  test('refuses an engine whose declared soname is missing, leaving nothing installed', async () => {
+    const root = makeTmpDir();
+    const src = makeEngineDir(root, ID);
+    rmSync(join(src, 'lib', 'libwebkitgtk-6.0.so.4'));
+    await expect(installFromDir(root, src)).rejects.toThrow(/libwebkitgtk-6\.0\.so\.4/);
+    expect(isInstalled(root, ID)).toBe(false);
   });
 
   test('rejects a source dir with no readable engine.json', async () => {
