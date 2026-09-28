@@ -324,6 +324,22 @@ describe('page object hardening', () => {
     ]);
   });
 
+  test('a non-object api is rejected at expose time', () => {
+    const expose = installCrossWorldHost(CHANNEL, new MockDocument(), MockCustomEvent);
+    for (const api of [false, '1.2', () => 5, [1, 2], null]) {
+      expect(() => expose('api', api as unknown as Record<string, unknown>)).toThrow(
+        /must be an object/,
+      );
+    }
+  });
+
+  test('a nested function is rejected at expose time, naming the member', () => {
+    const expose = installCrossWorldHost(CHANNEL, new MockDocument(), MockCustomEvent);
+    expect(() => expose('api', { ipc: { send: () => undefined } })).toThrow(
+      /"ipc".*nested functions are not supported/,
+    );
+  });
+
   test('a prototype-pollution member name is rejected at expose time', () => {
     const doc = new MockDocument();
     const expose = makeIsolatedHost(doc);

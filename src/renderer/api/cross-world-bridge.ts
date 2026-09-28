@@ -20,6 +20,8 @@
  *    STRUCTURED-CLONE copied. No functions as arguments, no callbacks, no live
  *    object references, no class instances with behaviour — data only. A call
  *    with uncloneable arguments rejects before it is sent.
+ *  - `api` must be an object. Only its own top-level functions become methods;
+ *    a nested function is rejected and an inherited one is never callable.
  *  - Non-function values on `api` are deep-cloned + deep-frozen into the page
  *    object once at expose time; later mutations on the isolated side are NOT
  *    reflected.
@@ -265,6 +267,9 @@ export const generateIsolatedHostSource = (channelId: string): string => {
   });
 
   function expose(key, api) {
+    if (api === null || typeof api !== 'object' || Array.isArray(api)) {
+      throw new Error('contextBridge: the api exposed as "' + key + '" must be an object');
+    }
     if (surfaces.has(key)) {
       throw new Error('contextBridge: "' + key + '" is already defined in the main world');
     }
@@ -288,7 +293,15 @@ export const generateIsolatedHostSource = (channelId: string): string => {
       if (typeof api[name] === 'function') {
         methods.push(name);
       } else {
-        values[name] = clone(api[name]);
+        try {
+          values[name] = clone(api[name]);
+        } catch (error) {
+          throw new Error(
+            'contextBridge: member "' + name + '" must be a function or cloneable data ' +
+              '(nested functions are not supported; make them top-level methods): ' +
+              error.message
+          );
+        }
       }
     }
     var entry = { key: key, api: api, methods: methods, values: values };
