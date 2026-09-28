@@ -68,14 +68,16 @@ class LinuxWebContents implements NativeWebContents {
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
   #windowOpenCallback: ((url: string) => void) | undefined;
 
-  constructor(userPreloadSource?: string) {
+  constructor(userPreloadSource?: string, frame?: boolean) {
     const channelId = generateChannelId();
+    const stub = generatePageWorldStub(channelId);
     const wired = createWebViewWithIpc({
       preloadSource: generatePreloadBootstrap(),
       isolatedSetupSource: generateIsolatedChannelSetup(channelId),
       isolatedHostSource: generateIsolatedHostSource(channelId),
-      // No `__bunmaska` in the page world (context isolation): it only mirrors `--app-region`.
-      pageWorldSource: `${generatePageWorldStub(channelId)}\n${windowControlsScript()}`, // ponytail: frameless window-op buttons wait on the isolated-world bridge (D045)
+      // Electron ignores drag regions in a framed window, so only a frameless one pays for the scan.
+      // ponytail: --app-region mirror only; frameless window-op buttons wait on the isolated bridge (D045)
+      pageWorldSource: frame === false ? `${stub}\n${windowControlsScript()}` : stub,
       ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {
         this.#markBridgeReady();
@@ -324,7 +326,7 @@ class LinuxWindow implements NativeWindow {
       gtk.symbols.gtk_window_fullscreen(this.#window);
     }
 
-    this.#webContents = new LinuxWebContents(options.preloadScript);
+    this.#webContents = new LinuxWebContents(options.preloadScript, options.frame);
     // Always a box, so a later setApplicationMenu can prepend a bar without reparenting the view.
     const menu = loadGtkMenuFFI().symbols;
     const box = menu.gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);

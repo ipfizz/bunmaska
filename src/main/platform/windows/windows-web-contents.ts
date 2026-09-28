@@ -28,7 +28,13 @@ export class WindowsWebContents implements NativeWebContents {
   readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
   readonly #windowOpCallbacks: Array<(op: string) => void> = [];
 
-  constructor(hwnd: bigint, width: number, height: number, preloadScript?: string) {
+  constructor(
+    hwnd: bigint,
+    width: number,
+    height: number,
+    preloadScript?: string,
+    frame?: boolean,
+  ) {
     const schemes = protocol.getRegisteredSchemes();
     if (schemes.length > 0) {
       // ponytail: the WinCairo C API has no URL-scheme handler hook at wpewebkit-2.52.5.
@@ -43,9 +49,8 @@ export class WindowsWebContents implements NativeWebContents {
       generateIsolatedHostSource(channelId),
       ...(preloadScript !== undefined ? [preloadScript] : []),
       generatePageWorldStub(channelId),
-      // Windows has no separate isolated world, so the page world IS the bridge
-      // world: it's correct (and necessary) to expose the window-op controls here.
-      windowControlsScript({ nativeOpChannel: true }),
+      // Page world = bridge world here (S03); Electron ignores drag regions when framed.
+      ...(frame === false ? [windowControlsScript({ nativeOpChannel: true })] : []),
       generateDomReadyScript(),
     ];
     this.#webView = WindowsWebView.create({

@@ -5,13 +5,13 @@ import { WindowsWebContents } from '../../../../../src/main/platform/windows/win
 import { WindowsWebView } from '../../../../../src/main/platform/windows/windows-webkit-view';
 
 /** A WindowsWebContents over a stub view (the real one needs WinCairo). */
-const createContents = () => {
+const createContents = (frame?: boolean) => {
   const evaluated: string[] = [];
   const stubView = { evaluateJavaScript: (code: string) => evaluated.push(code) };
   const create = spyOn(WindowsWebView, 'create').mockImplementation(
     () => stubView as unknown as WindowsWebView,
   );
-  const contents = new WindowsWebContents(0n, 800, 600);
+  const contents = new WindowsWebContents(0n, 800, 600, undefined, frame);
   const options = create.mock.calls[0]?.[0];
   if (options === undefined) {
     throw new Error('WindowsWebView.create was not called');
@@ -75,5 +75,16 @@ describe('WindowsWebContents', () => {
     }
     exec?.onMessage(JSON.stringify({ execId, ok: true, result: 2 }));
     expect(await pending).toBe(2);
+  });
+
+  test('only a frameless window gets the title-bar controls, as Electron ignores them framed', () => {
+    const hasControls = (frame?: boolean): boolean => {
+      const { options } = createContents(frame);
+      mock.restore();
+      return options.userScripts.some((source) => source.includes('--app-region'));
+    };
+    expect(hasControls(undefined)).toBe(false);
+    expect(hasControls(true)).toBe(false);
+    expect(hasControls(false)).toBe(true);
   });
 });
