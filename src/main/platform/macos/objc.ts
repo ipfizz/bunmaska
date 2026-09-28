@@ -17,8 +17,15 @@ export type Handle = bigint;
 
 export const LIBOBJC_PATH = 'libobjc.A.dylib';
 
-/** Convert a `bigint` handle to the branded `Pointer` Bun FFI expects. */
-export const ptrIn = (handle: Handle): Pointer => Number(handle) as Pointer;
+const MAX_EXACT_POINTER = BigInt(Number.MAX_SAFE_INTEGER);
+
+/** Convert a real C pointer to a `Pointer`; throws on a tagged or too-wide handle (D029). */
+export const ptrIn = (handle: Handle): Pointer => {
+  if (handle > MAX_EXACT_POINTER) {
+    throw new FFIError(`ptrIn: 0x${handle.toString(16)} does not fit a JS number (tagged?)`);
+  }
+  return Number(handle) as Pointer;
+};
 
 /** Convert a `Pointer` (or `null`) returned by FFI to a `bigint` handle (`0n` for null). */
 export const bigIntOut = (pointer: Pointer | null): Handle =>
