@@ -1,18 +1,10 @@
 import { nsStringToString } from './cocoa-foundation';
+import { msgSendPtrReturnsU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * Bridges `WKScriptMessageHandler` callbacks to JS.
- *
- * WebKit requires a real Objective-C object conforming to
- * `WKScriptMessageHandler` to receive
- * `window.webkit.messageHandlers.<name>.postMessage(...)`. We define that class
- * once at runtime (D026), allocate one instance per web view, and route each
- * instance's messages to its registered JS callback by keying on the `self`
- * handle delivered to the IMP.
- */
+/** `WKScriptMessageHandler` bridge (D021, D026): one instance per web view, routed by `self`. */
 
 const registry = new Map<Handle, (envelopeJson: string) => void>();
 
@@ -34,7 +26,15 @@ const ensureHandlerClass = (): Handle => {
           return;
         }
         const body = rt.msgSend(message, rt.selectors.get('body'));
-        callback(nsStringToString(body));
+        // Any page can post null/1/{}; UTF8String on a non-NSString is an uncatchable NSException.
+        const isString = msgSendPtrReturnsU8(
+          body,
+          rt.selectors.get('isKindOfClass:'),
+          rt.classes.get('NSString'),
+        );
+        if (isString === 1) {
+          callback(nsStringToString(body));
+        }
       },
     },
   ]);
@@ -45,18 +45,13 @@ export type ScriptMessageHandler = {
   /** The Objective-C handler instance to pass to `addScriptMessageHandler:name:`. */
   readonly handle: Handle;
   /**
-   * Drop the per-window routing entry and release the native instance. Call from
-   * the owning window's `close()` AFTER detaching it from the
-   * `userContentController` so a late message can no longer reach a freed
-   * callback. Idempotent.
+   * Unroute and release. Idempotent. Call only AFTER detaching from the
+   * `userContentController`, or a late message reaches a freed instance.
    */
   dispose(): void;
 };
 
-/**
- * Create a `WKScriptMessageHandler` instance whose messages are delivered to
- * `onEnvelope` as the raw JSON string the renderer posted.
- */
+/** Create a handler that passes each posted string body to `onEnvelope` as raw JSON. */
 export const createScriptMessageHandler = (
   onEnvelope: (envelopeJson: string) => void,
 ): ScriptMessageHandler => {

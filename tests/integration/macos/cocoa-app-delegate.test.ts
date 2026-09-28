@@ -1,3 +1,4 @@
+import { dlopen, FFIType } from 'bun:ffi';
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import {
@@ -8,14 +9,23 @@ import { nsString } from '../../../src/main/platform/macos/cocoa-foundation';
 import { msgSendPtr, msgSendPtrPtr } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
-/**
- * Drives the runtime `BunmaskaAppDelegate` against the real Objective-C runtime.
- * The delegate-callback routing uses the same `defineObjcClass` JSCallback
- * mechanism as the (CI-proven) window/navigation delegates; here we prove the
- * class builds, installs as `NSApp`'s delegate, and routes `openURLs:`/`openFile:`
- * to the JS handlers (the events AppKit normally fires for deep links / file
- * associations).
- */
+/** Drives the runtime `BunmaskaAppDelegate` by sending its selectors directly. */
+
+/** `objc_msgSend(id, SEL, id, u64) -> BOOL`; the u64 lets a test put junk above the BOOL byte. */
+const sendReopen = (delegate: bigint, flag: bigint): number => {
+  const lib = dlopen('libobjc.A.dylib', {
+    objc_msgSend: {
+      args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
+      returns: FFIType.u8,
+    },
+  });
+  try {
+    const sel = cocoa().selectors.get('applicationShouldHandleReopen:hasVisibleWindows:');
+    return lib.symbols.objc_msgSend(delegate, sel, 0n, flag);
+  } finally {
+    lib.close();
+  }
+};
 
 const NOOP_HANDLERS: AppDelegateHandlers = {
   activate: () => undefined,
@@ -25,11 +35,6 @@ const NOOP_HANDLERS: AppDelegateHandlers = {
 
 if (currentPlatform() === 'macos') {
   describe('BunmaskaAppDelegate on the real macOS runtime', () => {
-    test('createAppDelegate returns a live instance', () => {
-      const delegate = createAppDelegate(NOOP_HANDLERS);
-      expect(delegate.handle).not.toBe(0n);
-    });
-
     test('installs on NSApp and reads back via -delegate', () => {
       const rt = cocoa();
       const nsApp = rt.msgSend(
@@ -39,6 +44,14 @@ if (currentPlatform() === 'macos') {
       const delegate = createAppDelegate(NOOP_HANDLERS);
       msgSendPtr(nsApp, rt.selectors.get('setDelegate:'), delegate.handle);
       expect(rt.msgSend(nsApp, rt.selectors.get('delegate'))).toBe(delegate.handle);
+    });
+
+    test('Dock reopen reports the BOOL flag and returns it, as Electron does', () => {
+      const seen: boolean[] = [];
+      const delegate = createAppDelegate({ ...NOOP_HANDLERS, activate: (v) => seen.push(v) });
+      expect(sendReopen(delegate.handle, 0n)).toBe(0);
+      expect(sendReopen(delegate.handle, 0x1_0000_0001n)).toBe(1);
+      expect(seen).toEqual([false, true]);
     });
 
     test('application:openURLs: routes each URL to the openUrl handler', () => {
@@ -63,26 +76,32 @@ if (currentPlatform() === 'macos') {
       expect(seen).toEqual(['myapp://open/x']);
     });
 
-    test('application:openFile: routes the path to the openFile handler', () => {
+    test('application:openURLs: routes a file URL to openFile as a path', () => {
       const rt = cocoa();
-      let seen: string | undefined;
+      const urls: string[] = [];
+      const files: string[] = [];
       const delegate = createAppDelegate({
         ...NOOP_HANDLERS,
-        openFile: (p) => {
-          seen = p;
-        },
+        openUrl: (u) => urls.push(u),
+        openFile: (p) => files.push(p),
       });
       const nsApp = rt.msgSend(
         rt.classes.get('NSApplication'),
         rt.selectors.get('sharedApplication'),
       );
-      msgSendPtrPtr(
-        delegate.handle,
-        rt.selectors.get('application:openFile:'),
-        nsApp,
-        nsString('/tmp/bunmaska-open.txt'),
+      const url = msgSendPtr(
+        rt.classes.get('NSURL'),
+        rt.selectors.get('fileURLWithPath:'),
+        nsString('/tmp/bunmaska open.txt'),
       );
-      expect(seen).toBe('/tmp/bunmaska-open.txt');
+      const array = msgSendPtr(
+        rt.classes.get('NSArray'),
+        rt.selectors.get('arrayWithObject:'),
+        url,
+      );
+      msgSendPtrPtr(delegate.handle, rt.selectors.get('application:openURLs:'), nsApp, array);
+      expect(files).toEqual(['/tmp/bunmaska open.txt']);
+      expect(urls).toEqual([]);
     });
   });
 }

@@ -1,43 +1,20 @@
 import { makeOneShotBlock } from './cocoa-block';
+import { bounded } from './cocoa-cookies';
 import { msgSendPtr3 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
+import { loadWebKit } from './cocoa-webkit';
 
-/**
- * macOS website-data management via `WKWebsiteDataStore`.
- *
- * The completion handler is a hand-built ObjC Block (D022b) that fires on the
- * pumped run loop, so the returned Promise settles when the removal finishes.
- */
-
-const CLEAR_TIMEOUT_MS = 15000;
-
-/** Remove all website data from the default store; resolves when it completes. */
-export const clearStorageData = (): Promise<void> => {
-  const rt = cocoa();
-  const store = rt.msgSend(
-    rt.classes.get('WKWebsiteDataStore'),
-    rt.selectors.get('defaultDataStore'),
-  );
-  const types = rt.msgSend(
-    rt.classes.get('WKWebsiteDataStore'),
-    rt.selectors.get('allWebsiteDataTypes'),
-  );
-  const since = rt.msgSend(rt.classes.get('NSDate'), rt.selectors.get('distantPast'));
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`clearStorageData timed out after ${CLEAR_TIMEOUT_MS}ms`));
-    }, CLEAR_TIMEOUT_MS);
-    // Completion handler is ^(void) — no arguments beyond the implicit block.
-    const block = makeOneShotBlock(() => {
-      clearTimeout(timer);
-      resolve();
-    }, []);
+/** Remove all website data from the default store; resolves when it completes (D022b). */
+export const clearStorageData = (): Promise<void> =>
+  bounded('clearStorageData', (resolve) => {
+    loadWebKit();
+    const rt = cocoa();
+    const store = rt.classes.get('WKWebsiteDataStore');
     msgSendPtr3(
-      store,
+      rt.msgSend(store, rt.selectors.get('defaultDataStore')),
       rt.selectors.get('removeDataOfTypes:modifiedSince:completionHandler:'),
-      types,
-      since,
-      block,
+      rt.msgSend(store, rt.selectors.get('allWebsiteDataTypes')),
+      rt.msgSend(rt.classes.get('NSDate'), rt.selectors.get('distantPast')),
+      makeOneShotBlock(() => resolve(undefined), []),
     );
   });
-};

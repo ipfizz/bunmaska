@@ -1,17 +1,8 @@
 import { nsStringToString } from './cocoa-foundation';
-import { msgSendI64, msgSendReturnsI64 } from './cocoa-msgsend-variants';
+import { msgSendI64, msgSendReturnsI64, msgSendReturnsU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
-
-/**
- * Bridges `NSApplicationDelegate` callbacks to JS (D026).
- *
- * `applicationShouldHandleReopen:hasVisibleWindows:` is AppKit's Dock-reopen
- * hook and the source of Electron's `activate` event. The delegate object is
- * created with `alloc`/`init` (retain count +1) and never released, so it
- * outlives `NSApp` (which holds its delegate weakly).
- */
 
 /** JS handlers an `NSApplicationDelegate` instance routes callbacks to. */
 export type AppDelegateHandlers = {
@@ -37,10 +28,11 @@ const ensureDelegateClass = (): Handle => {
       typeEncoding: 'c@:@c',
       args: ['object', 'object'],
       returns: 'bool',
-      impl: (_self, _cmd, _sender, hasVisibleWindows) => {
-        current?.activate(hasVisibleWindows === 1n);
-        // Return YES so AppKit performs its default reopen behavior.
-        return 1;
+      impl: (_self, _cmd, _sender, flag) => {
+        // Only the low byte of a BOOL register is defined by the ABI.
+        const hasVisibleWindows = (flag & 0xffn) !== 0n;
+        current?.activate(hasVisibleWindows);
+        return hasVisibleWindows ? 1 : 0;
       },
     },
     {
@@ -53,19 +45,13 @@ const ensureDelegateClass = (): Handle => {
         const count = msgSendReturnsI64(urls, rt.selectors.get('count'));
         for (let i = 0n; i < count; i += 1n) {
           const url = msgSendI64(urls, rt.selectors.get('objectAtIndex:'), i);
-          current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+          // AppKit never calls application:openFile: once openURLs: exists; split file URLs here.
+          if (msgSendReturnsU8(url, rt.selectors.get('isFileURL')) === 1) {
+            current?.openFile(nsStringToString(rt.msgSend(url, rt.selectors.get('path'))));
+          } else {
+            current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+          }
         }
-      },
-    },
-    {
-      // BOOL application:(NSApplication*)app openFile:(NSString*)filename
-      selector: 'application:openFile:',
-      typeEncoding: 'c@:@@',
-      args: ['object', 'object'],
-      returns: 'bool',
-      impl: (_self, _cmd, _app, filename) => {
-        current?.openFile(nsStringToString(filename));
-        return 1;
       },
     },
   ]);
@@ -78,8 +64,8 @@ export type AppDelegate = {
 };
 
 /**
- * Create an `NSApplicationDelegate` instance routing callbacks to `handlers`.
- * There is one application delegate per process; the most recent handlers win.
+ * Create the app delegate; the most recent `handlers` win. Its alloc/init +1 is never
+ * released because `NSApp` holds its delegate weakly.
  */
 export const createAppDelegate = (handlers: AppDelegateHandlers): AppDelegate => {
   const rt = cocoa();

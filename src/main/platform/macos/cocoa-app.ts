@@ -3,17 +3,7 @@ import { msgSendI64, msgSendPtr, msgSendReturnsU8 } from './cocoa-msgsend-varian
 import { cocoa } from './cocoa-runtime';
 import type { Handle } from './objc';
 
-/**
- * macOS application-level operations on `NSApplication` (D026/D029), backing the
- * macOS-only parts of Electron's `app`.
- *
- * `NSApp` is `[NSApplication sharedApplication]` — idempotent — so each call
- * re-fetches it rather than depending on the backend exposing its private handle
- * across the platform seam (D024). All args are scalars/objects (no struct
- * returns), so everything is pure `bun:ffi`.
- */
-
-/** Electron's activation-policy names → `NSApplicationActivationPolicy` values. */
+/** Electron's activation-policy names as `NSApplicationActivationPolicy` values. */
 const ACTIVATION_POLICY: Readonly<Record<string, bigint>> = {
   regular: 0n,
   accessory: 1n,
@@ -39,7 +29,6 @@ export const setActivationPolicy = (policy: 'regular' | 'accessory' | 'prohibite
   msgSendI64(nsApp(), rt.selectors.get('setActivationPolicy:'), ACTIVATION_POLICY[policy] ?? 0n);
 };
 
-/** Hide all application windows (without minimizing). */
 export const hide = (): void => {
   msgSendPtr(nsApp(), cocoa().selectors.get('hide:'), 0n);
 };
@@ -52,7 +41,6 @@ export const show = (): void => {
 export const isHidden = (): boolean =>
   msgSendReturnsU8(nsApp(), cocoa().selectors.get('isHidden')) === 1;
 
-/** Whether the application is the active (frontmost) app. */
 export const isActive = (): boolean =>
   msgSendReturnsU8(nsApp(), cocoa().selectors.get('isActive')) === 1;
 
