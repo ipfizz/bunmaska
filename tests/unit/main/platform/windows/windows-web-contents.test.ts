@@ -32,7 +32,9 @@ const collectWarnings = (): string[] => {
 afterEach(() => {
   mock.restore();
   resetLogger();
-  protocol.clearForTesting();
+  for (const scheme of protocol.getRegisteredSchemes()) {
+    protocol.unhandle(scheme);
+  }
 });
 
 describe('WindowsWebContents', () => {
