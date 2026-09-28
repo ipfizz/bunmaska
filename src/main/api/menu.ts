@@ -237,32 +237,18 @@ export class MenuItem {
     this.id = options.id;
     const role =
       options.role === undefined ? undefined : ROLE_NAMES.get(options.role.toLowerCase());
-    if (role !== undefined && isMacroRole(role)) {
-      const macro = MACRO_ROLE_SUBMENUS[role];
-      this.role = undefined;
-      this.label = options.label ?? macro.label;
-      this.enabled = options.enabled ?? true;
-      this.checked = false;
-      this.accelerator = undefined;
-      this.click = undefined;
-      this.submenu = Menu.buildFromTemplate(macro.submenu);
-      this.type = 'submenu';
-      return;
-    }
+    const macro = role !== undefined && isMacroRole(role) ? MACRO_ROLE_SUBMENUS[role] : undefined;
     // An unsupported role degrades to a plain item labelled with the role name.
     this.role = role !== undefined && isRole(role) ? role : undefined;
     const roleDefault = this.role !== undefined ? ROLE_DEFAULTS[this.role] : undefined;
-    this.label = options.label ?? roleDefault?.label ?? options.role ?? '';
+    this.label = options.label ?? macro?.label ?? roleDefault?.label ?? options.role ?? '';
     this.enabled = options.enabled ?? true;
     this.checked = options.checked ?? false;
     this.accelerator = options.accelerator ?? roleDefault?.accelerator;
     this.click = options.click;
+    const submenu = options.submenu ?? macro?.submenu;
     this.submenu =
-      options.submenu === undefined
-        ? undefined
-        : options.submenu instanceof Menu
-          ? options.submenu
-          : Menu.buildFromTemplate(options.submenu);
+      submenu === undefined || submenu instanceof Menu ? submenu : Menu.buildFromTemplate(submenu);
     this.type = options.type ?? (this.submenu !== undefined ? 'submenu' : 'normal');
   }
 }

@@ -146,6 +146,11 @@ describe('Menu macro roles', () => {
     ]);
   });
 
+  test('a macro role keeps an explicitly supplied submenu', () => {
+    const item = new MenuItem({ role: 'editMenu', submenu: [{ label: 'Mine' }] });
+    expect(item.submenu?.items.map((i) => i.label)).toEqual(['Mine']);
+  });
+
   test('a macro role accepts a custom label', () => {
     expect(new MenuItem({ role: 'editMenu', label: 'Edit…' }).label).toBe('Edit…');
   });
