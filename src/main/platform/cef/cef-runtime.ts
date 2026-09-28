@@ -272,6 +272,21 @@ export const initializeCef = (options: CefInitOptions): void => {
     toAddress(onContextInitialized.ptr),
   );
   setPtr(handler.buf, BROWSER_PROCESS_HANDLER.onScheduleMessagePumpWork, glue.scheduleFn());
+  // Another process launched on this profile: unhandled (0 or NULL), Chrome opens its own
+  // tabbed browser window here, outside every bunmaska policy. UI thread.
+  const onRelaunch = new JSCallback(
+    (_self: unknown, commandLine: unknown) => {
+      release(toAddress(commandLine));
+      return 1;
+    },
+    { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+  );
+  retainForever(onRelaunch);
+  setPtr(
+    handler.buf,
+    BROWSER_PROCESS_HANDLER.onAlreadyRunningAppRelaunch,
+    toAddress(onRelaunch.ptr),
+  );
 
   const onCommandLine = new JSCallback(
     (_self: unknown, processType: unknown, commandLine: unknown) => {

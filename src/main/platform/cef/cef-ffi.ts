@@ -47,7 +47,11 @@ export const COMMAND_LINE = {
   appendSwitch: 152,
   appendSwitchWithValue: 160,
 } as const;
-export const BROWSER_PROCESS_HANDLER = { onContextInitialized: 48, onScheduleMessagePumpWork: 72 };
+export const BROWSER_PROCESS_HANDLER = {
+  onContextInitialized: 48,
+  onAlreadyRunningAppRelaunch: 64,
+  onScheduleMessagePumpWork: 72,
+};
 export const CLIENT = { getDisplayHandler: 72, getLifeSpanHandler: 144, getLoadHandler: 152 };
 export const LIFE_SPAN = { onBeforePopup: 40, onAfterCreated: 64, doClose: 72, onBeforeClose: 80 };
 export const LOAD = { onLoadingStateChange: 40, onLoadEnd: 56, onLoadError: 64 } as const;
