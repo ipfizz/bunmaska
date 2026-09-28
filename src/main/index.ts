@@ -18,7 +18,7 @@ export {
   type WebPreferences,
 } from './api/browser-window';
 export { type LoadFileOptions, WebContents } from './api/web-contents';
-export { ipcMain } from './api/ipc-main';
+export { type IpcMainEvent, type IpcMainInvokeEvent, ipcMain } from './api/ipc-main';
 export { clipboard, type Clipboard } from './api/clipboard';
 export {
   dialog,
@@ -31,6 +31,7 @@ export { type GlobalShortcut, globalShortcut } from './api/global-shortcut';
 export {
   Menu,
   MenuItem,
+  type MenuItemClick,
   type MenuItemOptions,
   type MenuItemType,
   type MenuPopupOptions,
