@@ -135,7 +135,7 @@ export class AutoUpdaterImpl extends EventEmitter {
   #feedURL: string | undefined;
   #publicKey: string | undefined;
   #channel: string | undefined;
-  #available: UpdateManifest | undefined;
+  #available: { readonly manifest: UpdateManifest; readonly text: string } | undefined;
   #staged: StagedUpdate | undefined;
 
   constructor(deps?: Partial<AutoUpdaterDeps>) {
@@ -208,13 +208,27 @@ export class AutoUpdaterImpl extends EventEmitter {
     return error;
   }
 
+  /** Throws unless `<url>.sig` is a valid publisher signature over `message`. */
+  async #verifySignature(
+    publicKey: string,
+    url: string,
+    message: Uint8Array,
+    what: string,
+  ): Promise<void> {
+    const signature = (await this.#deps.fetchText(`${url}.sig`)).trim();
+    if (!verifyArtifact(publicKey, message, signature)) {
+      throw new Error(`autoUpdater: ${what} signature verification failed`);
+    }
+  }
+
   /** Returns `null` when no newer version is offered. Rejects on network/manifest failure. */
   async checkForUpdates(): Promise<UpdateCheckResult | null> {
     const feedURL = this.#requireFeedURL();
     this.emit('checking-for-update');
+    let text: string;
     let manifest: UpdateManifest;
     try {
-      const text = await this.#deps.fetchText(joinUrl(feedURL, 'update.json'));
+      text = await this.#deps.fetchText(joinUrl(feedURL, 'update.json'));
       manifest = parseUpdateManifest(text);
     } catch (cause) {
       throw this.#emitError(cause);
@@ -240,7 +254,7 @@ export class AutoUpdaterImpl extends EventEmitter {
       this.emit('update-not-available', toUpdateInfo(manifest));
       return null;
     }
-    this.#available = manifest;
+    this.#available = { manifest, text };
     this.emit('update-available', toUpdateInfo(manifest));
     return { updateInfo: toUpdateInfo(manifest), manifest };
   }
@@ -255,14 +269,22 @@ export class AutoUpdaterImpl extends EventEmitter {
    */
   async downloadUpdate(): Promise<StagedUpdate> {
     const feedURL = this.#requireFeedURL();
-    const manifest = this.#available;
-    if (manifest === undefined) {
+    const available = this.#available;
+    if (available === undefined) {
       throw this.#emitError(
         new Error('autoUpdater.downloadUpdate: no update available; call checkForUpdates first'),
       );
     }
+    const { manifest } = available;
     try {
       const publicKey = this.#requirePublicKey();
+      // Authenticates every field checkForUpdates acted on (version, os/arch, channel, name).
+      await this.#verifySignature(
+        publicKey,
+        joinUrl(feedURL, 'update.json'),
+        new TextEncoder().encode(available.text),
+        'update.json',
+      );
       assertSizeWithin(manifest.size, MAX_COMPRESSED_ARTIFACT_BYTES, 'compressed artifact');
       const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact));
       if (bytes.length !== manifest.size) {
@@ -276,12 +298,12 @@ export class AutoUpdaterImpl extends EventEmitter {
           `autoUpdater: artifact hash mismatch (expected ${manifest.hash}, got ${actualHash})`,
         );
       }
-      const signature = (
-        await this.#deps.fetchText(joinUrl(feedURL, `${manifest.artifact}.sig`))
-      ).trim();
-      if (!verifyArtifact(publicKey, bytes, signature)) {
-        throw new Error('autoUpdater: artifact signature verification failed');
-      }
+      await this.#verifySignature(
+        publicKey,
+        joinUrl(feedURL, manifest.artifact),
+        bytes,
+        'artifact',
+      );
       const tarBytes = this.#deps.decompress(bytes);
       assertSizeWithin(tarBytes.length, MAX_DECOMPRESSED_TAR_BYTES, 'decompressed update');
       const tarPath = await this.#deps.stage(tarBytes, manifest);

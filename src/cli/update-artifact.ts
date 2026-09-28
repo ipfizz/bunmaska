@@ -63,6 +63,8 @@ export type UpdateArtifactResult = {
   readonly manifest: UpdateManifest;
   /** Present only when the spec carried a signing key. */
   readonly sigPath?: string;
+  /** `update.json.sig`; present only when the spec carried a signing key. */
+  readonly manifestSigPath?: string;
 };
 
 const tarThenZstd = async (bundlePath: string, outPath: string): Promise<void> => {
@@ -98,13 +100,20 @@ export const emitUpdateArtifact = async (
   await deps.tarZst(spec.bundlePath, artifactPath);
   const bytes = deps.readBytes(artifactPath);
   const manifest = buildUpdateManifest(spec, bytes);
+  const manifestText = serializeUpdateManifest(manifest);
   const manifestPath = join(spec.outDir, 'update.json');
-  deps.writeText(manifestPath, serializeUpdateManifest(manifest));
   if (spec.signingKeyPem === undefined) {
+    deps.writeText(manifestPath, manifestText);
     return { artifactPath, manifestPath, manifest };
   }
-  // Same detached format the runtime autoUpdater fetches as `<artifact>.sig`.
+  // Sign before writing so a bad key leaves no unsigned update.json behind.
+  const artifactSig = signArtifact(spec.signingKeyPem, bytes);
+  const manifestSig = signArtifact(spec.signingKeyPem, new TextEncoder().encode(manifestText));
+  // Same detached format the runtime autoUpdater fetches as `<file>.sig`.
   const sigPath = `${artifactPath}.sig`;
-  deps.writeText(sigPath, `${signArtifact(spec.signingKeyPem, bytes)}\n`);
-  return { artifactPath, manifestPath, manifest, sigPath };
+  const manifestSigPath = `${manifestPath}.sig`;
+  deps.writeText(manifestPath, manifestText);
+  deps.writeText(sigPath, `${artifactSig}\n`);
+  deps.writeText(manifestSigPath, `${manifestSig}\n`);
+  return { artifactPath, manifestPath, manifest, sigPath, manifestSigPath };
 };

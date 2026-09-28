@@ -129,6 +129,37 @@ describe('emitUpdateArtifact signing', () => {
     expect(verifyArtifact(KEYS.publicKey, new Uint8Array([1]), sig)).toBe(false);
   });
 
+  test('signs the exact update.json text into update.json.sig', async () => {
+    const writes = new Map<string, string>();
+    const result = await emitUpdateArtifact(
+      { ...spec('/out', '/build/My App.app'), signingKeyPem: KEYS.privateKey },
+      {
+        tarZst: async () => undefined,
+        readBytes: () => new Uint8Array([9, 8, 7]),
+        writeText: (path, text) => writes.set(slash(path), text),
+      },
+    );
+    expect(slash(result.manifestSigPath ?? '')).toBe('/out/update.json.sig');
+    const manifestBytes = new TextEncoder().encode(writes.get('/out/update.json') ?? '');
+    const sig = (writes.get('/out/update.json.sig') ?? '').trim();
+    expect(verifyArtifact(KEYS.publicKey, manifestBytes, sig)).toBe(true);
+  });
+
+  test('an unusable signing key fails before any feed file is written', async () => {
+    const writes = new Map<string, string>();
+    await expect(
+      emitUpdateArtifact(
+        { ...spec('/out', '/build/My App.app'), signingKeyPem: KEYS.publicKey },
+        {
+          tarZst: async () => undefined,
+          readBytes: () => new Uint8Array([1]),
+          writeText: (path, text) => writes.set(slash(path), text),
+        },
+      ),
+    ).rejects.toThrow();
+    expect([...writes.keys()]).toEqual([]);
+  });
+
   test('without a signing key no .sig is written and sigPath is absent', async () => {
     const writes = new Map<string, string>();
     const result = await emitUpdateArtifact(spec('/out', '/build/My App.app'), {

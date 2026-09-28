@@ -35,6 +35,17 @@ const manifest = (version: string): UpdateManifest => ({
   artifact: 'my-app-stable-macos-arm64.tar.zst',
 });
 
+/** A feed serving `m` as update.json, signed by the publisher key, plus the artifact `.sig`. */
+const signedFeed =
+  (m: UpdateManifest, manifestSignedAs: UpdateManifest = m) =>
+  async (url: string): Promise<string> => {
+    if (url.endsWith('update.json.sig')) {
+      const signed = new TextEncoder().encode(serializeUpdateManifest(manifestSignedAs));
+      return signArtifact(KEYS.privateKey, signed);
+    }
+    return url.endsWith('.sig') ? SIG : serializeUpdateManifest(m);
+  };
+
 type Harness = {
   updater: AutoUpdaterImpl;
   staged: StagedUpdate[];
@@ -47,8 +58,7 @@ const makeUpdater = (overrides: Partial<AutoUpdaterDeps>, feedVersion = '2.0.0')
   const decompressed: Uint8Array[] = [];
   const events: string[] = [];
   const deps: Partial<AutoUpdaterDeps> = {
-    fetchText: async (url) =>
-      url.endsWith('.sig') ? SIG : serializeUpdateManifest(manifest(feedVersion)),
+    fetchText: signedFeed(manifest(feedVersion)),
     fetchBytes: async () => ARTIFACT,
     currentVersion: () => '1.0.0',
     currentOs: () => 'macos',
@@ -205,6 +215,26 @@ describe('autoUpdater.downloadUpdate', () => {
     expect(h.events).toContain('error');
   });
 
+  test('refuses a re-labelled update.json before fetching the artifact (rollback guard)', async () => {
+    let fetched = false;
+    const h = makeUpdater(
+      {
+        // A genuinely signed 2.0.0 release re-served under a forged version.
+        fetchText: signedFeed(manifest('99.0.0'), manifest('2.0.0')),
+        fetchBytes: async () => {
+          fetched = true;
+          return ARTIFACT;
+        },
+      },
+      '99.0.0',
+    );
+    h.updater.setFeedURL(FEED);
+    await h.updater.checkForUpdates();
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/update\.json signature/);
+    expect(fetched).toBe(false);
+    expect(h.events).toContain('error');
+  });
+
   test('rejects + emits error on an artifact size mismatch', async () => {
     const h = makeUpdater({ fetchBytes: async () => new Uint8Array([1, 2]) }, '2.0.0');
     h.updater.setFeedURL(FEED);
@@ -225,13 +255,7 @@ describe('autoUpdater.downloadUpdate', () => {
     let fetched = false;
     const h = makeUpdater(
       {
-        fetchText: async (url) =>
-          url.endsWith('.sig')
-            ? SIG
-            : serializeUpdateManifest({
-                ...manifest('2.0.0'),
-                size: MAX_COMPRESSED_ARTIFACT_BYTES + 1,
-              }),
+        fetchText: signedFeed({ ...manifest('2.0.0'), size: MAX_COMPRESSED_ARTIFACT_BYTES + 1 }),
         fetchBytes: async () => {
           fetched = true;
           return ARTIFACT;
