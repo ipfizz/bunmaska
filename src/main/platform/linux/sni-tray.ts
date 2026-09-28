@@ -18,6 +18,7 @@ import {
   nodeInfoNewForXml,
   probeSessionBusUnchecked,
   registerObject,
+  subscribeSignal,
   unregisterObject,
 } from './linux-dbus';
 
@@ -323,13 +324,17 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   retained.callbacks.push(methodCall, getProp, setProp); // load-bearing: the vtable copy points here.
   retained.misc.push(node, vtable);
 
+  let destroyed = false;
   // Registered by object path: the watcher pairs it with our sender's unique name (the
   // libappindicator form). Absent watcher => fast null => the icon simply doesn't appear.
-  const g = loadGlibFFI().symbols;
-  const pathVariant = g.g_variant_new_string(cstr(objectPath));
-  if (pathVariant !== null) {
+  const registerWithWatcher = (): void => {
+    const g = loadGlibFFI().symbols;
+    const pathVariant = g.g_variant_new_string(cstr(objectPath));
+    if (pathVariant === null) {
+      return;
+    }
     const args = g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(pathVariant)])), 1n);
-    callMethodSync(
+    const reply = callMethodSync(
       conn,
       WATCHER_NAME,
       WATCHER_PATH,
@@ -337,9 +342,28 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
       'RegisterStatusNotifierItem',
       args,
     );
-  }
+    if (reply !== null) {
+      g.g_variant_unref(reply);
+    }
+  };
+  registerWithWatcher();
+  // A watcher that starts or restarts after us has no record of this item.
+  subscribeSignal(
+    conn,
+    {
+      sender: 'org.freedesktop.DBus',
+      interface: 'org.freedesktop.DBus',
+      member: 'NameOwnerChanged',
+      path: '/org/freedesktop/DBus',
+      arg0: WATCHER_NAME,
+    },
+    () => {
+      if (!destroyed) {
+        registerWithWatcher();
+      }
+    },
+  );
 
-  let destroyed = false;
   return {
     setToolTip: (toolTip) => {
       state.toolTip = toolTip;
