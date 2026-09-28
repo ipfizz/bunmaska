@@ -298,6 +298,13 @@ const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8
   return buildPackedDib(width, height, pixels, stride);
 };
 
+/**
+ * DIBs a live GDI+ bitmap reads in place (GdipCreateBitmapFromGdiDib does not copy the
+ * pixels). A local's last use is the create call, so an optimised frame could let GC free
+ * it mid-encode; membership here keeps it reachable until GdipDisposeImage.
+ */
+const pinnedDibs = new Set<Uint8Array>();
+
 export const windowsClipboardBackend: ClipboardBackend = {
   readText(): string {
     return withClipboard('', () => {
@@ -336,21 +343,20 @@ export const windowsClipboardBackend: ClipboardBackend = {
     const gdip = loadGdiplus().symbols;
     const out = new Uint8Array(8);
     const outPtr = ptr(out);
-    // GdiplusCreateBitmapFromGdiDib may reference (not copy) the pixels, so `dib`
-    // must stay live until encodePng — it does, being referenced through the call.
+    pinnedDibs.add(dib);
     const status = gdip.GdipCreateBitmapFromGdiDib(
       ptr(dib),
       ptr(dib.subarray(dibBitsOffset(dib))),
       outPtr,
     );
-    if (status !== GDIP_OK) {
-      return new Uint8Array(0);
-    }
-    const handle = read.u64(outPtr, 0);
+    const handle = status === GDIP_OK ? read.u64(outPtr, 0) : 0n;
     try {
       return windowsNativeImageBackend.encodePng(handle);
     } finally {
-      gdip.GdipDisposeImage(handle);
+      if (handle !== 0n) {
+        gdip.GdipDisposeImage(handle);
+      }
+      pinnedDibs.delete(dib);
     }
   },
 
