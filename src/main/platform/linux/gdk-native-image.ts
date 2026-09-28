@@ -44,8 +44,7 @@ const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
   const gio = loadGioFFI();
   const gobject = loadGObjectFFI();
 
-  const dataPtr = bytes.length === 0 ? null : ptr(bytes);
-  const gbytes = glib.symbols.g_bytes_new(dataPtr, BigInt(bytes.length));
+  const gbytes = glib.symbols.g_bytes_new(ptr(bytes), BigInt(bytes.length));
   const stream = gio.symbols.g_memory_input_stream_new_from_bytes(gbytes);
   // The stream took its own ref on the bytes; drop our local one.
   glib.symbols.g_bytes_unref(gbytes);
