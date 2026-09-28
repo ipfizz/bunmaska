@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   type AppEnvironment,
   buildAppEnvironment,
+  defaultAppEnvironment,
   type EnvironmentDeps,
 } from '../../../../src/main/api/app-environment';
 
@@ -148,5 +149,23 @@ describe('buildAppEnvironment — passthrough', () => {
     });
     env.relaunch('/bin/app', ['--flag']);
     expect(calls).toEqual([['/bin/app', ['--flag']]]);
+  });
+});
+
+describe('defaultAppEnvironment - relaunch', () => {
+  test('spawns ahead of exit listeners registered earlier', () => {
+    const earlier = (): void => undefined;
+    process.on('exit', earlier);
+    const before = new Set(process.listeners('exit'));
+    defaultAppEnvironment().relaunch('/bin/true', []);
+    const added = process.listeners('exit').filter((listener) => !before.has(listener));
+    try {
+      expect(added).toHaveLength(1);
+      expect(process.listeners('exit')[0]).toBe(added[0]);
+    } finally {
+      for (const listener of [earlier, ...added]) {
+        process.removeListener('exit', listener);
+      }
+    }
   });
 });

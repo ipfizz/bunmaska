@@ -111,7 +111,8 @@ export const defaultAppEnvironment = (): AppEnvironment =>
     readFile: safeRead,
     exit: (code) => process.exit(code),
     relaunch: (execPath, args) => {
-      process.once('exit', () => {
+      // Prepended: the Windows backend's exit listener TerminateProcess-es (D043).
+      process.prependOnceListener('exit', () => {
         try {
           Bun.spawn({ cmd: [execPath, ...args], stdio: ['ignore', 'ignore', 'ignore'] }).unref();
         } catch {
