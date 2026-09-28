@@ -11,11 +11,8 @@ import { CONTROL_MASK, SHIFT_MASK } from '../../../src/main/platform/linux/x11-k
 
 const hasDisplay = currentPlatform() === 'linux' && linuxGlobalShortcutBackend.isSupported();
 
-/** XSync is not in the backend's table; a second client needs it to order its requests. */
 const xSync = (dpy: Pointer): void => {
-  dlopen('libX11.so.6', {
-    XSync: { args: [FFIType.pointer, FFIType.i32], returns: FFIType.i32 },
-  }).symbols.XSync(dpy, 0);
+  loadX11FFI().symbols.XSync(dpy, 0);
 };
 
 const loadXtst = () =>
@@ -89,7 +86,7 @@ describe.skipIf(!hasDisplay)('x11-global-shortcut under an X server', () => {
     expect(() => pollX11ShortcutsOnce()).not.toThrow();
   });
 
-  test('a key another client already grabbed does not exit the process', async () => {
+  test('a key another client already grabbed is refused without exiting the process', async () => {
     const x11 = loadX11FFI().symbols;
     const other = openOtherClient();
     try {
@@ -97,7 +94,7 @@ describe.skipIf(!hasDisplay)('x11-global-shortcut under an X server', () => {
       const mods = CONTROL_MASK | SHIFT_MASK;
       x11.XGrabKey(other, keycode, mods, x11.XDefaultRootWindow(other), 0, 1, 1);
       xSync(other);
-      linuxGlobalShortcutBackend.register('Ctrl+Shift+J', () => undefined);
+      expect(linuxGlobalShortcutBackend.register('Ctrl+Shift+J', () => undefined)).toBe(false);
       await pumpShortcuts(() => false);
       expect(() => pollX11ShortcutsOnce()).not.toThrow();
     } finally {
