@@ -1,4 +1,5 @@
 import { CString, JSCallback, type Pointer } from 'bun:ffi';
+import { createLogger } from '../../../common/logger';
 import type { NativeNavigationEvent } from '../native';
 import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
@@ -25,6 +26,24 @@ import {
  * runtime, so each handler's ABI shape is declared as an exported `*_CB_DEF`
  * constant (unit-testable in pure JS) and reused by the factory below.
  */
+
+const log = createLogger('gtk-signals');
+
+/**
+ * Wrap a signal handler so a JS throw is logged and `fallback` returned. An
+ * exception left pending in a JSCallback silently skips every later callback in
+ * the same `g_main_context_iteration` (URI-scheme requests, async completions).
+ */
+export const guarded =
+  <A extends unknown[], R>(fn: (...args: A) => R, fallback: R) =>
+  (...args: A): R => {
+    try {
+      return fn(...args);
+    } catch (error) {
+      log.error('signal handler threw', error);
+      return fallback;
+    }
+  };
 
 /** ABI shape for `GtkWindow::close-request`: `(self, user_data) -> gboolean`. */
 export const CLOSE_REQUEST_CB_DEF = { args: ['ptr', 'ptr'], returns: 'i32' } as const;
@@ -65,7 +84,10 @@ export const closeRequestDecision = (onCloseRequest: () => boolean): number =>
  */
 export const makeCloseRequestCallback = (onCloseRequest: () => boolean): JSCallback =>
   new JSCallback(
-    (_self: Pointer, _userData: Pointer): number => closeRequestDecision(onCloseRequest),
+    guarded(
+      (_self: Pointer, _userData: Pointer): number => closeRequestDecision(onCloseRequest),
+      0,
+    ),
     CLOSE_REQUEST_CB_DEF,
   );
 
@@ -75,9 +97,12 @@ export const makeCloseRequestCallback = (onCloseRequest: () => boolean): JSCallb
  * tracked flag. The `GParamSpec*` second arg is ignored.
  */
 export const makeNotifyCallback = (onNotify: () => void): JSCallback =>
-  new JSCallback((_gobject: Pointer, _pspec: Pointer, _userData: Pointer): void => {
-    onNotify();
-  }, NOTIFY_CB_DEF);
+  new JSCallback(
+    guarded((_gobject: Pointer, _pspec: Pointer, _userData: Pointer): void => {
+      onNotify();
+    }, undefined),
+    NOTIFY_CB_DEF,
+  );
 
 /**
  * `GtkWidget::destroy` handler. Fires `onClosed` bookkeeping + drops retained
@@ -91,16 +116,19 @@ export const makeDestroyCallback = (onClosed: () => void): JSCallback =>
 export const makeLoadChangedCallback = (
   onNavigation: (event: NativeNavigationEvent) => void,
 ): JSCallback =>
-  new JSCallback((_self: Pointer, loadEvent: number, _userData: Pointer): void => {
-    if (loadEvent === WEBKIT_LOAD_STARTED) {
-      onNavigation({ type: 'did-start-loading' });
-    } else if (loadEvent === WEBKIT_LOAD_COMMITTED) {
-      onNavigation({ type: 'did-navigate' });
-    } else if (loadEvent === WEBKIT_LOAD_FINISHED) {
-      onNavigation({ type: 'did-finish-load' });
-      onNavigation({ type: 'did-stop-loading' });
-    }
-  }, LOAD_CHANGED_CB_DEF);
+  new JSCallback(
+    guarded((_self: Pointer, loadEvent: number, _userData: Pointer): void => {
+      if (loadEvent === WEBKIT_LOAD_STARTED) {
+        onNavigation({ type: 'did-start-loading' });
+      } else if (loadEvent === WEBKIT_LOAD_COMMITTED) {
+        onNavigation({ type: 'did-navigate' });
+      } else if (loadEvent === WEBKIT_LOAD_FINISHED) {
+        onNavigation({ type: 'did-finish-load' });
+        onNavigation({ type: 'did-stop-loading' });
+      }
+    }, undefined),
+    LOAD_CHANGED_CB_DEF,
+  );
 
 /**
  * `WebKitWebView::load-failed` handler. Emits `did-fail-load` then
@@ -111,17 +139,20 @@ export const makeLoadFailedCallback = (
   onNavigation: (event: NativeNavigationEvent) => void,
 ): JSCallback =>
   new JSCallback(
-    (
-      _self: Pointer,
-      _loadEvent: number,
-      _uri: Pointer,
-      _error: Pointer,
-      _userData: Pointer,
-    ): number => {
-      onNavigation({ type: 'did-fail-load', errorCode: -1, errorDescription: '' });
-      onNavigation({ type: 'did-stop-loading' });
-      return 0;
-    },
+    guarded(
+      (
+        _self: Pointer,
+        _loadEvent: number,
+        _uri: Pointer,
+        _error: Pointer,
+        _userData: Pointer,
+      ): number => {
+        onNavigation({ type: 'did-fail-load', errorCode: -1, errorDescription: '' });
+        onNavigation({ type: 'did-stop-loading' });
+        return 0;
+      },
+      0,
+    ),
     LOAD_FAILED_CB_DEF,
   );
 
@@ -133,7 +164,7 @@ export const makeLoadFailedCallback = (
 export const makeCreateCallback = (onWindowOpen: (url: string) => void): JSCallback => {
   const webkit = loadWebKitGtkFFI();
   return new JSCallback(
-    (_webView: Pointer, navigationAction: Pointer, _userData: Pointer): Pointer | null => {
+    guarded((_webView: Pointer, navigationAction: Pointer, _userData: Pointer): Pointer | null => {
       const request = webkit.symbols.webkit_navigation_action_get_request(navigationAction);
       if (request !== null) {
         const uri = webkit.symbols.webkit_uri_request_get_uri(request);
@@ -142,7 +173,7 @@ export const makeCreateCallback = (onWindowOpen: (url: string) => void): JSCallb
         }
       }
       return null;
-    },
+    }, null),
     CREATE_CB_DEF,
   );
 };
@@ -159,16 +190,19 @@ export const makeCreateCallback = (onWindowOpen: (url: string) => void): JSCallb
 export const makeScriptMessageCallback = (onMessage: (json: string) => void): JSCallback => {
   const jsc = loadJscFFI();
   const glib = loadGlibFFI();
-  return new JSCallback((_manager: Pointer, value: Pointer, _userData: Pointer): void => {
-    const ptr = jsc.symbols.jsc_value_to_string(value);
-    // A NULL conversion would deliver an unparseable '' to the IPC layer; drop it.
-    if (ptr === null) {
-      return;
-    }
-    const json = new CString(ptr).toString();
-    glib.symbols.g_free(ptr);
-    onMessage(json);
-  }, SCRIPT_MESSAGE_CB_DEF);
+  return new JSCallback(
+    guarded((_manager: Pointer, value: Pointer, _userData: Pointer): void => {
+      const ptr = jsc.symbols.jsc_value_to_string(value);
+      // A NULL conversion would deliver an unparseable '' to the IPC layer; drop it.
+      if (ptr === null) {
+        return;
+      }
+      const json = new CString(ptr).toString();
+      glib.symbols.g_free(ptr);
+      onMessage(json);
+    }, undefined),
+    SCRIPT_MESSAGE_CB_DEF,
+  );
 };
 
 /** Anything with a native trampoline that must be freed off the current stack. */

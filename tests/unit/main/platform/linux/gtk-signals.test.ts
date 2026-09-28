@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'bun:test';
+import { CFunction, type FFITypeOrString, type JSCallback } from 'bun:ffi';
+import { describe, expect, it, test } from 'bun:test';
+import { type LogRecord, resetLogger, setLogSink } from '../../../../../src/common/logger';
 import {
   CLOSE_REQUEST_CB_DEF,
   closeRequestDecision,
@@ -90,6 +92,43 @@ describe('gtk-signals JSCallback factories (constructible + closable)', () => {
     const cb = makeNotifyCallback(noop);
     expect(typeof cb.ptr).toBe('number');
     cb.close();
+  });
+});
+
+describe('a throwing handler never unwinds into GLib', () => {
+  const nativeCall = (
+    cb: JSCallback,
+    def: { args: readonly FFITypeOrString[]; returns: FFITypeOrString },
+  ) => {
+    if (cb.ptr === null) {
+      throw new Error('no thunk');
+    }
+    return CFunction({ ptr: cb.ptr, args: [...def.args], returns: def.returns });
+  };
+  const boom = (): never => {
+    throw new Error('boom');
+  };
+
+  test('a throwing notify handler returns normally and logs the error', () => {
+    const records: LogRecord[] = [];
+    setLogSink((record) => records.push(record));
+    const cb = makeNotifyCallback(boom);
+    try {
+      expect(() => nativeCall(cb, NOTIFY_CB_DEF)(null, null, null)).not.toThrow();
+      expect(records.map((r) => r.level)).toContain('error');
+    } finally {
+      cb.close();
+      resetLogger();
+    }
+  });
+
+  test('a throwing close-request handler allows the close (returns 0)', () => {
+    const cb = makeCloseRequestCallback(boom);
+    try {
+      expect(nativeCall(cb, CLOSE_REQUEST_CB_DEF)(null, null)).toBe(0);
+    } finally {
+      cb.close();
+    }
   });
 });
 
