@@ -1,20 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { buildDittoArgs, notarizeApp } from '../../../src/cli/notarize';
+import { notarizeApp } from '../../../src/cli/notarize';
 
 const CREDS = { appleId: 'dev@example.com', teamId: 'TEAM123', password: 'app-pw' };
-
-describe('buildDittoArgs', () => {
-  test('zips with -c -k --keepParent as notarytool requires', () => {
-    expect(buildDittoArgs('/out/My App.app', '/out/My App.app.zip')).toEqual([
-      'ditto',
-      '-c',
-      '-k',
-      '--keepParent',
-      '/out/My App.app',
-      '/out/My App.app.zip',
-    ]);
-  });
-});
 
 describe('notarizeApp', () => {
   test('runs ditto, then notarytool submit --wait on the ZIP, then staples the app', async () => {

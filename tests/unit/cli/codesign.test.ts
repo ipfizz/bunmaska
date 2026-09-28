@@ -2,8 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildCodesignArgs,
   buildCodesignVerifyArgs,
-  buildNotarizeArgs,
-  buildStapleArgs,
   codesignEntitlements,
 } from '../../../src/cli/build-macos';
 
@@ -35,11 +33,10 @@ describe('buildCodesignArgs', () => {
 });
 
 describe('codesignEntitlements', () => {
-  test('grants the JIT/FFI exceptions Bun needs under the hardened runtime', () => {
-    const xml = codesignEntitlements();
-    expect(xml).toContain('com.apple.security.cs.allow-jit');
-    expect(xml).toContain('com.apple.security.cs.allow-unsigned-executable-memory');
-    expect(xml).toContain('com.apple.security.cs.disable-library-validation');
+  test('grants allow-jit, without which bun:ffi refuses to load under the hardened runtime', () => {
+    expect(codesignEntitlements()).toContain(
+      '<key>com.apple.security.cs.allow-jit</key>\n  <true/>',
+    );
   });
 });
 
@@ -47,40 +44,5 @@ describe('buildCodesignVerifyArgs', () => {
   test('verifies strictly against the app bundle path', () => {
     const appPath = '/tmp/out/My App.app';
     expect(buildCodesignVerifyArgs(appPath)).toEqual(['--verify', '--strict', appPath]);
-  });
-});
-
-describe('buildNotarizeArgs', () => {
-  test('builds an xcrun notarytool submit argv with the credentials', () => {
-    const args = buildNotarizeArgs({
-      appPath: '/tmp/out/My App.app',
-      appleId: 'dev@example.com',
-      teamId: 'TEAMID123',
-      password: 'app-specific-pw',
-    });
-    expect(args).toEqual([
-      'xcrun',
-      'notarytool',
-      'submit',
-      '/tmp/out/My App.app',
-      '--apple-id',
-      'dev@example.com',
-      '--team-id',
-      'TEAMID123',
-      '--password',
-      'app-specific-pw',
-      '--wait',
-    ]);
-  });
-});
-
-describe('buildStapleArgs', () => {
-  test('builds an xcrun stapler staple argv for the app bundle', () => {
-    expect(buildStapleArgs('/tmp/out/My App.app')).toEqual([
-      'xcrun',
-      'stapler',
-      'staple',
-      '/tmp/out/My App.app',
-    ]);
   });
 });
