@@ -4,16 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dispatch } from '../../../src/cli/index';
 import { runKeygen } from '../../../src/cli/keygen';
+import { currentArch } from '../../../src/common/platform';
 import { verifyArtifact } from '../../../src/common/signature';
-import { currentPlatform } from '../../../src/common/platform';
+import { captureStdio } from '../../helpers/capture-stdio';
 
-/**
- * `--update` routing through dispatch with the macOS builder stubbed to a REAL
- * mini bundle, so emitUpdateArtifact runs its real tar+zstd path and the .sig
- * decision (warn vs sign) is exercised end to end. macOS-host-only like the
- * other dispatch build tests.
- */
-const onlyMac = currentPlatform() === 'macos';
+/** The builder is stubbed to a real mini bundle so emitUpdateArtifact runs for real. */
+const ARTIFACT = `demo-stable-linux-${currentArch()}.tar.zst`;
 
 const originalCwd = process.cwd();
 let dir: string | undefined;
@@ -25,37 +21,12 @@ afterEach(() => {
   }
 });
 
-type Streams = { out: string[]; err: string[] };
-
-/** Capture process.stdout/stderr writes for the duration of `fn`. */
-const captured = async (fn: () => Promise<void>): Promise<Streams> => {
-  const out: string[] = [];
-  const err: string[] = [];
-  const stdoutWrite = process.stdout.write.bind(process.stdout);
-  const stderrWrite = process.stderr.write.bind(process.stderr);
-  process.stdout.write = ((chunk: string | Uint8Array) => {
-    out.push(String(chunk));
-    return true;
-  }) as typeof process.stdout.write;
-  process.stderr.write = ((chunk: string | Uint8Array) => {
-    err.push(String(chunk));
-    return true;
-  }) as typeof process.stderr.write;
-  try {
-    await fn();
-  } finally {
-    process.stdout.write = stdoutWrite;
-    process.stderr.write = stderrWrite;
-  }
-  return { out, err };
-};
-
 const setupProject = (): { root: string; bundle: string } => {
   const root = mkdtempSync(join(tmpdir(), 'bunmaska-update-key-'));
   dir = root;
   writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '1.2.3' }));
   writeFileSync(join(root, 'app.ts'), '');
-  const bundle = join(root, 'Demo.app');
+  const bundle = join(root, 'Demo');
   mkdirSync(bundle);
   writeFileSync(join(bundle, 'payload.txt'), 'update me');
   process.chdir(root);
@@ -64,59 +35,123 @@ const setupProject = (): { root: string; bundle: string } => {
 
 describe('dispatch build --update signing', () => {
   test('without --update-key it loudly warns the feed is unsigned', async () => {
-    if (!onlyMac) {
-      return;
-    }
     const { root, bundle } = setupProject();
     let code = -1;
-    const streams = await captured(async () => {
+    const streams = await captureStdio(async () => {
       code = await dispatch(
         {
           kind: 'build',
           entry: 'app.ts',
-          options: { target: 'macos', name: 'Demo', update: true },
+          options: { target: 'linux', name: 'Demo', update: true },
         },
-        { buildMac: async () => bundle },
+        { buildLinux: async () => ({ appDir: bundle, tarball: '', deb: '' }) },
       );
     });
     expect(code).toBe(0);
     const stderr = streams.err.join('');
     expect(stderr).toContain('UNSIGNED');
     expect(stderr).toContain('--update-key');
-    expect(existsSync(join(root, 'demo-stable-macos-arm64.tar.zst.sig'))).toBe(false);
+    expect(existsSync(join(root, `${ARTIFACT}.sig`))).toBe(false);
   });
 
   test('with --update-key it writes a .sig the public key verifies and prints its path', async () => {
-    if (!onlyMac) {
-      return;
-    }
     const { root, bundle } = setupProject();
     const keysDir = join(root, 'keys');
     mkdirSync(keysDir);
     runKeygen(keysDir, { out: () => undefined, err: () => undefined });
     let code = -1;
-    const streams = await captured(async () => {
+    const streams = await captureStdio(async () => {
       code = await dispatch(
         {
           kind: 'build',
           entry: 'app.ts',
           options: {
-            target: 'macos',
+            target: 'linux',
             name: 'Demo',
             update: true,
             updateKey: join(keysDir, 'update-signing-key.pem'),
           },
         },
-        { buildMac: async () => bundle },
+        { buildLinux: async () => ({ appDir: bundle, tarball: '', deb: '' }) },
       );
     });
     expect(code).toBe(0);
-    const sigPath = join(root, 'demo-stable-macos-arm64.tar.zst.sig');
+    const sigPath = join(root, `${ARTIFACT}.sig`);
     expect(streams.out.join('')).toContain(sigPath);
+    expect(streams.out.join('')).toContain(join(root, 'update.json.sig'));
     expect(streams.err.join('')).not.toContain('UNSIGNED');
-    const artifact = readFileSync(join(root, 'demo-stable-macos-arm64.tar.zst'));
+    const artifact = readFileSync(join(root, ARTIFACT));
     const publicPem = readFileSync(join(keysDir, 'update-public-key.pem'), 'utf8');
     const sig = readFileSync(sigPath, 'utf8').trim();
     expect(verifyArtifact(publicPem, artifact, sig)).toBe(true);
+  });
+});
+
+describe('dispatch build rejects unusable update options before building', () => {
+  test.each([
+    ['--update-key without --update', { updateKey: 'update-signing-key.pem' }],
+    ['--channel without --update', { channel: 'beta' }],
+    ['a public key as --update-key', { update: true, updateKey: 'update-public-key.pem' }],
+  ])('%s', async (_label, options) => {
+    const { root } = setupProject();
+    runKeygen(root, { out: () => undefined, err: () => undefined });
+    let built = false;
+    let code = -1;
+    await captureStdio(async () => {
+      code = await dispatch(
+        { kind: 'build', entry: 'app.ts', options: { target: 'linux', name: 'Demo', ...options } },
+        {
+          buildLinux: async () => {
+            built = true;
+            return { appDir: root, tarball: '', deb: '' };
+          },
+        },
+      );
+    });
+    expect(code).toBe(1);
+    expect(built).toBe(false);
+  });
+});
+
+describe('dispatch build --update manifest', () => {
+  test("uses the config's updates.channel when --channel is absent", async () => {
+    const { root, bundle } = setupProject();
+    writeFileSync(
+      join(root, 'bunmaska.config.ts'),
+      "export default { updates: { channel: 'beta' } };\n",
+    );
+    let code = -1;
+    await captureStdio(async () => {
+      code = await dispatch(
+        {
+          kind: 'build',
+          entry: 'app.ts',
+          options: { target: 'linux', name: 'Demo', update: true },
+        },
+        { buildLinux: async () => ({ appDir: bundle, tarball: '', deb: '' }) },
+      );
+    });
+    expect(code).toBe(0);
+    const manifest = JSON.parse(readFileSync(join(root, 'update.json'), 'utf8'));
+    expect(manifest.channel).toBe('beta');
+  });
+
+  test('a Windows feed is labelled x64 whatever the host arch', async () => {
+    const { root, bundle } = setupProject();
+    let code = -1;
+    await captureStdio(async () => {
+      code = await dispatch(
+        {
+          kind: 'build',
+          entry: 'app.ts',
+          options: { target: 'windows', name: 'Demo', update: true },
+        },
+        { buildWindows: async () => ({ appDir: bundle, exePath: '', zip: '' }) },
+      );
+    });
+    expect(code).toBe(0);
+    const manifest = JSON.parse(readFileSync(join(root, 'update.json'), 'utf8'));
+    expect(manifest.arch).toBe('x64');
+    expect(existsSync(join(root, 'demo-stable-windows-x64.tar.zst'))).toBe(true);
   });
 });

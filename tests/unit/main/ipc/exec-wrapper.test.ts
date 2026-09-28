@@ -59,6 +59,21 @@ describe('buildExecWrapper', () => {
     ).toMatchObject({ execId: 5, ok: true, result: 'hi' });
   });
 
+  test('reports a result JSON cannot encode instead of posting nothing', async () => {
+    for (const code of ['10n', '(() => { const o = {}; o.self = o; return o; })()']) {
+      const outcome = await runWrapper(buildExecWrapper(3, 'bunmaskaExec', code));
+      expect(outcome).toMatchObject({ execId: 3, ok: false });
+      expect(outcome.error).toContain('not JSON-serializable');
+    }
+  });
+
+  test('reports a rejection with a non-printable reason', async () => {
+    const outcome = await runWrapper(
+      buildExecWrapper(4, 'bunmaskaExec', 'Promise.reject(Object.create(null))'),
+    );
+    expect(outcome).toMatchObject({ execId: 4, ok: false });
+  });
+
   test('reports a thrown error as an unsuccessful outcome', async () => {
     const outcome = await runWrapper(
       buildExecWrapper(9, 'bunmaskaExec', 'throw new Error("boom")'),

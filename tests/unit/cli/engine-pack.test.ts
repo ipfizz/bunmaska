@@ -2,11 +2,11 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generateSigningKeyPair } from '../../../src/cli/engine-signature';
+import { generateSigningKeyPair } from '../../../src/common/signature';
 import { packEngineDir } from '../../../src/cli/engine-pack';
 import { installFromUrl, type RemoteFetch, zstdTarExtract } from '../../../src/cli/engine-remote';
 import { contentHash } from '../../../src/common/manifest';
-import { engineDir, isInstalled } from '../../../src/cli/engine-store';
+import { engineDir, isInstalled } from '../../../src/common/engine-store';
 
 const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
 
@@ -69,6 +69,19 @@ describe('packEngineDir', () => {
     const { privateKey } = generateSigningKeyPair();
     const empty = makeTmpDir();
     await expect(packEngineDir(empty, privateKey)).rejects.toThrow(/engine\.json/i);
+  });
+
+  test('rejects an engine.json id that is not a valid engine-id, before signing', async () => {
+    const { privateKey } = generateSigningKeyPair();
+    const dir = makeEngineDir();
+    writeFileSync(join(dir, 'engine.json'), JSON.stringify({ id: 'webkit-local', soname: 'x' }));
+    let compressed = false;
+    const compress = async () => {
+      compressed = true;
+      return new Uint8Array();
+    };
+    await expect(packEngineDir(dir, privateKey, { compress })).rejects.toThrow(/engine-id/);
+    expect(compressed).toBe(false);
   });
 
   test('does not ship the store-local INSTALLATION_COMPLETE marker inside the artifact', async () => {

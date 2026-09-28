@@ -6,8 +6,18 @@ import {
   buildOpenPanel,
   buildSavePanel,
 } from '../../../src/main/platform/macos/cocoa-dialog';
+import { nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
 import { msgSendReturnsI64 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
+
+const panelDirectory = (panel: bigint): string => {
+  const rt = cocoa();
+  const url = rt.msgSend(panel, rt.selectors.get('directoryURL'));
+  return nsStringToString(rt.msgSend(url, rt.selectors.get('path')));
+};
+
+const panelName = (panel: bigint): string =>
+  nsStringToString(cocoa().msgSend(panel, cocoa().selectors.get('nameFieldStringValue')));
 
 /**
  * Only the non-blocking *build* steps are tested. The *run* steps call
@@ -79,6 +89,18 @@ if (currentPlatform() === 'macos') {
 
     test('buildSavePanel returns a non-null NSSavePanel', () => {
       expect(buildSavePanel({ defaultName: 'untitled.txt', extensions: [] })).not.toBe(0n);
+    });
+
+    test('buildSavePanel splits an absolute defaultPath into directory and name, as Electron', () => {
+      const panel = buildSavePanel({ defaultName: '/Library/report.pdf', extensions: [] });
+      expect(panelDirectory(panel)).toBe('/Library');
+      expect(panelName(panel)).toBe('report.pdf');
+    });
+
+    test('buildSavePanel opens at a defaultPath that is an existing directory', () => {
+      const panel = buildSavePanel({ defaultName: '/Library', extensions: [] });
+      expect(panelDirectory(panel)).toBe('/Library');
+      expect(panelName(panel)).not.toBe('Library');
     });
 
     test('buildSavePanel tolerates an empty default name', () => {

@@ -1,38 +1,22 @@
 import { CString, type Pointer, ptr } from 'bun:ffi';
-import type { DialogBackend } from '../../api/dialog';
+import { statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
+import type { DialogBackend, MessageBoxSpec, OpenDialogSpec, SaveDialogSpec } from '../services';
 import { cstr } from '../cstr';
 import { runAsyncReady } from './gasync';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
-import { loadGtkDialogFFI, loadGtkDialogGObjectFFI } from './gtk-dialog-ffi';
+import { loadGObjectFFI } from './gobject-ffi';
+import { loadGtkDialogFFI } from './gtk-dialog-ffi';
+
+// GtkAlertDialog and GtkFileDialog (GTK 4.10+). Callback lifetime rules live in gasync.ts.
 
 /**
- * Native dialogs for the Linux backend — the GTK 4 equivalent of the macOS
- * `cocoa-dialog` module. `GtkAlertDialog` powers `showMessageBox`;
- * `GtkFileDialog` powers `showOpenDialog`/`showSaveDialog` (both added 4.10,
- * always present on the CI runner's GTK 4.12+).
- *
- * Unlike Cocoa's blocking `runModal`, GTK's dialogs are asynchronous: each
- * `gtk_*_choose/open/save` call kicks off the modal dialog and invokes a
- * `GAsyncReadyCallback` when the user settles it; the matching `*_finish` reads
- * the value. The backend methods therefore return Promises (the `dialog` API's
- * `await` flattens them). Callback lifetime rules live in gasync.ts.
- */
-
-/**
- * The NULL-terminated `const char* const*` button-label array for
- * `gtk_alert_dialog_set_buttons`, plus the backing cstr buffers.
- *
- * GTK reads the array (and each string) only during the synchronous
- * `set_buttons` call, but Bun may GC a `Uint8Array` whose pointer was taken via
- * `ptr()` the moment it falls out of scope — so the caller MUST keep BOTH the
- * returned `array` and every entry of `buffers` referenced until that call
- * returns.
+ * The NULL-terminated `const char* const*` for `gtk_alert_dialog_set_buttons`. Keep `array`
+ * AND `buffers` referenced until that call returns: Bun may GC a buffer whose `ptr()` was taken.
  */
 export type ButtonsArray = {
-  /** `BigUint64Array` of cstr pointers, NULL-terminated with a trailing `0n`. */
   readonly array: BigUint64Array;
-  /** One retained NUL-terminated UTF-8 buffer per label. */
   readonly buffers: ReadonlyArray<Uint8Array>;
 };
 
@@ -46,38 +30,24 @@ export const buildButtonsArray = (labels: ReadonlyArray<string>): ButtonsArray =
   return { array, buffers };
 };
 
-/**
- * Map the raw `gtk_alert_dialog_choose_finish` button index to the response.
- * A valid (`>= 0`) index is returned as-is; the dismissal sentinel (`-1`) and
- * any error index fall back to `cancelId` (Electron semantics).
- */
-export const mapChooseResult = (index: number, _defaultId: number, cancelId: number): number =>
+/** A negative `choose_finish` index (Escape or an error) is the `cancelId` response. */
+export const mapChooseResult = (index: number, cancelId: number): number =>
   index >= 0 ? index : cancelId;
 
-/**
- * Compute the cancel index for a message box: the index of a button labelled
- * "Cancel" (case-insensitive), else `0`. The {@link MessageBoxSpec} carries no
- * explicit cancelId, so this mirrors Electron's default of treating a Cancel
- * button (or the first button) as the dismissal response.
- */
-const cancelIdForButtons = (buttons: ReadonlyArray<string>): number => {
-  const idx = buttons.findIndex((label) => label.toLowerCase() === 'cancel');
+/** Electron's default cancelId: the first "cancel" or "no" button (case-insensitive), else 0. */
+export const cancelIdForButtons = (buttons: ReadonlyArray<string>): number => {
+  const idx = buttons.findIndex((label) => ['cancel', 'no'].includes(label.toLowerCase()));
   return idx >= 0 ? idx : 0;
 };
 
-/** Settle inputs for `gtk_alert_dialog_choose`, with the finish step injectable. */
 export type SettleChooseArgs = {
   readonly result: Pointer;
-  readonly defaultId: number;
   readonly cancelId: number;
-  /** Calls `gtk_alert_dialog_choose_finish`; may throw on the GError path. */
+  /** Calls `gtk_alert_dialog_choose_finish`. */
   readonly finish: (result: Pointer) => number;
 };
 
-/**
- * Produce the message-box response from a `GAsyncResult`. A thrown `finish`
- * (the `GError` dismissal path) maps to `cancelId`.
- */
+/** The message-box response; a throwing `finish` counts as a dismissal. */
 export const settleChoose = (args: SettleChooseArgs): number => {
   let index: number;
   try {
@@ -85,22 +55,18 @@ export const settleChoose = (args: SettleChooseArgs): number => {
   } catch {
     index = -1;
   }
-  return mapChooseResult(index, args.defaultId, args.cancelId);
+  return mapChooseResult(index, args.cancelId);
 };
 
-/** Settle inputs for `gtk_file_dialog_open/save`, with finish + reader injectable. */
 export type SettleFilePathArgs = {
   readonly result: Pointer;
-  /** Calls `gtk_file_dialog_*_finish`; returns a `GFile*` or null; may throw. */
+  /** Calls `gtk_file_dialog_*_finish`; null on cancel. */
   readonly finish: (result: Pointer) => Pointer | null;
-  /** Reads (and frees) the path out of a non-null `GFile*`. */
+  /** Reads the path out of, and releases, a non-null `GFile*`. */
   readonly readPath: (file: Pointer) => string;
 };
 
-/**
- * Produce a file path from a `GAsyncResult`. A null `GFile*` (cancel) or a
- * thrown `finish` (dismissal) yields `''`.
- */
+/** The chosen path; `''` on cancel or a throwing `finish`. */
 export const settleFilePath = (args: SettleFilePathArgs): string => {
   let file: Pointer | null;
   try {
@@ -111,11 +77,11 @@ export const settleFilePath = (args: SettleFilePathArgs): string => {
   return file === null ? '' : args.readPath(file);
 };
 
-/** Read the local path out of a `GFile*`, freeing the transfer-full `char*`. */
+/** Read the local path out of a transfer-full `GFile*`, releasing the file and the `char*`. */
 const readGFilePath = (file: Pointer): string => {
-  const gio = loadGioFFI();
   const glib = loadGlibFFI();
-  const pathPtr = gio.symbols.g_file_get_path(file);
+  const pathPtr = loadGioFFI().symbols.g_file_get_path(file);
+  loadGObjectFFI().symbols.g_object_unref(file);
   if (pathPtr === null) {
     return '';
   }
@@ -124,16 +90,15 @@ const readGFilePath = (file: Pointer): string => {
   return path;
 };
 
-const showMessageBox = (spec: {
-  readonly message: string;
-  readonly detail: string;
-  readonly buttons: ReadonlyArray<string>;
-  // GtkAlertDialog has no severity concept, so `type` is accepted but ignored.
-  readonly type?: string;
-}): Promise<number> => {
+const showMessageBox = (spec: MessageBoxSpec): Promise<number> => {
   const gtk = loadGtkDialogFFI();
-  const gobject = loadGtkDialogGObjectFFI();
-  const dialog = gobject.symbols.g_object_new(gtk.symbols.gtk_alert_dialog_get_type(), null);
+  const gobject = loadGObjectFFI();
+  const dialog = gobject.symbols.g_object_new(
+    gtk.symbols.gtk_alert_dialog_get_type(),
+    null,
+    null,
+    null,
+  );
   if (dialog === null) {
     throw new Error('g_object_new(GtkAlertDialog) returned null');
   }
@@ -141,8 +106,7 @@ const showMessageBox = (spec: {
   gtk.symbols.gtk_alert_dialog_set_detail(dialog, cstr(spec.detail));
   gtk.symbols.gtk_alert_dialog_set_modal(dialog, 1);
   const labels = spec.buttons.length > 0 ? spec.buttons : ['OK'];
-  // `set_buttons` copies the labels internally, so the buffers need only outlive
-  // this synchronous call (not the async choose() round-trip).
+  // set_buttons copies the labels, so the buffers need only outlive this synchronous call.
   const buttons = buildButtonsArray(labels);
   gtk.symbols.gtk_alert_dialog_set_buttons(dialog, ptr(buttons.array.buffer));
   const cancelId = cancelIdForButtons(labels);
@@ -151,14 +115,23 @@ const showMessageBox = (spec: {
     (result) =>
       settleChoose({
         result,
-        defaultId: 0,
         cancelId,
         finish: (r) => gtk.symbols.gtk_alert_dialog_choose_finish(dialog, r, null),
       }),
-  );
+  ).finally(() => loadGObjectFFI().symbols.g_object_unref(dialog));
 };
 
-/** Set a default `GtkFileFilter` of `*.ext` patterns, when any extension is given. */
+/** A `*.ext` glob matching any letter case; GTK's add_pattern is case-sensitive off Windows. */
+export const extensionPattern = (ext: string): string => {
+  const chars = [...ext].map((c) => {
+    const lower = c.toLowerCase();
+    const upper = c.toUpperCase();
+    return lower === upper ? c : `[${lower}${upper}]`;
+  });
+  return `*.${chars.join('')}`;
+};
+
+/** No filter when `extensions` is empty. */
 const applyExtensionFilter = (
   gtk: ReturnType<typeof loadGtkDialogFFI>,
   fileDialog: Pointer,
@@ -172,46 +145,92 @@ const applyExtensionFilter = (
     return;
   }
   for (const ext of extensions) {
-    gtk.symbols.gtk_file_filter_add_pattern(filter, cstr(`*.${ext}`));
+    gtk.symbols.gtk_file_filter_add_pattern(filter, cstr(extensionPattern(ext)));
   }
   gtk.symbols.gtk_file_dialog_set_default_filter(fileDialog, filter);
+  loadGObjectFFI().symbols.g_object_unref(filter);
 };
 
-// The open spec's file/directory/multi flags are accepted for API parity but
-// not yet applied: v1 always presents a single-file open. Directory selection
-// (gtk_file_dialog_select_folder) and multi-select (gtk_file_dialog_open_multiple)
-// are out of scope.
-const showOpenDialog = (spec: {
-  readonly canChooseFiles: boolean;
-  readonly canChooseDirectories: boolean;
-  readonly allowsMultipleSelection: boolean;
-  readonly extensions: ReadonlyArray<string>;
-}): Promise<string[]> => {
+/** Read every path out of a transfer-full `GListModel*` of `GFile`, releasing the list. */
+const readGFileListPaths = (list: Pointer): string[] => {
+  const gio = loadGioFFI().symbols;
+  const paths: string[] = [];
+  const count = gio.g_list_model_get_n_items(list);
+  for (let i = 0; i < count; i += 1) {
+    const file = gio.g_list_model_get_item(list, i);
+    const path = file === null ? '' : readGFilePath(file);
+    if (path !== '') {
+      paths.push(path);
+    }
+  }
+  loadGObjectFFI().symbols.g_object_unref(list);
+  return paths;
+};
+
+/** Open `fileDialog` in `path` when it is a directory, else preselect it as a file in its folder. */
+const setInitialPath = (
+  gtk: ReturnType<typeof loadGtkDialogFFI>,
+  fileDialog: Pointer,
+  path: string,
+): void => {
+  const file = loadGioFFI().symbols.g_file_new_for_path(cstr(path));
+  if (file === null) {
+    return;
+  }
+  if (statSync(path, { throwIfNoEntry: false })?.isDirectory() === true) {
+    gtk.symbols.gtk_file_dialog_set_initial_folder(fileDialog, file);
+  } else {
+    gtk.symbols.gtk_file_dialog_set_initial_file(fileDialog, file);
+  }
+  loadGObjectFFI().symbols.g_object_unref(file);
+};
+
+/** The GtkFileDialog entry point; a folder picker wins over files, as Electron does on Linux. */
+export const openDialogMethod = (
+  spec: Pick<OpenDialogSpec, 'canChooseDirectories' | 'allowsMultipleSelection'>,
+): 'open' | 'open_multiple' | 'select_folder' | 'select_multiple_folders' => {
+  if (spec.canChooseDirectories) {
+    return spec.allowsMultipleSelection ? 'select_multiple_folders' : 'select_folder';
+  }
+  return spec.allowsMultipleSelection ? 'open_multiple' : 'open';
+};
+
+const showOpenDialog = (spec: OpenDialogSpec): Promise<string[]> => {
   const gtk = loadGtkDialogFFI();
   const fileDialog = gtk.symbols.gtk_file_dialog_new();
   if (fileDialog === null) {
     throw new Error('gtk_file_dialog_new() returned null');
   }
+  const method = openDialogMethod(spec);
   gtk.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Open'));
   gtk.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
-  applyExtensionFilter(gtk, fileDialog, spec.extensions);
+  if (spec.defaultPath.length > 0) {
+    setInitialPath(gtk, fileDialog, spec.defaultPath);
+  }
+  if (!spec.canChooseDirectories) {
+    applyExtensionFilter(gtk, fileDialog, spec.extensions);
+  }
   return runAsyncReady<string[]>(
-    (cbPtr) => gtk.symbols.gtk_file_dialog_open(fileDialog, null, null, cbPtr, null),
+    (cbPtr) => gtk.symbols[`gtk_file_dialog_${method}`](fileDialog, null, null, cbPtr, null),
     (result) => {
-      const path = settleFilePath({
-        result,
-        finish: (r) => gtk.symbols.gtk_file_dialog_open_finish(fileDialog, r, null),
-        readPath: readGFilePath,
-      });
+      const finish = (r: Pointer) =>
+        gtk.symbols[`gtk_file_dialog_${method}_finish`](fileDialog, r, null);
+      if (method === 'open_multiple' || method === 'select_multiple_folders') {
+        let list: Pointer | null = null;
+        try {
+          list = finish(result);
+        } catch {
+          // A dismissal or GError reads as no selection.
+        }
+        return list === null ? [] : readGFileListPaths(list);
+      }
+      const path = settleFilePath({ result, finish, readPath: readGFilePath });
       return path === '' ? [] : [path];
     },
-  );
+  ).finally(() => loadGObjectFFI().symbols.g_object_unref(fileDialog));
 };
 
-const showSaveDialog = (spec: {
-  readonly defaultName: string;
-  readonly extensions: ReadonlyArray<string>;
-}): Promise<string> => {
+const showSaveDialog = (spec: SaveDialogSpec): Promise<string> => {
   const gtk = loadGtkDialogFFI();
   const fileDialog = gtk.symbols.gtk_file_dialog_new();
   if (fileDialog === null) {
@@ -219,7 +238,10 @@ const showSaveDialog = (spec: {
   }
   gtk.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Save'));
   gtk.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
-  if (spec.defaultName.length > 0) {
+  // Electron's defaultPath is an absolute directory, an absolute file or a bare name.
+  if (isAbsolute(spec.defaultName)) {
+    setInitialPath(gtk, fileDialog, spec.defaultName);
+  } else if (spec.defaultName.length > 0) {
     gtk.symbols.gtk_file_dialog_set_initial_name(fileDialog, cstr(spec.defaultName));
   }
   applyExtensionFilter(gtk, fileDialog, spec.extensions);
@@ -231,10 +253,9 @@ const showSaveDialog = (spec: {
         finish: (r) => gtk.symbols.gtk_file_dialog_save_finish(fileDialog, r, null),
         readPath: readGFilePath,
       }),
-  );
+  ).finally(() => loadGObjectFFI().symbols.g_object_unref(fileDialog));
 };
 
-/** The Linux native dialog backend (single-path open; multi-select is v2). */
 export const linuxDialogBackend: DialogBackend = {
   showMessageBox,
   showOpenDialog,

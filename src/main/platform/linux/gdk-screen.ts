@@ -1,31 +1,28 @@
-import { type Pointer, ptr } from 'bun:ffi';
-import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import { FFIType, type Pointer, ptr } from 'bun:ffi';
+import type { Point, RawDisplay, ScreenBackend } from '../services';
+import { dlopen } from '../dlopen';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
 
-/**
- * Linux display enumeration via GTK4's GdkMonitor model.
- *
- * `gdk_display_get_monitors(default)` returns a `GListModel*` of `GdkMonitor`
- * (owned by GDK — NOT unref'd). `g_list_model_get_n_items` gives the count and
- * `g_list_model_get_item(model, i)` returns a transfer-full `GdkMonitor*` that
- * MUST be `g_object_unref`'d after reading. Per monitor:
- * `gdk_monitor_get_geometry(monitor, GdkRectangle* out)` fills a 4 x i32
- * `[x, y, width, height]` buffer (allocated here as an `Int32Array(4)`), and
- * `gdk_monitor_get_scale_factor` gives the integer device-pixel scale.
- *
- * v1 LIMITATIONS (all documented):
- * - workArea == bounds: GTK4's GdkMonitor has no work-area / strut API, so the
- *   panel/dock inset is not excluded.
- * - id == index: GdkMonitor has no stable numeric id; the list index is used.
- * - primary == index 0: GTK4 removed the primary-monitor concept; the first
- *   enumerated monitor is treated as primary.
- * - rotation == 0, internal == false: GdkMonitor exposes neither a rotation
- *   angle nor a built-in-panel flag through a simple scalar getter.
- * - getCursorScreenPoint == {0,0}: the GTK4 pointer position needs a surface +
- *   seat + device, which this read-only enumeration backend does not hold.
- */
+const loadFractionalScale = () =>
+  dlopen('libgtk-4.so.1', {
+    gdk_monitor_get_scale: { args: [FFIType.pointer], returns: FFIType.f64 },
+  });
+
+let fractionalScale: ReturnType<typeof loadFractionalScale> | null | undefined;
+
+/** `gdk_monitor_get_scale` (GTK 4.14+) reports fractional scaling; older GTK has only the integer ceiling. */
+const monitorScale = (monitor: Pointer, integerScale: number): number => {
+  if (fractionalScale === undefined) {
+    try {
+      fractionalScale = loadFractionalScale();
+    } catch {
+      fractionalScale = null;
+    }
+  }
+  return fractionalScale?.symbols.gdk_monitor_get_scale(monitor) ?? integerScale;
+};
 
 const readGeometry = (
   symbols: ReturnType<typeof loadGdkFFI>['symbols'],
@@ -36,7 +33,7 @@ const readGeometry = (
   return { x: rect[0] ?? 0, y: rect[1] ?? 0, width: rect[2] ?? 0, height: rect[3] ?? 0 };
 };
 
-/** Enumerate connected monitors via the GdkMonitor GListModel. */
+// ponytail: workArea = bounds, id = index, primary = index 0, rotation 0, internal false; GTK4 has no API for them.
 export const getDisplays = (): readonly RawDisplay[] => {
   const gdk = loadGdkFFI();
   const gio = loadGioFFI();
@@ -46,6 +43,7 @@ export const getDisplays = (): readonly RawDisplay[] => {
   if (display === null) {
     return [];
   }
+  // GDK owns the model: never unref it.
   const model = gdk.symbols.gdk_display_get_monitors(display);
   if (model === null) {
     return [];
@@ -54,12 +52,13 @@ export const getDisplays = (): readonly RawDisplay[] => {
 
   const displays: RawDisplay[] = [];
   for (let i = 0; i < count; i++) {
+    // transfer-full: unref after reading.
     const monitor = gio.symbols.g_list_model_get_item(model, i);
     if (monitor === null) {
       continue;
     }
     const geometry = readGeometry(gdk.symbols, monitor);
-    const scaleFactor = gdk.symbols.gdk_monitor_get_scale_factor(monitor);
+    const scaleFactor = monitorScale(monitor, gdk.symbols.gdk_monitor_get_scale_factor(monitor));
     gobject.symbols.g_object_unref(monitor);
 
     const bounds = { x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height };
@@ -76,10 +75,9 @@ export const getDisplays = (): readonly RawDisplay[] => {
   return displays;
 };
 
-/** GTK4 cursor position needs a seat/device; v1 returns {0,0} (documented). */
+// ponytail: always {0,0}; the GTK4 pointer position needs a surface, seat and device.
 export const getCursorScreenPoint = (): Point => ({ x: 0, y: 0 });
 
-/** The Linux screen backend the public `screen` API delegates to. */
 export const gdkScreenBackend: ScreenBackend = {
   getDisplays,
   getCursorScreenPoint,

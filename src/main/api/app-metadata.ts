@@ -1,17 +1,9 @@
 import { dirname, join } from 'node:path';
 
-/**
- * Resolution of the consuming app's name and version: walk up from the main
- * module's directory to the nearest `package.json`, as Electron does.
- */
-
 export const DEFAULT_APP_NAME = 'bunmaska-app';
 export const DEFAULT_APP_VERSION = '0.0.0';
 
-/**
- * Each field is explicitly `| undefined` (not merely optional) so a parsed
- * manifest can set a key to `undefined` under `exactOptionalPropertyTypes`.
- */
+/** Fields are `| undefined`, not just optional, so a parse can store `undefined` (`exactOptionalPropertyTypes`). */
 export type Manifest = {
   readonly name?: string | undefined;
   readonly productName?: string | undefined;
@@ -47,6 +39,12 @@ const parseManifest = (contents: string): Manifest | undefined => {
   };
 };
 
+/** The PARSEABLE `package.json` in `dir`, else `undefined`. */
+export const readManifest = (dir: string, read: ManifestReader): Manifest | undefined => {
+  const contents = read(join(dir, 'package.json'));
+  return contents === undefined ? undefined : parseManifest(contents);
+};
+
 /**
  * The first directory at or above `startDir` with a PARSEABLE `package.json`;
  * a malformed manifest is skipped and the walk continues upward.
@@ -54,12 +52,9 @@ const parseManifest = (contents: string): Manifest | undefined => {
 export const findManifest = (startDir: string, read: ManifestReader): FoundManifest | undefined => {
   let dir = startDir;
   for (;;) {
-    const contents = read(join(dir, 'package.json'));
-    if (contents !== undefined) {
-      const manifest = parseManifest(contents);
-      if (manifest !== undefined) {
-        return { dir, manifest };
-      }
+    const manifest = readManifest(dir, read);
+    if (manifest !== undefined) {
+      return { dir, manifest };
     }
     const parent = dirname(dir);
     if (parent === dir) {

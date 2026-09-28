@@ -1,17 +1,15 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  type GlobalShortcutBackend,
   globalShortcut,
   setGlobalShortcutBackendForTesting,
 } from '../../../../src/main/api/global-shortcut';
+import type { GlobalShortcutBackend } from '../../../../src/main/platform/services';
 
 /**
  * The platform-neutral `globalShortcut` API, exercised with a fake backend so
  * the accelerator validation, registry bookkeeping, and dispatch logic are
  * tested with ZERO FFI.
  */
-
-type Registration = { accelerator: string; callback: () => void };
 
 const makeFakeBackend = () => {
   const registered = new Map<string, () => void>();
@@ -36,15 +34,7 @@ const makeFakeBackend = () => {
     registered.get(accelerator)?.();
   };
   const has = (accelerator: string): boolean => registered.has(accelerator);
-  const last = (): Registration | undefined => {
-    const keys = [...registered.keys()];
-    const k = keys[keys.length - 1];
-    if (k === undefined) {
-      return undefined;
-    }
-    return { accelerator: k, callback: registered.get(k) ?? (() => undefined) };
-  };
-  return { backend, fire, has, last, calls };
+  return { backend, fire, has, calls };
 };
 
 afterEach(() => {
@@ -53,6 +43,14 @@ afterEach(() => {
 });
 
 describe('globalShortcut.register', () => {
+  test('returns false without touching the backend where grabs are unsupported', () => {
+    const fake = makeFakeBackend();
+    setGlobalShortcutBackendForTesting({ ...fake.backend, isSupported: () => false });
+    expect(globalShortcut.register('CmdOrCtrl+K', () => undefined)).toBe(false);
+    expect(fake.calls).toEqual([]);
+    expect(globalShortcut.isRegistered('CmdOrCtrl+K')).toBe(false);
+  });
+
   test('parses, registers via the backend, and returns true', () => {
     const fake = makeFakeBackend();
     setGlobalShortcutBackendForTesting(fake.backend);
@@ -95,6 +93,18 @@ describe('globalShortcut.register', () => {
     setGlobalShortcutBackendForTesting(fake.backend);
     expect(globalShortcut.register('CmdOrCtrl+K', () => undefined)).toBe(true);
     expect(globalShortcut.register('CmdOrCtrl+K', () => undefined)).toBe(false);
+  });
+});
+
+describe('equivalent accelerator spellings', () => {
+  test('are one shortcut: registered once, found and removed under any spelling', () => {
+    const fake = makeFakeBackend();
+    setGlobalShortcutBackendForTesting(fake.backend);
+    expect(globalShortcut.register('CmdOrCtrl+K', () => undefined)).toBe(true);
+    expect(globalShortcut.register('CommandOrControl+k', () => undefined)).toBe(false);
+    expect(globalShortcut.isRegistered('cmdorctrl + K')).toBe(true);
+    globalShortcut.unregister('CommandOrControl+K');
+    expect(fake.calls).toEqual(['register:CmdOrCtrl+K', 'unregister:CmdOrCtrl+K']);
   });
 });
 

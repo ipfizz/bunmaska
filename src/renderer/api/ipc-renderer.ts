@@ -1,10 +1,6 @@
 import { BunmaskaError } from '../../common/errors';
 
-/**
- * Renderer-side IPC over the `globalThis.__bunmaska` bridge. `on` listeners
- * receive a placeholder event object as their first argument to match Electron's
- * `(event, ...args)` shape.
- */
+/** IPC over `globalThis.__bunmaska`; listeners get a placeholder event first, as in Electron. */
 
 type BridgeListener = (...args: unknown[]) => void;
 
@@ -34,7 +30,7 @@ const getBridge = (): RendererBridge => {
   const bridge = Reflect.get(globalThis, '__bunmaska') as RendererBridge | undefined;
   if (bridge === undefined) {
     throw new BunmaskaError(
-      'Bunmaska preload bridge is not available; ensure a preload script ran before renderer code',
+      'ipcRenderer is only available in the preload (isolated world); expose what the page needs with contextBridge',
     );
   }
   return bridge;
@@ -44,9 +40,7 @@ type WrapperEntry = { channel: string; listener: IpcRendererListener; wrapper: B
 
 /** Create the `ipcRenderer` object bound to the current page's bridge. */
 export const createIpcRenderer = (): IpcRenderer => {
-  // The bridge stores the WRAPPED listener (one that injects the event arg), so
-  // removeListener must look up the exact wrapper registered for a (channel,
-  // listener) pair.
+  // The bridge holds the wrapper, not the listener, so removeListener must find the wrapper.
   const wrappers: WrapperEntry[] = [];
 
   const wrap = (channel: string, listener: IpcRendererListener): BridgeListener => {
@@ -78,10 +72,12 @@ export const createIpcRenderer = (): IpcRenderer => {
       getBridge().on(channel, wrap(channel, listener));
     },
     once(channel, listener) {
-      // The bridge drops the wrapper after one dispatch, so the tracked wrapper
-      // also drops its own entry when it fires (keeps removeListener consistent).
+      // The bridge drops a fired once, so drop this exact entry, not an `on` of the same listener.
       const wrapper: BridgeListener = (...args) => {
-        takeWrapper(channel, listener);
+        const index = wrappers.findIndex((e) => e.wrapper === wrapper);
+        if (index !== -1) {
+          wrappers.splice(index, 1);
+        }
         listener({}, ...args);
       };
       wrappers.push({ channel, listener, wrapper });

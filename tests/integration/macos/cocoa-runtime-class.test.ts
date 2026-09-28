@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import { msgSendReturnsU8 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
+import {
+  msgSendPtr,
+  msgSendReturnsU8,
+} from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 import { defineObjcClass } from '../../../src/main/platform/macos/cocoa-runtime-class';
 
 if (currentPlatform() === 'macos') {
   describe('defineObjcClass', () => {
+    test('throws for an already-registered class name', () => {
+      expect(() => defineObjcClass('NSObject', 'NSObject', [])).toThrow(/already registered/);
+    });
+
     test('creates a registered subclass of NSObject', () => {
       expect(defineObjcClass('BunmaskaTestClassA', 'NSObject', [])).not.toBe(0n);
     });
@@ -65,6 +72,39 @@ if (currentPlatform() === 'macos') {
       );
       expect(msgSendReturnsU8(instance, rt.selectors.get('bunmaskaShouldYes'))).toBe(1);
       expect(msgSendReturnsU8(instance, rt.selectors.get('bunmaskaShouldNo'))).toBe(0);
+    });
+
+    test('a BOOL argument reads only its low byte, ignoring junk in the upper register bits', () => {
+      const rt = cocoa();
+      let received: bigint | undefined;
+      const cls = defineObjcClass('BunmaskaTestClassBoolArg', 'NSObject', [
+        {
+          selector: 'bunmaskaTakeBool:',
+          typeEncoding: 'v@:c',
+          args: ['bool'],
+          impl: (_self, _cmd, flag) => {
+            received = flag;
+          },
+        },
+      ]);
+      const instance = rt.msgSend(
+        rt.msgSend(cls, rt.selectors.get('alloc')),
+        rt.selectors.get('init'),
+      );
+      msgSendPtr(instance, rt.selectors.get('bunmaskaTakeBool:'), 0x1_0000_0001n);
+      expect(received).toBe(1n);
+    });
+
+    test('throws when a selector is added twice instead of dropping the second impl', () => {
+      const spec = {
+        selector: 'bunmaskaTwice',
+        typeEncoding: 'v@:',
+        args: [],
+        impl: () => undefined,
+      };
+      expect(() => defineObjcClass('BunmaskaTestClassTwice', 'NSObject', [spec, spec])).toThrow(
+        /bunmaskaTwice/,
+      );
     });
   });
 }

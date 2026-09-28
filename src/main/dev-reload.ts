@@ -1,17 +1,9 @@
-/**
- * Dev live-reload (app side): for a renderer-only change the `bunmaska dev`
- * supervisor writes a `reload` command on the child's stdin instead of restarting
- * it, and this reloads the open windows in place.
- */
+/** App side of `bunmaska dev`: reload commands arrive on stdin, one per line. */
 
-/** The dev command the supervisor writes for a renderer-only change. */
+/** The command the supervisor writes for a renderer-only change. */
 export const DEV_RELOAD_COMMAND = 'reload';
 
-/**
- * True inside an app the dev supervisor respawned after a source change. The
- * backends then show the window without activating the app, so a restart
- * never yanks focus away from the editor.
- */
+/** True in a dev respawn: windows show without taking focus from the editor. */
 export const isDevRestart = (): boolean => process.env['BUNMASKA_DEV_RESTART'] === '1';
 
 /** Split a stdin chunk into the trimmed, non-empty commands it carries. */
@@ -30,20 +22,24 @@ export const handleDevChunk = (chunk: string, reloadAll: () => void): void => {
   }
 };
 
-/** The slice of `process.stdin` this module needs. */
+/** The slice of `process.stdin` this module needs; `end` passes no chunk. */
 export type DevStdin = {
-  on: (event: 'data', listener: (chunk: Buffer | string) => void) => void;
+  on: (event: 'data' | 'end', listener: (chunk?: Buffer | string) => void) => void;
   unref?: () => void;
 };
 
 /**
- * Subscribe to reload commands on `stdin`. Does not keep the process alive (the
- * stdin handle is unref'd). Call once, only in dev — `browser-window` gates it on
- * `BUNMASKA_DEV`.
+ * Subscribe to reload commands on `stdin`; the unref'd handle never keeps the app alive.
+ * `onSupervisorGone` runs when the pipe closes, i.e. `bunmaska dev` died.
  */
-export const startDevReload = (reloadAll: () => void, stdin: DevStdin = process.stdin): void => {
+export const startDevReload = (
+  reloadAll: () => void,
+  onSupervisorGone: () => void,
+  stdin: DevStdin = process.stdin,
+): void => {
   stdin.on('data', (chunk) => {
-    handleDevChunk(chunk.toString(), reloadAll);
+    handleDevChunk(chunk?.toString() ?? '', reloadAll);
   });
+  stdin.on('end', () => onSupervisorGone());
   stdin.unref?.();
 };

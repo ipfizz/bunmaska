@@ -5,11 +5,11 @@ seoTitle: "The bunmaska CLI - init, dev, build, engine store"
 order: 2
 ---
 
-Installing the package gives you the `bunmaska` command - your **developer tool**. The whole development loop lives here: scaffold, run, package. It is not bundled into your app and your users never install it; what they get is a standalone executable (see [Shipping Your App](/docs/shipping)). Everything below is for you, not them. `bunmaska <command> --help` prints the usage for any of them.
+Installing the package gives you the `bunmaska` command - your **developer tool**. The whole development loop lives here: scaffold, run, package. It is not bundled into your app and your users never install it; what they get is a standalone executable (see [Shipping Your App](/docs/shipping)). Everything below is for you, not them. `bunmaska <command> --help` prints the usage for any of them. A command rejects flags and extra arguments it does not take, and a failure prints one line, not a stack trace.
 
 ## `bunmaska init [dir]`
 
-Scaffolds a runnable starter from an embedded template: `src/main.ts`, `src/preload.js`, a renderer (`src/index.html` + script), a `bunmaska.config.ts`, a `package.json` wired to depend on `bunmaska`, plus a `.gitignore` and a `README.md`. The app is named after the directory unless you name it yourself.
+Scaffolds a runnable starter from an embedded template: `src/main.ts`, `src/preload.js`, a renderer page (`src/index.html`), a `bunmaska.config.ts`, a `package.json` wired to depend on `bunmaska` (with `@types/bun` and a `build` script that writes into `dist/`), a `tsconfig.json` so it type-checks out of the box, plus a `.gitignore` and a `README.md`. The app is named after the directory unless you name it yourself. Like an Electron starter, it quits when its last window closes, except on macOS, where clicking the Dock icon reopens a window.
 
 ```sh
 bunmaska init my-app        # creates ./my-app, named my-app
@@ -23,11 +23,13 @@ It refuses to overwrite: if any file it would write already exists, nothing is w
 
 Runs your app and reacts to file changes (debounced). This is what you'll have open all day, so it is built to not waste your time:
 
-- **Main-process edits restart** the app; the restart waits for the old process to actually exit first, so you never get two windows or a lost single-instance lock.
-- **Renderer asset edits live-reload** the open windows in place - no restart. With a [`renderer` block](/docs/building#bundling-your-renderer) in your config, edits under the renderer entry's directory **rebuild the bundle first**, then the new output triggers the reload; a broken edit prints the bundler error and keeps the loop alive.
-- **Preload edits restart** (the preload is bundled and injected at window construction, so a reload would re-inject the stale script - restarting is the honest action).
+- **Main-process edits restart** the app: your entry, any local module it imports (`.js` included, followed transitively), and any other TypeScript file outside the renderer entry's directory. The restart waits for the old process to actually exit first (force-killing one that ignores `SIGTERM` after a grace period), so you never get two windows or a lost single-instance lock.
+- **Other edits live-reload** the open windows in place - no restart. With a [`renderer` block](/docs/building#bundling-your-renderer) in your config, edits under the renderer entry's directory and to its `renderer.copy` sources **rebuild the bundle first**, then the new output triggers the reload; a broken edit prints the bundler error and keeps the loop alive. Every restart rebuilds the renderer first, too, so a renderer edit that lands together with a main-process edit is never lost.
+- **Preload edits restart** - a file named `preload.js` / `.mjs` / `.cjs` / `.ts`, including a copied one (the preload is bundled and injected at window construction, so a reload would re-inject the stale script - restarting is the honest action).
+- **Config edits are not applied live.** Editing `bunmaska.config.ts` prints a reminder to restart `bunmaska dev`.
+- **Some paths are never watched:** `node_modules`, dotfiles and dot directories, `.app` bundles, and the root-level `build/`, `out/` and `coverage/` directories. `dist/` is watched on purpose, since your renderer output lands there.
 - **No-op saves do nothing.** Changes are content-hashed, so a formatter rewriting identical bytes or a metadata-only touch doesn't restart anything. Atomic editor saves (write-temp-then-rename) are handled too.
-- **Window position survives restarts.** The first window's bounds are saved to `.bunmaska-dev-state.json` (add it to `.gitignore`; the scaffold already does) and restored on the next start, instead of reopening at the OS default. Packaged apps never touch this.
+- **Window placement survives restarts.** The first window's bounds are saved to `.bunmaska-dev-state.json` (add it to `.gitignore`; the scaffold already does) and restored on the next start, instead of reopening at the OS default - size and position on macOS and Windows, size only on Linux, where the compositor owns position. Packaged apps never touch this.
 - If the app has quit and you touch a renderer file, it says so ("app is not running") instead of pretending to reload a corpse.
 - A project's [engine pin](/docs/concepts/engine) (`engine.webkit` in the config) is respected - `dev` and `run` launch on the pinned engine, same as `build`.
 
@@ -37,7 +39,7 @@ bunmaska dev
 
 ## `bunmaska run <entry> [args...]`
 
-Runs an entry file once, no watching. Equivalent to `bun run <entry>` with Bunmaska's runtime wiring; trailing arguments are forwarded to the app.
+Runs an entry file once, no watching. Equivalent to `bun run <entry>` with Bunmaska's runtime wiring; trailing arguments are forwarded to the app (`--help` included), and so are Ctrl+C and `SIGTERM`, so the app gets its chance to quit cleanly.
 
 ```sh
 bunmaska run src/main.ts --verbose
@@ -49,19 +51,19 @@ Compiles your app with `bun build --compile`, bundles it next to the Bun runtime
 
 - **macOS** - a `.app` bundle (with a `.icns` converted from your PNG), optional code-signing/notarization, and a `.dmg`.
 - **Linux** - an AppDir `.tar.gz` and a `.deb`.
-- **Windows** (`--target windows`) - a portable `<Name>/` directory and a `.zip` (x64); `--embed-engine <dir>` bundles a WinCairo engine into it.
+- **Windows** (`--target windows`) - a portable `<Name>/` directory and a `.zip` (x64); `--embed-engine <dir>`, or `engine.embed: true` with an installed pin, bundles a WinCairo engine into it.
 
-`--embed-engine`, `--sign`, `--notarize` and `--dmg` are rejected for targets they do not apply to.
+`--embed-engine`, `--sign`, `--notarize` and `--dmg` are rejected for targets they do not apply to, and `--notarize` without a Developer ID `--sign` (none at all, or ad-hoc `-`) is refused before anything is built.
 
 ```sh
 bunmaska build
 ```
 
-The entry defaults to the `entry` in your `bunmaska.config.ts` (the `init` scaffold sets it); pass it explicitly (`bunmaska build src/main.ts`) to override. `name`, `id` and `icon` are read from the same config when the flags are not given - flag beats config, config beats the fallback derived from the entry file name.
+The entry defaults to the `entry` in your `bunmaska.config.ts` (the `init` scaffold sets it); pass it explicitly (`bunmaska build src/main.ts`) to override. `name`, `id` and `icon` are read from the same config when the flags are not given - flag beats config, config beats the fallback derived from the entry file name. One config serves every target, so a config `icon` the target cannot use (a `.icns` on a Linux build, say) is skipped with a warning; an explicit `--icon` of the wrong type is still an error.
 
 ## `bunmaska build --update`
 
-Everything `build` does, plus it emits the auto-update feed the runtime `autoUpdater` consumes: an `update.json` manifest, a content-hashed `.tar.zst`, and - with `--update-key` - a detached Ed25519 `.sig` beside the artifact. Because there's no 150 MB engine to re-download, updates are tiny.
+Everything `build` does, plus it emits the auto-update feed the runtime `autoUpdater` consumes: an `update.json` manifest, a content-hashed `.tar.zst`, and - with `--update-key` - a detached Ed25519 signature for each (`update.json.sig` and `<artifact>.sig`), four files in all. `--channel` defaults to the config's `updates.channel`, else `stable`. Because there's no 150 MB engine to re-download, updates are tiny.
 
 ```sh
 bunmaska build --update --update-key update-signing-key.pem --channel stable
@@ -100,7 +102,7 @@ Most apps never touch this - the system WebKit default is the right answer for t
 
 ## `bunmaska doctor [dir]`
 
-A quick health report: the Bun version, the platform, the engine store, and the engine the current project resolves (and whether it's installed). It exits 1 when the project pins a full engine id that is not installed, and tells you to run `bun install` in the project when it has no `node_modules`. Run it when something engine-related looks off.
+A quick health report: the Bun version, the platform, the engine store, and the engine the current project resolves (and whether it's installed). It exits 1 when the project pins a full engine id for this OS and architecture that is not installed (a pin built for another platform is reported as such and ignored here), and tells you to run `bun install` in the project when it has no `node_modules`. Run it when something engine-related looks off.
 
 ```sh
 bunmaska doctor

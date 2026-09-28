@@ -21,6 +21,7 @@ if (currentPlatform() === 'macos') {
           name,
           value: 'roundtrip',
           secure: true,
+          httpOnly: true,
           expirationDate,
         });
 
@@ -31,6 +32,7 @@ if (currentPlatform() === 'macos') {
         expect(cookie?.domain).toBe('cookies.bunmaska.test');
         expect(cookie?.path).toBe('/');
         expect(cookie?.secure).toBe(true);
+        expect(cookie?.httpOnly).toBe(true);
         expect(cookie?.expirationDate).toBeCloseTo(expirationDate, 0);
 
         // The url filter enforces the secure flag: http must not see it.

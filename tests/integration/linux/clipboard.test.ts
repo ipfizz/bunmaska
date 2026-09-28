@@ -23,6 +23,7 @@ import { createLinuxDrain } from '../../../src/main/platform/linux/gtk-run-loop'
  */
 
 const isLinux = currentPlatform() === 'linux';
+const hasDisplay = isLinux && loadGtkFFI().symbols.gtk_init_check() !== 0;
 
 /** A valid 1x1 PNG, round-tripped as raw `image/png` bytes (no NativeImage decode). */
 const PNG_1x1 = new Uint8Array(
@@ -110,89 +111,110 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
   // Each async test carries a 15s bun:test deadline (third arg) on TOP of the 5s
   // awaitWithPump budget + 20m job ceiling — so a regression fails fast at every
   // layer instead of hanging.
-  test('writeText then readText round-trips plain text in the same process', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return; // No display; the symbol-resolution test above already proved dispatch.
-    }
-    const value = 'bunmaska-clip-roundtrip-stable';
-    linuxClipboardBackend.writeText(value);
-    const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
-    expect(got).toBe(value);
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'writeText then readText round-trips plain text in the same process',
+    async () => {
+      const value = 'bunmaska-clip-roundtrip-stable';
+      linuxClipboardBackend.writeText(value);
+      const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
+      expect(got).toBe(value);
+    },
+    15000,
+  );
 
-  test('writeText replaces previous contents', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    linuxClipboardBackend.writeText('bunmaska-clip-first');
-    linuxClipboardBackend.writeText('bunmaska-clip-second');
-    const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
-    expect(got).toBe('bunmaska-clip-second');
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'writeText replaces previous contents',
+    async () => {
+      linuxClipboardBackend.writeText('bunmaska-clip-first');
+      linuxClipboardBackend.writeText('bunmaska-clip-second');
+      const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
+      expect(got).toBe('bunmaska-clip-second');
+    },
+    15000,
+  );
 
-  test('round-trips UTF-8 content', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    const value = 'café — 日本語 — 🎉';
-    linuxClipboardBackend.writeText(value);
-    const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
-    expect(got).toBe(value);
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'round-trips UTF-8 content',
+    async () => {
+      const value = 'café — 日本語 — 🎉';
+      linuxClipboardBackend.writeText(value);
+      const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
+      expect(got).toBe(value);
+    },
+    15000,
+  );
 
-  test('clear then readText returns empty string', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    linuxClipboardBackend.writeText('bunmaska-clip-to-be-cleared');
-    linuxClipboardBackend.clear();
-    const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
-    expect(got).toBe('');
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'writeText of an empty string reads back empty (a zero-length payload is valid)',
+    async () => {
+      linuxClipboardBackend.writeText('bunmaska-clip-before-empty');
+      linuxClipboardBackend.writeText('');
+      const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
+      expect(got).toBe('');
+    },
+    15000,
+  );
 
-  test('writeHTML then readHTML round-trips markup in the same process', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    const markup = '<b>bold</b> &amp; <i>italic</i>';
-    linuxClipboardBackend.writeHTML(markup);
-    const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
-    expect(got).toBe(markup);
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'clear then readText returns empty string',
+    async () => {
+      linuxClipboardBackend.writeText('bunmaska-clip-to-be-cleared');
+      linuxClipboardBackend.clear();
+      const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
+      expect(got).toBe('');
+    },
+    15000,
+  );
 
-  test('round-trips UTF-8 HTML content', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    const markup = '<p>café — 日本語 — 🎉</p>';
-    linuxClipboardBackend.writeHTML(markup);
-    const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
-    expect(got).toBe(markup);
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'writeHTML then readHTML round-trips markup in the same process',
+    async () => {
+      const markup = '<b>bold</b> &amp; <i>italic</i>';
+      linuxClipboardBackend.writeHTML(markup);
+      const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
+      expect(got).toBe(markup);
+    },
+    15000,
+  );
 
-  test('readHTML on a cleared clipboard returns empty string (null-stream / no-format path)', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    linuxClipboardBackend.clear();
-    const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
-    expect(got).toBe('');
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'round-trips UTF-8 HTML content',
+    async () => {
+      const markup = '<p>café — 日本語 — 🎉</p>';
+      linuxClipboardBackend.writeHTML(markup);
+      const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
+      expect(got).toBe(markup);
+    },
+    15000,
+  );
 
-  test('writeImage then readImage round-trips PNG bytes in the same process', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
-    linuxClipboardBackend.writeImage(PNG_1x1);
-    const got = await awaitWithPump(linuxClipboardBackend.readImage(), 5000);
-    expect(Array.from(got)).toEqual(Array.from(PNG_1x1));
-  }, 15000);
+  test.skipIf(!hasDisplay)(
+    'readHTML on a cleared clipboard returns empty string (null-stream / no-format path)',
+    async () => {
+      linuxClipboardBackend.clear();
+      const got = await awaitWithPump(linuxClipboardBackend.readHTML(), 5000);
+      expect(got).toBe('');
+    },
+    15000,
+  );
 
-  test('availableFormats reports image/png after writing an image', () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+  test.skipIf(!hasDisplay)(
+    'writeImage then readImage round-trips PNG bytes in the same process',
+    async () => {
+      linuxClipboardBackend.writeImage(PNG_1x1);
+      const got = await awaitWithPump(linuxClipboardBackend.readImage(), 5000);
+      expect(Array.from(got)).toEqual(Array.from(PNG_1x1));
+    },
+    15000,
+  );
+
+  test.skipIf(!hasDisplay)('availableFormats reports image/png after writing an image', () => {
     linuxClipboardBackend.writeImage(PNG_1x1);
     expect(linuxClipboardBackend.availableFormats()).toContain('image/png');
+  });
+
+  test.skipIf(!hasDisplay)('availableFormats reports text/plain after writing text', () => {
+    linuxClipboardBackend.writeText('bunmaska-clip-formats');
+    expect(linuxClipboardBackend.availableFormats()).toContain('text/plain');
   });
 });

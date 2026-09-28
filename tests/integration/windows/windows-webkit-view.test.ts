@@ -6,7 +6,7 @@ import { resolveWindowsEngineDir } from '../../../src/main/platform/windows/webk
  * Windows + engine only. The load-bearing WinCairo proof: a real `WKView` hosted
  * in a native Win32 window spawns the WebKit web/network processes, runs an
  * injected document-start script, and delivers its `postMessage` back to the main
- * process through Bunmaska's cooperative Win32 message pump — all in pure
+ * process through Bunmaska's cooperative Win32 message pump, all in pure
  * `bun:ffi`, zero compiled native code.
  *
  * Driven in a spawned Bun subprocess: WebKit's multi-process IPC + thread

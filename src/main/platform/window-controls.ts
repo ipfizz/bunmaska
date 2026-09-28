@@ -1,27 +1,12 @@
-/**
- * The built-in page-world script for custom (frameless) title bars. It does up to
- * two things:
- *
- *  1. (Native-op-channel platforms only.) Exposes `window.__bunmaska.window`
- *     controls that post `{ op }` to the `bunmaskaWindow` message handler. GATED:
- *     on a platform with a real isolated world (macOS/Linux) the page world must
- *     NOT carry a `__bunmaska` handle — that would defeat context isolation. Only
- *     Windows, whose bridge already lives in the page world, opts in.
- *  2. MIRRORS `--app-region` onto `-webkit-app-region`, which macOS WKWebView
- *     honors for window dragging; custom properties inherit, giving Electron's
- *     app-region cascade. Engines that ignore it (WinCairo, WebKitGTK) fall back
- *     to the native window-op handler in (1).
- *
- * The mirror observes structural changes only, not the `style` attribute it writes,
- * so it cannot loop.
- */
+// Frameless title bars (D045): mirrors `--app-region` onto `-webkit-app-region`, which only
+// macOS WKWebView drags off. The mirror never observes the `style` attribute it writes, so it
+// cannot loop. ponytail: no Linux drag yet, wire gdk_toplevel_begin_move via the isolated bridge.
 export const WINDOW_HANDLER_NAME = 'bunmaskaWindow';
 
 /**
- * Build the page-world title-bar script. Pass `nativeOpChannel: true` ONLY where the
- * page world IS the bridge world (Windows, which has no separate isolated world);
- * on macOS/Linux it must stay false so the page world carries no `__bunmaska`
- * handle, leaving only the `--app-region` mirror macOS drags natively off.
+ * `nativeOpChannel` adds `window.__bunmaska.window` controls and a mousedown drag. Pass it ONLY
+ * where the page world IS the bridge world (Windows): on macOS/Linux a page-world `__bunmaska`
+ * would defeat context isolation.
  */
 export function windowControlsScript(options: { nativeOpChannel?: boolean } = {}): string {
   const ops = options.nativeOpChannel
@@ -50,12 +35,19 @@ export function windowControlsScript(options: { nativeOpChannel?: boolean } = {}
 `
     : '';
   return `(function(){
-${ops}  var mirror = function(){
+${ops}  var mirrored = new WeakSet();
+  var mirror = function(){
     try {
       var els = document.querySelectorAll('*');
       for (var i = 0; i < els.length; i++) {
         var v = getComputedStyle(els[i]).getPropertyValue('--app-region').trim();
-        if (v === 'drag' || v === 'no-drag') els[i].style.setProperty('-webkit-app-region', v);
+        if (v === 'drag' || v === 'no-drag') {
+          els[i].style.setProperty('-webkit-app-region', v);
+          mirrored.add(els[i]);
+        } else if (mirrored.has(els[i])) {
+          els[i].style.removeProperty('-webkit-app-region');
+          mirrored.delete(els[i]);
+        }
       }
     } catch (e) {}
   };
@@ -68,7 +60,12 @@ ${ops}  var mirror = function(){
   if (document.readyState !== 'loading') schedule();
   document.addEventListener('DOMContentLoaded', schedule);
   try {
-    new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(schedule).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
   } catch (e) {}
 })();`;
 }

@@ -1,56 +1,5 @@
-import { selectBackend } from '../platform/index';
-import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
-import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
-import { windowsNativeImageBackend } from '../platform/windows/windows-native-image';
-
-/**
- * Image loading, querying, and encoding — a drop-in subset of Electron's
- * `nativeImage` module.
- *
- * SIZE — bun:ffi cannot return a struct by value, so Electron's `NSImage.size`
- * (an `NSSize` struct) is unreadable across the FFI boundary. Instead each
- * backend reports `width`/`height` via SCALAR getters at decode time (macOS
- * `NSBitmapImageRep` `pixelsWide`/`pixelsHigh`, both `NSInteger`; Linux
- * `gdk_pixbuf_get_width`/`get_height`, both `int`; Windows GDI+), which `getSize`
- * returns directly. No struct ever crosses FFI.
- *
- * The template flag is plain JS metadata: the macOS `NSImage setTemplate:` is
- * applied when the image is realized for a `Tray`/menu, not on the decoded rep
- * here. `toJPEG`'s quality is honored on macOS; Linux uses GdkPixbuf's default.
- * `getScaleFactors` and `{ scaleFactor }` are deferred, not stubbed.
- */
-
-/** Opaque: an ObjC object address (macOS) or a `Pointer` (Linux), both as `bigint`. */
-export type NativeImageHandle = bigint;
-
-export type DecodedImage = {
-  /** `0n` when empty or the decode failed. */
-  readonly handle: NativeImageHandle;
-  /** Pixel width via a SCALAR getter; `0` when empty. */
-  readonly width: number;
-  /** Pixel height via a SCALAR getter; `0` when empty. */
-  readonly height: number;
-  /** Set for a bad path or undecodable bytes. */
-  readonly empty: boolean;
-};
-
-export type NativeImageBackend = {
-  /** A filesystem path or in-memory PNG/JPEG bytes. */
-  decode(source: string | Uint8Array): DecodedImage;
-  encodePng(handle: NativeImageHandle): Uint8Array;
-  /** `quality` is 0-100. */
-  encodeJpeg(handle: NativeImageHandle, quality: number): Uint8Array;
-  /** Redraws at exactly `width`×`height` px into a NEW native image. */
-  resize(handle: NativeImageHandle, width: number, height: number): DecodedImage;
-  /** Copies the sub-rectangle into a NEW native image. */
-  crop(
-    handle: NativeImageHandle,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-  ): DecodedImage;
-};
+import { service } from '../platform/index';
+import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../platform/services';
 
 /** Preserves aspect ratio when one dimension is omitted. */
 export const resolveResizeDimensions = (
@@ -70,19 +19,19 @@ export const resolveResizeDimensions = (
   if (hasH) {
     return { width: Math.max(1, Math.round((height / srcH) * srcW)), height: Math.round(height) };
   }
-  return { width: srcW, height: srcH }; // both omitted → unchanged size
+  return { width: srcW, height: srcH };
 };
 
-/** `undefined` when the clamped rect is empty. */
+/** The rect's intersection with the image; `undefined` when empty. */
 export const clampCropRect = (
   imgW: number,
   imgH: number,
   rect: { x: number; y: number; width: number; height: number },
 ): { x: number; y: number; width: number; height: number } | undefined => {
-  const x = Math.max(0, Math.min(Math.round(rect.x), imgW));
-  const y = Math.max(0, Math.min(Math.round(rect.y), imgH));
-  const width = Math.min(Math.round(rect.width), imgW - x);
-  const height = Math.min(Math.round(rect.height), imgH - y);
+  const x = Math.max(0, Math.round(rect.x));
+  const y = Math.max(0, Math.round(rect.y));
+  const width = Math.min(imgW, Math.round(rect.x) + Math.round(rect.width)) - x;
+  const height = Math.min(imgH, Math.round(rect.y) + Math.round(rect.height)) - y;
   if (width <= 0 || height <= 0) {
     return undefined;
   }
@@ -90,6 +39,12 @@ export const clampCropRect = (
 };
 
 const DATA_URL_PREFIX = 'data:image/png;base64,';
+
+// The held value must never reference the image, or the image is never collected.
+const releaser = new FinalizationRegistry<{
+  readonly backend: NativeImageBackend;
+  readonly handle: NativeImageHandle;
+}>(({ backend, handle }) => backend.release?.(handle));
 
 /** Created through the {@link nativeImage} factory, never directly. */
 export class NativeImage {
@@ -107,6 +62,9 @@ export class NativeImage {
     this.#width = decoded.empty ? 0 : decoded.width;
     this.#height = decoded.empty ? 0 : decoded.height;
     this.#empty = decoded.empty;
+    if (decoded.handle !== 0n) {
+      releaser.register(this, { backend, handle: decoded.handle });
+    }
   }
 
   /** Pixel dimensions; `{ width: 0, height: 0 }` when empty. */
@@ -132,7 +90,7 @@ export class NativeImage {
     return Buffer.from(this.#backend.encodePng(this.#handle));
   }
 
-  /** `quality` is 0-100, default 92. A zero-length `Buffer` when the image is empty. */
+  /** `quality` is 0-100, default 92, ignored on Windows. Zero-length when the image is empty. */
   toJPEG(quality = 92): Buffer {
     if (this.#empty) {
       return Buffer.alloc(0);
@@ -170,10 +128,7 @@ export class NativeImage {
     return new NativeImage(this.#backend, this.#backend.resize(this.#handle, width, height));
   }
 
-  /**
-   * `rect` is in px with a top-left origin. A rect entirely outside the image
-   * yields an empty image; a partially-overflowing one is clamped to bounds.
-   */
+  /** `rect` is in px, top-left origin, and clipped to the image; no overlap yields an empty image. */
   crop(rect: { x: number; y: number; width: number; height: number }): NativeImage {
     if (this.#empty) {
       return new NativeImage(this.#backend, EMPTY_DECODE);
@@ -188,7 +143,7 @@ export class NativeImage {
     );
   }
 
-  /** A template is a monochrome icon the OS recolors for light/dark. */
+  /** A monochrome icon the OS recolors for light/dark; applied when a Tray or menu uses it. */
   setTemplateImage(option: boolean): void {
     this.#template = option;
   }
@@ -198,18 +153,13 @@ export class NativeImage {
   }
 }
 
-const { get: getBackend, setForTesting } = selectBackend<NativeImageBackend>('nativeImage', {
-  macos: () => cocoaNativeImageBackend,
-  linux: () => gdkNativeImageBackend,
-  windows: () => windowsNativeImageBackend,
-});
+const { get: getBackend, setForTesting } = service('nativeImage');
 
 /** @internal */
 export const setNativeImageBackendForTesting = setForTesting;
 
 const EMPTY_DECODE: DecodedImage = { handle: 0n, width: 0, height: 0, empty: true };
 
-/** The `nativeImage` module — Electron-compatible image load/query/encode. */
 export const nativeImage = {
   /** A bad or unreadable path yields an empty image, not a throw. */
   createFromPath(path: string): NativeImage {
@@ -225,14 +175,20 @@ export const nativeImage = {
   createFromDataURL(dataURL: string): NativeImage {
     const comma = dataURL.indexOf(',');
     if (comma === -1 || !dataURL.startsWith('data:')) {
-      return this.createEmpty();
+      return nativeImage.createEmpty();
     }
     const meta = dataURL.slice('data:'.length, comma);
     const payload = dataURL.slice(comma + 1);
+    // Percent-escapes are raw bytes: decodeURIComponent throws on non-UTF-8 like `%89`.
     const bytes = meta.includes(';base64')
-      ? new Uint8Array(Buffer.from(payload, 'base64'))
-      : new TextEncoder().encode(decodeURIComponent(payload));
-    return this.createFromBuffer(bytes);
+      ? Buffer.from(payload, 'base64')
+      : Buffer.from(
+          payload.replace(/%([0-9a-f]{2})/gi, (_, hex: string) =>
+            String.fromCharCode(Number.parseInt(hex, 16)),
+          ),
+          'latin1',
+        );
+    return nativeImage.createFromBuffer(new Uint8Array(bytes));
   },
   /** No native decode is performed. */
   createEmpty(): NativeImage {

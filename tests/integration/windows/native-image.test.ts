@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { currentPlatform } from '../../../src/common/platform';
 import { nativeImage } from '../../../src/main/api/native-image';
 import { windowsNativeImageBackend } from '../../../src/main/platform/windows/windows-native-image';
@@ -18,53 +21,82 @@ const PNG_1x1 = new Uint8Array(
   ),
 );
 
-if (currentPlatform() === 'windows') {
-  describe('Windows nativeImage backend (GDI+)', () => {
-    test('decode reports dimensions for a valid PNG', () => {
-      const image = windowsNativeImageBackend.decode(PNG_1x1);
-      expect(image.empty).toBe(false);
-      expect(image.handle).not.toBe(0n);
-      expect(image.width).toBe(1);
-      expect(image.height).toBe(1);
-    });
-
-    test('decode of garbage bytes is an empty image (not a throw)', () => {
-      const image = windowsNativeImageBackend.decode(new Uint8Array([1, 2, 3, 4]));
-      expect(image.empty).toBe(true);
-    });
-
-    test('encodePng round-trips to valid PNG bytes (exercises the COM Release)', () => {
-      const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
-      const png = windowsNativeImageBackend.encodePng(handle);
-      expect(png.length).toBeGreaterThan(0);
-      // PNG magic: 89 50 4E 47.
-      expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-    });
-
-    test('encodeJpeg produces valid JPEG bytes', () => {
-      const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
-      const jpeg = windowsNativeImageBackend.encodeJpeg(handle, 90);
-      expect(jpeg.length).toBeGreaterThan(0);
-      expect([jpeg[0], jpeg[1]]).toEqual([0xff, 0xd8]); // JPEG SOI marker
-    });
-
-    test('resize produces an image of the requested size', () => {
-      const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
-      const resized = windowsNativeImageBackend.resize(handle, 8, 4);
-      expect(resized.empty).toBe(false);
-      expect(resized.width).toBe(8);
-      expect(resized.height).toBe(4);
-    });
-
-    test('crop produces a sub-image of the requested size', () => {
-      const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
-      const cropped = windowsNativeImageBackend.crop(handle, 0, 0, 1, 1);
-      expect(cropped.empty).toBe(false);
-      expect(cropped.width).toBe(1);
-    });
+describe.skipIf(currentPlatform() !== 'windows')('Windows nativeImage backend (GDI+)', () => {
+  test('decode reports dimensions for a valid PNG', () => {
+    const image = windowsNativeImageBackend.decode(PNG_1x1);
+    expect(image.empty).toBe(false);
+    expect(image.handle).not.toBe(0n);
+    expect(image.width).toBe(1);
+    expect(image.height).toBe(1);
   });
 
-  describe('Windows public nativeImage (over the real backend)', () => {
+  test('decode of garbage bytes is an empty image (not a throw)', () => {
+    const image = windowsNativeImageBackend.decode(new Uint8Array([1, 2, 3, 4]));
+    expect(image.empty).toBe(true);
+  });
+
+  test('encodePng round-trips to valid PNG bytes (exercises the COM Release)', () => {
+    const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+    const png = windowsNativeImageBackend.encodePng(handle);
+    expect(png.length).toBeGreaterThan(0);
+    // PNG magic: 89 50 4E 47.
+    expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  test('decode from a path does not keep the file locked', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-image-'));
+    const path = join(dir, 'icon.png');
+    writeFileSync(path, PNG_1x1);
+    try {
+      expect(windowsNativeImageBackend.decode(path).empty).toBe(false);
+      expect(() => unlinkSync(path)).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('decode of a missing path is an empty image', () => {
+    expect(windowsNativeImageBackend.decode('C:\\bunmaska_no_such_image_zzz.png').empty).toBe(true);
+  });
+
+  test('encodePng ends exactly at the IEND chunk (no trailing HGLOBAL bytes)', () => {
+    const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+    const png = windowsNativeImageBackend.encodePng(handle);
+    expect([...png.subarray(-8)]).toEqual([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+  });
+
+  test('encodeJpeg produces valid JPEG bytes', () => {
+    const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+    const jpeg = windowsNativeImageBackend.encodeJpeg(handle, 90);
+    expect(jpeg.length).toBeGreaterThan(0);
+    expect([jpeg[0], jpeg[1]]).toEqual([0xff, 0xd8]); // JPEG SOI marker
+  });
+
+  test('resize produces an image of the requested size', () => {
+    const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+    const resized = windowsNativeImageBackend.resize(handle, 8, 4);
+    expect(resized.empty).toBe(false);
+    expect(resized.width).toBe(8);
+    expect(resized.height).toBe(4);
+  });
+
+  test('crop produces a sub-image of the requested size', () => {
+    const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+    const cropped = windowsNativeImageBackend.crop(handle, 0, 0, 1, 1);
+    expect(cropped.empty).toBe(false);
+    expect(cropped.width).toBe(1);
+  });
+
+  test('release disposes a decoded image and ignores the empty handle', () => {
+    const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+    expect(() => windowsNativeImageBackend.release?.(handle)).not.toThrow();
+    expect(() => windowsNativeImageBackend.release?.(0n)).not.toThrow();
+  });
+});
+
+describe.skipIf(currentPlatform() !== 'windows')(
+  'Windows public nativeImage (over the real backend)',
+  () => {
     test('createFromBuffer → getSize / isEmpty / toPNG round-trip', () => {
       const image = nativeImage.createFromBuffer(PNG_1x1);
       expect(image.isEmpty()).toBe(false);
@@ -81,5 +113,5 @@ if (currentPlatform() === 'windows') {
     test('an undecodable buffer makes an empty image', () => {
       expect(nativeImage.createFromBuffer(new Uint8Array([9, 9, 9])).isEmpty()).toBe(true);
     });
-  });
-}
+  },
+);

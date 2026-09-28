@@ -45,7 +45,13 @@ if (currentPlatform() === 'macos') {
 
       app = createMacOSApplication();
       app.start();
-      const win = app.createWindow({ width: 400, height: 300, title: 'protocol', show: true });
+      const win = app.createWindow({
+        width: 400,
+        height: 300,
+        title: 'protocol',
+        show: true,
+        protocol: { schemes: ['app'], dispatch: protocol.dispatch },
+      });
       contents = win.webContents;
       contents.onNavigation((navEvent) => {
         if (navEvent.type !== 'did-finish-load') {

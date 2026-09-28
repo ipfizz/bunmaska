@@ -1,17 +1,8 @@
 import { nsStringToString } from './cocoa-foundation';
-import { msgSendI64, msgSendReturnsI64 } from './cocoa-msgsend-variants';
+import { msgSendI64, msgSendReturnsI64, msgSendReturnsU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
-
-/**
- * Bridges `NSApplicationDelegate` callbacks to JS (D026).
- *
- * `applicationShouldHandleReopen:hasVisibleWindows:` is AppKit's Dock-reopen
- * hook and the source of Electron's `activate` event. The delegate object is
- * created with `alloc`/`init` (retain count +1) and never released, so it
- * outlives `NSApp` (which holds its delegate weakly).
- */
 
 /** JS handlers an `NSApplicationDelegate` instance routes callbacks to. */
 export type AppDelegateHandlers = {
@@ -21,7 +12,11 @@ export type AppDelegateHandlers = {
   readonly openUrl: (url: string) => void;
   /** The OS asked the app to open a file path (file association). */
   readonly openFile: (path: string) => void;
+  /** AppKit is terminating (Cmd+Q, Dock Quit, logout); the native terminate was cancelled. */
+  readonly quitRequested: () => void;
 };
+
+const NS_TERMINATE_CANCEL = 0n;
 
 let delegateClass: Handle | undefined;
 let current: AppDelegateHandlers | undefined;
@@ -35,12 +30,24 @@ const ensureDelegateClass = (): Handle => {
       // BOOL applicationShouldHandleReopen:(id)sender hasVisibleWindows:(BOOL)flag
       selector: 'applicationShouldHandleReopen:hasVisibleWindows:',
       typeEncoding: 'c@:@c',
-      args: ['object', 'object'],
+      args: ['object', 'bool'],
       returns: 'bool',
-      impl: (_self, _cmd, _sender, hasVisibleWindows) => {
-        current?.activate(hasVisibleWindows === 1n);
-        // Return YES so AppKit performs its default reopen behavior.
-        return 1;
+      impl: (_self, _cmd, _sender, flag) => {
+        const hasVisibleWindows = flag !== 0n;
+        current?.activate(hasVisibleWindows);
+        return hasVisibleWindows ? 1 : 0;
+      },
+    },
+    {
+      // NSApplicationTerminateReply applicationShouldTerminate:(NSApplication*)sender
+      selector: 'applicationShouldTerminate:',
+      typeEncoding: 'Q@:@',
+      args: ['object'],
+      returns: 'object',
+      // -terminate: would exit without before-quit/will-quit or window vetoes; the JS quit runs them.
+      impl: () => {
+        current?.quitRequested();
+        return NS_TERMINATE_CANCEL as unknown as undefined;
       },
     },
     {
@@ -53,19 +60,13 @@ const ensureDelegateClass = (): Handle => {
         const count = msgSendReturnsI64(urls, rt.selectors.get('count'));
         for (let i = 0n; i < count; i += 1n) {
           const url = msgSendI64(urls, rt.selectors.get('objectAtIndex:'), i);
-          current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+          // AppKit never calls application:openFile: once openURLs: exists; split file URLs here.
+          if (msgSendReturnsU8(url, rt.selectors.get('isFileURL')) === 1) {
+            current?.openFile(nsStringToString(rt.msgSend(url, rt.selectors.get('path'))));
+          } else {
+            current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+          }
         }
-      },
-    },
-    {
-      // BOOL application:(NSApplication*)app openFile:(NSString*)filename
-      selector: 'application:openFile:',
-      typeEncoding: 'c@:@@',
-      args: ['object', 'object'],
-      returns: 'bool',
-      impl: (_self, _cmd, _app, filename) => {
-        current?.openFile(nsStringToString(filename));
-        return 1;
       },
     },
   ]);
@@ -78,8 +79,8 @@ export type AppDelegate = {
 };
 
 /**
- * Create an `NSApplicationDelegate` instance routing callbacks to `handlers`.
- * There is one application delegate per process; the most recent handlers win.
+ * Create the app delegate; the most recent `handlers` win. Its alloc/init +1 is never
+ * released because `NSApp` holds its delegate weakly.
  */
 export const createAppDelegate = (handlers: AppDelegateHandlers): AppDelegate => {
   const rt = cocoa();

@@ -1,8 +1,3 @@
-/**
- * Maps a raw argv tail (no node/bun/script prefix) to a {@link Command}
- * discriminated union.
- */
-
 import { currentPlatform } from '../common/platform';
 
 export type BuildTarget = 'macos' | 'linux' | 'windows';
@@ -13,19 +8,16 @@ export type BuildOptions = {
   readonly out?: string;
   readonly icon?: string;
   readonly target?: BuildTarget;
-  /** macOS code-signing identity (`-` = ad-hoc). Real Developer-ID needs the cert in the keychain. */
+  /** macOS code-signing identity; `-` is ad hoc, a Developer ID needs its cert in the keychain. */
   readonly sign?: string;
-  /** Request notarization (a documented hook; requires Apple credentials to actually run). */
+  /** Notarize the macOS .app (needs APPLE_ID, TEAM_ID, BUNMASKA_NOTARIZE_PASSWORD). */
   readonly notarize?: boolean;
-  /** Also produce a `.dmg` containing the built `.app` (macOS-only; uses hdiutil). */
   readonly dmg?: boolean;
-  /** Release channel for the update feed (default: `stable`). */
   readonly channel?: string;
-  /** Also emit the auto-update feed: a `.tar.zst` of the bundle + `update.json`. */
   readonly update?: boolean;
-  /** PEM private key file that signs the `--update` artifact (`.sig` beside the `.tar.zst`). */
+  /** PEM private key that signs the `--update` artifact. */
   readonly updateKey?: string;
-  /** Windows: directory of a WinCairo WebKit engine to bundle so the `.exe` self-contains it. */
+  /** Windows: a WinCairo engine directory to bundle beside the `.exe`. */
   readonly embedEngine?: string;
 };
 
@@ -52,8 +44,9 @@ export type Command =
 
 const BUILD_STRING_FLAGS = new Map<
   string,
-  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine' | 'updateKey'
+  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine' | 'updateKey' | 'target'
 >([
+  ['--target', 'target'],
   ['--name', 'name'],
   ['--id', 'id'],
   ['--out', 'out'],
@@ -64,10 +57,10 @@ const BUILD_STRING_FLAGS = new Map<
   ['--embed-engine', 'embedEngine'],
 ]);
 
-const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>([
-  '--notarize',
-  '--dmg',
-  '--update',
+const BUILD_BOOLEAN_FLAGS = new Map<string, 'notarize' | 'dmg' | 'update'>([
+  ['--notarize', 'notarize'],
+  ['--dmg', 'dmg'],
+  ['--update', 'update'],
 ]);
 
 const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux', 'windows']);
@@ -75,12 +68,21 @@ const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', '
 const isBuildTarget = (value: string): value is BuildTarget =>
   BUILD_TARGETS.has(value as BuildTarget);
 
+/** The error for the first flag-like or past-`max` argument of a positional-only command. */
+const unexpected = (command: string, args: readonly string[], max: number): Command | undefined => {
+  const bad = args.find((arg, i) => i >= max || arg.startsWith('-'));
+  return bad === undefined
+    ? undefined
+    : { kind: 'error', message: `bunmaska ${command}: unexpected argument ${bad}` };
+};
+
 /** `init [dir]` scaffolds into dir; `init <name> <dir>` also names the app. */
 const parseInit = (rest: readonly string[]): Command => {
-  const [first, second, ...extra] = rest;
-  if (extra.length > 0) {
-    return { kind: 'error', message: `bunmaska init: unexpected argument ${extra[0]}` };
+  const error = unexpected('init', rest, 2);
+  if (error !== undefined) {
+    return error;
   }
+  const [first, second] = rest;
   if (first !== undefined && second !== undefined) {
     return { kind: 'init', dir: second, name: first };
   }
@@ -88,11 +90,10 @@ const parseInit = (rest: readonly string[]): Command => {
 };
 
 const parseDev = (rest: readonly string[]): Command => {
-  const [entry, ...extra] = rest;
-  if (extra.length > 0) {
-    return { kind: 'error', message: `bunmaska dev: unexpected argument ${extra[0]}` };
-  }
-  return entry === undefined ? { kind: 'dev' } : { kind: 'dev', entry };
+  const [entry] = rest;
+  return (
+    unexpected('dev', rest, 1) ?? (entry === undefined ? { kind: 'dev' } : { kind: 'dev', entry })
+  );
 };
 
 const parseRun = (rest: readonly string[]): Command => {
@@ -113,29 +114,9 @@ const parseBuild = (rest: readonly string[]): Command => {
       continue;
     }
     if (token.startsWith('--')) {
-      if (BUILD_BOOLEAN_FLAGS.has(token)) {
-        if (token === '--notarize') {
-          options.notarize = true;
-        } else if (token === '--dmg') {
-          options.dmg = true;
-        } else if (token === '--update') {
-          options.update = true;
-        }
-        continue;
-      }
-      if (token === '--target') {
-        const value = rest[i + 1];
-        if (value === undefined) {
-          return { kind: 'error', message: `bunmaska build: flag ${token} requires a value` };
-        }
-        if (!isBuildTarget(value)) {
-          return {
-            kind: 'error',
-            message: `bunmaska build: --target must be macos, linux or windows (got ${value})`,
-          };
-        }
-        options.target = value;
-        i += 1;
+      const flag = BUILD_BOOLEAN_FLAGS.get(token);
+      if (flag !== undefined) {
+        options[flag] = true;
         continue;
       }
       const key = BUILD_STRING_FLAGS.get(token);
@@ -146,7 +127,16 @@ const parseBuild = (rest: readonly string[]): Command => {
       if (value === undefined) {
         return { kind: 'error', message: `bunmaska build: flag ${token} requires a value` };
       }
-      options[key] = value;
+      if (key !== 'target') {
+        options[key] = value;
+      } else if (isBuildTarget(value)) {
+        options.target = value;
+      } else {
+        return {
+          kind: 'error',
+          message: `bunmaska build: --target must be macos, linux or windows (got ${value})`,
+        };
+      }
       i += 1;
       continue;
     }
@@ -187,29 +177,36 @@ const parseEngine = (rest: readonly string[]): Command => {
   if (action === undefined) {
     return { kind: 'error', message: 'bunmaska engine: missing subcommand' };
   }
+  const positional = (max: number): Command | undefined =>
+    unexpected(`engine ${action}`, args, max);
   switch (action) {
     case 'list':
-      return { kind: 'engine', sub: { action: 'list' } };
+      return positional(0) ?? { kind: 'engine', sub: { action: 'list' } };
     case 'available':
-      return { kind: 'engine', sub: { action: 'available' } };
+      return positional(0) ?? { kind: 'engine', sub: { action: 'available' } };
     case 'which': {
       const target = args[0];
-      return {
-        kind: 'engine',
-        sub: target === undefined ? { action: 'which' } : { action: 'which', target },
-      };
+      return (
+        positional(1) ?? {
+          kind: 'engine',
+          sub: target === undefined ? { action: 'which' } : { action: 'which', target },
+        }
+      );
     }
     case 'install': {
       const source = args[0];
       if (source === undefined) {
-        return { kind: 'error', message: 'bunmaska engine install: missing <id|path>' };
+        return { kind: 'error', message: 'bunmaska engine install: missing <id|path|url>' };
       }
-      return { kind: 'engine', sub: { action: 'install', source } };
+      return positional(1) ?? { kind: 'engine', sub: { action: 'install', source } };
     }
     case 'use': {
       const id = args[0];
       if (id === undefined) {
         return { kind: 'error', message: 'bunmaska engine use: missing <engine-id>' };
+      }
+      if (id.startsWith('-')) {
+        return { kind: 'error', message: `bunmaska engine use: unexpected argument ${id}` };
       }
       let forDir: string | undefined;
       for (let i = 1; i < args.length; i += 1) {
@@ -230,7 +227,12 @@ const parseEngine = (rest: readonly string[]): Command => {
         sub: forDir === undefined ? { action: 'use', id } : { action: 'use', id, for: forDir },
       };
     }
-    case 'prune':
+    case 'prune': {
+      // A typo such as --dryrun must not fall through to a real prune.
+      const bad = args.find((arg) => arg !== '--dry-run' && arg !== '--force');
+      if (bad !== undefined) {
+        return { kind: 'error', message: `bunmaska engine prune: unexpected argument ${bad}` };
+      }
       return {
         kind: 'engine',
         sub: {
@@ -239,19 +241,20 @@ const parseEngine = (rest: readonly string[]): Command => {
           force: args.includes('--force'),
         },
       };
+    }
     case 'verify': {
       const id = args[0];
       if (id === undefined) {
         return { kind: 'error', message: 'bunmaska engine verify: missing <engine-id>' };
       }
-      return { kind: 'engine', sub: { action: 'verify', id } };
+      return positional(1) ?? { kind: 'engine', sub: { action: 'verify', id } };
     }
     default:
       return { kind: 'error', message: `bunmaska engine: unknown subcommand '${action}'` };
   }
 };
 
-/** Parse the argv tail into a {@link Command}. Never throws. */
+/** Parse the argv tail (no bun/script prefix) into a {@link Command}. Never throws. */
 export const parseArgs = (argv: readonly string[]): Command => {
   const [head, ...rest] = argv;
   if (head === undefined || head === '--help' || head === '-h' || head === 'help') {
@@ -260,8 +263,10 @@ export const parseArgs = (argv: readonly string[]): Command => {
   if (head === '--version' || head === '-v') {
     return { kind: 'version' };
   }
-  // `bunmaska build --help` prints the usage instead of "unknown flag".
-  if (rest.includes('--help') || rest.includes('-h')) {
+  // `bunmaska build --help` prints the usage instead of "unknown flag"; the
+  // arguments after a run entry belong to the app.
+  const own = head === 'run' ? rest.slice(0, 1) : rest;
+  if (own.includes('--help') || own.includes('-h')) {
     return { kind: 'help' };
   }
   if (head === 'init') {
@@ -284,14 +289,14 @@ export const parseArgs = (argv: readonly string[]): Command => {
   }
   if (head === 'doctor') {
     const target = rest[0];
-    return target === undefined ? { kind: 'doctor' } : { kind: 'doctor', target };
+    return (
+      unexpected('doctor', rest, 1) ??
+      (target === undefined ? { kind: 'doctor' } : { kind: 'doctor', target })
+    );
   }
   return { kind: 'error', message: `bunmaska: unknown command '${head}'` };
 };
 
-/**
- * `--target` when given, else the host platform. The platform tags and the
- * build-target tags coincide, so the host maps straight through.
- */
+/** `--target`, else the host platform. */
 export const resolveTarget = (target: BuildTarget | undefined): BuildTarget =>
   target ?? currentPlatform();

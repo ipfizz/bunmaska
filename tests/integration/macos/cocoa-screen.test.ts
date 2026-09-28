@@ -1,38 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import {
-  cocoaScreenBackend,
-  getDisplays,
-  loadCoreGraphicsFFI,
-} from '../../../src/main/platform/macos/cocoa-screen';
+import { cocoaScreenBackend, getDisplays } from '../../../src/main/platform/macos/cocoa-screen';
+import type { RawDisplay } from '../../../src/main/platform/services';
 
-/**
- * The load-bearing proof that the CoreGraphics scalar-getter geometry path
- * actually works on a REAL macOS host: at least one display with positive
- * width/height and a scaleFactor >= 1, read live off the hardware. If bun:ffi
- * could not return these scalars this test would fail with zeros or a crash.
- */
+const primaryOf = (displays: readonly RawDisplay[]): RawDisplay => {
+  const primary = displays.find((d) => d.primary);
+  if (primary === undefined) {
+    throw new Error('no primary display');
+  }
+  return primary;
+};
+
 if (currentPlatform() === 'macos') {
   describe('cocoa-screen on a real macOS host', () => {
-    test('loadCoreGraphicsFFI resolves the display scalar getters', () => {
-      const { symbols } = loadCoreGraphicsFFI();
-      for (const name of [
-        'CGGetActiveDisplayList',
-        'CGMainDisplayID',
-        'CGDisplayPixelsWide',
-        'CGDisplayPixelsHigh',
-        'CGDisplayRotation',
-        'CGDisplayIsBuiltin',
-        'CGDisplayIsMain',
-        'CGDisplayCopyDisplayMode',
-        'CGDisplayModeGetWidth',
-        'CGDisplayModeGetPixelWidth',
-        'CGDisplayModeRelease',
-      ] as const) {
-        expect(typeof symbols[name]).toBe('function');
-      }
-    });
-
     test('getDisplays returns at least one display with sane geometry', () => {
       const displays = getDisplays();
       expect(displays.length).toBeGreaterThanOrEqual(1);
@@ -42,21 +22,28 @@ if (currentPlatform() === 'macos') {
         expect(d.bounds.height).toBeGreaterThan(0);
         expect(d.scaleFactor).toBeGreaterThanOrEqual(1);
         expect(Number.isFinite(d.rotation)).toBe(true);
-        expect(typeof d.internal).toBe('boolean');
-        // workArea mirrors bounds on macOS v1.
-        expect(d.workArea).toEqual(d.bounds);
       }
     });
 
-    test('exactly one display reports itself as primary', () => {
-      const primaries = getDisplays().filter((d) => d.primary);
-      expect(primaries.length).toBe(1);
+    test('exactly one display reports itself as primary, at the global origin', () => {
+      const displays = getDisplays();
+      expect(displays.filter((d) => d.primary).length).toBe(1);
+      expect(primaryOf(displays).bounds.x).toBe(0);
+      expect(primaryOf(displays).bounds.y).toBe(0);
     });
 
-    test('the backend exposes a {0,0}-safe cursor point (v1 limit)', () => {
-      const point = cocoaScreenBackend.getCursorScreenPoint();
-      expect(Number.isFinite(point.x)).toBe(true);
-      expect(Number.isFinite(point.y)).toBe(true);
+    test("the primary display's workArea sits below the menu bar, inside its bounds", () => {
+      const { bounds, workArea } = primaryOf(getDisplays());
+      expect(workArea.y).toBeGreaterThan(bounds.y);
+      expect(workArea.y + workArea.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+    });
+
+    test('the cursor point lies on some display', () => {
+      const { x, y } = cocoaScreenBackend.getCursorScreenPoint();
+      const onDisplay = getDisplays().some(
+        ({ bounds: b }) => x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height,
+      );
+      expect(onDisplay).toBe(true);
     });
   });
 }

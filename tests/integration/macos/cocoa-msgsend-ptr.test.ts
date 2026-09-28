@@ -4,7 +4,7 @@ import { msgSendPtr } from '../../../src/main/platform/macos/cocoa-msgsend-varia
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 if (currentPlatform() === 'macos') {
-  describe('msgSendPtr — one-extra-pointer-arg variant', () => {
+  describe('msgSendPtr - one-extra-pointer-arg variant', () => {
     test('[NSWindow performSelector:@selector(alloc)] returns an allocated instance', () => {
       const rt = cocoa();
       const nsWindow = rt.classes.get('NSWindow');

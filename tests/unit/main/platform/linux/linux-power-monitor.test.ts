@@ -1,12 +1,12 @@
 import type { Pointer } from 'bun:ffi';
 import { describe, expect, test } from 'bun:test';
-import type { PowerEventHandlers } from '../../../../../src/main/platform/macos/cocoa-power';
 import {
   decodePrepareForSleep,
   observePowerEvents,
   type PowerDbusDeps,
 } from '../../../../../src/main/platform/linux/linux-power-monitor';
 import type { SignalEvent, SignalMatch } from '../../../../../src/main/platform/linux/linux-dbus';
+import type { PowerEventHandlers } from '../../../../../src/main/platform/services';
 
 const spyHandlers = (): { fired: string[]; handlers: PowerEventHandlers } => {
   const fired: string[] = [];

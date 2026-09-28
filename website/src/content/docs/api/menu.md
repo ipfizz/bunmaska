@@ -6,7 +6,7 @@ order: 7
 
 Process: Main
 
-The `Menu` module lets you build application menu bars and context (popup) menus. The menu tree is held as plain JS objects and realized into native widgets on demand - a native `NSMenu` on macOS, GTK menus on Linux, and Win32 `HMENU` on Windows. Both context menus and the application menu bar work on all three. Role items route to the responder chain on macOS; Linux wires the editing and window roles; on Windows role items are inert labels today (no accelerator table). Accelerator text in labels is a follow-up off macOS.
+The `Menu` module lets you build application menu bars and context (popup) menus. The menu tree is held as plain JS objects and realized into native widgets on demand - a native `NSMenu` on macOS, GTK menus on Linux, and Win32 `HMENU` on Windows. Both context menus and the application menu bar work on all three. Role items route to the responder chain on macOS; Linux wires the editing, window and `quit` roles; Windows wires the window and `quit` roles, and its editing role items are inert labels. **Accelerators are macOS-only:** Linux and Windows neither bind the key nor show it in the label yet.
 
 Bunmaska exposes both `Menu` and a companion `MenuItem` class. You typically build menus declaratively with `Menu.buildFromTemplate(...)`, but you can also construct items by hand and `append`/`insert` them.
 
@@ -29,7 +29,7 @@ const menu = Menu.buildFromTemplate([
   {
     label: 'File',
     submenu: [
-      { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => console.log('new') },
+      { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => console.log('new') }, // shortcut: macOS only
       { type: 'separator' },
       { role: 'quit' },
     ],
@@ -45,6 +45,8 @@ Menu.setApplicationMenu(menu);
 `static setApplicationMenu(menu: Menu | null): void`
 
 Sets `menu` as the application menu. On macOS this becomes the system menu bar; on Linux it is installed via the GTK realizer; on Windows it is a Win32 menu bar. Passing `null` removes the bar on all three platforms - the stored reference (`getApplicationMenu()` returns `null`) and the native side, including bars already installed on Linux.
+
+As in Electron, a macOS app that sets no menu gets a default one once it is ready: an app menu (About, Hide, Quit), File > Close Window, and the standard Edit and Window menus, so Cmd+Q and copy/paste work out of the box. Calling `setApplicationMenu` (even with `null`) before `ready` skips it, and calling it later replaces it. Linux and Windows get no default menu bar.
 
 ```ts
 import { Menu } from 'bunmaska';
@@ -184,10 +186,10 @@ Constructs a single menu item. All properties are read-only after construction. 
 - `type` (`'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio'`)
 - `id` (string) - for `getMenuItemById`
 - `enabled` (boolean, default `true`)
-- `checked` (boolean) - renders a checkmark on `checkbox`/`radio` items
-- `accelerator` (string) - a single-key accelerator like `'CmdOrCtrl+Q'` (the bare key plus modifiers; multi-key chords are not parsed)
+- `checked` (boolean) - renders a checkmark on `checkbox`/`radio` items; as in Electron, clicking a checkbox flips it and clicking a radio item checks it and unchecks its group (the run of radio items between separators)
+- `accelerator` (string) - an accelerator like `'CmdOrCtrl+Q'` or `'Shift+F5'`: one key (a character, or a named key such as `F1`-`F24`, `Plus`, `Space`, `Tab`, `Return`, `Escape`, `Backspace`, `Insert`, `Delete`, the arrows, `Home`, `End`, `PageUp`, `PageDown`) plus modifiers. macOS only; key sequences are not parsed
 - `role` (a role or macro role - see below)
-- `click` (`() => void`) - receives no arguments (no `menuItem`/`browserWindow`/`event` like Electron)
+- `click` (`(menuItem, window, event) => void`) - Electron's signature: `window` is the focused `BrowserWindow` (`undefined` when none is focused) and `event` is an empty object
 - `submenu` (`Menu` or an array of `MenuItemOptions`)
 
 ```ts
@@ -205,7 +207,7 @@ const item = new MenuItem({
 
 ### Roles
 
-A `role` gives an item a default label, accelerator, and native behavior with no explicit `click`. If both a `role` and a `click` are supplied, the role wins.
+A `role` gives an item a default label, accelerator, and native behavior with no explicit `click`. If both a `role` and a `click` are supplied, the role wins. Role names match case-insensitively, as in Electron, and a role Bunmaska does not support becomes a plain item labelled with the role name instead of throwing.
 
 Item-level roles: `undo`, `redo`, `cut`, `copy`, `paste`, `pasteAndMatchStyle`, `delete`, `selectAll`, `minimize`, `close`, `zoom`, `quit`, `togglefullscreen`, `about`, `hide`, `hideOthers`, `unhide`.
 
@@ -213,9 +215,9 @@ Macro roles (each expands into a whole standard submenu): `editMenu`, `windowMen
 
 Platform notes from the source:
 
-- **macOS** wires every role to its standard first-responder selector (e.g. `copy:`, `terminate:`), routed up the responder chain.
-- **Linux** dispatches editing roles (undo/redo/cut/copy/paste/delete/selectAll/pasteAndMatchStyle) as WebKitGTK editing commands and window roles (minimize/close/zoom/togglefullscreen) as GTK window ops. Roles with neither - `quit`, `about`, `hide`, `hideOthers`, `unhide` - have **no Linux menu-click wiring yet** (their keyboard shortcuts still work natively via WebKit).
-- **Windows** role items are inert labels today - no accelerator table is installed, so neither the click nor the shortcut is wired.
+- **macOS** wires every role to its standard first-responder selector (e.g. `copy:`, `terminate:`), routed up the responder chain. `quit` goes through [`app.quit()`](/docs/api/app#appquitexitcode), so `before-quit`, window `close` vetoes and `will-quit` all run.
+- **Linux** dispatches editing roles (undo/redo/cut/copy/paste/delete/selectAll/pasteAndMatchStyle) as WebKitGTK editing commands and window roles (minimize/close/zoom/togglefullscreen) as GTK window ops, and `quit` calls `app.quit()`. `about`, `hide`, `hideOthers` and `unhide` render as inert labels, and no role gets a keyboard shortcut. Labels honor `&` mnemonics and keep literal underscores.
+- **Windows** runs the window roles (minimize/close/zoom/togglefullscreen) on the window whose menu bar was clicked, and `quit` through `app.quit()`. The editing roles are inert labels (the WinCairo C API has no editing-command call), and no accelerator table is installed, so no shortcut is wired.
 
 ```ts
 import { Menu } from 'bunmaska';
@@ -230,7 +232,8 @@ Menu.setApplicationMenu(menu);
 - **Events** - Electron's `'menu-will-show'` and `'menu-will-close'` are not emitted; `Menu` is not an `EventEmitter` here.
 - **`Menu.sendActionToFirstResponder(action)`** _macOS_ - not implemented; use a `role` to get first-responder behavior instead.
 - **`menu.popup` extras** - no `frame`, `positioningItem` _macOS_, `sourceType` _Windows/Linux_, or `callback` option. `x`/`y` default to the top-left, not the mouse cursor.
-- **`click` callback arguments** - handlers receive nothing; there is no `(menuItem, browserWindow, event)` signature, no `KeyboardEvent` modifier flags.
-- **Dynamic `MenuItem` mutation** - items are read-only after construction. There are no settable `enabled` / `checked` / `visible` / `label` properties, no `MenuItem.sublabel`, `icon`, `toolTip`, `acceleratorWorksWhenHidden`, `registerAccelerator`, `sharingItem`, or `commandId`.
-- **Deferred roles** - `appMenu`, `viewMenu`, `fileMenu`, `recentDocuments`, `shareMenu`, `services`, `startSpeaking`/`stopSpeaking`, `toggleDevTools`, `reload`/`forceReload`, `resetZoom`/`zoomIn`/`zoomOut`, and the window-control roles (`front`, `window`, `help`) are not available. Only the role list above is supported.
-- **Windows accelerator text** - the menu bar and context menus work on Windows (Win32 `HMENU`), but accelerator/`&`-mnemonic text is not rendered into the labels yet, and role items are inert labels (no accelerator table).
+- **The default application menu off macOS** - Electron installs one everywhere when you set none; Bunmaska does so on macOS only (see `setApplicationMenu`).
+- **`click` event details** - the `(menuItem, window, event)` signature is there, but `event` carries no `KeyboardEvent` modifier flags or `triggeredByAccelerator`.
+- **Dynamic `MenuItem` mutation** - only `checked` can change after construction (a click flips it). There are no settable `enabled` / `visible` / `label` properties, no `MenuItem.sublabel`, `icon`, `toolTip`, `acceleratorWorksWhenHidden`, `registerAccelerator`, `sharingItem`, or `commandId`.
+- **Deferred roles** - `appMenu`, `viewMenu`, `fileMenu`, `recentDocuments`, `shareMenu`, `services`, `startSpeaking`/`stopSpeaking`, `toggleDevTools`, `reload`/`forceReload`, `resetZoom`/`zoomIn`/`zoomOut`, and the window-control roles (`front`, `window`, `help`) are not available; they render as plain items with the role name as the label.
+- **Accelerators off macOS** - Linux and Windows show neither the shortcut nor its label text.

@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { dlopen, FFIType, type Pointer, read } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
 import { nativeImage, setNativeImageBackendForTesting } from '../../../src/main/api/native-image';
+import { gdkNativeImageBackend } from '../../../src/main/platform/linux/gdk-native-image';
 import { loadGdkPixbufFFI } from '../../../src/main/platform/linux/gdk-pixbuf-ffi';
+import { loadGObjectFFI } from '../../../src/main/platform/linux/gobject-ffi';
 import {
   removeTinyPngFile,
   TINY_PNG_HEIGHT,
@@ -81,6 +84,18 @@ if (currentPlatform() === 'linux') {
       expect(jpeg[1]).toBe(0xd8);
     });
 
+    test('toJPEG(quality) reaches the encoder as its quantization table', () => {
+      setNativeImageBackendForTesting(undefined);
+      const image = nativeImage.createFromBuffer(makeTinyPng());
+      /** The first luminance DC quantizer after the DQT marker: 1 at quality 100, 8 at 75. */
+      const dcQuantizer = (jpeg: Uint8Array): number | undefined => {
+        const marker = jpeg.findIndex((byte, i) => byte === 0xff && jpeg[i + 1] === 0xdb);
+        return marker === -1 ? undefined : jpeg[marker + 5];
+      };
+      expect(dcQuantizer(image.toJPEG(100))).toBe(1);
+      expect(dcQuantizer(image.toJPEG(10)) ?? 0).toBeGreaterThan(8);
+    });
+
     test('a bad path decodes to an empty image (no crash)', () => {
       setNativeImageBackendForTesting(undefined);
       const image = nativeImage.createFromPath('/no/such/bunmaska/image.png');
@@ -122,6 +137,22 @@ if (currentPlatform() === 'linux') {
         .crop({ x: 1, y: 0, width: 2, height: TINY_PNG_HEIGHT });
       expect(img.getSize()).toEqual({ width: 2, height: TINY_PNG_HEIGHT });
       expect(img.toPNG().length).toBeGreaterThan(0); // proves the copy detached + re-encodes
+    });
+
+    test('release drops the reference decode returned', () => {
+      const { handle } = gdkNativeImageBackend.decode(makeTinyPng());
+      const pixbuf = Number(handle) as Pointer;
+      const gobject = dlopen('libgobject-2.0.so.0', {
+        g_object_ref: { args: [FFIType.ptr], returns: FFIType.ptr },
+      });
+      gobject.symbols.g_object_ref(pixbuf); // keeps the pixbuf alive to count
+      // GObject is { GTypeInstance (one pointer), guint ref_count, ... }.
+      const refCount = (): number => read.u32(pixbuf, 8);
+      const held = refCount();
+      gdkNativeImageBackend.release?.(handle);
+      expect(refCount()).toBe(held - 1);
+      loadGObjectFFI().symbols.g_object_unref(pixbuf);
+      gobject.close();
     });
   });
 }

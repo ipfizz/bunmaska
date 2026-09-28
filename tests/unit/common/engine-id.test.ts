@@ -2,38 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { BunmaskaError } from '../../../src/common/errors';
 import {
   compareEngineIds,
-  type EngineRef,
-  formatEngineId,
   isSystemEngine,
   parseEngineId,
   SYSTEM_ENGINE,
 } from '../../../src/common/engine-id';
 
-const ref: EngineRef = {
-  engine: 'webkitgtk',
-  api: '6.0',
-  upstream: '2.52.4',
-  rev: 'bunmaska1',
-  os: 'linux',
-  arch: 'x64',
-};
-
-describe('formatEngineId', () => {
-  test('joins the six fields with dashes', () => {
-    expect(formatEngineId(ref)).toBe('webkitgtk-6.0-2.52.4-bunmaska1-linux-x64');
-  });
-
-  test('rejects a field containing a dash (would break round-trip)', () => {
-    expect(() => formatEngineId({ ...ref, rev: 'bun-maska1' })).toThrow(BunmaskaError);
-    expect(() => formatEngineId({ ...ref, upstream: '2.52-4' })).toThrow(BunmaskaError);
-  });
-});
-
 describe('parseEngineId', () => {
-  test('round-trips a formatted id', () => {
-    expect(parseEngineId(formatEngineId(ref))).toEqual(ref);
-  });
-
   test('reads each field back in order', () => {
     const parsed = parseEngineId('webkitgtk-6.0-2.46.0-bunmaska2-linux-arm64');
     expect(parsed).toEqual({

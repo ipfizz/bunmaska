@@ -5,9 +5,15 @@ import { join } from 'node:path';
 import { InvalidArgumentError } from '../../../../src/common/errors';
 import { app } from '../../../../src/main/api/app';
 import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../../src/main/api/menu';
+import {
   BrowserWindow,
   resetWindowRegistryForTesting,
 } from '../../../../src/main/api/browser-window';
+import { protocol } from '../../../../src/main/api/protocol';
 import { session } from '../../../../src/main/api/session';
 import { resetWebContentsIdsForTesting } from '../../../../src/main/api/web-contents';
 import { resetBootstrapForTesting } from '../../../../src/main/bootstrap';
@@ -20,7 +26,9 @@ import type {
   Rect,
   WindowEventType,
 } from '../../../../src/main/platform/native';
+import { armInertObservers, inertMenuRealizer } from '../../../helpers/inert-observers';
 import { appExitCodes, installSafeAppExit } from '../../../helpers/safe-app-exit';
+import type { NativeMenuItemSpec } from '../../../../src/main/platform/services';
 
 type FakeWindow = NativeWindow & {
   fireClosed: () => void;
@@ -128,6 +136,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     },
     show: () => {
       visible = true;
+      eventCallbacks.get('show')?.();
     },
     hide: () => {
       visible = false;
@@ -225,6 +234,8 @@ let created: NativeWindowOptions[];
 let windows: FakeWindow[];
 
 beforeEach(() => {
+  armInertObservers();
+  setMenuRealizerForTesting(inertMenuRealizer);
   resetWindowRegistryForTesting();
   resetWebContentsIdsForTesting();
   resetBootstrapForTesting();
@@ -237,6 +248,8 @@ beforeEach(() => {
 
 afterEach(() => {
   setNativeAppForTesting(undefined);
+  setMenuRealizerForTesting(undefined);
+  resetApplicationMenuForTesting();
   app.resetForTesting();
   session.defaultSession.resetForTesting();
 });
@@ -316,18 +329,43 @@ describe('BrowserWindow runtime setters', () => {
 
 describe('BrowserWindow construction', () => {
   test('applies default options when none are given', () => {
-    new BrowserWindow();
-    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: true });
+    const win = new BrowserWindow();
+    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: false });
+    expect(win.isVisible()).toBe(true);
   });
 
   test('passes through provided options', () => {
-    new BrowserWindow({ width: 1024, height: 768, title: 'My App', show: false });
+    const win = new BrowserWindow({ width: 1024, height: 768, title: 'My App', show: false });
     expect(created[0]).toEqual({ width: 1024, height: 768, title: 'My App', show: false });
+    expect(win.isVisible()).toBe(false);
+  });
+
+  test('the initial show is emitted after the window is wired and announced', () => {
+    let shown = 0;
+    app.on('browser-window-created', (_event: unknown, win: BrowserWindow) => {
+      win.on('show', () => {
+        shown += 1;
+      });
+    });
+    new BrowserWindow();
+    expect(shown).toBe(1);
   });
 
   test('forwards resizable, frame, and fullscreen when provided', () => {
     new BrowserWindow({ resizable: false, frame: false, fullscreen: true });
     expect(created[0]).toMatchObject({ resizable: false, frame: false, fullscreen: true });
+  });
+
+  test('hands the registered protocol schemes and their dispatcher to the backend', () => {
+    protocol.handle('bmtest', () => ({ data: 'hi', mimeType: 'text/plain' }));
+    try {
+      new BrowserWindow();
+      const served = created[0]?.protocol;
+      expect(served?.schemes).toEqual(['bmtest']);
+      expect(served?.dispatch('bmtest://x')?.mimeType).toBe('text/plain');
+    } finally {
+      protocol.unhandle('bmtest');
+    }
   });
 
   test('omits resizable/frame/fullscreen when not provided', () => {
@@ -418,6 +456,46 @@ describe('BrowserWindow registry', () => {
 
   test('fromId returns undefined for an unknown id', () => {
     expect(BrowserWindow.fromId(9999)).toBeUndefined();
+  });
+
+  test('fromWebContents returns the owning open window, else null', () => {
+    const a = new BrowserWindow();
+    const b = new BrowserWindow();
+    expect(BrowserWindow.fromWebContents(b.webContents)).toBe(b);
+    a.close();
+    expect(BrowserWindow.fromWebContents(a.webContents)).toBeNull();
+  });
+
+  test('getFocusedWindow returns the focused window, else null', () => {
+    new BrowserWindow();
+    const b = new BrowserWindow();
+    expect(BrowserWindow.getFocusedWindow()).toBeNull();
+    b.focus();
+    expect(BrowserWindow.getFocusedWindow()).toBe(b);
+  });
+
+  test('a menu item click receives the focused window', () => {
+    let specs: readonly NativeMenuItemSpec[] = [];
+    setMenuRealizerForTesting({
+      realize: (items) => {
+        specs = items;
+        return 1n;
+      },
+      setApplicationMenu: () => undefined,
+    });
+    try {
+      new BrowserWindow();
+      const b = new BrowserWindow();
+      b.focus();
+      let received: unknown;
+      Menu.buildFromTemplate([
+        { label: 'Go', click: (_item, window) => (received = window) },
+      ]).realize();
+      specs[0]?.onClick?.();
+      expect(received).toBe(b);
+    } finally {
+      setMenuRealizerForTesting(undefined);
+    }
   });
 });
 
@@ -555,12 +633,40 @@ describe('BrowserWindow lifecycle events', () => {
     expect(win.isDestroyed()).toBe(false);
   });
 
-  test('teardown runs exactly once across repeated close attempts (idempotent)', () => {
-    const win = new BrowserWindow();
+  test('teardown runs exactly once across repeated native close requests', () => {
+    new BrowserWindow();
     windows[0]?.fireCloseRequest();
-    win.close();
     windows[0]?.fireCloseRequest();
     expect(windows[0]?.teardownCount()).toBe(1);
+  });
+});
+
+describe('BrowserWindow after closed', () => {
+  test('methods throw Electron TypeError without reaching the native window', () => {
+    const win = new BrowserWindow({ title: 'before' });
+    win.close();
+    expect(() => win.setTitle('after')).toThrow(new TypeError('Object has been destroyed'));
+    expect(() => win.close()).toThrow(TypeError);
+    expect(windows[0]?.getTitle()).toBe('before');
+    expect(windows[0]?.teardownCount()).toBe(1);
+  });
+
+  test('isDestroyed keeps answering', () => {
+    const win = new BrowserWindow();
+    win.destroy();
+    expect(win.isDestroyed()).toBe(true);
+    expect(win.webContents.isDestroyed()).toBe(true);
+  });
+
+  test('native window events after closed are not re-emitted', () => {
+    const win = new BrowserWindow();
+    let moved = 0;
+    win.on('move', () => {
+      moved += 1;
+    });
+    win.close();
+    windows[0]?.fireEvent('move');
+    expect(moved).toBe(0);
   });
 });
 
@@ -629,6 +735,45 @@ describe('App-level window events', () => {
   test('closing the last window with no listener quits the app', () => {
     const win = new BrowserWindow();
     win.close();
+    expect(appExitCodes()).toEqual([0]);
+  });
+
+  test('a throwing closed listener still lets the last close quit the app', () => {
+    const win = new BrowserWindow();
+    win.on('closed', () => {
+      throw new Error('listener bug');
+    });
+    expect(() => win.close()).toThrow('listener bug');
+    expect(appExitCodes()).toEqual([0]);
+  });
+
+  test('app.quit closes every window, then exits', () => {
+    const a = new BrowserWindow();
+    const b = new BrowserWindow();
+    const closed: string[] = [];
+    a.on('closed', () => closed.push('a'));
+    b.on('closed', () => closed.push('b'));
+    app.quit();
+    expect(closed).toEqual(['a', 'b']);
+    expect(appExitCodes()).toEqual([0]);
+  });
+
+  test('a close veto during app.quit keeps the window and cancels the quit', () => {
+    const dirty = new BrowserWindow();
+    dirty.on('close', (event: { preventDefault(): void }) => event.preventDefault());
+    app.quit();
+    expect(dirty.isDestroyed()).toBe(false);
+    expect(appExitCodes()).toEqual([]);
+  });
+
+  test('app.quit emits no window-all-closed while it closes the windows', () => {
+    new BrowserWindow();
+    let fired = 0;
+    app.on('window-all-closed', () => {
+      fired += 1;
+    });
+    app.quit();
+    expect(fired).toBe(0);
     expect(appExitCodes()).toEqual([0]);
   });
 

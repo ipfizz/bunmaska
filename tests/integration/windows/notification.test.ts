@@ -17,39 +17,39 @@ const spec = {
   silent: false,
 };
 
-if (currentPlatform() === 'windows') {
-  describe('Windows notification backend', () => {
-    test('isSupported is true', () => {
-      expect(windowsNotificationBackend.isSupported()).toBe(true);
-    });
-
-    test('present shows a balloon and returns a closable handle', () => {
-      const handle = windowsNotificationBackend.present(spec);
-      expect(typeof handle.close).toBe('function');
-      expect(() => handle.close()).not.toThrow();
-      // close is idempotent.
-      expect(() => handle.close()).not.toThrow();
-    });
-
-    test('a silent notification presents without throwing', () => {
-      const handle = windowsNotificationBackend.present({ ...spec, silent: true });
-      handle.close();
-      expect(true).toBe(true);
-    });
-
-    test('onClosed registers a callback without firing it eagerly', () => {
-      const handle = windowsNotificationBackend.present(spec);
-      let closed = 0;
-      handle.onClosed(() => {
-        closed += 1;
-      });
-      expect(closed).toBe(0);
-      handle.close(); // an explicit close fires onClosed
-      expect(closed).toBe(1);
-    });
+describe.skipIf(currentPlatform() !== 'windows')('Windows notification backend', () => {
+  test('isSupported is true', () => {
+    expect(windowsNotificationBackend.isSupported()).toBe(true);
   });
 
-  describe('Windows public Notification (over the real backend)', () => {
+  test('present shows a balloon and returns a closable handle', () => {
+    const handle = windowsNotificationBackend.present(spec);
+    expect(() => handle.close()).not.toThrow();
+    // close is idempotent.
+    expect(() => handle.close()).not.toThrow();
+  });
+
+  test('a silent notification presents without throwing', () => {
+    expect(() =>
+      windowsNotificationBackend.present({ ...spec, silent: true }).close(),
+    ).not.toThrow();
+  });
+
+  test('onClosed registers a callback without firing it eagerly', () => {
+    const handle = windowsNotificationBackend.present(spec);
+    let closed = 0;
+    handle.onClosed(() => {
+      closed += 1;
+    });
+    expect(closed).toBe(0);
+    handle.close(); // an explicit close fires onClosed
+    expect(closed).toBe(1);
+  });
+});
+
+describe.skipIf(currentPlatform() !== 'windows')(
+  'Windows public Notification (over the real backend)',
+  () => {
     test('show emits "show" and close tears it down', () => {
       const notification = new Notification({ title: 'Bunmaska', body: 'beta' });
       let shown = 0;
@@ -64,5 +64,5 @@ if (currentPlatform() === 'windows') {
     test('Notification.isSupported is true on Windows', () => {
       expect(Notification.isSupported()).toBe(true);
     });
-  });
-}
+  },
+);

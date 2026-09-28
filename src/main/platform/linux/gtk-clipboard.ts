@@ -1,78 +1,33 @@
 import { CString, JSCallback, type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
-import type { ClipboardBackend } from '../../api/clipboard';
+import type { ClipboardBackend } from '../services';
 import { cstr } from '../cstr';
+import { GASYNC_READY_CB_DEF } from './gasync';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
 
 /**
- * Linux clipboard backend — the GDK 4 equivalent of the macOS `cocoa-clipboard`
- * module. The display's `GdkClipboard*` (from
- * `gdk_display_get_clipboard(gdk_display_get_default())`) owns plain-text
- * read/write against the system selection.
- *
- * Unlike Cocoa's synchronous `NSPasteboard stringForType:`, GDK's clipboard read
- * is asynchronous-only: `gdk_clipboard_read_text_async` kicks off the read and
- * invokes a `GAsyncReadyCallback` when it completes; `gdk_clipboard_read_text_finish`
- * extracts the transfer-full `char*` (NULL on empty/none). `readText` therefore
- * returns a Promise. Writes are synchronous: a `GdkContentProvider` wrapping the
- * UTF-8 bytes is installed via `gdk_clipboard_set_content` (a NULL provider
- * clears the clipboard).
- *
- * HTML uses the same write path with the `text/html` MIME. Reading HTML cannot
- * use the text-only `read_text` helper, so it goes through the general
- * `gdk_clipboard_read_async` (negotiating the `text/html` format) →
- * `gdk_clipboard_read_finish` (a transfer-full `GInputStream*`).
- *
- * DRAINING THE STREAM **ASYNCHRONOUSLY** is load-bearing. For an own-process
- * clipboard, GDK fulfils the read through an in-process `gdk_pipe_io_stream`
- * whose data is pushed by a writer `GTask` that ONLY runs when the GMainContext
- * iterates. A *synchronous* `g_input_stream_read_bytes` here would park on a
- * `g_cond_wait` for that writer while simultaneously freezing the one thread that
- * iterates the context → deadlock (this caused a multi-hour CI hang). So the
- * stream is drained with `g_input_stream_read_bytes_async` chunk-by-chunk: every
- * `await` yields control back to the pump, keeping the GMainContext free to feed
- * the pipe. Forward progress therefore requires the event loop to turn between
- * pump iterations (the app's CooperativePump and the test pump both yield) — this
- * MUST NOT be driven by a tight synchronous `g_main_context_iteration` loop.
- *
- * JSCallback lifecycle safety (a past SIGSEGV regression — mirrors gtk-dialog's
- * `runAsyncDialog`): every `GAsyncReadyCallback` thunk MUST stay reachable until
- * GDK fires it, and it MUST NOT be `close()`d synchronously inside its own
- * invocation (that frees the native trampoline the GDK caller is about to return
- * into). Each in-flight callback is retained in the module-level {@link inFlight}
- * set and `close()`d on a later tick via `setTimeout(..., 0)`. The HTML drain
- * allocates a FRESH one-shot callback per chunk (reads are strictly serial, so
- * there is never more than one in flight per stream — no `G_IO_ERROR_PENDING`).
+ * GDK 4 clipboard. Stream reads MUST drain asynchronously (D033): an own-process read is fed by
+ * a writer GTask that runs only when the pumped GMainContext iterates, so a synchronous read
+ * deadlocks the one thread that could feed it (a multi-hour CI hang). Callback lifetime: gasync.ts.
  */
 
-/** ABI shape for `GAsyncReadyCallback`: `(source, result, user_data) -> void`. */
-export const CLIPBOARD_READ_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
-
-/** The MIME type GDK uses for UTF-8 plain text on the clipboard. */
 const TEXT_MIME = 'text/plain;charset=utf-8';
-/** The MIME type for HTML markup on the clipboard. */
 const HTML_MIME = 'text/html';
-/** The MIME type for PNG image data on the clipboard. */
 const IMAGE_PNG_MIME = 'image/png';
 
-/** Bytes per `g_input_stream_read_bytes_async` call when draining a clipboard stream. */
 const STREAM_CHUNK_SIZE = 65536;
-/** Hard cap on drain iterations — a runaway guard (≈ 1 GiB at the chunk size). */
+/** Runaway guard: about 1 GiB at the chunk size. */
 const MAX_STREAM_CHUNKS = 16384;
 
-/** Every JSCallback awaiting a GDK clipboard read. Retained so Bun can't GC it. */
+/** Every callback GDK has yet to fire; Bun must not GC it first. */
 const inFlight = new Set<JSCallback>();
 
-/**
- * Per-read retained buffers for an HTML read: the `text/html\0` C string and the
- * `const char**` mime array handed to `gdk_clipboard_read_async`. Kept reachable
- * until the async read completes so Bun cannot GC the memory GDK is reading.
- */
+/** A read's mime buffers, kept reachable past `gdk_clipboard_read_async` (which copies them). */
 const retainedReadBuffers = new Map<JSCallback, { mime: Uint8Array; mimeArray: BigUint64Array }>();
 
-/** Resolve the display's `GdkClipboard*`, throwing if there is no default display. */
+/** Throws without a default display. */
 const getClipboard = (): Pointer => {
   const gdk = loadGdkFFI();
   const display = gdk.symbols.gdk_display_get_default();
@@ -86,19 +41,15 @@ const getClipboard = (): Pointer => {
   return clipboard;
 };
 
-/** Settle inputs for `gdk_clipboard_read_text_finish`, with finish + reader injectable. */
 export type SettleReadTextArgs = {
   readonly result: Pointer;
-  /** Calls `gdk_clipboard_read_text_finish`; returns a `char*` or null; may throw. */
+  /** Calls `gdk_clipboard_read_text_finish`; null when there is no text. */
   readonly finish: (result: Pointer) => Pointer | null;
-  /** Reads (and frees) the string out of a non-null `char*`. */
+  /** Reads, then frees, a non-null `char*`. */
   readonly readString: (text: Pointer) => string;
 };
 
-/**
- * Produce the clipboard text from a `GAsyncResult`. A null `char*` (empty/none)
- * or a thrown `finish` (GError path) yields `''`.
- */
+/** The clipboard text; `''` for a null `char*` or a throwing `finish`. */
 export const settleReadText = (args: SettleReadTextArgs): string => {
   let text: Pointer | null;
   try {
@@ -109,7 +60,7 @@ export const settleReadText = (args: SettleReadTextArgs): string => {
   return text === null ? '' : args.readString(text);
 };
 
-/** Read the transfer-full `char*` into a JS string, then `g_free` it. */
+/** Reads, then `g_free`s, a transfer-full `char*`. */
 const readGString = (text: Pointer): string => {
   const glib = loadGlibFFI();
   const value = new CString(text).toString();
@@ -117,20 +68,15 @@ const readGString = (text: Pointer): string => {
   return value;
 };
 
-/** One ASYNC chunk read + the final release of a `GInputStream`. */
+/** Async chunk reads over one `GInputStream`. */
 export type AsyncStreamReader = {
-  /** Resolve up to `count` bytes; an empty result signals EOF (or a swallowed error). */
+  /** Up to `count` bytes; an empty chunk is EOF (or a swallowed read error). */
   read(count: number): Promise<Uint8Array>;
-  /** Release the stream (idempotent). */
+  /** Idempotent. */
   close(): void;
 };
 
-/**
- * Drain `reader` fully into a UTF-8 string (capped by {@link MAX_STREAM_CHUNKS}).
- * Strictly serial — awaits each read before issuing the next, so only one native
- * read is ever in flight. `reader.close()` runs in a `finally`, so the stream is
- * released on every terminal path (EOF, the cap, or a thrown read).
- */
+/** Strictly serial, so only one native read is ever in flight; always closes the reader. */
 export const drainStreamBytesAsync = async (reader: AsyncStreamReader): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -149,77 +95,39 @@ export const drainStreamBytesAsync = async (reader: AsyncStreamReader): Promise<
   return Buffer.concat(chunks, total);
 };
 
-/**
- * Drain `reader` fully into a UTF-8 string (capped by {@link MAX_STREAM_CHUNKS}).
- * Concatenates bytes BEFORE decoding so a multibyte char split across a chunk
- * boundary still decodes correctly.
- */
+/** Decodes after concatenating, so a multibyte char split across two chunks survives. */
 export const drainStreamAsync = async (reader: AsyncStreamReader): Promise<string> =>
   new TextDecoder().decode(await drainStreamBytesAsync(reader));
 
-/** Settle inputs for `gdk_clipboard_read_finish`, with finish + async drain injectable. */
-export type SettleReadStreamArgs = {
+export type SettleReadStreamArgs<T> = {
   readonly result: Pointer;
-  /** Calls `gdk_clipboard_read_finish`; returns a `GInputStream*` or null; may throw. */
+  /** Calls `gdk_clipboard_read_finish`; null when no offered format matches. */
   readonly finish: (result: Pointer) => Pointer | null;
-  /** Drains a non-null `GInputStream*` to a string. */
-  readonly drain: (stream: Pointer) => Promise<string>;
+  readonly drain: (stream: Pointer) => Promise<T>;
+  readonly empty: T;
 };
 
-/**
- * Produce the clipboard payload from a `GAsyncResult`. A null stream (no matching
- * format) or a thrown `finish` (GError path) yields `''`.
- */
-export const settleReadStreamAsync = async (args: SettleReadStreamArgs): Promise<string> => {
+/** The payload; `empty` for a null stream or a throwing `finish`. */
+export const settleReadStream = async <T>(args: SettleReadStreamArgs<T>): Promise<T> => {
   let stream: Pointer | null;
   try {
     stream = args.finish(args.result);
   } catch {
-    return '';
+    return args.empty;
   }
-  return stream === null ? '' : args.drain(stream);
+  return stream === null ? args.empty : args.drain(stream);
 };
 
-/** Settle inputs for a binary `gdk_clipboard_read_finish`, draining to raw bytes. */
-export type SettleReadStreamBytesArgs = {
-  readonly result: Pointer;
-  readonly finish: (result: Pointer) => Pointer | null;
-  readonly drain: (stream: Pointer) => Promise<Uint8Array>;
-};
-
-/** Like {@link settleReadStreamAsync} but yields raw bytes (empty on no-match/error). */
-export const settleReadStreamBytesAsync = async (
-  args: SettleReadStreamBytesArgs,
-): Promise<Uint8Array> => {
-  let stream: Pointer | null;
-  try {
-    stream = args.finish(args.result);
-  } catch {
-    return new Uint8Array(0);
-  }
-  return stream === null ? new Uint8Array(0) : args.drain(stream);
-};
-
-/**
- * An {@link AsyncStreamReader} over a real GIO `GInputStream*` (transfer-full).
- *
- * Each `read` allocates a FRESH one-shot `GAsyncReadyCallback` (retained in
- * {@link inFlight}, closed on a deferred tick after its own invocation — never
- * synchronously), issues the non-blocking `g_input_stream_read_bytes_async`, and
- * resolves the chunk when the callback fires. `close` drops the transfer-full ref
- * with `g_object_unref` (GIO auto-closes the stream on its last unref — no
- * separate, potentially-blocking, synchronous close).
- */
+/** Takes a transfer-full `GInputStream*`; one fresh callback per chunk, never re-armed (D033). */
 const realAsyncStreamReader = (stream: Pointer): AsyncStreamReader => {
   const gio = loadGioFFI();
   const glib = loadGlibFFI();
   let closed = false;
 
-  /** Read the chunk bytes out of a completed read's `GAsyncResult`, then unref the GBytes. */
   const finishChunk = (result: Pointer): Uint8Array => {
     const gbytes = gio.symbols.g_input_stream_read_bytes_finish(stream, result, null);
     if (gbytes === null) {
-      return new Uint8Array(0); // GError → treat as EOF
+      return new Uint8Array(0); // a failed read ends the drain like EOF
     }
     const size = Number(glib.symbols.g_bytes_get_size(gbytes));
     if (size === 0) {
@@ -250,12 +158,12 @@ const realAsyncStreamReader = (stream: Pointer): AsyncStreamReader => {
             inFlight.delete(cb);
             cb.close();
           }, 0);
-        }, CLIPBOARD_READ_CB_DEF);
+        }, GASYNC_READY_CB_DEF);
         inFlight.add(cb);
         const cbPtr = cb.ptr;
         if (cbPtr === null) {
           inFlight.delete(cb);
-          resolve(new Uint8Array(0)); // allocation failure → EOF, ends the drain
+          resolve(new Uint8Array(0)); // allocation failure ends the drain like EOF
           return;
         }
         gio.symbols.g_input_stream_read_bytes_async(stream, BigInt(count), 0, null, cbPtr, null);
@@ -265,16 +173,16 @@ const realAsyncStreamReader = (stream: Pointer): AsyncStreamReader => {
         return;
       }
       closed = true;
-      // No explicit g_input_stream_close (it can block); GIO closes on last unref.
+      // The last unref closes the stream (g_input_stream_dispose).
       loadGObjectFFI().symbols.g_object_unref(stream);
     },
   };
 };
 
-const readText = (): Promise<string> => {
-  const gdk = loadGdkFFI();
-  const clipboard = getClipboard();
-  return new Promise<string>((resolve) => {
+const readText = (): Promise<string> =>
+  new Promise<string>((resolve) => {
+    const gdk = loadGdkFFI();
+    const clipboard = getClipboard();
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
       const value = settleReadText({
         result,
@@ -286,7 +194,7 @@ const readText = (): Promise<string> => {
         inFlight.delete(callback);
         callback.close();
       }, 0);
-    }, CLIPBOARD_READ_CB_DEF);
+    }, GASYNC_READY_CB_DEF);
     inFlight.add(callback);
     const cbPtr = callback.ptr;
     if (cbPtr === null) {
@@ -295,7 +203,6 @@ const readText = (): Promise<string> => {
     }
     gdk.symbols.gdk_clipboard_read_text_async(clipboard, null, cbPtr, null);
   });
-};
 
 /** Install raw `bytes` on the clipboard under `mime` via a `GdkContentProvider`. */
 const writeBytes = (mime: string, bytes: Uint8Array): void => {
@@ -303,18 +210,19 @@ const writeBytes = (mime: string, bytes: Uint8Array): void => {
   const glib = loadGlibFFI();
   const clipboard = getClipboard();
   // `g_bytes_new` copies, so `bytes` need only outlive that call.
-  const gbytes = glib.symbols.g_bytes_new(ptr(bytes), bytes.length);
+  const gbytes = glib.symbols.g_bytes_new(bytes.length === 0 ? null : ptr(bytes), bytes.length);
   if (gbytes === null) {
     throw new Error('g_bytes_new() returned null');
   }
   const provider = gdk.symbols.gdk_content_provider_new_for_bytes(cstr(mime), gbytes);
-  // The provider took its own ref on the GBytes; drop the local one. The provider
-  // itself is owned by the clipboard once set_content takes a ref.
+  // The provider took its own ref on the GBytes.
   glib.symbols.g_bytes_unref(gbytes);
   if (provider === null) {
     throw new Error('gdk_content_provider_new_for_bytes() returned null');
   }
+  // set_content takes its own ref; drop ours or every write leaks the provider and its payload.
   gdk.symbols.gdk_clipboard_set_content(clipboard, provider);
+  loadGObjectFFI().symbols.g_object_unref(provider);
 };
 
 /** Install `text` on the clipboard under `mime` (exact UTF-8 bytes, no trailing NUL). */
@@ -327,27 +235,26 @@ const writeHTML = (markup: string): void => writeBytesAs(HTML_MIME, markup);
 
 const writeImage = (png: Uint8Array): void => writeBytes(IMAGE_PNG_MIME, png);
 
-const readHTML = (): Promise<string> => {
-  const gdk = loadGdkFFI();
-  const clipboard = getClipboard();
-  return new Promise<string>((resolve) => {
-    // NUL-terminated array of mime-type C strings: ["text/html", NULL].
+const readHTML = (): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    const gdk = loadGdkFFI();
+    const clipboard = getClipboard();
+    // ["text/html", NULL]
     const mime = new TextEncoder().encode(`${HTML_MIME}\0`);
     const mimeArray = new BigUint64Array([BigInt(ptr(mime)), 0n]);
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
-      // The drain is async (yields to the pump between chunks); resolve when it
-      // settles. This kickoff callback's own work is done synchronously here.
-      void settleReadStreamAsync({
+      void settleReadStream({
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
         drain: (stream) => drainStreamAsync(realAsyncStreamReader(stream)),
-      }).then(resolve);
+        empty: '',
+      }).then(resolve, reject);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);
         callback.close();
       }, 0);
-    }, CLIPBOARD_READ_CB_DEF);
+    }, GASYNC_READY_CB_DEF);
     inFlight.add(callback);
     retainedReadBuffers.set(callback, { mime, mimeArray });
     const cbPtr = callback.ptr;
@@ -358,27 +265,27 @@ const readHTML = (): Promise<string> => {
     }
     gdk.symbols.gdk_clipboard_read_async(clipboard, ptr(mimeArray), 0, null, cbPtr, null);
   });
-};
 
-const readImage = (): Promise<Uint8Array> => {
-  const gdk = loadGdkFFI();
-  const clipboard = getClipboard();
-  return new Promise<Uint8Array>((resolve) => {
-    // NUL-terminated array of mime-type C strings: ["image/png", NULL].
+const readImage = (): Promise<Uint8Array> =>
+  new Promise<Uint8Array>((resolve, reject) => {
+    const gdk = loadGdkFFI();
+    const clipboard = getClipboard();
+    // ["image/png", NULL]
     const mime = new TextEncoder().encode(`${IMAGE_PNG_MIME}\0`);
     const mimeArray = new BigUint64Array([BigInt(ptr(mime)), 0n]);
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
-      void settleReadStreamBytesAsync({
+      void settleReadStream({
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
         drain: (stream) => drainStreamBytesAsync(realAsyncStreamReader(stream)),
-      }).then(resolve);
+        empty: new Uint8Array(0),
+      }).then(resolve, reject);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);
         callback.close();
       }, 0);
-    }, CLIPBOARD_READ_CB_DEF);
+    }, GASYNC_READY_CB_DEF);
     inFlight.add(callback);
     retainedReadBuffers.set(callback, { mime, mimeArray });
     const cbPtr = callback.ptr;
@@ -391,9 +298,17 @@ const readImage = (): Promise<Uint8Array> => {
     }
     gdk.symbols.gdk_clipboard_read_async(clipboard, ptr(mimeArray), 0, null, cbPtr, null);
   });
-};
 
-/** The MIME types currently advertised by the clipboard (Electron's `availableFormats`). */
+/** Electron-style MIME names from `gdk_content_formats_to_string` (GType names dropped). */
+export const formatsFromGdk = (text: string): string[] => [
+  ...new Set(
+    text
+      .split(/\s+/)
+      .filter((token) => token.includes('/'))
+      .map((mime) => mime.split(';')[0] as string),
+  ),
+];
+
 const availableFormats = (): string[] => {
   const gdk = loadGdkFFI();
   const glib = loadGlibFFI();
@@ -407,10 +322,7 @@ const availableFormats = (): string[] => {
   }
   const text = new CString(cstrPtr).toString();
   glib.symbols.g_free(cstrPtr);
-  return text
-    .split(/\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  return formatsFromGdk(text);
 };
 
 const clear = (): void => {
@@ -419,7 +331,6 @@ const clear = (): void => {
   gdk.symbols.gdk_clipboard_set_content(clipboard, null);
 };
 
-/** The Linux native clipboard backend (text + HTML + PNG images via GDK 4). */
 export const linuxClipboardBackend: ClipboardBackend = {
   readText,
   writeText,

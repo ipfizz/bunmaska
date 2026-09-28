@@ -2,14 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { findConfigFile, loadConfig, loadConfigFile } from '../../../src/cli/config';
+import { configChannel, validateConfig } from '../../../src/common/config-schema';
 import { BunmaskaError } from '../../../src/common/errors';
-import {
-  configChannel,
-  findConfigFile,
-  loadConfig,
-  loadConfigFile,
-  validateConfig,
-} from '../../../src/cli/config';
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
@@ -123,13 +118,12 @@ describe('loadConfigFile / loadConfig', () => {
 
 describe('loadConfigFile on an unresolvable import', () => {
   test('says to run bun install instead of dumping the resolver stack', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-config-'));
-    const path = join(dir, 'bunmaska.config.ts');
+    const path = join(makeTmpDir(), 'bunmaska.config.ts');
+    // A relative miss, never a bare name: Bun auto-install would fetch a squattable package.
     writeFileSync(
       path,
-      "import { defineConfig } from 'definitely-not-installed-zz';\nexport default defineConfig({});\n",
+      "import { defineConfig } from './missing-module.ts';\nexport default defineConfig({});\n",
     );
     await expect(loadConfigFile(path)).rejects.toThrow(/Run bun install in/);
-    rmSync(dir, { recursive: true, force: true });
   });
 });

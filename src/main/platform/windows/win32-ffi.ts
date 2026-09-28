@@ -2,19 +2,14 @@ import { FFIType } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import { winLibraryAccessor } from './win32';
 
-/**
- * Handle discipline (see `win32.ts`): every `HWND`/`HINSTANCE`/`HMENU`/`HCURSOR`
- * is declared `u64` and carried as a `bigint`, NOT `ptr` — a Win32 handle is an
- * opaque kernel value, not a virtual address. Real pointers (the `WNDCLASSEXW`
- * and `MSG` struct buffers, wide strings) are passed as `ptr`.
- */
+// Handles are u64 bigints, never ptr (the rule lives in win32.ts).
 
-/** user32.dll — window classes, windows, and the message pump. */
+/** user32.dll - window classes, windows, and the message pump. */
 const USER32_SYMBOLS = {
   // (const WNDCLASSEXW *) -> ATOM
   RegisterClassExW: { args: [FFIType.ptr], returns: FFIType.u16 },
-  // (LPCWSTR className, HINSTANCE) -> BOOL
-  UnregisterClassW: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.i32 },
+  // (LPCWSTR name) -> UINT message id, the same in every process for one name (0 on failure).
+  RegisterWindowMessageW: { args: [FFIType.ptr], returns: FFIType.u32 },
   // (DWORD exStyle, LPCWSTR className, LPCWSTR windowName, DWORD style,
   //  int x, int y, int w, int h, HWND parent, HMENU menu, HINSTANCE, LPVOID param) -> HWND
   CreateWindowExW: {
@@ -63,8 +58,6 @@ const USER32_SYMBOLS = {
   TranslateMessage: { args: [FFIType.ptr], returns: FFIType.i32 },
   // (const MSG *) -> LRESULT
   DispatchMessageW: { args: [FFIType.ptr], returns: FFIType.i64 },
-  // (int exitCode) -> void
-  PostQuitMessage: { args: [FFIType.i32], returns: FFIType.void },
   // (HINSTANCE, LPCWSTR lpCursorName) -> HCURSOR
   LoadCursorW: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u64 },
   // (HWND, UINT msg, WPARAM, LPARAM) -> LRESULT (synchronous dispatch to the WndProc)
@@ -72,12 +65,12 @@ const USER32_SYMBOLS = {
     args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64],
     returns: FFIType.i64,
   },
-  // (HWND, UINT msg, WPARAM, LPARAM) -> BOOL — posts to the queue (the pump sees it)
+  // (HWND, UINT msg, WPARAM, LPARAM) -> BOOL - posts to the queue (the pump sees it)
   PostMessageW: {
     args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64],
     returns: FFIType.i32,
   },
-  // () -> BOOL — release mouse capture, so a custom-titlebar drag can hand off to
+  // () -> BOOL - release mouse capture, so a custom-titlebar drag can hand off to
   // the system move loop via WM_NCLBUTTONDOWN/HTCAPTION.
   ReleaseCapture: { args: [], returns: FFIType.i32 },
   // (HWND, HWND insertAfter, int x, int y, int cx, int cy, UINT flags) -> BOOL
@@ -93,66 +86,70 @@ const USER32_SYMBOLS = {
     ],
     returns: FFIType.i32,
   },
-  // (HWND) -> BOOL — is the window minimised?
+  // (HWND) -> BOOL - is the window minimised?
   IsIconic: { args: [FFIType.u64], returns: FFIType.i32 },
-  // (HWND) -> BOOL — is the window maximised?
+  // (HWND) -> BOOL - is the window maximised?
   IsZoomed: { args: [FFIType.u64], returns: FFIType.i32 },
-  // (HWND, LPRECT) -> BOOL — the window's bounds in screen coordinates.
+  // (HWND, LPRECT) -> BOOL - the window's bounds in screen coordinates.
   GetWindowRect: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
-  // (HWND) -> BOOL — bring the window to the foreground and focus it.
+  // (HWND, WINDOWPLACEMENT *) -> BOOL - set `length` first; rcNormalPosition is the restored rect.
+  GetWindowPlacement: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+  // (HWND) -> BOOL - bring the window to the foreground and focus it.
   SetForegroundWindow: { args: [FFIType.u64], returns: FFIType.i32 },
-  // () -> HWND — the window the user is currently working with.
+  // () -> HWND - the window the user is currently working with.
   GetForegroundWindow: { args: [], returns: FFIType.u64 },
-  // (HWND, int nIndex) -> LONG_PTR — read a window style word (GWL_STYLE/EXSTYLE).
+  // (HWND, int nIndex) -> LONG_PTR - read a window style word (GWL_STYLE/EXSTYLE).
   GetWindowLongPtrW: { args: [FFIType.u64, FFIType.i32], returns: FFIType.i64 },
-  // (HWND, int nIndex, LONG_PTR) -> LONG_PTR — write a window style word.
+  // (HWND, int nIndex, LONG_PTR) -> LONG_PTR - write a window style word.
   SetWindowLongPtrW: { args: [FFIType.u64, FFIType.i32, FFIType.i64], returns: FFIType.i64 },
-  // (HWND, COLORREF, BYTE alpha, DWORD flags) -> BOOL — per-window opacity.
+  // (HWND, COLORREF, BYTE alpha, DWORD flags) -> BOOL - per-window opacity.
   SetLayeredWindowAttributes: {
     args: [FFIType.u64, FFIType.u32, FFIType.u8, FFIType.u32],
     returns: FFIType.i32,
   },
-  // (int nIndex) -> int — a system metric (e.g. primary screen width/height).
+  // (int nIndex) -> int - a system metric (e.g. primary screen width/height).
   GetSystemMetrics: { args: [FFIType.i32], returns: FFIType.i32 },
 
   // ── Clipboard (used by the clipboard backend) ────────────────────────────
-  // (HWND) -> BOOL — open the clipboard for the current task.
+  // (HWND) -> BOOL - open the clipboard for the current task.
   OpenClipboard: { args: [FFIType.u64], returns: FFIType.i32 },
-  // () -> BOOL — close it (release ownership of the open).
+  // () -> BOOL - close it (release ownership of the open).
   CloseClipboard: { args: [], returns: FFIType.i32 },
-  // () -> BOOL — empty + take ownership (the caller must hold it open).
+  // () -> BOOL - empty + take ownership (the caller must hold it open).
   EmptyClipboard: { args: [], returns: FFIType.i32 },
-  // (UINT format) -> HANDLE — the clipboard still OWNS the returned handle.
+  // (UINT format) -> HANDLE - the clipboard still OWNS the returned handle.
   GetClipboardData: { args: [FFIType.u32], returns: FFIType.u64 },
-  // (UINT format, HANDLE) -> HANDLE — the clipboard TAKES ownership of the handle.
+  // (UINT format, HANDLE) -> HANDLE - the clipboard TAKES ownership of the handle.
   SetClipboardData: { args: [FFIType.u32, FFIType.u64], returns: FFIType.u64 },
   // (UINT format) -> BOOL
   IsClipboardFormatAvailable: { args: [FFIType.u32], returns: FFIType.i32 },
-  // (LPCWSTR) -> UINT — register/look up a named format (e.g. "HTML Format").
+  // (LPCWSTR) -> UINT - register/look up a named format (e.g. "HTML Format").
   RegisterClipboardFormatW: { args: [FFIType.ptr], returns: FFIType.u32 },
 
   // ── Global hot keys (used by the globalShortcut backend) ─────────────────
-  // (HWND, int id, UINT fsModifiers, UINT vk) -> BOOL — claim a system-wide hot
+  // (HWND, int id, UINT fsModifiers, UINT vk) -> BOOL - claim a system-wide hot
   // key; HWND NULL posts WM_HOTKEY to the calling thread's queue (the pump sees it).
   RegisterHotKey: {
     args: [FFIType.u64, FFIType.i32, FFIType.u32, FFIType.u32],
     returns: FFIType.i32,
   },
-  // (HWND, int id) -> BOOL — release a hot key claimed with RegisterHotKey.
+  // (HWND, int id) -> BOOL - release a hot key claimed with RegisterHotKey.
   UnregisterHotKey: { args: [FFIType.u64, FFIType.i32], returns: FFIType.i32 },
 
   // ── Displays + cursor (used by the screen backend) ───────────────────────
-  // (HDC, LPCRECT clip, MONITORENUMPROC, LPARAM) -> BOOL — enumerate monitors;
+  // (HDC, LPCRECT clip, MONITORENUMPROC, LPARAM) -> BOOL - enumerate monitors;
   // the callback (a JSCallback function pointer) fires once per monitor.
   EnumDisplayMonitors: {
     args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.i64],
     returns: FFIType.i32,
   },
-  // (HMONITOR, LPMONITORINFO) -> BOOL — bounds, work area, and primary flag.
+  // (HWND, DWORD flags) -> HMONITOR - the monitor a window is on.
+  MonitorFromWindow: { args: [FFIType.u64, FFIType.u32], returns: FFIType.u64 },
+  // (HMONITOR, LPMONITORINFO) -> BOOL - bounds, work area, and primary flag.
   GetMonitorInfoW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
-  // (LPPOINT) -> BOOL — the cursor position in screen coordinates.
+  // (LPPOINT) -> BOOL - the cursor position in screen coordinates.
   GetCursorPos: { args: [FFIType.ptr], returns: FFIType.i32 },
-  // (UINT uType) -> BOOL — play a system sound (shell.beep). 0xFFFFFFFF = a simple beep.
+  // (UINT uType) -> BOOL - play a system sound (shell.beep). 0xFFFFFFFF = a simple beep.
   MessageBeep: { args: [FFIType.u32], returns: FFIType.i32 },
 
   // ── Icons (used by the tray backend) ─────────────────────────────────────
@@ -161,30 +158,30 @@ const USER32_SYMBOLS = {
     args: [FFIType.u64, FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.i32, FFIType.u32],
     returns: FFIType.u64,
   },
-  // (HINSTANCE, LPCWSTR name) -> HICON — load a standard/system icon (int resource).
+  // (HINSTANCE, LPCWSTR name) -> HICON - load a standard/system icon (int resource).
   LoadIconW: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u64 },
-  // (HICON) -> BOOL — free an icon loaded for the tray.
+  // (HICON) -> BOOL - free an icon loaded for the tray.
   DestroyIcon: { args: [FFIType.u64], returns: FFIType.i32 },
-  // (HWND, LPCWSTR text, LPCWSTR caption, UINT type) -> int — a modal message box.
+  // (HWND, LPCWSTR text, LPCWSTR caption, UINT type) -> int - a modal message box.
   MessageBoxW: { args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
 
   // ── Menus (used by the menu backend) ─────────────────────────────────────
-  // () -> HMENU — a new, empty popup (context) menu.
+  // () -> HMENU - a new, empty popup (context) menu.
   CreatePopupMenu: { args: [], returns: FFIType.u64 },
-  // (HMENU, UINT flags, UINT_PTR idOrSubmenu, LPCWSTR text) -> BOOL — append an item.
+  // (HMENU, UINT flags, UINT_PTR idOrSubmenu, LPCWSTR text) -> BOOL - append an item.
   AppendMenuW: {
     args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
   },
-  // (HMENU) -> BOOL — destroy a menu and its submenus.
+  // (HMENU) -> BOOL - destroy a menu and its submenus.
   DestroyMenu: { args: [FFIType.u64], returns: FFIType.i32 },
-  // (HMENU) -> int — number of items (for tests).
+  // (HMENU) -> int - number of items (for tests).
   GetMenuItemCount: { args: [FFIType.u64], returns: FFIType.i32 },
-  // (HWND) -> HMENU — the window's current menu bar (0 if none).
+  // (HWND) -> HMENU - the window's current menu bar (0 if none).
   GetMenu: { args: [FFIType.u64], returns: FFIType.u64 },
-  // (HMENU, int pos) -> UINT — the command id at a position (-1 for a popup/submenu).
+  // (HMENU, int pos) -> UINT - the command id at a position (-1 for a popup/submenu).
   GetMenuItemID: { args: [FFIType.u64, FFIType.i32], returns: FFIType.u32 },
-  // (HMENU, UINT flags, int x, int y, int reserved, HWND, LPRECT) -> BOOL/cmd —
+  // (HMENU, UINT flags, int x, int y, int reserved, HWND, LPRECT) -> BOOL/cmd -
   // show a context menu modally; with TPM_RETURNCMD it returns the chosen command id.
   TrackPopupMenu: {
     args: [
@@ -198,63 +195,61 @@ const USER32_SYMBOLS = {
     ],
     returns: FFIType.i32,
   },
-  // () -> BOOL — end the active menu (used re-entrantly from an item's click).
+  // () -> BOOL - end the active menu; only reachable from a native callback while it tracks.
   EndMenu: { args: [], returns: FFIType.i32 },
-  // (HWND, LPPOINT) -> BOOL — convert client coordinates to screen coordinates.
+  // (HWND, LPPOINT) -> BOOL - convert client coordinates to screen coordinates.
   ClientToScreen: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
-  // () -> HMENU — a new, empty menu BAR (the container SetMenu attaches to a window;
+  // () -> HMENU - a new, empty menu BAR (the container SetMenu attaches to a window;
   // distinct from CreatePopupMenu, which makes a vertical submenu/context menu).
   CreateMenu: { args: [], returns: FFIType.u64 },
-  // (HWND, HMENU) -> BOOL — attach (or detach with NULL) a menu bar to a window.
+  // (HWND, HMENU) -> BOOL - attach (or detach with NULL) a menu bar to a window.
   SetMenu: { args: [FFIType.u64, FFIType.u64], returns: FFIType.i32 },
-  // (HWND) -> BOOL — repaint the menu bar after its contents change.
+  // (HWND) -> BOOL - repaint the menu bar after its contents change.
   DrawMenuBar: { args: [FFIType.u64], returns: FFIType.i32 },
 } as const;
 
-/** kernel32.dll — the running module handle, DLL-search dir, and proc lookup. */
+/** kernel32.dll - the running module handle, DLL-search dir, and proc lookup. */
 const KERNEL32_SYMBOLS = {
   // (LPCWSTR moduleName | NULL) -> HMODULE
   GetModuleHandleW: { args: [FFIType.ptr], returns: FFIType.u64 },
-  // (LPCWSTR pathName | NULL) -> BOOL — adds one directory to the DLL search path.
+  // (LPCWSTR pathName | NULL) -> BOOL - adds one directory to the DLL search path.
   // The Windows substitute for $ORIGIN: it lets a bundled engine's WebKit2.dll
   // resolve its own dependency closure (ICU, libcurl, ...) from the engine dir.
   SetDllDirectoryW: { args: [FFIType.ptr], returns: FFIType.i32 },
-  // (HMODULE, LPCSTR procName) -> FARPROC — used to get the address of the system
-  // DefWindowProcW so a web-host child window can use it as a NATIVE window
-  // procedure (a JSCallback WndProc cannot survive WebKit's re-entrant flood).
+  // (HMODULE, LPCSTR procName) -> FARPROC - DefWindowProcW's address, the WKView host's
+  // native proc (D043).
   GetProcAddress: { args: [FFIType.u64, FFIType.cstring], returns: FFIType.u64 },
-  // (HANDLE process, UINT exitCode) -> BOOL — hard-terminate. Used to exit the
-  // app WITHOUT running WebKit's static/DLL-detach teardown, which crashes.
+  // (HANDLE process, UINT exitCode) -> BOOL - exit without WebKit's crashing teardown (D043).
   TerminateProcess: { args: [FFIType.u64, FFIType.u32], returns: FFIType.i32 },
-  // (EXECUTION_STATE esFlags) -> EXECUTION_STATE — block system/display sleep for
+  // (EXECUTION_STATE esFlags) -> EXECUTION_STATE - block system/display sleep for
   // the calling thread (powerSaveBlocker). Returns the previous state (0 on error).
   SetThreadExecutionState: { args: [FFIType.u32], returns: FFIType.u32 },
 
   // ── Movable global memory (clipboard transfer buffers) ───────────────────
   // (UINT uFlags, SIZE_T dwBytes) -> HGLOBAL
   GlobalAlloc: { args: [FFIType.u32, FFIType.u64], returns: FFIType.u64 },
-  // (HGLOBAL) -> LPVOID — lock a movable block and get its real address.
+  // (HGLOBAL) -> LPVOID - lock a movable block and get its real address.
   GlobalLock: { args: [FFIType.u64], returns: FFIType.ptr },
   // (HGLOBAL) -> BOOL
   GlobalUnlock: { args: [FFIType.u64], returns: FFIType.i32 },
-  // (HGLOBAL) -> SIZE_T — the block's byte size.
+  // (HGLOBAL) -> SIZE_T - the block's byte size.
   GlobalSize: { args: [FFIType.u64], returns: FFIType.u64 },
-  // (HGLOBAL) -> HGLOBAL — free a block we still own (NULL on success).
+  // (HGLOBAL) -> HGLOBAL - free a block we still own (NULL on success).
   GlobalFree: { args: [FFIType.u64], returns: FFIType.u64 },
-  // (HLOCAL) -> HLOCAL — free a block the system allocated for us (e.g. a DPAPI
+  // (HLOCAL) -> HLOCAL - free a block the system allocated for us (e.g. a DPAPI
   // CryptProtectData output blob), NULL on success.
   LocalFree: { args: [FFIType.u64], returns: FFIType.u64 },
 } as const;
 
-/** ole32.dll — COM/OLE, which WebKit's Windows port requires initialised per-thread. */
+/** ole32.dll - COM/OLE, which WebKit's Windows port requires initialised per-thread. */
 const OLE32_SYMBOLS = {
   // (LPVOID reserved) -> HRESULT
   OleInitialize: { args: [FFIType.ptr], returns: FFIType.i32 },
-  // (LPVOID) -> void — free memory the shell allocated for us (e.g. a folder PIDL).
+  // (LPVOID) -> void - free memory the shell allocated for us (e.g. a folder PIDL).
   CoTaskMemFree: { args: [FFIType.u64], returns: FFIType.void },
-  // (HGLOBAL, BOOL fDeleteOnRelease, IStream** ppstm) -> HRESULT — wrap memory in a stream.
+  // (HGLOBAL, BOOL fDeleteOnRelease, IStream** ppstm) -> HRESULT - wrap memory in a stream.
   CreateStreamOnHGlobal: { args: [FFIType.u64, FFIType.i32, FFIType.ptr], returns: FFIType.i32 },
-  // (IStream* pstm, HGLOBAL* phglobal) -> HRESULT — recover the backing memory handle.
+  // (IStream* pstm, HGLOBAL* phglobal) -> HRESULT - recover the backing memory handle.
   GetHGlobalFromStream: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 

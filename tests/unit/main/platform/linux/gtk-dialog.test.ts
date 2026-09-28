@@ -1,22 +1,17 @@
 import { type Pointer, ptr, read } from 'bun:ffi';
-import { describe, expect, it } from 'bun:test';
-import { GASYNC_READY_CB_DEF } from '../../../../../src/main/platform/linux/gasync';
+import { describe, expect, test } from 'bun:test';
 import {
   buildButtonsArray,
+  cancelIdForButtons,
+  extensionPattern,
   mapChooseResult,
+  openDialogMethod,
   settleChoose,
   settleFilePath,
 } from '../../../../../src/main/platform/linux/gtk-dialog';
 
-describe('GASYNC_READY_CB_DEF (GAsyncReadyCallback ABI, shape-only)', () => {
-  it('is (source, result, user_data) -> void', () => {
-    expect(GASYNC_READY_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
-    expect(GASYNC_READY_CB_DEF.returns).toBe('void');
-  });
-});
-
 describe('buildButtonsArray', () => {
-  it('produces a NULL-terminated array of one pointer per label plus a trailing 0n', () => {
+  test('produces a NULL-terminated array of one pointer per label plus a trailing 0n', () => {
     const built = buildButtonsArray(['Yes', 'No', 'Cancel']);
     // 3 labels + 1 NULL terminator.
     expect(built.array.length).toBe(4);
@@ -29,7 +24,7 @@ describe('buildButtonsArray', () => {
     expect(built.buffers.length).toBe(3);
   });
 
-  it('encodes each label as a readable NUL-terminated UTF-8 cstr', () => {
+  test('encodes each label as a readable NUL-terminated UTF-8 cstr', () => {
     const built = buildButtonsArray(['OK']);
     // Read the bytes back through the pointer to prove it points at "OK\0".
     const base = Number(built.array[0]) as unknown as Pointer;
@@ -41,40 +36,58 @@ describe('buildButtonsArray', () => {
     expect(b2).toBe(0);
   });
 
-  it('yields just a NULL terminator for an empty label list', () => {
+  test('yields just a NULL terminator for an empty label list', () => {
     const built = buildButtonsArray([]);
     expect(built.array.length).toBe(1);
     expect(built.array[0]).toBe(0n);
     expect(built.buffers.length).toBe(0);
   });
 
-  it('exposes a non-null pointer to the underlying array for passing to GTK', () => {
+  test('exposes a non-null pointer to the underlying array for passing to GTK', () => {
     const built = buildButtonsArray(['A']);
     expect(ptr(built.array.buffer)).not.toBe(0);
   });
 });
 
 describe('mapChooseResult', () => {
-  it('returns the clicked button index when finish yields a valid index', () => {
-    expect(mapChooseResult(0, 0, 1)).toBe(0);
-    expect(mapChooseResult(2, 0, 1)).toBe(2);
+  test('returns the clicked button index when finish yields a valid index', () => {
+    expect(mapChooseResult(0, 1)).toBe(0);
+    expect(mapChooseResult(2, 1)).toBe(2);
   });
 
-  it('maps the dismissal sentinel (-1) to the cancelId', () => {
-    expect(mapChooseResult(-1, 0, 3)).toBe(3);
+  test('maps the dismissal sentinel (-1) to the cancelId', () => {
+    expect(mapChooseResult(-1, 3)).toBe(3);
   });
 
-  it('falls back to the cancelId on any negative (error) index', () => {
-    expect(mapChooseResult(-5, 1, 7)).toBe(7);
+  test('falls back to the cancelId on any negative (error) index', () => {
+    expect(mapChooseResult(-5, 7)).toBe(7);
+  });
+});
+
+describe('cancelIdForButtons', () => {
+  test('picks the first button labelled cancel or no, case-insensitively (Electron default)', () => {
+    expect(cancelIdForButtons(['Yes', 'No'])).toBe(1);
+    expect(cancelIdForButtons(['Save', 'CANCEL', 'No'])).toBe(1);
+  });
+
+  test('falls back to 0 when no button is a cancel label', () => {
+    expect(cancelIdForButtons(['OK', 'Retry'])).toBe(0);
+  });
+});
+
+describe('extensionPattern', () => {
+  test('matches an extension in any letter case (GTK globs are case-sensitive on Linux)', () => {
+    expect(extensionPattern('jpg')).toBe('*.[jJ][pP][gG]');
+    expect(extensionPattern('Tar.gz')).toBe('*.[tT][aA][rR].[gG][zZ]');
+    expect(extensionPattern('mp4')).toBe('*.[mM][pP]4');
   });
 });
 
 describe('settleChoose (injected finish-fn, no real dialog)', () => {
-  it('resolves with the mapped button index from the injected finish-fn', () => {
+  test('resolves with the mapped button index from the injected finish-fn', () => {
     const fakeResult = 123 as unknown as Pointer;
     const value = settleChoose({
       result: fakeResult,
-      defaultId: 0,
       cancelId: 1,
       finish: (r) => {
         expect(r).toBe(fakeResult);
@@ -84,20 +97,18 @@ describe('settleChoose (injected finish-fn, no real dialog)', () => {
     expect(value).toBe(2);
   });
 
-  it('maps a -1 dismissal from the injected finish-fn to the cancelId', () => {
+  test('maps a -1 dismissal from the injected finish-fn to the cancelId', () => {
     const value = settleChoose({
       result: 0 as unknown as Pointer,
-      defaultId: 0,
       cancelId: 5,
       finish: () => -1,
     });
     expect(value).toBe(5);
   });
 
-  it('maps a thrown finish (GError path) to the cancelId', () => {
+  test('maps a thrown finish (GError path) to the cancelId', () => {
     const value = settleChoose({
       result: 0 as unknown as Pointer,
-      defaultId: 0,
       cancelId: 9,
       finish: () => {
         throw new Error('GTK_DIALOG_ERROR_DISMISSED');
@@ -108,7 +119,7 @@ describe('settleChoose (injected finish-fn, no real dialog)', () => {
 });
 
 describe('settleFilePath (injected finish + reader, no real dialog)', () => {
-  it('returns the read path when the injected finish-fn yields a non-null GFile*', () => {
+  test('returns the read path when the injected finish-fn yields a non-null GFile*', () => {
     const fakeFile = 42 as unknown as Pointer;
     const path = settleFilePath({
       result: 0 as unknown as Pointer,
@@ -121,7 +132,7 @@ describe('settleFilePath (injected finish + reader, no real dialog)', () => {
     expect(path).toBe('/home/user/notes.md');
   });
 
-  it('returns empty string when the injected finish-fn yields null (cancel)', () => {
+  test('returns empty string when the injected finish-fn yields null (cancel)', () => {
     const path = settleFilePath({
       result: 0 as unknown as Pointer,
       finish: () => null,
@@ -132,7 +143,7 @@ describe('settleFilePath (injected finish + reader, no real dialog)', () => {
     expect(path).toBe('');
   });
 
-  it('returns empty string when finish throws (GError / dismissal)', () => {
+  test('returns empty string when finish throws (GError / dismissal)', () => {
     const path = settleFilePath({
       result: 0 as unknown as Pointer,
       finish: () => {
@@ -141,5 +152,19 @@ describe('settleFilePath (injected finish + reader, no real dialog)', () => {
       readPath: () => '/should/not/return',
     });
     expect(path).toBe('');
+  });
+});
+
+describe('openDialogMethod', () => {
+  test('maps openDirectory and multiSelections to the GtkFileDialog entry point', () => {
+    const spec = (canChooseDirectories: boolean, allowsMultipleSelection: boolean) => ({
+      canChooseFiles: true,
+      canChooseDirectories,
+      allowsMultipleSelection,
+    });
+    expect(openDialogMethod(spec(false, false))).toBe('open');
+    expect(openDialogMethod(spec(false, true))).toBe('open_multiple');
+    expect(openDialogMethod(spec(true, false))).toBe('select_folder');
+    expect(openDialogMethod(spec(true, true))).toBe('select_multiple_folders');
   });
 });

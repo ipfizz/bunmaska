@@ -1,56 +1,33 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
-import { dlopen } from '../dlopen';
-import { cstr } from '../cstr';
-import type { Handle } from './objc';
+import { callFromNative, dataSymbolAddress, type Handle } from './objc';
 
 /**
- * Hand-built ObjC **Blocks** for bun:ffi — the primitive that unblocks every
- * completion-handler-based AppKit/WebKit API (D022, now SOLVED).
- *
- * A Block is a C struct whose 5th field (`invoke`, at offset 0x10) is a function
- * pointer the ObjC runtime calls as `invoke(block, ...args)`. We build a GLOBAL
- * block (no captured variables, so the runtime never copies/frees it) whose
- * `invoke` is a {@link JSCallback}:
+ * Hand-built ObjC Blocks for completion-handler APIs (D022b). The runtime calls a
+ * block as `invoke(block, ...args)`, reading `invoke` at offset 16:
  *
  * ```
  * struct Block_literal { void *isa; int flags; int reserved; void *invoke; void *descriptor; }
  * struct Block_descriptor { unsigned long reserved; unsigned long size; }
  * ```
  *
- * - `isa` = `&_NSConcreteGlobalBlock` (resolved once via `dlsym`).
- * - `flags` = `BLOCK_IS_GLOBAL` (1 << 28). No copy/dispose helpers, no signature
- *   (direct invocation does not need one — verified against `dispatch_async` +
- *   the run loop).
- * - `invoke` = the JSCallback pointer; its first parameter is the block itself.
+ * - `isa` = `&_NSConcreteGlobalBlock`: a GLOBAL block captures nothing, so the
+ *   runtime never copies or frees it.
+ * - `flags` = `BLOCK_IS_GLOBAL` (1 << 28). No copy/dispose helpers and no signature:
+ *   direct invocation needs neither (verified with `dispatch_async` + the run loop).
+ * - `invoke` = a JSCallback whose first parameter is the block itself.
  *
- * LIFETIME: a completion handler fires LATER, on the pumped run loop, so the
- * literal + descriptor + JSCallback must stay reachable until then — they are
- * held in {@link retained}. After the handler runs we close the JSCallback on a
- * DEFERRED tick (never synchronously inside its own invocation, which would free
- * the native trampoline mid-call and segfault — the same crash class as the GTK
- * `runAsyncDialog` callbacks).
+ * The literal and JSCallback stay in {@link retained} until the block fires, then
+ * close on a deferred tick, never inside their own invocation (D022b).
  */
 
 const BLOCK_IS_GLOBAL = 1 << 28;
 const BLOCK_LITERAL_SIZE = 32;
 
 let cachedIsa: Pointer | undefined;
-/** Resolve `&_NSConcreteGlobalBlock` (the isa every global block points at), once. */
+/** `&_NSConcreteGlobalBlock`, the isa every global block points at. */
 const globalBlockIsa = (): Pointer => {
-  if (cachedIsa !== undefined) {
-    return cachedIsa;
-  }
-  const libc = dlopen('/usr/lib/libSystem.B.dylib', {
-    dlopen: { args: [FFIType.cstring, FFIType.i32], returns: FFIType.ptr },
-    dlsym: { args: [FFIType.ptr, FFIType.cstring], returns: FFIType.ptr },
-  });
-  const handle = libc.symbols.dlopen(cstr('/usr/lib/libSystem.B.dylib'), 2);
-  const isa = libc.symbols.dlsym(handle, cstr('_NSConcreteGlobalBlock'));
-  if (isa === null) {
-    throw new Error('cocoa-block: could not resolve _NSConcreteGlobalBlock');
-  }
-  cachedIsa = isa;
-  return isa;
+  cachedIsa ??= dataSymbolAddress('/usr/lib/libSystem.B.dylib', '_NSConcreteGlobalBlock');
+  return cachedIsa;
 };
 
 let sharedDescriptor: BigUint64Array | undefined;
@@ -61,8 +38,7 @@ const descriptorPtr = (): Pointer => {
 };
 
 type RetainedBlock = { readonly literal: Uint8Array; readonly cb: JSCallback };
-const retained = new Set<RetainedBlock>();
-const cancelable = new Map<Handle, RetainedBlock>();
+const retained = new Map<Handle, RetainedBlock>();
 
 /** Number of blocks still awaiting their callback. Test-only. */
 export const retainedBlockCount = (): number => retained.size;
@@ -71,43 +47,22 @@ export const retainedBlockCount = (): number => retained.size;
 export type BlockArg = number | bigint | null;
 
 /**
- * Build a one-shot global Block whose handler runs when the runtime invokes it.
- * `argTypes` are the block's parameter FFI types AFTER the implicit leading block
- * pointer (which is dropped before `handler` is called). The handler receives the
- * real arguments in order. The block frees itself (deferred) after it fires, so
- * this is for completion handlers that are called exactly once.
- *
- * Returns the block pointer as a {@link Handle} to pass to an `objc_msgSend`
- * argument slot.
+ * Build a block for a completion handler called exactly once; it frees itself after
+ * firing. `argTypes` follow the implicit block pointer, which `handler` never sees.
+ * Declare ObjC object params as `FFIType.u64`: `ptr` loses tagged-pointer bits (D029).
  */
 export const makeOneShotBlock = (
   handler: (...args: BlockArg[]) => void,
   argTypes: readonly FFIType[] = [],
 ): Handle => {
-  let entry: RetainedBlock | undefined;
+  let blockPtr = 0n;
   const cb = new JSCallback(
     (...all: BlockArg[]) => {
-      try {
-        // Drop the leading block pointer; hand the real args to the caller.
-        handler(...all.slice(1));
-      } finally {
-        // Deferred close: never free the trampoline inside its own invocation.
-        const settle = setTimeout(() => {
-          if (entry !== undefined) {
-            retained.delete(entry);
-            for (const [key, value] of cancelable) {
-              if (value === entry) {
-                cancelable.delete(key);
-              }
-            }
-          }
-          cb.close();
-        }, 0);
-        // Don't let the cleanup timer keep the process alive on its own.
-        if (typeof settle === 'object' && settle !== null && 'unref' in settle) {
-          (settle as { unref: () => void }).unref();
-        }
-      }
+      callFromNative(undefined, () => handler(...all.slice(1)));
+      setTimeout(() => {
+        retained.delete(blockPtr);
+        cb.close();
+      }, 0).unref();
     },
     { args: [FFIType.ptr, ...argTypes], returns: FFIType.void },
   );
@@ -125,30 +80,7 @@ export const makeOneShotBlock = (
   view.setBigUint64(16, BigInt(invokePtr), true); // invoke
   view.setBigUint64(24, BigInt(descriptorPtr()), true); // descriptor
 
-  entry = { literal, cb };
-  retained.add(entry);
-  const blockPtr = BigInt(ptr(literal));
-  cancelable.set(blockPtr, entry);
+  blockPtr = BigInt(ptr(literal));
+  retained.set(blockPtr, { literal, cb });
   return blockPtr;
-};
-
-/**
- * Release a one-shot block that will never fire (a timed-out completion).
- * Without this, every timeout leaked the retained literal AND its JSCallback.
- * Deferred close, same discipline as the fired path: the native side may still
- * be mid-call with the trampoline.
- */
-export const cancelOneShotBlock = (blockPtr: Handle): void => {
-  const entry = cancelable.get(blockPtr);
-  if (entry === undefined) {
-    return;
-  }
-  cancelable.delete(blockPtr);
-  const settle = setTimeout(() => {
-    retained.delete(entry);
-    entry.cb.close();
-  }, 0);
-  if (typeof settle === 'object' && settle !== null && 'unref' in settle) {
-    (settle as { unref: () => void }).unref();
-  }
 };

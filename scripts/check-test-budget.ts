@@ -1,72 +1,99 @@
 /**
- * Runs the test suite once and gates on its shape, so a suite that SILENTLY stops
- * registering (a broken `hasEngine` probe, a wrong `currentPlatform()` guard, a
- * module-level `if` that drops to zero tests) fails CI instead of passing green.
- *
- * It asserts, per OS: zero failures, at least `minPass` passing tests (a big drop
- * means a whole suite vanished), and no more than `maxSkip` skips (a jump means a
- * suite that should run got gated off). Bounds are deliberately generous for now —
- * they catch a catastrophic regression without false-failing normal per-OS
- * variation; ratchet them tighter as each leg's real numbers settle.
- *
- * Where it runs: `validate` (macOS + Linux CI, and any local `bun run validate`,
- * incl. Windows dev boxes where the full suite passes). Windows CI runs the scoped
- * `validate:windows` (its own gate) because that leg has no engine, so a budget with
- * mac/linux skip bounds wouldn't fit it; tightening Windows into a full-`validate`
- * CI leg is the tracked 1d follow-up (needs the engine cached into that leg first).
+ * Runs `bun test` for one leg and fails on a failing test or on pass/skip counts
+ * outside the leg's budget, so a suite that silently stops registering fails CI.
+ * Rules: CONTRIBUTING, "The budget gate". Usage: `bun scripts/check-test-budget.ts [leg]`.
  */
 import { platform } from 'node:os';
 
-type Budget = { minPass: number; maxSkip: number };
-
-const BUDGETS: Record<string, Budget> = {
-  // Ratcheted to the numbers each leg actually reported on a green 3-OS run
-  // (darwin 1502/74, linux 1400/45), with ~5% headroom. win32 CI runs the scoped
-  // `validate:windows`, which does not call this gate at all, so its bound only
-  // fires on a Windows dev box running full validate — left loose deliberately.
-  win32: { minPass: 1200, maxSkip: 130 },
-  darwin: { minPass: 1400, maxSkip: 90 },
-  linux: { minPass: 1330, maxSkip: 55 },
+type Leg = {
+  readonly minPass: number;
+  readonly maxSkip: number;
+  readonly paths?: readonly string[];
+  readonly timeoutMs?: number;
 };
 
-const budget = BUDGETS[platform()] ?? { minPass: 1000, maxSkip: 200 };
+type Counts = { readonly pass: number; readonly skip: number; readonly fail: number };
 
-const proc = Bun.spawnSync(['bun', 'test', '--timeout', '30000'], {
-  stdout: 'pipe',
-  stderr: 'pipe',
-});
-const out = `${proc.stdout.toString()}\n${proc.stderr.toString()}`;
-process.stdout.write(out);
-
-const num = (label: string): number => {
-  // bun prints e.g. " 1524 pass" / " 75 skip" / " 0 fail"
-  const match = out.match(new RegExp(`(\\d+)\\s+${label}`));
-  return match?.[1] ? Number(match[1]) : Number.NaN;
+/**
+ * Full-suite legs by `os.platform()`, within ~5% of measured CI runs at 9e2e312 (darwin 1901/185,
+ * linux 1730/189), plus `windows-scoped`, the suite `validate:windows` runs (231/15).
+ * ponytail: counts only; a per-OS file floor would catch a few files vanishing in the headroom.
+ */
+export const LEGS: Readonly<Record<string, Leg>> = {
+  darwin: { minPass: 1805, maxSkip: 194 },
+  linux: { minPass: 1637, maxSkip: 198 },
+  // ponytail: unmeasured; the full suite is not path-portable to Windows yet.
+  win32: { minPass: 1197, maxSkip: 130 },
+  'windows-scoped': {
+    minPass: 220,
+    maxSkip: 16,
+    paths: ['tests/unit/main/platform/windows', 'tests/integration/windows'],
+    timeoutMs: 60000,
+  },
 };
 
-const pass = num('pass');
-const skip = num('skip');
-const fail = num('fail');
+/** Read bun's summary from its stderr; the last summary line wins, and bun omits `skip` at zero. */
+export const parseCounts = (stderr: string): Counts => {
+  const count = (label: string, missing: number): number => {
+    const last = [...stderr.matchAll(new RegExp(`^\\s*(\\d+) ${label}\\s*$`, 'gm'))].at(-1)?.[1];
+    return last === undefined ? missing : Number(last);
+  };
+  return {
+    pass: count('pass', Number.NaN),
+    skip: count('skip', 0),
+    fail: count('fail', Number.NaN),
+  };
+};
 
-const problems: string[] = [];
-if (proc.exitCode !== 0) problems.push(`the test run exited ${proc.exitCode}`);
-if (Number.isNaN(pass) || Number.isNaN(skip) || Number.isNaN(fail)) {
-  problems.push('could not parse pass/skip/fail counts from the test output');
-}
-if (fail > 0) problems.push(`${fail} test(s) failed`);
-if (pass < budget.minPass) {
-  problems.push(`only ${pass} tests passed (< ${budget.minPass}) — did a suite stop registering?`);
-}
-if (skip > budget.maxSkip) {
-  problems.push(`${skip} tests skipped (> ${budget.maxSkip}) — did a suite get gated off?`);
-}
+/** Why a run breaks `leg`'s budget; empty when it holds. */
+export const budgetProblems = (leg: Leg, counts: Counts, exitCode: number | null): string[] => {
+  const { pass, skip, fail } = counts;
+  const problems: string[] = [];
+  if (exitCode !== 0) problems.push(`the test run exited ${exitCode}`);
+  if (Number.isNaN(pass) || Number.isNaN(fail)) {
+    problems.push('could not parse the pass/fail counts from the test output');
+  }
+  if (fail > 0) problems.push(`${fail} test(s) failed`);
+  if (pass < leg.minPass) {
+    problems.push(`only ${pass} tests passed (< ${leg.minPass}) - did a suite stop registering?`);
+  }
+  if (skip > leg.maxSkip) {
+    problems.push(`${skip} tests skipped (> ${leg.maxSkip}) - did a suite get gated off?`);
+  }
+  return problems;
+};
 
-process.stdout.write(
-  `\ntest budget [${platform()}]: pass=${pass} skip=${skip} fail=${fail} ` +
-    `(min pass ${budget.minPass}, max skip ${budget.maxSkip})\n`,
-);
-if (problems.length > 0) {
-  process.stdout.write(`TEST BUDGET FAILED:\n  - ${problems.join('\n  - ')}\n`);
-  process.exit(1);
+if (import.meta.main) {
+  const name = process.argv[2] ?? platform();
+  const leg = LEGS[name];
+  if (leg === undefined) {
+    process.stderr.write(
+      `test budget: no leg "${name}" (known: ${Object.keys(LEGS).join(', ')})\n`,
+    );
+    process.exit(1);
+  }
+  const timeout = String(leg.timeoutMs ?? 30000);
+  const proc = Bun.spawn([process.execPath, 'test', '--timeout', timeout, ...(leg.paths ?? [])], {
+    stdout: 'inherit',
+    stderr: 'pipe',
+  });
+  // Streamed, not buffered: a CI timeout on a hung test must still show how far the run got.
+  let stderr = '';
+  const decoder = new TextDecoder();
+  for await (const chunk of proc.stderr) {
+    process.stderr.write(chunk);
+    stderr += decoder.decode(chunk, { stream: true });
+  }
+  const exitCode = await proc.exited;
+  const counts = parseCounts(stderr);
+  const problems = budgetProblems(leg, counts, exitCode);
+  process.stdout.write(
+    `\ntest budget [${name}]: pass=${counts.pass} skip=${counts.skip} fail=${counts.fail} ` +
+      `(min pass ${leg.minPass}, max skip ${leg.maxSkip})\n`,
+  );
+  if (problems.length > 0) {
+    process.stdout.write(`TEST BUDGET FAILED:\n  - ${problems.join('\n  - ')}\n`);
+    process.exit(1);
+  }
+  process.stdout.write('test budget OK\n');
 }
-process.stdout.write('test budget OK\n');

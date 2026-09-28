@@ -1,19 +1,7 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine/resolve';
-
-/**
- * Loads libsoup 3 - the HTTP library WebKitGTK's cookie API traffics in.
- * Soup symbols are NOT reachable through the libwebkitgtk dlopen handle, so
- * this is its own library, engine-resolved like webkitgtk-ffi (a pinned
- * engine bundles its own libsoup).
- *
- * Convention: `gboolean` is {@link FFIType.i32} (compare `!== 0`); the
- * `soup_cookie_get_*` string getters return BORROWED `const char*` declared as
- * {@link FFIType.pointer} so NULL is guardable and nothing is freed.
- */
+import { dlopenLinux } from './glib-ffi';
 
 const LIBSOUP_PATH = 'libsoup-3.0.so.0';
 
@@ -28,6 +16,7 @@ export const SOUP_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // The string getters return BORROWED `const char*`: never free them.
   soup_cookie_get_name: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
@@ -67,7 +56,7 @@ export const SOUP_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof SOUP_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof SOUP_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -81,9 +70,7 @@ export const loadSoupFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const engine = resolveEngine();
-  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
-  const ffi = dlopen(engineLibPath(engine, LIBSOUP_PATH), SOUP_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBSOUP_PATH, SOUP_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

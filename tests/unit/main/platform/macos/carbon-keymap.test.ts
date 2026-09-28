@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseAccelerator } from '../../../../../src/main/api/accelerator';
+import { parseAccelerator } from '../../../../../src/common/accelerator';
 import {
   carbonModifierMask,
   CMD_KEY,
@@ -34,10 +34,16 @@ describe('macVirtualKeyCode', () => {
     expect(macVirtualKeyCode('0')).toBe(29);
   });
 
-  test('maps function keys', () => {
+  test('maps function keys through F20', () => {
     expect(macVirtualKeyCode('F1')).toBe(122);
     expect(macVirtualKeyCode('F5')).toBe(96);
     expect(macVirtualKeyCode('F12')).toBe(111);
+    expect(macVirtualKeyCode('F16')).toBe(106);
+    expect(macVirtualKeyCode('F20')).toBe(90);
+  });
+
+  test('maps Plus to the =/+ key', () => {
+    expect(macVirtualKeyCode('Plus')).toBe(macVirtualKeyCode('='));
   });
 
   test('maps common named keys', () => {
@@ -47,8 +53,27 @@ describe('macVirtualKeyCode', () => {
     expect(macVirtualKeyCode('Tab')).toBe(48);
   });
 
-  test('returns undefined for an unmappable key', () => {
-    expect(macVirtualKeyCode('Plus')).toBeUndefined();
+  test('maps the numeric keypad and Insert the accelerator parser accepts', () => {
+    const code = (accelerator: string): number | undefined => {
+      const parsed = parseAccelerator(accelerator, 'macos');
+      return parsed === undefined ? undefined : macVirtualKeyCode(parsed.key);
+    };
+    expect(code('num0')).toBe(82);
+    expect(code('num7')).toBe(89);
+    // kVK_ANSI_Keypad8 and 9 skip 0x5A, which is kVK_F20.
+    expect(code('num8')).toBe(91);
+    expect(code('num9')).toBe(92);
+    expect(code('numdec')).toBe(65);
+    expect(code('nummult')).toBe(67);
+    expect(code('numadd')).toBe(69);
+    expect(code('numdiv')).toBe(75);
+    expect(code('numsub')).toBe(78);
+    // A PC keyboard's Insert key reaches macOS as kVK_Help.
+    expect(code('Insert')).toBe(114);
+  });
+
+  test('returns undefined for a key macOS has no code for', () => {
+    expect(macVirtualKeyCode('F21')).toBeUndefined();
   });
 
   test('is case-insensitive on the key label', () => {
@@ -57,13 +82,6 @@ describe('macVirtualKeyCode', () => {
 });
 
 describe('carbonModifierMask', () => {
-  test('exposes the Carbon mask constants', () => {
-    expect(CMD_KEY).toBe(0x100);
-    expect(SHIFT_KEY).toBe(0x200);
-    expect(OPTION_KEY).toBe(0x800);
-    expect(CONTROL_KEY).toBe(0x1000);
-  });
-
   test('Cmd accelerator on macOS yields the cmdKey mask', () => {
     const parsed = parseAccelerator('CmdOrCtrl+K', 'macos');
     expect(parsed).toBeDefined();
@@ -79,6 +97,14 @@ describe('carbonModifierMask', () => {
       throw new Error('unreachable');
     }
     expect(carbonModifierMask(parsed)).toBe(CMD_KEY | CONTROL_KEY | OPTION_KEY | SHIFT_KEY);
+  });
+
+  test('Plus implies Shift, as Electron registers it', () => {
+    const parsed = parseAccelerator('CmdOrCtrl+Plus', 'macos');
+    if (parsed === undefined) {
+      throw new Error('unreachable');
+    }
+    expect(carbonModifierMask(parsed)).toBe(CMD_KEY | SHIFT_KEY);
   });
 
   test('a bare key yields a zero mask', () => {

@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { InvalidArgumentError, UnsupportedPlatformError } from '../../../../src/common/errors';
-import type { Cookie, CookieFilter } from '../../../../src/main/api/cookie-util';
-import {
-  Session,
-  type SessionBackend,
-  session,
-  setSessionBackendForTesting,
-} from '../../../../src/main/api/session';
+import type { Cookie, CookieFilter } from '../../../../src/common/cookie-util';
+import { Session, session, setSessionBackendForTesting } from '../../../../src/main/api/session';
+import type { SessionBackend } from '../../../../src/main/platform/services';
 
 /** A fake backend recording calls; every method resolves unless overridden. */
 const fakeBackend = (overrides: Partial<SessionBackend> = {}) => {
@@ -70,6 +66,23 @@ describe('session.defaultSession', () => {
     });
     await session.defaultSession.clearStorageData();
     expect(called).toBe(1);
+  });
+
+  test('clearStorageData rejects a storages or origin filter instead of clearing everything', async () => {
+    let called = 0;
+    fakeBackend({
+      clearStorageData: () => {
+        called += 1;
+        return Promise.resolve();
+      },
+    });
+    await expect(
+      session.defaultSession.clearStorageData({ storages: ['cookies'] }),
+    ).rejects.toBeInstanceOf(UnsupportedPlatformError);
+    await expect(
+      session.defaultSession.clearStorageData({ origin: 'https://example.com' }),
+    ).rejects.toBeInstanceOf(UnsupportedPlatformError);
+    expect(called).toBe(0);
   });
 });
 

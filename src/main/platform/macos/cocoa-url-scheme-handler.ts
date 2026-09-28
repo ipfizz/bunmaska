@@ -1,6 +1,6 @@
 import { ptr } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
-import { type BuiltProtocolResponse, protocol } from '../../api/protocol';
+import type { BuiltProtocolResponse, NativeProtocol } from '../native';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import {
   msgSendPtr,
@@ -12,60 +12,14 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * Bridges `WKURLSchemeHandler` callbacks to the `protocol` module on macOS.
- *
- * A `WKWebView` routes a custom scheme here (via `setURLSchemeHandler:forURLScheme:`
- * on its `WKWebViewConfiguration`) and we serve the task synchronously.
- *
- * The class is defined once at runtime via {@link defineObjcClass} (D026); its
- * IMP `JSCallback`s are retained for the process lifetime by the runtime-class
- * helper's `retainedCallbacks`, so they are NEVER freed inside their own
- * invocation (the JSCallback-lifecycle discipline that prevents the SIGSEGV).
- */
-
 const log = createLogger('macos-url-scheme-handler');
 
-/** The Bunmaska error domain for a failed custom-scheme task. */
 const ERROR_DOMAIN = 'BunmaskaProtocol';
-/** `NSURLErrorResourceUnavailable`-ish code for an unhandled/declined request. */
-const ERROR_CODE_NO_HANDLER = -1100n;
+const ERROR_CODE_NO_HANDLER = -1100n; // NSURLErrorFileDoesNotExist
 
-/** The dispatcher the IMP calls to serve a URL; defaults to {@link protocol.dispatch}. */
-let dispatcher: (url: string) => BuiltProtocolResponse | undefined = protocol.dispatch;
+let dispatcher: NativeProtocol['dispatch'] = () => undefined;
 
-/** Override the URL dispatcher. Test-only. */
-export const setUrlSchemeDispatcherForTesting = (
-  fake: ((url: string) => BuiltProtocolResponse | undefined) | undefined,
-): void => {
-  dispatcher = fake ?? protocol.dispatch;
-};
-
-/** Read the absolute string of a `WKURLSchemeTask`'s request URL. */
-const requestUrlOf = (task: Handle): string => {
-  const rt = cocoa();
-  const request = rt.msgSend(task, rt.selectors.get('request'));
-  if (request === 0n) {
-    return '';
-  }
-  const url = rt.msgSend(request, rt.selectors.get('URL'));
-  if (url === 0n) {
-    return '';
-  }
-  return nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString')));
-};
-
-/** Build an `NSURL` from a string for the response's URL field. */
-const nsUrl = (url: string): Handle => {
-  const rt = cocoa();
-  return msgSendPtr(rt.classes.get('NSURL'), rt.selectors.get('URLWithString:'), nsString(url));
-};
-
-/**
- * Fail `task` with an `NSError` (no registered handler / declined / empty body).
- * Best-effort: a task that WebKit has already finished/stopped throws on a
- * second response, so swallow.
- */
+/** Fail `task` as declined. The catch covers JS/FFI errors only; an NSException aborts. */
 const failTask = (task: Handle): void => {
   try {
     const rt = cocoa();
@@ -82,16 +36,9 @@ const failTask = (task: Handle): void => {
   }
 };
 
-/**
- * Serve `built` to `task`: build an `NSData` from the bytes and an
- * `NSURLResponse` for `url`, then drive the task through
- * `didReceiveResponse:` → `didReceiveData:` → `didFinish`.
- */
-const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): void => {
+const serveTask = (task: Handle, url: Handle, built: BuiltProtocolResponse): void => {
   const rt = cocoa();
-  // NSData dataWithBytes:length: copies, so `bytes` only needs to outlive this
-  // call — no long-lived pinning. A zero-length body still produces a valid
-  // (empty) NSData.
+  // dataWithBytes:length: copies, so `bytes` only has to outlive this call.
   const bytes = built.bytes;
   const dataPtr = bytes.length === 0 ? 0n : BigInt(ptr(bytes));
   const data = msgSendPtrI64(
@@ -101,28 +48,33 @@ const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): voi
     BigInt(bytes.length),
   );
 
+  // NSURLResponse keeps MIMEType verbatim; a `; charset=x` suffix belongs in the encoding.
+  const [mimeType = '', ...params] = built.mimeType.split(';').map((part) => part.trim());
+  const charset = params
+    .find((p) => /^charset=/i.test(p))
+    ?.slice(8)
+    .replaceAll('"', '');
   const response = msgSendPtrPtrI64Ptr(
     rt.msgSend(rt.classes.get('NSURLResponse'), rt.selectors.get('alloc')),
     rt.selectors.get('initWithURL:MIMEType:expectedContentLength:textEncodingName:'),
-    nsUrl(url),
-    nsString(built.mimeType),
+    url,
+    nsString(mimeType),
     BigInt(bytes.length),
-    nsString('utf-8'),
+    nsString(charset || 'utf-8'),
   );
 
   msgSendPtr(task, rt.selectors.get('didReceiveResponse:'), response);
+  rt.msgSend(response, rt.selectors.get('release'));
   msgSendPtr(task, rt.selectors.get('didReceiveData:'), data);
   rt.msgSend(task, rt.selectors.get('didFinish'));
 };
 
-/**
- * @internal The body of `webView:startURLSchemeTask:`. Never throws out into the
- * IMP (any error fails the task instead).
- */
-export const handleStartTask = (task: Handle): void => {
+/** @internal `webView:startURLSchemeTask:`; never throws into the IMP, any error fails the task. */
+export const handleStartTask = (task: Handle, dispatch: NativeProtocol['dispatch']): void => {
   try {
-    const url = requestUrlOf(task);
-    const built = dispatcher(url);
+    const rt = cocoa();
+    const url = rt.msgSend(rt.msgSend(task, rt.selectors.get('request')), rt.selectors.get('URL'));
+    const built = dispatch(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
     if (built === undefined) {
       failTask(task);
       return;
@@ -145,17 +97,15 @@ const ensureHandlerClass = (): Handle => {
       selector: 'webView:startURLSchemeTask:',
       typeEncoding: 'v@:@@',
       args: ['object', 'object'],
-      // (self, _cmd, webView, task) — the task is the 2nd declared arg.
       impl: (_self, _cmd, _webView, task) => {
-        handleStartTask(task);
+        handleStartTask(task, dispatcher);
       },
     },
     {
       selector: 'webView:stopURLSchemeTask:',
       typeEncoding: 'v@:@@',
       args: ['object', 'object'],
-      // We serve synchronously, so there is nothing to cancel — but the selector
-      // MUST exist or WebKit refuses the handler (the protocol requires both).
+      // Tasks finish synchronously, but WebKit rejects a handler without this selector.
       impl: () => undefined,
     },
   ]);
@@ -168,14 +118,15 @@ export type UrlSchemeHandler = {
   readonly handle: Handle;
 };
 
-/**
- * Create a shared `WKURLSchemeHandler` instance. The instance routes every
- * scheme through {@link protocol.dispatch}, so one instance serves all
- * registered schemes on a given configuration.
- */
-export const createUrlSchemeHandler = (): UrlSchemeHandler => {
-  const rt = cocoa();
-  const cls = ensureHandlerClass();
-  const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
-  return { handle };
+let shared: UrlSchemeHandler | undefined;
+
+/** The process-wide handler every configuration shares; `dispatch` replaces the previous one. */
+export const createUrlSchemeHandler = (dispatch: NativeProtocol['dispatch']): UrlSchemeHandler => {
+  dispatcher = dispatch;
+  if (shared === undefined) {
+    const rt = cocoa();
+    const alloc = rt.msgSend(ensureHandlerClass(), rt.selectors.get('alloc'));
+    shared = { handle: rt.msgSend(alloc, rt.selectors.get('init')) };
+  }
+  return shared;
 };

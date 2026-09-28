@@ -1,8 +1,6 @@
 /**
- * The preload bootstrap: `globalThis.__bunmaska`, the low-level bridge injected
- * into every page at document-start, that `ipcRenderer` / `contextBridge` build on.
- * Authored as a plain-JS string (never a stringified TS function) so the exact text
- * reaches the page's JS engine with no transpilation in between.
+ * `globalThis.__bunmaska`, the document-start bridge `ipcRenderer` and `contextBridge` build on.
+ * Plain-JS text, never a stringified TS function, so no transpiler rewrites what is injected.
  */
 
 const BOOTSTRAP_SOURCE = `(function () {
@@ -12,13 +10,34 @@ const BOOTSTRAP_SOURCE = `(function () {
       ? g.webkit.messageHandlers.bunmaska
       : null;
 
+  // Throw on what JSON would silently drop or garble (Electron throws on functions too).
+  function unsendable(key, value) {
+    var type = typeof value;
+    if (type === 'object' && value !== null) {
+      type = Object.prototype.toString.call(value).slice(8, -1);
+    }
+    if (
+      type === 'function' ||
+      type === 'symbol' ||
+      type === 'bigint' ||
+      type === 'Map' ||
+      type === 'Set' ||
+      type === 'ArrayBuffer' ||
+      ArrayBuffer.isView(value)
+    ) {
+      throw new TypeError('IPC arguments are JSON-serialized; cannot send a ' + type);
+    }
+    return value;
+  }
+
   function post(envelope) {
+    var json = JSON.stringify(envelope, unsendable);
     if (channel) {
-      channel.postMessage(JSON.stringify(envelope));
+      channel.postMessage(json);
     }
   }
 
-  var nextId = 1;
+  var nextId = Math.floor(Math.random() * 0x1fffffffffff) + 1; // ponytail: random base per document; envelope nonce if replies still cross
   var pending = new Map();
   var listeners = new Map();
 
@@ -32,8 +51,8 @@ const BOOTSTRAP_SOURCE = `(function () {
       var id = nextId;
       nextId += 1;
       return new Promise(function (resolve, reject) {
-        pending.set(id, { resolve: resolve, reject: reject });
         post({ kind: 'invoke', id: id, channel: ch, args: args });
+        pending.set(id, { resolve: resolve, reject: reject });
       });
     },
     on: function (ch, listener) {
@@ -87,13 +106,11 @@ const BOOTSTRAP_SOURCE = `(function () {
         for (var i = 0; i < snapshot.length; i += 1) {
           var record = snapshot[i];
           var current = listeners.get(env.channel) || [];
-          // Skip records removed (by removeListener/removeAllListeners) earlier
-          // in this same dispatch.
+          // Skip records removed earlier in this same dispatch.
           if (current.indexOf(record) === -1) {
             continue;
           }
-          // once-listeners are removed BEFORE firing so a re-entrant dispatch
-          // cannot invoke them a second time.
+          // Remove a once BEFORE firing so a re-entrant dispatch cannot fire it twice.
           if (record.once) {
             current.splice(current.indexOf(record), 1);
           }

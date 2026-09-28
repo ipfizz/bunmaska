@@ -1,42 +1,29 @@
 import { randomBytes } from 'node:crypto';
 import { CString, type Pointer } from 'bun:ffi';
-import type { KeyringBackend } from '../../api/safe-storage';
+import type { KeyringBackend } from '../services';
 import { cstr } from '../cstr';
 import { loadLibsecretFFI, secretSchema } from './libsecret-ffi';
 
-/**
- * Linux libsecret backend for `safeStorage`. The 32-byte key is stored as a
- * lowercase-hex STRING (libsecret passwords are NUL-terminated C strings, so raw
- * bytes are unsafe) in the default login keyring under a fixed zero-attribute
- * schema.
- *
- * The real store/lookup is SYNCHRONOUS (blocking D-Bus) and is gated behind
- * `BUNMASKA_ENABLE_LINUX_KEYRING` — CI never sets it, so the blocking path is
- * unreachable under xvfb (echoing the GIO-read deadlock lesson). Crucially,
- * `isAvailable()` is CHEAP + NON-BLOCKING: it only checks the gate + that the
- * library dlopens; the one blocking keyring round-trip happens lazily inside
- * `getOrCreateKey()` (called once, behind the API's key cache).
- */
+// The key is stored as hex: libsecret passwords are NUL-terminated C strings. Env gate and a
+// non-blocking isAvailable per D036.
+// ponytail: one zero-attribute item is shared by every Bunmaska app; scope it with an 'application' attribute.
+// ponytail: the *_sync calls block the JS thread on a keyring unlock prompt; prefetch async at app ready.
 
 const LABEL = 'Bunmaska safeStorage key';
 
-/** Whether the live keyring path is enabled. CI leaves this unset → backend reports unavailable. */
 const liveKeyringEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_KEYRING'] === '1';
 
-/** Read a transfer-full `gchar*` into a JS string and `secret_password_free` it. */
 const takePassword = (password: Pointer): string => {
   const value = new CString(password).toString();
   loadLibsecretFFI().symbols.secret_password_free(password);
   return value;
 };
 
-/** Look up the stored hex key. Returns null if absent OR on any error. Never throws. */
+/** null when absent or on any error. */
 const lookupHex = (): string | null => {
   const lib = loadLibsecretFFI();
   let result: Pointer | null;
   try {
-    // (schema, cancellable=null, error=null, NULL terminator). A NULL error
-    // out-param means a null return already covers "absent or failed".
     result = lib.symbols.secret_password_lookup_sync(secretSchema(), null, null, null);
   } catch {
     return null;
@@ -44,11 +31,9 @@ const lookupHex = (): string | null => {
   return result === null ? null : takePassword(result);
 };
 
-/** Store the hex key. Returns false on any failure. */
 const storeHex = (hex: string): boolean => {
   const lib = loadLibsecretFFI();
   try {
-    // (schema, collection=null→default, label, password, cancellable=null, error=null, NULL)
     const ok = lib.symbols.secret_password_store_sync(
       secretSchema(),
       null,
@@ -64,7 +49,7 @@ const storeHex = (hex: string): boolean => {
   }
 };
 
-/** Decode a stored hex value to a 32-byte key, or throw if it is malformed (never overwrite). */
+/** Throws on a malformed stored key: overwriting it would orphan every blob encrypted under it. */
 const decodeKey = (hex: string): Buffer => {
   const buf = Buffer.from(hex, 'hex');
   if (buf.length !== 32) {
@@ -76,8 +61,6 @@ const decodeKey = (hex: string): Buffer => {
 };
 
 export const linuxLibsecretBackend: KeyringBackend = {
-  // Cheap + non-blocking: the gate must be on AND the library must dlopen. The
-  // actual keyring round-trip is deferred to getOrCreateKey().
   isAvailable: () => {
     if (!liveKeyringEnabled()) {
       return false;

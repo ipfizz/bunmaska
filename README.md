@@ -93,7 +93,7 @@ Full reference, every flag → **[bunmaska.org/docs/cli](https://bunmaska.org/do
 
 ## What you get
 
-An Electron-shaped API surface - `app`, `BrowserWindow`, `webContents`, `ipcMain`/`ipcRenderer` with context isolation, `Menu`, `dialog`, `clipboard`, `Tray`, `Notification`, `nativeImage`, `safeStorage`, and more - plus an auto-updater and the engine store, all pure `bun:ffi`.
+An Electron-shaped API surface - `app`, `BrowserWindow`, `webContents`, `ipcMain`/`ipcRenderer` with a context bridge, `Menu`, `dialog`, `clipboard`, `Tray`, `Notification`, `nativeImage`, `safeStorage`, and more - plus an auto-updater and the engine store, all pure `bun:ffi`.
 
 The README won't try to be the API reference, because that list only grows. The **full module list, per-platform status, and the exact Electron parity matrix** live where they can stay honest:
 
@@ -133,7 +133,7 @@ The docs site lives in [`website/`](./website); the framework is this repo's roo
 
 ## Status
 
-**Alpha** - `0.1.0-alpha.8`. It genuinely works on macOS, Linux, and Windows (x64), it's on npm, and everything deeper lives at **[bunmaska.org](https://bunmaska.org)**. If it's still 2027 and this file still opens with "alpha," feel free to open an issue titled *"are you OK."*
+**Alpha** - `0.1.0-alpha.9`. It genuinely works on macOS, Linux, and Windows (x64), it's on npm, and everything deeper lives at **[bunmaska.org](https://bunmaska.org)**. If it's still 2027 and this file still opens with "alpha," feel free to open an issue titled *"are you OK."*
 
 ## License
 

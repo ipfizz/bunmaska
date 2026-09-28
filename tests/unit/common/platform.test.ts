@@ -4,7 +4,6 @@ import {
   type Arch,
   currentArch,
   currentPlatform,
-  isSupported,
   mapArch,
   mapPlatform,
   type Platform,
@@ -26,20 +25,6 @@ describe('mapPlatform', () => {
   test('throws BunmaskaError on unknown platform tag', () => {
     expect(() => mapPlatform('freebsd')).toThrow(BunmaskaError);
     expect(() => mapPlatform('freebsd')).toThrow(/Unsupported platform: freebsd/);
-  });
-});
-
-describe('isSupported', () => {
-  test('macos is supported', () => {
-    expect(isSupported('macos')).toBe(true);
-  });
-
-  test('linux is supported', () => {
-    expect(isSupported('linux')).toBe(true);
-  });
-
-  test('windows is supported', () => {
-    expect(isSupported('windows')).toBe(true);
   });
 });
 

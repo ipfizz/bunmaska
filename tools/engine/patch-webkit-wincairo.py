@@ -10,8 +10,7 @@ sys.argv and passes the list bare; 2.53+ uses argparse and --split-by-directory)
 so the Python patch is two-mode and the CMake patch is line-based: it rewrites
 whatever `COMMAND ... generate-serializers.py ...` line carries the inline list.
 
-This is the kind of build-only patch the engine-id's `bunmaska<rev>` field exists
-for; it does not change the produced binary's behaviour. Usage:
+A build-only patch: it does not change the produced binary's behaviour. Usage:
 
     python patch-webkit-wincairo.py <path-to-webkit-checkout>
 
@@ -106,7 +105,7 @@ def main(webkit: Path) -> None:
     cml = webkit / "Source/WebKit/CMakeLists.txt"
     for p in (gen, cml):
         if not p.exists():
-            raise SystemExit(f"FATAL: {p} not found — is this a WebKit checkout?")
+            raise SystemExit(f"FATAL: {p} not found; is this a WebKit checkout?")
     patch_generator(gen)
     patch_cmake(cml)
 

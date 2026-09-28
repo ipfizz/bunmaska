@@ -41,7 +41,9 @@ const readEntry = (bytes: Uint8Array, name: string): Uint8Array => {
       const localExtraLen = u16(bytes, localOffset + 28);
       const dataStart = localOffset + 30 + localNameLen + localExtraLen;
       const data = bytes.subarray(dataStart, dataStart + compSize);
-      return method === 0 ? new Uint8Array(data) : new Uint8Array(inflateRawSync(data));
+      const content = method === 0 ? new Uint8Array(data) : new Uint8Array(inflateRawSync(data));
+      expect(u32(bytes, p + 16)).toBe(Bun.hash.crc32(content) >>> 0);
+      return content;
     }
     p += 46 + nameLen + extraLen + commentLen;
   }
@@ -87,6 +89,14 @@ describe('buildZipArchive', () => {
     ]);
     expect(readEntry(zip, 'My App/My App.exe')).toEqual(exe);
     expect(readEntry(zip, 'My App/engine.id')).toEqual(new Uint8Array([]));
+  });
+
+  test('refuses more entries than a ZIP32 archive can count instead of wrapping', () => {
+    const entries = Array.from({ length: 0x10000 }, (_, i) => ({
+      name: `f${i}`,
+      content: new Uint8Array(),
+    }));
+    expect(() => buildZipArchive(entries)).toThrow(/ZIP64/);
   });
 
   test('marks names UTF-8 (general-purpose bit 11) so non-ASCII paths survive', () => {

@@ -1,11 +1,10 @@
-import { type Pointer, ptr } from 'bun:ffi';
-import { parseAccelerator } from '../../api/accelerator';
-import type { GlobalShortcutBackend } from '../../api/global-shortcut';
+import { CFunction, JSCallback, type Pointer, ptr } from 'bun:ffi';
+import { parseAccelerator } from '../../../common/accelerator';
+import type { GlobalShortcutBackend } from '../services';
 import { cstr } from '../cstr';
 import { loadX11FFI } from './x11-ffi';
 import {
   KEY_PRESS,
-  KEY_PRESS_MASK,
   x11KeysymName,
   x11ModifierMask,
   XEVENT_BUFFER_SIZE,
@@ -16,45 +15,57 @@ import {
   XKEY_STATE_OFFSET,
 } from './x11-keymap';
 
-/**
- * Linux `globalShortcut` backend via Xlib `XGrabKey` (X11 only, BEST-EFFORT).
- *
- * On X11 we open a DEDICATED display connection, grab each accelerator's
- * keycode+modifier on the root window, and poll that connection for `KeyPress`
- * events from {@link pollX11ShortcutsOnce} (wired into the Linux cooperative
- * pump's drain). A fired `KeyPress` is matched back to its registration by
- * keycode+modifier and the JS callback is dispatched.
- *
- * HONEST LIMITS:
- * - WAYLAND IS UNSUPPORTED in v1. `XGrabKey` only governs the X server; under a
- *   Wayland compositor (even via XWayland) a global grab does not see keys routed
- *   to native Wayland clients. True global shortcuts on Wayland require the
- *   `org.freedesktop.portal.GlobalShortcuts` portal — a separate, deferred path.
- * - If `XOpenDisplay` fails (no X server / headless without xvfb), the backend
- *   reports `isSupported() === false` and `register` returns `false` — it does
- *   NOT fake success.
- * - `XGrabKey` here grabs ONLY the exact modifier combo; it does not add the
- *   Lock/NumLock variants, so a shortcut may not fire while CapsLock/NumLock is
- *   on. That refinement is deferred.
- */
+// X11 only: grabs live on a dedicated display that gtk-run-loop polls; Wayland sessions report
+// unsupported. ponytail: Wayland needs the org.freedesktop.portal.GlobalShortcuts portal.
 
-type Registration = {
-  readonly keycode: number;
-  readonly modifiers: number;
-  readonly callback: () => void;
-};
+type Grab = { readonly keycode: number; readonly modifiers: number };
+type Registration = Grab & { readonly callback: () => void };
 
 let display: Pointer | null | undefined;
 let displayFailed = false;
 let rootWindow = 0n;
 const registrations: Registration[] = [];
+const eventBuffer = new Uint8Array(XEVENT_BUFFER_SIZE);
+const eventView = new DataView(eventBuffer.buffer);
+let errorTrap: JSCallback | undefined;
+let grabFailed = false;
 
-/** Open (once) the dedicated X display for grabs, or record that it is unavailable. */
+/**
+ * Record and swallow X errors on the grab display: a BadAccess for a key another client
+ * holds would otherwise reach Xlib's default handler, which exit(1)s the app. Errors on
+ * any other display chain to the previous handler. Never closed (Xlib keeps the pointer).
+ */
+const installErrorTrap = (x11: ReturnType<typeof loadX11FFI>): void => {
+  let previous: CallableFunction | undefined;
+  errorTrap = new JSCallback(
+    (dpy: Pointer | null, event: Pointer | null): number => {
+      if (dpy === display) {
+        grabFailed = true;
+        return 0;
+      }
+      return previous === undefined ? 0 : Number(previous(dpy, event));
+    },
+    { args: ['ptr', 'ptr'], returns: 'i32' },
+  );
+  const prior = x11.symbols.XSetErrorHandler(errorTrap.ptr);
+  if (prior !== null) {
+    previous = CFunction({ ptr: prior, args: ['ptr', 'ptr'], returns: 'i32' });
+  }
+};
+
+/** XWayland root grabs never see keys routed to native Wayland clients, so Wayland is unsupported. */
+export const isWaylandSession = (env: Readonly<Record<string, string | undefined>>): boolean =>
+  Boolean(env['WAYLAND_DISPLAY']) || env['XDG_SESSION_TYPE'] === 'wayland';
+
 const ensureDisplay = (): Pointer | null => {
   if (display !== undefined) {
     return display;
   }
   if (displayFailed) {
+    return null;
+  }
+  if (isWaylandSession(process.env)) {
+    displayFailed = true;
     return null;
   }
   try {
@@ -65,8 +76,8 @@ const ensureDisplay = (): Pointer | null => {
       return null;
     }
     display = dpy;
+    installErrorTrap(x11);
     rootWindow = x11.symbols.XDefaultRootWindow(dpy);
-    x11.symbols.XSelectInput(dpy, rootWindow, KEY_PRESS_MASK);
     return dpy;
   } catch {
     displayFailed = true;
@@ -74,115 +85,94 @@ const ensureDisplay = (): Pointer | null => {
   }
 };
 
-const register = (accelerator: string, callback: () => void): boolean => {
+/** The keycode+modifier combo `accelerator` grabs, or undefined when X cannot express it. */
+const resolveGrab = (accelerator: string, dpy: Pointer): Grab | undefined => {
   const parsed = parseAccelerator(accelerator, 'linux');
-  if (parsed === undefined) {
-    return false;
-  }
-  const keysymName = x11KeysymName(parsed.key);
-  if (keysymName === undefined) {
-    return false;
-  }
-  const dpy = ensureDisplay();
-  if (dpy === null) {
-    return false;
+  const keysymName = parsed === undefined ? undefined : x11KeysymName(parsed.key);
+  if (parsed === undefined || keysymName === undefined) {
+    return undefined;
   }
   const x11 = loadX11FFI();
   const keysym = x11.symbols.XStringToKeysym(cstr(keysymName));
-  if (keysym === 0n) {
-    return false;
-  }
-  const keycode = x11.symbols.XKeysymToKeycode(dpy, keysym);
-  if (keycode === 0) {
-    return false;
-  }
-  const modifiers = x11ModifierMask(parsed);
-  // owner_events FALSE(0), pointer_mode/keyboard_mode GrabModeAsync(1).
-  for (const lockBits of GRAB_VARIANTS) {
-    x11.symbols.XGrabKey(dpy, keycode, modifiers | lockBits, rootWindow, 0, 1, 1);
-  }
-  x11.symbols.XFlush(dpy);
-  registrations.push({ keycode, modifiers, callback });
-  return true;
+  const keycode = keysym === 0n ? 0 : x11.symbols.XKeysymToKeycode(dpy, keysym);
+  return keycode === 0 ? undefined : { keycode, modifiers: x11ModifierMask(parsed) };
 };
 
-const matches = (reg: Registration, accelerator: string): boolean => {
-  const parsed = parseAccelerator(accelerator, 'linux');
-  if (parsed === undefined) {
-    return false;
+const findRegistration = (grab: Grab): number =>
+  registrations.findIndex((r) => r.keycode === grab.keycode && r.modifiers === grab.modifiers);
+
+const ungrab = (dpy: Pointer, grab: Grab): void => {
+  const x11 = loadX11FFI();
+  for (const lockBits of GRAB_VARIANTS) {
+    x11.symbols.XUngrabKey(dpy, grab.keycode, grab.modifiers | lockBits, rootWindow);
   }
-  const dpy = display;
-  if (dpy === null || dpy === undefined) {
-    return false;
-  }
-  const keysymName = x11KeysymName(parsed.key);
-  if (keysymName === undefined) {
+};
+
+const register = (accelerator: string, callback: () => void): boolean => {
+  const dpy = ensureDisplay();
+  const grab = dpy === null ? undefined : resolveGrab(accelerator, dpy);
+  if (dpy === null || grab === undefined || findRegistration(grab) !== -1) {
     return false;
   }
   const x11 = loadX11FFI();
-  const keysym = x11.symbols.XStringToKeysym(cstr(keysymName));
-  const keycode = x11.symbols.XKeysymToKeycode(dpy, keysym);
-  return reg.keycode === keycode && reg.modifiers === x11ModifierMask(parsed);
+  grabFailed = false;
+  // owner_events FALSE(0), pointer_mode/keyboard_mode GrabModeAsync(1).
+  for (const lockBits of GRAB_VARIANTS) {
+    x11.symbols.XGrabKey(dpy, grab.keycode, grab.modifiers | lockBits, rootWindow, 0, 1, 1);
+  }
+  x11.symbols.XSync(dpy, 0);
+  if (grabFailed) {
+    ungrab(dpy, grab);
+    x11.symbols.XSync(dpy, 0);
+    return false;
+  }
+  registrations.push({ ...grab, callback });
+  return true;
 };
 
 const unregister = (accelerator: string): void => {
   const dpy = display;
-  if (dpy === null || dpy === undefined) {
+  const grab = dpy === null || dpy === undefined ? undefined : resolveGrab(accelerator, dpy);
+  if (dpy === null || dpy === undefined || grab === undefined) {
     return;
   }
-  const x11 = loadX11FFI();
-  for (let i = registrations.length - 1; i >= 0; i -= 1) {
-    const reg = registrations[i];
-    if (reg !== undefined && matches(reg, accelerator)) {
-      for (const lockBits of GRAB_VARIANTS) {
-        x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers | lockBits, rootWindow);
-      }
-      registrations.splice(i, 1);
-    }
+  const index = findRegistration(grab);
+  if (index === -1) {
+    return;
   }
-  x11.symbols.XFlush(dpy);
+  registrations.splice(index, 1);
+  ungrab(dpy, grab);
+  loadX11FFI().symbols.XFlush(dpy);
 };
 
 const unregisterAll = (): void => {
   const dpy = display;
-  if (dpy === null || dpy === undefined) {
-    registrations.length = 0;
-    return;
-  }
-  const x11 = loadX11FFI();
-  for (const reg of registrations) {
-    for (const lockBits of GRAB_VARIANTS) {
-      x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers | lockBits, rootWindow);
+  if (dpy !== null && dpy !== undefined) {
+    for (const reg of registrations) {
+      ungrab(dpy, reg);
     }
+    loadX11FFI().symbols.XFlush(dpy);
   }
   registrations.length = 0;
-  x11.symbols.XFlush(dpy);
 };
 
-/**
- * Drain pending `KeyPress` events from the dedicated grab connection and fire the
- * matching callbacks. Wired into the Linux cooperative pump so registered hot
- * keys dispatch without blocking. No-op when no display is open.
- */
+/** Dispatch pending grab `KeyPress` events; called from the gtk-run-loop drain. */
 export const pollX11ShortcutsOnce = (): void => {
   const dpy = display;
   if (dpy === null || dpy === undefined) {
     return;
   }
   const x11 = loadX11FFI();
-  const buffer = new Uint8Array(XEVENT_BUFFER_SIZE);
-  const view = new DataView(buffer.buffer);
   let budget = 64;
   while (budget > 0 && x11.symbols.XPending(dpy) > 0) {
     budget -= 1;
-    x11.symbols.XNextEvent(dpy, ptr(buffer));
-    if (view.getInt32(XEVENT_TYPE_OFFSET, true) !== KEY_PRESS) {
+    x11.symbols.XNextEvent(dpy, ptr(eventBuffer));
+    if (eventView.getInt32(XEVENT_TYPE_OFFSET, true) !== KEY_PRESS) {
       continue;
     }
-    const keycode = view.getUint32(XKEY_KEYCODE_OFFSET, true);
-    const state = view.getUint32(XKEY_STATE_OFFSET, true);
+    const keycode = eventView.getUint32(XKEY_KEYCODE_OFFSET, true);
+    const state = eventView.getUint32(XKEY_STATE_OFFSET, true);
     for (const reg of registrations) {
-      // Keycode alone once dispatched here, so Ctrl+K fired Ctrl+Shift+K too.
       if (reg.keycode === keycode && x11StateMatches(state, reg.modifiers)) {
         reg.callback();
       }
@@ -190,10 +180,8 @@ export const pollX11ShortcutsOnce = (): void => {
   }
 };
 
-/** Linux is supported only when a real X display connection can be opened. */
 const isSupported = (): boolean => ensureDisplay() !== null;
 
-/** The Linux X11 global-shortcut backend (X11 only; Wayland deferred). */
 export const linuxGlobalShortcutBackend: GlobalShortcutBackend = {
   isSupported,
   register,

@@ -1,13 +1,9 @@
 /**
- * Renderer-side `webFrame`, running in the page's isolated world (which shares the
- * DOM, so `insertCSS`/zoom mutations affect the visible page).
- *
  * LIMITATIONS:
- *  - Zoom is WebKit's non-standard CSS `zoom` on the document element — layout
+ *  - Zoom is WebKit's non-standard CSS `zoom` on the document element: layout
  *    zoom only, NOT native WKWebView magnification or WebKitGTK `zoom_level`.
- *  - `executeJavaScript` evaluates in the caller's CURRENT world via indirect
- *    global `eval` (matching Electron). It is NOT the main-side
- *    `WebContents.executeJavaScript`.
+ *  - `executeJavaScript` evaluates in the CALLER's world (the preload's isolated
+ *    world), NOT the page as in Electron, so exposing it hands the page that world.
  */
 
 /** Minimal element surface webFrame touches (no DOM lib in this project). */
@@ -16,7 +12,7 @@ export type WebFrameElement = {
   readonly style: { zoom: string };
   setAttribute(name: string, value: string): void;
   appendChild(child: WebFrameElement): void;
-  removeChild(child: WebFrameElement): void;
+  remove(): void;
 };
 
 /** Minimal `document` surface webFrame touches. */
@@ -51,10 +47,7 @@ const resolveDocument = (override?: WebFrameDocument): WebFrameDocument | undefi
 
 const resolveGlobal = (override?: object): object => override ?? globalThis;
 
-/**
- * Create the `webFrame` object, resolving the page's `document` and global `eval`
- * from the current world unless a {@link WebFrameScope} overrides them.
- */
+/** Create `webFrame` over the current world's `document` and `eval`, or `scope`'s. */
 export const createWebFrame = (scope?: WebFrameScope): WebFrame => {
   const inserted = new Map<string, WebFrameElement>();
   let counter = 0;
@@ -95,8 +88,7 @@ export const createWebFrame = (scope?: WebFrameScope): WebFrame => {
         return;
       }
       inserted.delete(key);
-      const mount = getDocument();
-      (mount.head ?? mount.documentElement).removeChild(style);
+      style.remove();
     },
 
     setZoomFactor(factor) {

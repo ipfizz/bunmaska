@@ -1,12 +1,4 @@
-/**
- * Shared preload bundling, used by the runtime and by `bunmaska build`.
- *
- * A preload is injected as a CLASSIC script (a `WKUserScript` and its WebKitGTK /
- * WinCairo equivalents have no module mode), so a top-level `import` throws a
- * `SyntaxError` that aborts the whole preload — silently taking `window.api` with
- * it. The fix is to bundle the preload into a single self-contained IIFE, inlining
- * its imports, before it is injected or shipped.
- */
+/** Bundles module-syntax preloads to a classic IIFE for the runtime and `bunmaska build` (D046). */
 
 import { readFileSync } from 'node:fs';
 import { InvalidArgumentError } from './errors';
@@ -23,9 +15,9 @@ export const readPreloadSource = (absolutePath: string): string => {
 };
 
 /**
- * Whether `source` uses top-level ES-module syntax a classic script cannot run.
- * Deliberately conservative: it must never miss a real top-level `import` (the
- * breaking case); a false positive only costs a redundant bundle pass.
+ * Whether `source` uses top-level ES-module syntax a classic script cannot run. It must
+ * never miss a real `import`; a false positive costs a redundant bundle pass, except that
+ * Bun's IIFE never runs a CommonJS (`require`/`module.exports`) entry's body.
  */
 export const usesModuleSyntax = (source: string): boolean =>
   /^[ \t]*(?:import|export)\b/m.test(source);
@@ -38,15 +30,13 @@ export type PreloadBundler = {
   readonly bundle: (absolutePath: string) => string;
 };
 
-/**
- * The Bun executable when running under the Bun CLI, where the bundler is
- * reachable; `undefined` inside a compiled app, whose `process.execPath` is the
- * app binary and must never be re-spawned as a bundler.
- */
-const bunCliPath = (): string | undefined => {
-  const exe = process.execPath;
-  return /(?:^|[\\/])bun(?:-[^\\/]*)?(?:\.exe)?$/i.test(exe) ? exe : undefined;
-};
+/** Whether `execPath` is the Bun CLI; a compiled app's binary (even one named `bun-*`) is not. */
+export const isBunCli = (execPath: string): boolean =>
+  /(?:^|[\\/])bunx?(?:-debug|-profile)?(?:\.exe)?$/i.test(execPath);
+
+/** The Bun CLI, where the bundler is reachable; a compiled app must never re-spawn itself as one. */
+const bunCliPath = (): string | undefined =>
+  isBunCli(process.execPath) ? process.execPath : undefined;
 
 /** Production bundler: shells out to Bun's bundler. Available only under the Bun CLI. */
 export const defaultPreloadBundler: PreloadBundler = {

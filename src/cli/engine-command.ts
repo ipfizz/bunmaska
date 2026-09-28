@@ -1,5 +1,10 @@
 import { existsSync, statSync } from 'node:fs';
-import { compareEngineIds, isSystemEngine, parseEngineId } from '../common/engine-id';
+import {
+  compareEngineIds,
+  type EngineRef,
+  isSystemEngine,
+  parseEngineId,
+} from '../common/engine-id';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import type { EngineSubcommand } from './parse-args';
@@ -18,14 +23,12 @@ import {
   isInstalled,
   listInstalled,
   readLinks,
-  type StoreEnv,
   verifyEngine,
-} from './engine-store';
+} from '../common/engine-store';
 
 export type EngineCommandDeps = {
   /** The engine store root (the `webkit/` dir). */
   readonly root: string;
-  readonly env: StoreEnv;
   readonly out: (text: string) => void;
   readonly err: (text: string) => void;
   /** Read a project's validated config (empty `{}` when none). */
@@ -33,7 +36,12 @@ export type EngineCommandDeps = {
   /** Defaults to {@link installFromDir}. */
   readonly installDir?: (root: string, sourceDir: string) => Promise<InstallResult>;
   /** Defaults to {@link installFromUrl} over the real fetch. */
-  readonly installUrl?: (root: string, url: string, publicKeyPem: string) => Promise<InstallResult>;
+  readonly installUrl?: (
+    root: string,
+    url: string,
+    publicKeyPem: string,
+    expectedId: string | undefined,
+  ) => Promise<InstallResult>;
   /** Defaults to {@link fetchEngineIndex} over the real fetch. */
   readonly fetchIndex?: (feedBase: string) => Promise<EngineIndexEntry[]>;
 };
@@ -51,10 +59,29 @@ const sortIds = (ids: readonly string[]): string[] =>
 /** The pinned engine declared by a project's config (defaults to the system sentinel). */
 const configPin = (config: BunmaskaConfig): string => config.engine?.webkit ?? 'system';
 
+type PinState = 'system' | 'bare' | 'foreign' | 'installed' | 'missing';
+
+/** How this machine treats a pin; `foreign` = built for another os/arch, never loaded here. */
+const pinState = (pin: string, root: string): PinState => {
+  if (isSystemEngine(pin)) {
+    return 'system';
+  }
+  let ref: EngineRef;
+  try {
+    ref = parseEngineId(pin);
+  } catch {
+    return 'bare';
+  }
+  if (ref.os !== currentPlatform() || ref.arch !== currentArch()) {
+    return 'foreign';
+  }
+  return isInstalled(root, pin) ? 'installed' : 'missing';
+};
+
 const runList = (deps: EngineCommandDeps): number => {
   const installed = listInstalled(deps.root);
   if (installed.length === 0) {
-    deps.out('No engines installed — apps use the system WebKit by default.');
+    deps.out('No engines installed: apps use the system WebKit by default.');
     return 0;
   }
   const refs = new Map<string, number>();
@@ -103,18 +130,22 @@ const runAvailable = async (deps: EngineCommandDeps): Promise<number> => {
 const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Promise<number> => {
   const config = await deps.readConfig(target ?? '.');
   const pin = configPin(config);
-  if (isSystemEngine(pin)) {
-    deps.out('system — uses the OS WebView (no pinned engine)');
-    return 0;
-  }
-  try {
-    parseEngineId(pin);
-    const state = isInstalled(deps.root, pin)
-      ? 'installed'
-      : 'NOT installed — run `bunmaska engine install`';
-    deps.out(`${pin}  [${state}]`);
-  } catch {
-    deps.out(`${pin}  (bare upstream — resolved to a full engine-id at build time)`);
+  switch (pinState(pin, deps.root)) {
+    case 'system':
+      deps.out('system: uses the OS WebView (no pinned engine)');
+      break;
+    case 'bare':
+      deps.out(`${pin}  (bare version, not resolved yet: builds bake \`system\`; pin a full id)`);
+      break;
+    case 'foreign':
+      deps.out(`${pin}  [built for another os/arch, not used on this machine]`);
+      break;
+    case 'installed':
+      deps.out(`${pin}  [installed]`);
+      break;
+    case 'missing':
+      deps.out(`${pin}  [NOT installed: run \`bunmaska engine install\`]`);
+      break;
   }
   return 0;
 };
@@ -137,9 +168,8 @@ const isBareEngineId = (source: string): boolean => {
 
 const runInstall = async (source: string, deps: EngineCommandDeps): Promise<number> => {
   const isUrl = /^https?:\/\//.test(source);
-  // A local, already-extracted engine directory wins over feed routing — a dir
-  // whose name happens to be a valid engine-id must not be shadowed by the feed,
-  // and a local install never reads (or is broken by) bunmaska.config.
+  // A local dir wins over feed routing (even one named like an engine-id), and a
+  // local install never reads, or is broken by, bunmaska.config.
   if (!isUrl && existsSync(source) && statSync(source).isDirectory()) {
     const install = deps.installDir ?? installFromDir;
     deps.out(installedMessage(await install(deps.root, source)));
@@ -158,37 +188,23 @@ const runInstall = async (source: string, deps: EngineCommandDeps): Promise<numb
   }
   const config = await deps.readConfig('.');
   const url = isUrl ? source : engineFeedArtifactUrl(source, config.engine?.feed?.url ?? undefined);
-  const publicKey = resolveEnginePublicKey({
-    feedPublicKey: config.engine?.feed?.publicKey,
-    env: deps.env,
-  });
-  if (publicKey === undefined) {
-    deps.err(
-      'bunmaska engine install: no signing key to verify this engine. For a self-hosted feed, ' +
-        'set engine.feed.publicKey in bunmaska.config. Local engine directories install without a feed.',
-    );
-    return 1;
-  }
+  const publicKey = resolveEnginePublicKey({ feedPublicKey: config.engine?.feed?.publicKey });
   const installUrl =
     deps.installUrl ??
-    ((root, u, key) => installFromUrl(root, u, key, { fetch: defaultRemoteFetch }));
-  try {
-    deps.out(installedMessage(await installUrl(deps.root, url, publicKey)));
-    return 0;
-  } catch (error) {
-    deps.err(`bunmaska engine install: ${error instanceof Error ? error.message : String(error)}`);
-    return 1;
-  }
+    ((root, u, key, expectedId) =>
+      installFromUrl(root, u, key, {
+        fetch: defaultRemoteFetch,
+        ...(expectedId === undefined ? {} : { expectedId }),
+      }));
+  deps.out(
+    installedMessage(await installUrl(deps.root, url, publicKey, isUrl ? undefined : source)),
+  );
+  return 0;
 };
 
 const runUse = (id: string, forDir: string | undefined, deps: EngineCommandDeps): number => {
   if (!isSystemEngine(id)) {
-    try {
-      parseEngineId(id);
-    } catch (error) {
-      deps.err(`bunmaska engine use: ${error instanceof Error ? error.message : String(error)}`);
-      return 1;
-    }
+    parseEngineId(id);
   }
   const where = forDir ?? '.';
   deps.out(
@@ -210,21 +226,20 @@ const runPrune = async (
   force: boolean,
   deps: EngineCommandDeps,
 ): Promise<number> => {
-  // Refcounts are populated by apps at launch. Before any app has registered,
-  // every engine looks unreferenced — so a plain prune would wipe the whole
-  // store. Refuse that case unless explicitly forced (or just previewing).
+  // Apps register links at launch, so before any has, every engine looks
+  // unreferenced and a plain prune would wipe the whole store.
   const installed = listInstalled(deps.root);
   if (!dryRun && !force && installed.length > 0 && readLinks(deps.root).length === 0) {
     deps.out(
       `Refusing to prune: no app has registered a dependency yet, so all ${installed.length} ` +
-        'installed engine(s) look unreferenced. Apps register on launch — re-run with --force ' +
+        'installed engine(s) look unreferenced. Apps register on launch; re-run with --force ' +
         'to prune anyway, or --dry-run to preview.',
     );
     return 0;
   }
   const result = await gc(deps.root, { dryRun });
   if (result.removed.length === 0) {
-    deps.out('Nothing to prune — every installed engine is still referenced.');
+    deps.out('Nothing to prune: every installed engine is still referenced.');
   } else {
     deps.out(
       `${dryRun ? 'Would remove' : 'Removed'} ${result.removed.length} unreferenced engine(s):`,
@@ -238,7 +253,7 @@ const runPrune = async (
   }
   deps.out(`Kept ${result.kept.length} referenced engine(s).`);
   if (dryRun) {
-    deps.out('(dry run — nothing was deleted)');
+    deps.out('(dry run: nothing was deleted)');
   }
   return 0;
 };
@@ -256,11 +271,7 @@ const runVerify = (id: string, deps: EngineCommandDeps): number => {
   return 1;
 };
 
-/** Run a `bunmaska engine <sub>` command and resolve to the process exit code. */
-export const runEngine = async (
-  sub: EngineSubcommand,
-  deps: EngineCommandDeps,
-): Promise<number> => {
+const dispatch = async (sub: EngineSubcommand, deps: EngineCommandDeps): Promise<number> => {
   switch (sub.action) {
     case 'list':
       return runList(deps);
@@ -279,46 +290,69 @@ export const runEngine = async (
   }
 };
 
-/**
- * Exits non-zero only when the project pins a full engine-id that is not
- * installed.
- */
-export const runDoctor = async (
-  target: string | undefined,
+/** Print a failure as one `bunmaska <label>: <message>` line; resolves to exit code 1. */
+const failed = (label: string, deps: EngineCommandDeps, error: unknown): number => {
+  deps.err(`bunmaska ${label}: ${error instanceof Error ? error.message : String(error)}`);
+  return 1;
+};
+
+/** Run a `bunmaska engine <sub>` command and resolve to the process exit code. */
+export const runEngine = async (
+  sub: EngineSubcommand,
   deps: EngineCommandDeps,
 ): Promise<number> => {
+  try {
+    return await dispatch(sub, deps);
+  } catch (error) {
+    return failed(`engine ${sub.action}`, deps, error);
+  }
+};
+
+const doctor = async (target: string | undefined, deps: EngineCommandDeps): Promise<number> => {
   const installed = listInstalled(deps.root);
   deps.out('Bunmaska doctor');
   deps.out(`  bun:       ${Bun.version}`);
   deps.out(`  platform:  ${currentPlatform()}-${currentArch()}`);
   deps.out(`  store:     ${deps.root}`);
   deps.out(`  engines:   ${installed.length} installed`);
-  deps.out(
-    currentPlatform() === 'macos'
-      ? '  webkit:    system WKWebView (pinning deferred on macOS)'
-      : '  webkit:    WebKitGTK 6.0 (system soname libwebkitgtk-6.0.so.4)',
-  );
+  const webkit = {
+    macos: 'system WKWebView (pinning deferred on macOS)',
+    linux: 'WebKitGTK 6.0 (system soname libwebkitgtk-6.0.so.4)',
+    windows: 'WinCairo WebKit (no system WebKit: bundle one or pin an installed engine)',
+  }[currentPlatform()];
+  deps.out(`  webkit:    ${webkit}`);
 
   const config = await deps.readConfig(target ?? '.');
   const pin = configPin(config);
-  if (isSystemEngine(pin)) {
-    deps.out('  project:   system WebKit (no pin)');
-    return 0;
+  switch (pinState(pin, deps.root)) {
+    case 'system':
+      deps.out('  project:   system WebKit (no pin)');
+      return 0;
+    case 'bare':
+      deps.out(`  project:   pins ${pin} (bare version, not resolved yet: builds bake \`system\`)`);
+      return 0;
+    case 'foreign':
+      deps.out(`  project:   pins ${pin} (built for another os/arch, not used on this machine)`);
+      return 0;
+    case 'installed':
+      deps.out(`  project:   pins ${pin} [installed ✓]`);
+      return 0;
+    case 'missing':
+      deps.err(
+        `  project:   pins ${pin} [NOT installed ✗]: run \`bunmaska engine install ${pin}\``,
+      );
+      return 1;
   }
-  let isFullId = true;
+};
+
+/** Exits 1 when the project pins an uninstalled engine for this machine, or doctor fails. */
+export const runDoctor = async (
+  target: string | undefined,
+  deps: EngineCommandDeps,
+): Promise<number> => {
   try {
-    parseEngineId(pin);
-  } catch {
-    isFullId = false;
+    return await doctor(target, deps);
+  } catch (error) {
+    return failed('doctor', deps, error);
   }
-  if (!isFullId) {
-    deps.out(`  project:   pins ${pin} (bare upstream, resolved at build time)`);
-    return 0;
-  }
-  if (isInstalled(deps.root, pin)) {
-    deps.out(`  project:   pins ${pin} [installed ✓]`);
-    return 0;
-  }
-  deps.err(`  project:   pins ${pin} [NOT installed ✗] — run \`bunmaska engine install ${pin}\``);
-  return 1;
 };

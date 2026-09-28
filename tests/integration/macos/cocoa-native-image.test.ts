@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { toArrayBuffer } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
 import { nativeImage, setNativeImageBackendForTesting } from '../../../src/main/api/native-image';
+import { cocoaNativeImageBackend } from '../../../src/main/platform/macos/cocoa-native-image';
+import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
+import { ptrIn } from '../../../src/main/platform/macos/objc';
 import {
   removeTinyPngFile,
   TINY_PNG_HEIGHT,
@@ -8,6 +12,14 @@ import {
   makeTinyPng,
   writeTinyPngFile,
 } from '../../fixtures/tiny-png';
+
+/** 1x2 RGBA PNG: an opaque red pixel above an opaque blue one. */
+const RED_OVER_BLUE_1X2_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVR4nGP4z8Dwn4GB4f9/ABH4A/3f152fAAAAAElFTkSuQmCC';
+
+/** 1x1 8-bit gray+alpha PNG; AppKit's PNG encoder fails on such a rep directly. */
+const GRAY_ALPHA_1X1_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 /**
  * Real `nativeImage` on a macOS host, driving the live `NSBitmapImageRep`/`NSData`
@@ -58,6 +70,12 @@ if (currentPlatform() === 'macos') {
       expect(png[3]).toBe(0x47);
     });
 
+    test('toPNG encodes a gray+alpha source (PNG color type 4)', () => {
+      const image = nativeImage.createFromDataURL(`data:image/png;base64,${GRAY_ALPHA_1X1_PNG}`);
+      expect(image.isEmpty()).toBe(false);
+      expect(image.toPNG()[0]).toBe(0x89);
+    });
+
     test('toJPEG returns non-empty bytes starting with the JPEG SOI marker', () => {
       const jpeg = nativeImage.createFromPath(fixture).toJPEG(80);
       expect(jpeg.length > 0).toBe(true);
@@ -102,10 +120,28 @@ if (currentPlatform() === 'macos') {
       expect(img.toPNG().length).toBeGreaterThan(0);
     });
 
+    test('crop measures y from the top edge', () => {
+      const source = cocoaNativeImageBackend.decode(Buffer.from(RED_OVER_BLUE_1X2_PNG, 'base64'));
+      const top = cocoaNativeImageBackend.crop(source.handle, 0, 0, 1, 1);
+      const pixels = cocoa().msgSend(top.handle, cocoa().selectors.get('bitmapData'));
+      expect([...new Uint8Array(toArrayBuffer(ptrIn(pixels), 0, 4))]).toEqual([255, 0, 0, 255]);
+    });
+
     test('resize/crop of an empty image stay empty', () => {
       const empty = nativeImage.createFromPath('/no/such.png');
       expect(empty.resize({ width: 4, height: 4 }).isEmpty()).toBe(true);
       expect(empty.crop({ x: 0, y: 0, width: 1, height: 1 }).isEmpty()).toBe(true);
+    });
+
+    test('release drops the reference decode returned', () => {
+      const rt = cocoa();
+      const { handle } = cocoaNativeImageBackend.decode(makeTinyPng());
+      const retainCount = (): bigint => rt.msgSend(handle, rt.selectors.get('retainCount'));
+      rt.msgSend(handle, rt.selectors.get('retain')); // keeps the rep alive to count
+      const held = retainCount();
+      cocoaNativeImageBackend.release?.(handle);
+      expect(retainCount()).toBe(held - 1n);
+      rt.msgSend(handle, rt.selectors.get('release'));
     });
   });
 }

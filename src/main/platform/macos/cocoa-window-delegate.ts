@@ -3,29 +3,13 @@ import { defineObjcClass } from './cocoa-runtime-class';
 import type { WindowEventType } from '../native';
 import type { Handle } from './objc';
 
-/**
- * Bridges `NSWindowDelegate` notifications to JS.
- *
- * The class is defined once at runtime (D026) with one instance per window; each
- * instance routes its callbacks by keying on the `self` handle given to the IMP.
- *
- * The IMP `JSCallback`s are retained for the process lifetime by
- * {@link defineObjcClass} (the runtime keeps the class forever), so they are
- * NEVER closed inside their own invocation — matching the JSCallback-lifetime
- * discipline of `cocoa-navigation-delegate.ts` / `gtk-signals.ts`.
- *
- * CLOSE PATH (the use-after-free fix): `windowShouldClose:` consults the JS
- * veto (returning 0 to keep the window open); `windowWillClose:` runs the
- * window's teardown on EVERY close path — title-bar red button, programmatic
- * `-close`, and `app.quit()` — so a post-close `executeJavaScript` can never
- * touch a freed `WKWebView`.
- */
+/** `NSWindowDelegate` bridge (D026): one instance per window, routed by the IMP's `self`. */
 
 /** The per-window JS handlers an `NSWindowDelegate` routes notifications to. */
 export type WindowDelegateHandlers = {
   /** Return `true` to VETO the close (windowShouldClose: returns NO). */
   readonly shouldClose: () => boolean;
-  /** Run AFTER AppKit has committed to closing (windowWillClose:). */
+  /** Runs on every close path once AppKit has committed (windowWillClose:). */
   readonly willClose: () => void;
   /** A non-preventable lifecycle event fired. */
   readonly event: (type: WindowEventType) => void;
@@ -35,11 +19,7 @@ const registry = new Map<Handle, WindowDelegateHandlers>();
 
 let delegateClass: Handle | undefined;
 
-/**
- * Map of `NSWindowDelegate` notification selectors to the lifecycle event they
- * surface. `windowShouldClose:`/`windowWillClose:` are handled separately
- * because they are preventable / teardown-bearing, not plain events.
- */
+/** Plain notifications; the preventable close pair is handled separately below. */
 const NOTIFICATION_EVENTS: ReadonlyArray<readonly [selector: string, type: WindowEventType]> = [
   ['windowDidBecomeKey:', 'focus'],
   ['windowDidResignKey:', 'blur'],
@@ -54,7 +34,6 @@ const ensureDelegateClass = (): Handle => {
     return delegateClass;
   }
   delegateClass = defineObjcClass('BunmaskaWindowDelegate', 'NSObject', [
-    // windowShouldClose: returns a BOOL — return 0 (NO) to veto, 1 (YES) to allow.
     {
       selector: 'windowShouldClose:',
       typeEncoding: 'c@:@',
@@ -65,8 +44,7 @@ const ensureDelegateClass = (): Handle => {
         if (handlers === undefined) {
           return 1;
         }
-        // shouldClose() returns true to VETO; windowShouldClose: returns NO(0) to
-        // veto. Invert.
+        // Inverted: shouldClose() is true to veto, the BOOL is NO (0) to veto.
         return handlers.shouldClose() ? 0 : 1;
       },
     },
@@ -97,11 +75,7 @@ export type WindowDelegate = {
   readonly destroy: () => void;
 };
 
-/**
- * Create an `NSWindowDelegate` instance routing notifications to `handlers`.
- * Set it as the window's delegate via `setDelegate:`. The instance is retained
- * by the registry for the window's lifetime.
- */
+/** Create a delegate routing to `handlers`; the instance is owned +1 until `destroy()`. */
 export const createWindowDelegate = (handlers: WindowDelegateHandlers): WindowDelegate => {
   const rt = cocoa();
   const cls = ensureDelegateClass();

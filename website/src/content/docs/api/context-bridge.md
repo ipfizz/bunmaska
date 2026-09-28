@@ -4,7 +4,7 @@ description: "Renderer-side API for exposing a safe, async-only bridge from an i
 order: 6
 ---
 
-Create a safe bridge from an isolated preload world into the page's main world. In Bunmaska the preload (and this `contextBridge`) run in a dedicated isolated JS world - `WKContentWorld 'BunmaskaPreload'` on macOS, the `BunmaskaPreload` named world on Linux - so the page cannot see preload globals directly. `exposeInMainWorld` bridges across that boundary using a shared-`document` `CustomEvent` channel, materialising `window[apiKey]` in the page.
+Create a safe bridge from an isolated preload world into the page's main world. In Bunmaska the preload (and this `contextBridge`) run in a dedicated isolated JS world - `WKContentWorld 'BunmaskaPreload'` on macOS, the `BunmaskaPreload` named world on Linux - in each window's top frame only, so the page cannot see preload globals directly. `exposeInMainWorld` bridges across that boundary using a shared-`document` `CustomEvent` channel, materialising `window[apiKey]` in the page.
 > **Windows caveat:** on Windows (WinCairo) there is no isolated-world API yet, so the bridge runs in the **page world** - the isolation guarantee is weaker than on macOS/Linux. Don't rely on world isolation as a security boundary on Windows; see the [parity page](/docs/migrating/parity).
 
 Process: Renderer (preload)
@@ -32,14 +32,14 @@ window.app.version;      // '1.0.0' (frozen)
 ### `contextBridge.exposeInMainWorld(apiKey, api)`
 
 - `apiKey` string - The key to inject the API onto `window` with. The API is accessible on `window[apiKey]`.
-- `api` Record<string, unknown> - An object whose values are functions or cloneable data.
+- `api` Record<string, unknown> - An object whose own top-level values are functions or cloneable data. Anything else (a non-object `api`, a function nested below the top level, a key you already exposed, a member named `__proto__` / `constructor` / `prototype`) throws a `BunmaskaError` at expose time; an inherited function is never callable.
 
 Installs a cross-world host (lazily, on first call) and announces a page-world stub at `window[apiKey]`. For each entry in `api`:
 
 - **Function values** become async proxies. Calling `window[apiKey].method(...args)` dispatches a request event the isolated host answers, and returns a `Promise` that resolves with the result (or rejects with an `Error`). Arguments and the return value cross via structured clone, so you can pass strings, numbers, booleans, arrays, plain objects, and other cloneable types - but **not** functions, callbacks, or live object references. Even a synchronous-looking handler is async on the page side.
-- **Non-function values** are deep-cloned and deep-frozen into the page object once, at expose time. Later mutations on the isolated side are **not** reflected back to the page.
+- **Non-function values** are deep-cloned and deep-frozen into the page object once, at expose time (typed arrays and cycles included). Later mutations on the isolated side are **not** reflected back to the page.
 
-Calls have a 30-second timeout: if the isolated host never replies, the page-side `Promise` rejects with a timeout error. Calling this outside the Bunmaska isolated preload world (where no cross-world channel exists) throws a `BunmaskaError`.
+Calls have no timeout, as in Electron: a handler that never settles never replies. A call whose arguments are not structured-cloneable rejects immediately, and a page that forges a call to a method you never exposed gets a rejection, not your code. Calling this outside the Bunmaska isolated preload world (where no cross-world channel exists) throws a `BunmaskaError`.
 
 This is the only method on the module - and unlike Electron's, it is genuinely the whole surface.
 
@@ -55,7 +55,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('note:save', note),
 
   // frozen data snapshot, copied once at expose time
-  platform: process.platform,
+  appVersion: '1.4.2',
+
+  // the preload is browser code with no `process`, so ask main for host facts
+  platform: () => ipcRenderer.invoke('app:platform'),
 });
 ```
 
@@ -63,7 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 // Page (main world)
 const cfg = await window.electronAPI.readConfig();
 await window.electronAPI.saveNote({ title: 'hi', body: 'there' });
-console.log(window.electronAPI.platform); // frozen string
+console.log(window.electronAPI.appVersion); // frozen string
+console.log(await window.electronAPI.platform()); // e.g. 'darwin'
 ```
 
 #### Forwarding events from the preload

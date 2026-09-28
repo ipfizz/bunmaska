@@ -4,10 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BunmaskaConfig } from '../../../src/common/config-schema';
 import { runDoctor, runEngine } from '../../../src/cli/engine-command';
-import { installFromDir, linkApp } from '../../../src/cli/engine-store';
+import { installFromDir, linkApp } from '../../../src/common/engine-store';
+import { currentArch, currentPlatform } from '../../../src/common/platform';
 
-const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
-const ID2 = 'webkitgtk-6.0-2.46.0-bunmaska1-linux-x64';
+const HOST = `${currentPlatform()}-${currentArch()}`;
+const ID = `webkitgtk-6.0-2.52.4-bunmaska1-${HOST}`;
+const ID2 = `webkitgtk-6.0-2.46.0-bunmaska1-${HOST}`;
+const FOREIGN = `webkit-2-2.52.4-bunmaska1-${currentPlatform() === 'windows' ? 'linux' : 'windows'}-x64`;
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
@@ -44,7 +47,6 @@ const capture = (root: string, config: BunmaskaConfig = {}): Captured => {
     text: () => out.join('\n'),
     deps: {
       root,
-      env: {},
       out: (t) => out.push(t),
       err: (t) => err.push(t),
       readConfig: async () => config,
@@ -131,6 +133,21 @@ describe('engine which', () => {
     expect(c.text()).toMatch(/NOT installed/);
   });
 
+  test('a pin built for another machine is not reported as missing', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: FOREIGN } });
+    await runEngine({ action: 'which' }, c.deps);
+    expect(c.text()).toContain(FOREIGN);
+    expect(c.text()).toMatch(/not used on this machine/);
+    expect(c.text()).not.toMatch(/NOT installed/);
+  });
+
+  test('a bare version pin says builds bake system, never that it resolves', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: '2.52.4' } });
+    await runEngine({ action: 'which' }, c.deps);
+    expect(c.text()).toMatch(/builds bake `system`/);
+    expect(c.text()).not.toMatch(/resolved to/);
+  });
+
   test('shows installed for a present engine', async () => {
     const root = makeTmpDir();
     await installFromDir(root, makeEngineDir(root, ID));
@@ -147,6 +164,15 @@ describe('engine install', () => {
     const c = capture(root);
     expect(await runEngine({ action: 'install', source: src }, c.deps)).toBe(0);
     expect(c.text()).toContain(`installed ${ID}`);
+  });
+
+  test('a local dir without engine.json exits 1 with a message, not a stack', async () => {
+    const root = makeTmpDir();
+    const empty = join(root, 'empty');
+    mkdirSync(empty);
+    const c = capture(root);
+    expect(await runEngine({ action: 'install', source: empty }, c.deps)).toBe(1);
+    expect(c.err.join('\n')).toMatch(/^bunmaska engine install: .*engine\.json/);
   });
 
   test('errors (exit 1) on a source that is neither a dir, an id, nor a URL', async () => {
@@ -189,15 +215,18 @@ describe('engine install', () => {
   test('a bare engine-id resolves to the official feed artifact url', async () => {
     const c = capture(makeTmpDir());
     let seenUrl: string | undefined;
+    let seenId: string | undefined;
     const deps = {
       ...c.deps,
-      installUrl: async (_root: string, url: string, _key: string) => {
+      installUrl: async (_root: string, url: string, _key: string, expectedId?: string) => {
         seenUrl = url;
+        seenId = expectedId;
         return { id: ID, installed: true };
       },
     };
     expect(await runEngine({ action: 'install', source: ID }, deps)).toBe(0);
     expect(seenUrl).toBe(`https://engines.bunmaska.org/${ID}.tar.zst`);
+    expect(seenId).toBe(ID);
     expect(c.text()).toContain(`installed ${ID}`);
   });
 
@@ -215,7 +244,7 @@ describe('engine install', () => {
     expect(seenUrl).toBe(`https://mirror.example/e/${ID}.tar.zst`);
   });
 
-  test('an already-installed bare id is a no-op — it does not re-download', async () => {
+  test('an already-installed bare id is a no-op: it does not re-download', async () => {
     const root = makeTmpDir();
     await installFromDir(root, makeEngineDir(root, ID));
     const c = capture(root);
@@ -318,6 +347,39 @@ describe('doctor', () => {
     expect(await runDoctor(undefined, c.deps)).toBe(0);
     expect(c.text()).toMatch(/Bunmaska doctor/);
     expect(c.text()).toMatch(/store:/);
+  });
+
+  test('exits 0 when the project pins an engine built for another machine', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: FOREIGN } });
+    expect(await runDoctor('.', c.deps)).toBe(0);
+    expect(c.text()).toMatch(/not used on this machine/);
+  });
+
+  test('a bare version pin says builds bake system (exit 0)', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: '2.52.4' } });
+    expect(await runDoctor('.', c.deps)).toBe(0);
+    expect(c.text()).toMatch(/builds bake `system`/);
+  });
+
+  test('names the web engine this OS runs', async () => {
+    const c = capture(makeTmpDir());
+    await runDoctor(undefined, c.deps);
+    const engine = { macos: /WKWebView/, linux: /WebKitGTK/, windows: /WinCairo/ }[
+      currentPlatform()
+    ];
+    expect(c.text()).toMatch(engine);
+  });
+
+  test('exits 1 with a message when the config cannot be read', async () => {
+    const c = capture(makeTmpDir());
+    const deps = {
+      ...c.deps,
+      readConfig: async () => {
+        throw new Error('bunmaska.config is broken');
+      },
+    };
+    expect(await runDoctor('.', deps)).toBe(1);
+    expect(c.err.join('\n')).toMatch(/^bunmaska doctor: bunmaska.config is broken/);
   });
 
   test('exits 1 when the project pins an uninstalled engine', async () => {

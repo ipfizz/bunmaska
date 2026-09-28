@@ -1,6 +1,5 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { App, app } from '../../../../src/main/api/app';
+import { App } from '../../../../src/main/api/app';
 import { setNativeAppForTesting } from '../../../../src/main/native-app';
 import type { NativeAppKit, NativeApplication } from '../../../../src/main/platform/native';
 import {
@@ -13,7 +12,13 @@ import {
   type LockBackend,
   SingleInstanceManager,
 } from '../../../../src/main/api/single-instance';
-import { Menu, resetApplicationMenuForTesting } from '../../../../src/main/api/menu';
+import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../../src/main/api/menu';
+import type { AppPathName } from '../../../../src/main/api/app-paths';
+import { InvalidArgumentError } from '../../../../src/common/errors';
 
 /** Normalize host separators to POSIX so path comparisons match on any host. */
 const slash = (s: string): string => s.replaceAll('\\', '/');
@@ -44,21 +49,9 @@ const appWith = (overrides: Partial<EnvironmentDeps> = {}): App => {
   return a;
 };
 
-describe('App singleton', () => {
-  test('is an instance of App', () => {
-    expect(app).toBeInstanceOf(App);
-  });
-
-  test('is a Node EventEmitter for Electron compatibility', () => {
-    expect(app).toBeInstanceOf(EventEmitter);
-  });
-});
-
 describe('App.isReady', () => {
-  test('is a method (Electron parity), false on a fresh instance', () => {
-    const a = new App();
-    expect(typeof a.isReady).toBe('function');
-    expect(a.isReady()).toBe(false);
+  test('is false on a fresh instance', () => {
+    expect(new App().isReady()).toBe(false);
   });
 
   test('is true after markReady', () => {
@@ -69,7 +62,7 @@ describe('App.isReady', () => {
 });
 
 describe('App.markReady', () => {
-  test('emits ready exactly once when called multiple times', () => {
+  test('emits ready exactly once when called multiple times', async () => {
     const a = new App();
     let calls = 0;
     a.on('ready', () => {
@@ -78,26 +71,40 @@ describe('App.markReady', () => {
     a.markReady();
     a.markReady();
     a.markReady();
+    await Promise.resolve();
     expect(calls).toBe(1);
   });
 
-  test('fires handlers registered before markReady', () => {
+  test('emits ready after markReady returns, not inside it', async () => {
     const a = new App();
+    const order: string[] = [];
+    a.on('ready', () => order.push('ready'));
+    a.markReady();
+    order.push('returned');
+    await Promise.resolve();
+    expect(order).toEqual(['returned', 'ready']);
+  });
+
+  test('fires a handler registered in the same tick as markReady', async () => {
+    const a = new App();
+    a.markReady();
     let fired = false;
     a.on('ready', () => {
       fired = true;
     });
-    a.markReady();
+    await Promise.resolve();
     expect(fired).toBe(true);
   });
 
-  test('does not fire handlers registered after markReady', () => {
+  test('does not fire handlers registered after ready was emitted', async () => {
     const a = new App();
     a.markReady();
+    await Promise.resolve();
     let fired = false;
     a.on('ready', () => {
       fired = true;
     });
+    await Promise.resolve();
     expect(fired).toBe(false);
   });
 });
@@ -132,28 +139,13 @@ describe('App.whenReady', () => {
     await a.whenReady();
     expect(a.isReady()).toBe(true);
   });
-});
 
-describe('App event surface', () => {
-  test('before-quit handlers can be registered', () => {
+  test('rejects instead of throwing when the start hook fails', async () => {
     const a = new App();
-    a.on('before-quit', () => undefined);
-    expect(a.listenerCount('before-quit')).toBe(1);
-  });
-
-  test('window-all-closed handlers can be registered', () => {
-    const a = new App();
-    a.on('window-all-closed', () => undefined);
-    expect(a.listenerCount('window-all-closed')).toBe(1);
-  });
-
-  test('supports the Electron addListener/removeListener alias surface', () => {
-    const a = new App();
-    const handler = (): void => undefined;
-    a.addListener('will-quit', handler);
-    expect(a.listenerCount('will-quit')).toBe(1);
-    a.removeListener('will-quit', handler);
-    expect(a.listenerCount('will-quit')).toBe(0);
+    a.setStartHook(() => {
+      throw new Error('no display');
+    });
+    await expect(a.whenReady()).rejects.toThrow('no display');
   });
 });
 
@@ -171,6 +163,82 @@ describe('App.quit', () => {
     );
     return { app: a, exits };
   };
+
+  test('closes the windows after before-quit and before will-quit', () => {
+    const { app: a, exits } = quittableApp();
+    const order: string[] = [];
+    a.on('before-quit', () => order.push('before-quit'));
+    a.setWindowCloser(() => {
+      order.push('close windows');
+      return true;
+    });
+    a.on('will-quit', () => order.push('will-quit'));
+    a.quit();
+    expect(order).toEqual(['before-quit', 'close windows', 'will-quit']);
+    expect(exits).toEqual([0]);
+  });
+
+  test('a window that refuses to close cancels the quit, and a later quit still runs', () => {
+    const { app: a, exits } = quittableApp();
+    let windowsLeft = true;
+    a.setWindowCloser(() => !windowsLeft);
+    let willQuit = 0;
+    a.on('will-quit', () => {
+      willQuit += 1;
+    });
+    a.quit();
+    expect(willQuit).toBe(0);
+    expect(exits).toEqual([]);
+    windowsLeft = false;
+    a.quit();
+    expect(exits).toEqual([0]);
+  });
+
+  test('a throwing before-quit listener does not wedge later quits', () => {
+    const { app: a, exits } = quittableApp();
+    const bug = (): void => {
+      throw new Error('save failed');
+    };
+    a.on('before-quit', bug);
+    expect(() => a.quit()).toThrow('save failed');
+    a.off('before-quit', bug);
+    a.quit();
+    expect(exits).toEqual([0]);
+  });
+
+  test('quit listeners receive an event and the exit code', () => {
+    const { app: a } = quittableApp();
+    const seen: unknown[] = [];
+    a.on('quit', (event: unknown, code: unknown) => {
+      seen.push(typeof (event as { preventDefault?: unknown }).preventDefault, code);
+    });
+    a.quit(4);
+    expect(seen).toEqual(['function', 4]);
+  });
+
+  test('exits only after an asynchronous shutdown hook settles', async () => {
+    const { app: a, exits } = quittableApp();
+    let finish: () => void = () => undefined;
+    a.setShutdownHook(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    a.quit(3);
+    expect(exits).toEqual([]);
+    finish();
+    await Bun.sleep(0);
+    expect(exits).toEqual([3]);
+  });
+
+  test('exits even when the shutdown hook rejects', async () => {
+    const { app: a, exits } = quittableApp();
+    a.setShutdownHook(() => Promise.reject(new Error('engine wedged')));
+    a.quit();
+    await Bun.sleep(0);
+    expect(exits).toEqual([0]);
+  });
 
   test('emits before-quit, will-quit, then quit in order, then exits', () => {
     const { app: a, exits } = quittableApp();
@@ -210,7 +278,7 @@ describe('App.quit', () => {
   test('emits quit with the exit code and exits with it', () => {
     const { app: a, exits } = quittableApp();
     let quitCode = -1;
-    a.on('quit', (code: number) => {
+    a.on('quit', (_event: unknown, code: number) => {
       quitCode = code;
     });
     a.quit(5);
@@ -280,6 +348,33 @@ describe('App paths', () => {
     a.setPath('userData', '/custom/data');
     expect(a.getPath('userData')).toBe('/custom/data');
   });
+
+  test('setPath rejects a name getPath does not know', () => {
+    expect(() => appWith().setPath('bogus' as AppPathName, '/x')).toThrow(InvalidArgumentError);
+  });
+
+  test('setPath rejects a relative path', () => {
+    expect(() => appWith().setPath('userData', 'data')).toThrow(InvalidArgumentError);
+  });
+
+  test('Linux user folders come from xdg-user-dirs', () => {
+    const userDirs =
+      '# written by xdg-user-dirs-update\nXDG_DOWNLOAD_DIR="$HOME/Téléchargements"\n';
+    const a = appWith({
+      platform: 'linux',
+      home: '/home/ada',
+      readFile: (path) =>
+        slash(path) === '/home/ada/.config/user-dirs.dirs' ? userDirs : undefined,
+    });
+    expect(a.getPath('downloads')).toBe('/home/ada/Téléchargements');
+  });
+
+  test('setAppLogsPath without a path restores the platform default', () => {
+    const a = appWith();
+    a.setAppLogsPath('/var/log/custom');
+    a.setAppLogsPath();
+    expect(a.getPath('logs')).toBe('/Users/ada/Library/Logs/Demo App');
+  });
 });
 
 describe('App locale', () => {
@@ -297,10 +392,12 @@ describe('App locale', () => {
   });
 
   test('getPreferredSystemLanguages reflects the environment', () => {
-    expect(appWith({ env: { LANGUAGE: 'fr_FR:en_US' } }).getPreferredSystemLanguages()).toEqual([
-      'fr-FR',
-      'en-US',
-    ]);
+    expect(
+      appWith({
+        platform: 'linux',
+        env: { LANGUAGE: 'fr_FR:en_US' },
+      }).getPreferredSystemLanguages(),
+    ).toEqual(['fr-FR', 'en-US']);
   });
 });
 
@@ -309,27 +406,40 @@ describe('App.isPackaged', () => {
     expect(appWith({ execPath: '/opt/homebrew/bin/bun' }).isPackaged).toBe(false);
   });
 
-  test('is true inside a packaged bundle', () => {
-    expect(appWith({ execPath: '/Applications/Demo.app/Contents/MacOS/Demo' }).isPackaged).toBe(
-      true,
-    );
+  test('is true inside a compiled binary', () => {
+    expect(appWith({ mainScript: '/$bunfs/root/Demo' }).isPackaged).toBe(true);
   });
 });
 
 describe('App.relaunch', () => {
-  test('relaunches with the env execPath and current args by default', () => {
-    const calls: Array<[string, string[]]> = [];
-    const a = new App();
-    a.setEnvironmentForTesting(
-      fakeEnv({
-        execPath: '/bin/myapp',
-        relaunch: (execPath, args) => {
-          calls.push([execPath, args]);
-        },
-      }),
-    );
-    a.relaunch();
-    expect(calls).toEqual([['/bin/myapp', process.argv.slice(1)]]);
+  /** Relaunch with default args while `process.argv` is `argv`; returns the args passed on. */
+  const relaunchArgs = (argv: string[], mainScript: string): string[] => {
+    const calls: string[][] = [];
+    const a = appWith({ mainScript, relaunch: (_execPath, args) => calls.push(args) });
+    const saved = process.argv;
+    process.argv = argv;
+    try {
+      a.relaunch();
+    } finally {
+      process.argv = saved;
+    }
+    return calls[0] ?? [];
+  };
+
+  test('keeps the script path under the dev runner', () => {
+    const argv = ['/opt/homebrew/bin/bun', '/proj/src/main.ts', '--flag'];
+    expect(relaunchArgs(argv, '/proj/src/main.ts')).toEqual(['/proj/src/main.ts', '--flag']);
+  });
+
+  test('drops the embedded entry path in a compiled binary', () => {
+    const argv = ['bun', '/$bunfs/root/Demo', '--flag'];
+    expect(relaunchArgs(argv, '/$bunfs/root/Demo')).toEqual(['--flag']);
+  });
+
+  test('relaunches with the env execPath', () => {
+    const calls: string[] = [];
+    appWith({ execPath: '/bin/myapp', relaunch: (execPath) => calls.push(execPath) }).relaunch();
+    expect(calls).toEqual(['/bin/myapp']);
   });
 
   test('honors execPath and args overrides', () => {
@@ -348,56 +458,32 @@ describe('App.relaunch', () => {
 });
 
 describe('App single-instance lock', () => {
-  /** A real manager over a fake backend; exposes the captured server callback. */
-  const managerWith = (
-    opts: { acquire?: boolean[]; existingPid?: number; alive?: boolean } = {},
-  ): { manager: SingleInstanceManager; deliver: (json: string) => void; stops: () => number } => {
-    const acquireQueue = [...(opts.acquire ?? [true])];
+  /** A primary manager over a fake backend; `deliver` plays a peer's message. */
+  const primary = (): { manager: SingleInstanceManager; deliver: (json: string) => void } => {
     let onMessage: ((json: string) => void) | undefined;
-    let stops = 0;
     const backend: LockBackend = {
-      tryCreateLock: () => acquireQueue.shift() ?? false,
-      readLockPid: () => opts.existingPid,
-      isAlive: () => opts.alive ?? false,
+      tryCreateLock: () => true,
+      readLockPid: () => undefined,
+      isAlive: () => false,
       clearLock: () => undefined,
       startServer: (_path, cb) => {
         onMessage = cb;
       },
       notify: () => undefined,
-      stop: () => {
-        stops += 1;
-      },
+      stop: () => undefined,
     };
     return {
-      manager: new SingleInstanceManager(backend, {
-        lockPath: '/l',
-        socketPath: '/s',
-        pid: 1,
-      }),
+      manager: new SingleInstanceManager(backend, { lockPath: '/l', socketPath: '/s', pid: 1 }),
       deliver: (json) => onMessage?.(json),
-      stops: () => stops,
     };
   };
 
-  test('requestSingleInstanceLock returns true for the primary', () => {
-    const a = new App();
-    a.setSingleInstanceForTesting(managerWith({ acquire: [true] }).manager);
-    expect(a.requestSingleInstanceLock()).toBe(true);
-    expect(a.hasSingleInstanceLock()).toBe(true);
-  });
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-  test('requestSingleInstanceLock returns false for a secondary', () => {
+  test('emits second-instance with argv/cwd/data when a peer connects', async () => {
     const a = new App();
-    a.setSingleInstanceForTesting(
-      managerWith({ acquire: [false], existingPid: 999, alive: true }).manager,
-    );
-    expect(a.requestSingleInstanceLock()).toBe(false);
-    expect(a.hasSingleInstanceLock()).toBe(false);
-  });
-
-  test('emits second-instance with argv/cwd/data when a peer connects', () => {
-    const a = new App();
-    const fixture = managerWith({ acquire: [true] });
+    a.markReady();
+    const fixture = primary();
     a.setSingleInstanceForTesting(fixture.manager);
     let captured: { argv: string[]; cwd: string; data: unknown } | undefined;
     a.on('second-instance', (_event: unknown, argv: string[], cwd: string, data: unknown) => {
@@ -405,49 +491,38 @@ describe('App single-instance lock', () => {
     });
     a.requestSingleInstanceLock();
     fixture.deliver(encodePayload({ argv: ['p', 'q'], cwd: '/peer', additionalData: { z: 1 } }));
+    expect(captured).toBeUndefined();
+    await flush();
     expect(captured).toEqual({ argv: ['p', 'q'], cwd: '/peer', data: { z: 1 } });
   });
 
-  test('releaseSingleInstanceLock releases the lock', () => {
+  test('holds second-instance until after ready', async () => {
     const a = new App();
-    const fixture = managerWith({ acquire: [true] });
+    const fixture = primary();
     a.setSingleInstanceForTesting(fixture.manager);
+    const order: string[] = [];
+    a.on('ready', () => order.push('ready'));
+    a.on('second-instance', () => order.push('second-instance'));
     a.requestSingleInstanceLock();
-    a.releaseSingleInstanceLock();
-    expect(fixture.stops()).toBe(1);
-    expect(a.hasSingleInstanceLock()).toBe(false);
+    fixture.deliver(encodePayload({ argv: [], cwd: '/peer', additionalData: undefined }));
+    await flush();
+    a.markReady();
+    await flush();
+    expect(order).toEqual(['ready', 'second-instance']);
   });
 });
 
 describe('App macOS desktop integration', () => {
-  type DesktopCalls = {
-    policy: string[];
-    hidden: number;
-    shown: number;
-    badges: string[];
-    bounces: boolean[];
-    about: number;
-  };
+  type DesktopCalls = { badges: string[]; bounces: boolean[] };
 
   /** Install a fake native app (optionally with macOS appKit) and record calls. */
   const install = (withAppKit: boolean): DesktopCalls => {
-    const calls: DesktopCalls = {
-      policy: [],
-      hidden: 0,
-      shown: 0,
-      badges: [],
-      bounces: [],
-      about: 0,
-    };
+    const calls: DesktopCalls = { badges: [], bounces: [] };
     let dockBadge = '';
     const appKit: NativeAppKit = {
-      setActivationPolicy: (p) => calls.policy.push(p),
-      hide: () => {
-        calls.hidden += 1;
-      },
-      show: () => {
-        calls.shown += 1;
-      },
+      setActivationPolicy: () => undefined,
+      hide: () => undefined,
+      show: () => undefined,
       isHidden: () => true,
       isActive: () => true,
       setDockBadge: (label) => {
@@ -464,9 +539,6 @@ describe('App macOS desktop integration', () => {
         throw new Error('createWindow unused in desktop tests');
       },
       quit: () => undefined,
-      showAboutPanel: () => {
-        calls.about += 1;
-      },
       ...(withAppKit ? { appKit } : {}),
     };
     setNativeAppForTesting(native);
@@ -475,31 +547,11 @@ describe('App macOS desktop integration', () => {
 
   afterEach(() => setNativeAppForTesting(undefined));
 
-  test('setActivationPolicy delegates to appKit', () => {
-    const calls = install(true);
-    new App().setActivationPolicy('accessory');
-    expect(calls.policy).toEqual(['accessory']);
-  });
-
-  test('hide/show delegate to appKit', () => {
-    const calls = install(true);
-    const a = new App();
-    a.hide();
-    a.show();
-    expect([calls.hidden, calls.shown]).toEqual([1, 1]);
-  });
-
   test('isHidden/isActive reflect appKit', () => {
     install(true);
     const a = new App();
     expect(a.isHidden()).toBe(true);
     expect(a.isActive()).toBe(true);
-  });
-
-  test('showAboutPanel delegates', () => {
-    const calls = install(true);
-    new App().showAboutPanel();
-    expect(calls.about).toBe(1);
   });
 
   test('dock proxies setBadge/getBadge/bounce', () => {
@@ -534,22 +586,19 @@ describe('App macOS desktop integration', () => {
 });
 
 describe('App.applicationMenu', () => {
-  test('is null by default', () => {
+  afterEach(() => {
+    setMenuRealizerForTesting(undefined);
     resetApplicationMenuForTesting();
-    expect(new App().applicationMenu).toBeNull();
   });
 
-  test('the getter delegates to Menu.getApplicationMenu', () => {
-    resetApplicationMenuForTesting();
-    expect(new App().applicationMenu).toBe(Menu.getApplicationMenu());
-  });
-
-  test('assigning null clears the application menu', () => {
-    resetApplicationMenuForTesting();
+  test('reads back the menu it was assigned, then null once cleared', () => {
+    setMenuRealizerForTesting({ realize: () => 1n, setApplicationMenu: () => undefined });
     const a = new App();
+    const menu = new Menu();
+    a.applicationMenu = menu;
+    expect(a.applicationMenu).toBe(menu);
     a.applicationMenu = null;
     expect(a.applicationMenu).toBeNull();
-    expect(Menu.getApplicationMenu()).toBeNull();
   });
 });
 

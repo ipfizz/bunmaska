@@ -4,7 +4,7 @@ import { msgSendF64 } from '../../../src/main/platform/macos/cocoa-msgsend-varia
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 if (currentPlatform() === 'macos') {
-  describe('msgSendF64 — one-extra-f64-arg variant', () => {
+  describe('msgSendF64 - one-extra-f64-arg variant', () => {
     test('[NSDate dateWithTimeIntervalSinceNow:0.5] returns a non-zero NSDate', () => {
       const rt = cocoa();
       const nsDate = rt.classes.get('NSDate');

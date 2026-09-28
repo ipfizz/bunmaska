@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-#
-# Build a RELOCATABLE WebKitGTK 6.0 engine directory for the Bunmaska engine
-# store. It relocates the system WebKitGTK + GTK + their shared-object closure
-# into a self-contained tree whose libraries find each other via `$ORIGIN`, so
-# the engine can be `dlopen`ed from `~/.bunmaska/webkit/<id>/` independent of the
-# distro's own WebKitGTK.
-#
-# This is the apt-relocate path (proves the mechanism + produces a usable engine
-# on a matching/newer glibc). A truly cross-distro build compiles on an old-glibc
-# base; that is a later refinement — the structure here is the same.
-#
-# Usage: build-webkitgtk-linux.sh <out-dir> <engine-id>
-# Produces: <out-dir>/<engine-id>/{lib/,libexec/,engine.json}
-#
+# Relocates the system WebKitGTK + GTK closure into <out-dir>/<engine-id>/{lib,libexec,engine.json},
+# libs finding each other via $ORIGIN. Usage: build-webkitgtk-linux.sh <out-dir> <engine-id>
+# ponytail: apt-relocated, so matching/newer glibc only; cross-distro needs an old-glibc build
 set -euo pipefail
 
 OUT_DIR="${1:?usage: build-webkitgtk-linux.sh <out-dir> <engine-id>}"
@@ -24,15 +13,10 @@ ENGINE_DIR="${OUT_DIR}/${ENGINE_ID}"
 LIB_DIR="${ENGINE_DIR}/lib"
 LIBEXEC_DIR="${ENGINE_DIR}/libexec"
 
-# Core glibc/loader libraries that must stay the system's — bundling them causes
-# loader/symbol conflicts. Everything else in the closure gets bundled.
-KEEP_SYSTEM="ld-linux-x86-64.so.2 ld-linux-aarch64.so.1 libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libresolv.so.2 libgcc_s.so.1"
-
 log() { printf '  • %s\n' "$*"; }
 
 command -v patchelf >/dev/null || { echo "patchelf is required (apt install patchelf)"; exit 1; }
 
-# Resolve a soname to its absolute path via ldconfig.
 resolve_soname() {
   ldconfig -p | grep -F "$1" | head -1 | sed -E 's/.*=>\s*//'
 }
@@ -46,9 +30,22 @@ log "GTK:       $GTK_PATH"
 
 mkdir -p "$LIB_DIR" "$LIBEXEC_DIR"
 
-is_kept() { case " $KEEP_SYSTEM " in *" $1 "*) return 0;; *) return 1;; esac; }
+# Libraries that must stay the host's. Everything else in the closure is bundled.
+is_kept() {
+  case "$1" in
+    # glibc/loader: bundling them causes loader/symbol conflicts.
+    ld-linux*|libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|libresolv.so.*|libgcc_s.so.*) return 0 ;;
+    # Driver- and display-coupled (the AppImage excludelist): the host's GPU driver
+    # loads against these by soname, so an older bundled copy breaks EGL/GL init
+    # ("GLIBCXX_x not found" from a newer Mesa against a bundled libstdc++).
+    libGL.so.*|libGLX*.so.*|libEGL*.so.*|libGLdispatch.so.*|libOpenGL.so.*|libglapi.so.*) return 0 ;;
+    libgbm.so.*|libdrm*.so.*|libX11*.so.*|libxcb*.so.*|libasound.so.*) return 0 ;;
+    libfontconfig.so.*|libfreetype.so.*|libstdc++.so.*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-# Collect the full transitive .so closure of both roots (ldd is transitive).
+# ldd is transitive: this is the full closure.
 collect_closure() {
   ldd "$1" 2>/dev/null | awk '{ for (i=1;i<=NF;i++) if ($i ~ /^\//) print $i }'
 }
@@ -63,7 +60,7 @@ copy_lib() {
 }
 
 log "Bundling the shared-object closure…"
-# Copy the two roots first (preserve their sonames), then the closure.
+# The two roots first, under their sonames.
 cp -L "$WEBKIT_PATH" "$LIB_DIR/$SONAME"; chmod u+w "$LIB_DIR/$SONAME"
 cp -L "$GTK_PATH" "$LIB_DIR/$GTK_SONAME"; chmod u+w "$LIB_DIR/$GTK_SONAME"
 { collect_closure "$WEBKIT_PATH"; collect_closure "$GTK_PATH"; } | sort -u | while IFS= read -r so; do
@@ -78,7 +75,7 @@ find "$LIB_DIR" -name '*.so*' -type f | while IFS= read -r so; do
   patchelf --set-rpath '$ORIGIN' "$so" 2>/dev/null || true
 done
 
-# WebKit spawns helper processes; copy them best-effort so render works later.
+# WebKit spawns these helpers; nothing renders without them.
 log "Copying WebKit helper processes (best-effort)…"
 HELPER_SRC="$(dirname "$WEBKIT_PATH")/webkitgtk-6.0"
 for helper in WebKitNetworkProcess WebKitWebProcess WebKitGPUProcess; do

@@ -1,17 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { currentPlatform } from '../../../src/common/platform';
 import { app } from '../../../src/main/api/app';
-import { nativeTheme } from '../../../src/main/api/native-theme';
-import { powerMonitor } from '../../../src/main/api/power-monitor';
-import { ensureNativeStarted, resetBootstrapForTesting } from '../../../src/main/bootstrap';
+import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../src/main/api/menu';
+import { resetNativeThemeObservingForTesting } from '../../../src/main/api/native-theme';
+import { resetPowerMonitorObservingForTesting } from '../../../src/main/api/power-monitor';
+import { setDialogBackendForTesting } from '../../../src/main/api/dialog';
+import {
+  ensureNativeStarted,
+  reportUncaughtException,
+  resetBootstrapForTesting,
+} from '../../../src/main/bootstrap';
 import { setNativeAppForTesting } from '../../../src/main/native-app';
 import type { NativeApplication } from '../../../src/main/platform/native';
+import { armInertObservers, inertMenuRealizer } from '../../helpers/inert-observers';
 import { installSafeAppExit } from '../../helpers/safe-app-exit';
+import type { DialogBackend } from '../../../src/main/platform/services';
 
 type NativeTriggers = {
   native: NativeApplication;
   activate: (v: boolean) => void;
   openUrl: (url: string) => void;
   openFile: (path: string) => void;
+  quitRequest: () => void;
 };
 
 /** A fake native app exposing triggers for its registered lifecycle callbacks. */
@@ -19,6 +33,7 @@ const makeNative = (): NativeTriggers => {
   let activateCb: ((v: boolean) => void) | undefined;
   let openUrlCb: ((url: string) => void) | undefined;
   let openFileCb: ((path: string) => void) | undefined;
+  let quitRequestCb: (() => void) | undefined;
   const native: NativeApplication = {
     start: () => undefined,
     onReady: (ready) => ready(),
@@ -35,29 +50,58 @@ const makeNative = (): NativeTriggers => {
     onOpenFile: (c) => {
       openFileCb = c;
     },
+    onQuitRequest: (c) => {
+      quitRequestCb = c;
+    },
   };
   return {
     native,
     activate: (v) => activateCb?.(v),
     openUrl: (url) => openUrlCb?.(url),
     openFile: (path) => openFileCb?.(path),
+    quitRequest: () => quitRequestCb?.(),
   };
 };
 
 describe('bootstrap native wiring', () => {
   beforeEach(() => {
-    // Pre-arm the once-guards with no-ops so the synthetic `onReady` below does
-    // not drive the real native OS observers (FFI) during a unit test.
-    nativeTheme.startObserving(() => undefined);
-    powerMonitor.startObserving(() => undefined);
+    armInertObservers();
+    setMenuRealizerForTesting(inertMenuRealizer);
   });
 
   afterEach(() => {
+    setMenuRealizerForTesting(undefined);
+    resetApplicationMenuForTesting();
     setNativeAppForTesting(undefined);
     app.resetForTesting();
     resetBootstrapForTesting();
-    nativeTheme.resetObservingForTesting();
-    powerMonitor.resetObservingForTesting();
+    resetNativeThemeObservingForTesting();
+    resetPowerMonitorObservingForTesting();
+  });
+
+  test('an OS quit request runs app.quit on a later tick, never inside the native callback', async () => {
+    app.resetForTesting();
+    resetBootstrapForTesting();
+    installSafeAppExit();
+    const triggers = makeNative();
+    setNativeAppForTesting(triggers.native);
+    ensureNativeStarted();
+    let beforeQuit = 0;
+    const veto = (event: { preventDefault(): void }): void => {
+      beforeQuit += 1;
+      event.preventDefault();
+    };
+    app.on('before-quit', veto);
+    try {
+      triggers.quitRequest();
+      expect(beforeQuit).toBe(0);
+      for (let tick = 0; tick < 50 && beforeQuit === 0; tick += 1) {
+        await Bun.sleep(2);
+      }
+      expect(beforeQuit).toBe(1);
+    } finally {
+      app.removeListener('before-quit', veto);
+    }
   });
 
   test('forwards native activate to the app activate event with hasVisibleWindows', () => {
@@ -81,6 +125,51 @@ describe('bootstrap native wiring', () => {
     setNativeAppForTesting(native);
     ensureNativeStarted();
     expect(app.isReady()).toBe(true);
+  });
+
+  test.skipIf(currentPlatform() !== 'macos')(
+    'installs the default application menu once the native app is ready on macOS',
+    () => {
+      installSafeAppExit();
+      resetBootstrapForTesting();
+      setNativeAppForTesting(makeNative().native);
+      ensureNativeStarted();
+      expect(Menu.getApplicationMenu()?.items[0]?.label).toBe(app.name);
+    },
+  );
+
+  test('retries the native start after a failed one', () => {
+    const { native } = makeNative();
+    let starts = 0;
+    resetBootstrapForTesting();
+    setNativeAppForTesting({
+      ...native,
+      start: () => {
+        starts += 1;
+        if (starts === 1) {
+          throw new Error('no display');
+        }
+      },
+    });
+    expect(() => ensureNativeStarted()).toThrow('no display');
+    ensureNativeStarted();
+    expect(starts).toBe(2);
+  });
+
+  test('a bare ready listener starts the native app after the current tick', async () => {
+    const { native } = makeNative();
+    let starts = 0;
+    resetBootstrapForTesting();
+    setNativeAppForTesting({ ...native, start: () => (starts += 1) });
+    const listener = (): void => undefined;
+    app.on('ready', listener);
+    try {
+      expect(starts).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(starts).toBe(1);
+    } finally {
+      app.removeListener('ready', listener);
+    }
   });
 
   test('forwards native open-url to the app open-url event', () => {
@@ -151,5 +240,58 @@ describe('bootstrap quit wiring', () => {
     const counting = withCountingNative();
     app.quit();
     expect(counting.quits()).toBe(1);
+  });
+});
+
+describe("Electron's default uncaughtException handler", () => {
+  const shown: { message: string; detail: string }[] = [];
+  beforeEach(() => {
+    armInertObservers();
+    setMenuRealizerForTesting(inertMenuRealizer);
+    shown.length = 0;
+    const fake: DialogBackend = {
+      showMessageBox: (spec) => {
+        shown.push({ message: spec.message, detail: spec.detail });
+        return 0;
+      },
+      showOpenDialog: () => [],
+      showSaveDialog: () => '',
+    };
+    setDialogBackendForTesting(fake);
+  });
+  afterEach(() => {
+    setDialogBackendForTesting(undefined);
+    setMenuRealizerForTesting(undefined);
+    resetApplicationMenuForTesting();
+    setNativeAppForTesting(undefined);
+    resetBootstrapForTesting();
+  });
+
+  test('is installed when the native app starts', () => {
+    setNativeAppForTesting(makeNative().native);
+    ensureNativeStarted();
+    expect(process.listeners('uncaughtException')).toContain(reportUncaughtException);
+  });
+
+  test('shows the error in a box when the app has no handler of its own', () => {
+    const error = new Error('listener bug');
+    reportUncaughtException(error);
+    expect(shown).toEqual([
+      {
+        message: 'A JavaScript error occurred in the main process',
+        detail: `Uncaught Exception:\n${error.stack}`,
+      },
+    ]);
+  });
+
+  test("leaves the error to the app's own handler", () => {
+    const own = (): void => undefined;
+    process.on('uncaughtException', own);
+    try {
+      reportUncaughtException(new Error('handled elsewhere'));
+    } finally {
+      process.off('uncaughtException', own);
+    }
+    expect(shown).toEqual([]);
   });
 });

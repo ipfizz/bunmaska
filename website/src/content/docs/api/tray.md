@@ -32,9 +32,9 @@ app.whenReady().then(() => {
 
 ### `new Tray(image)`
 
-- `image` string | [NativeImage](native-image.md) - a filesystem path, or a NativeImage.
+- `image` string | [NativeImage](/docs/api/native-image) - a filesystem path, or a NativeImage.
 
-Creates a status item and shows the icon immediately. `image` is a filesystem path or a `NativeImage` (a NativeImage is written to a temp PNG the native backends load by path); there is no `guid` parameter. A bad or unreadable path does not crash; the icon is simply not set. On macOS, pass a `NativeImage` with `setTemplateImage(true)` - when `isTemplateImage()` is true it is applied as a [template image](native-image.md), so the menu bar inverts it for light/dark mode. A path ending in `Template` is not special-cased; use the NativeImage flag.
+Creates a status item and shows the icon immediately. `image` is a filesystem path or a `NativeImage` (a NativeImage is written to a temp PNG the native backends load by path); there is no `guid` parameter. A bad or unreadable path does not crash; the icon is simply not set. On macOS, pass a `NativeImage` with `setTemplateImage(true)` - when `isTemplateImage()` is true it is applied as a [template image](/docs/api/native-image#imagesettemplateimageoption), so the menu bar inverts it for light/dark mode. A path ending in `Template` is not special-cased; use the NativeImage flag.
 
 ```ts
 import { Tray } from 'bunmaska';
@@ -66,7 +66,7 @@ tray.setTitle('42');
 
 ### `tray.setImage(image)`
 
-- `image` string | [NativeImage](native-image.md) - a filesystem path, or a NativeImage.
+- `image` string | [NativeImage](/docs/api/native-image) - a filesystem path, or a NativeImage.
 
 Replaces the icon. Accepts a path string or a `NativeImage`, as the constructor does. No-op after `destroy()`.
 
@@ -76,7 +76,7 @@ tray.setImage('/path/to/active-iconTemplate.png');
 
 ### `tray.setContextMenu(menu)`
 
-- `menu` [Menu](menu.md) | null
+- `menu` [Menu](/docs/api/menu) | null
 
 Attaches a context menu (shown on click) or clears it with `null`. No-op after `destroy()`.
 

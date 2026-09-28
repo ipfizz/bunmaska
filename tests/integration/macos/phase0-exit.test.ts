@@ -17,7 +17,7 @@ const NS_APPLICATION_ACTIVATION_POLICY_REGULAR = 0n;
 const NS_BACKING_STORE_BUFFERED = 2n;
 
 if (currentPlatform() === 'macos') {
-  describe('Phase 0 macOS exit — drive AppKit end-to-end from Bun via bun:ffi', () => {
+  describe('Phase 0 macOS exit - drive AppKit end-to-end from Bun via bun:ffi', () => {
     test('full NSApplication + NSWindow choreography yields a live, named window', () => {
       const rt = cocoa();
 
@@ -52,14 +52,14 @@ if (currentPlatform() === 'macos') {
       );
       expect(window).not.toBe(0n);
 
-      // 5. [window makeKeyAndOrderFront:nil] — schedules the window for display
+      // 5. [window makeKeyAndOrderFront:nil] - schedules the window for display
       msgSendPtr(window, rt.selectors.get('makeKeyAndOrderFront:'), 0n);
 
-      // 6. [NSApp activateIgnoringOtherApps:YES] — brings the app frontmost
+      // 6. [NSApp activateIgnoringOtherApps:YES] - brings the app frontmost
       msgSendU8(app, rt.selectors.get('activateIgnoringOtherApps:'), 1);
 
       // 7. [window contentView] is auto-created during init and is a non-nil
-      //    NSView — proves the selector dispatch table on a fully-initialized
+      //    NSView - proves the selector dispatch table on a fully-initialized
       //    NSWindow works. (We avoid `[window title]` because windows in a
       //    non-bundled process can legitimately have nil titles.)
       const contentView = rt.msgSend(window, rt.selectors.get('contentView'));
@@ -67,7 +67,7 @@ if (currentPlatform() === 'macos') {
 
       // 8. [window isVisible] returns 0 or 1. On a headless CI runner without
       //    a window server this may legitimately return 0 even with a valid
-      //    window object — we assert only that the call returns a JS number.
+      //    window object - we assert only that the call returns a JS number.
       const visible = msgSendReturnsU8(window, rt.selectors.get('isVisible'));
       expect(typeof visible).toBe('number');
       expect(visible === 0 || visible === 1).toBe(true);

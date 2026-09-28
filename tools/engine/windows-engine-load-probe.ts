@@ -1,15 +1,6 @@
-/**
- * Build-engine probe (Windows): prove a RELOCATED WinCairo engine works when
- * resolved from the store — the peer of `engine-load-probe.ts`. Run with
- * `BUNMASKA_ENGINES_PATH` + `BUNMASKA_WEBKIT_ID` set and deliberately WITHOUT
- * `BUNMASKA_WEBKIT_PATH`, so the engine MUST be found via the store layout
- * `<root>/<id>/lib`. It then drives the full stack — a real `BrowserWindow` whose
- * WebProcess spawns from the store dir, and `executeJavaScript` round-tripping a
- * value — which is a stronger proof than merely counting loaded modules: nothing
- * renders unless the entire DLL closure + helper exes resolved from the store.
- *
- * Prints `STORE_ENGINE_OK <result>` on success, `STORE_ENGINE_FAIL ...` otherwise.
- */
+// Proves a relocated WinCairo engine renders when resolved from the store (run WITHOUT
+// BUNMASKA_WEBKIT_PATH): nothing renders unless the whole DLL closure and helper exes
+// resolved there. Prints STORE_ENGINE_OK <result> or STORE_ENGINE_FAIL <why>.
 import { app, BrowserWindow } from '../../src/index';
 import { resolveWindowsEngineDir } from '../../src/main/platform/windows/webkit2-ffi';
 
@@ -18,9 +9,7 @@ const finish = (line: string, code: number): never => {
   process.exit(code);
 };
 
-// The engine must resolve INTO the store via the pinned id (not an env path /
-// bundled dir). Compare separator-agnostically — the resolver returns Windows
-// backslash paths regardless of how the env var was written.
+// Compare separator-agnostically: the resolver returns backslash paths however the env was written.
 const slash = (s: string): string => s.replaceAll('\\', '/');
 const store = slash(process.env['BUNMASKA_ENGINES_PATH'] ?? '');
 const id = process.env['BUNMASKA_WEBKIT_ID'] ?? '';

@@ -1,13 +1,9 @@
 import type { MouseButton, NativeInputEvent } from '../native';
 import { loadUser32 } from './win32-ffi';
 
-/**
- * WinCairo WebKit's WKView hosts itself in an HWND whose window procedure turns native
- * Win32 input messages into engine-level `PlatformMouseEvent`s, so the page sees
- * `isTrusted === true` — exactly what a script-dispatched `element.click()` cannot
- * produce. Coordinates are client pixels relative to the view's top-left; per-monitor DPI
- * scaling is a follow-up — at 100% scale logical and client pixels coincide.
- */
+// Win32 messages to the WKView's HWND become engine-level events with `isTrusted === true`,
+// which a script-dispatched `element.click()` cannot produce.
+// ponytail: coordinates are client px, equal to logical px only while bun.exe is DPI-unaware.
 
 const WM_MOUSEMOVE = 0x0200;
 const WM_LBUTTONDOWN = 0x0201;
@@ -20,15 +16,13 @@ const WM_KEYDOWN = 0x0100;
 const WM_KEYUP = 0x0101;
 const WM_CHAR = 0x0102;
 
-/** WPARAM button bits for a *BUTTONDOWN message (which buttons are currently down). */
+/** MK_* WPARAM bits: which buttons are down. */
 const MK_LBUTTON = 0x0001;
 const MK_RBUTTON = 0x0002;
 const MK_MBUTTON = 0x0010;
 
-/** LPARAM for a key-up: repeat count 1 + bit 30 (was down) + bit 31 (transition). */
-const KEYUP_LPARAM = 0xc0000001n;
-/** LPARAM for a key-down / char: repeat count 1, key not previously down. */
-const KEYDOWN_LPARAM = 0x00000001n;
+/** Key-up LPARAM flags: bit 30 (was down) + bit 31 (transition). */
+const KEYUP_FLAGS = 0xc0000000n;
 
 /** A single Win32 window message to post: `(message, wParam, lParam)`. */
 export type WindowMessage = {
@@ -53,7 +47,7 @@ const buttonDown = (button: MouseButton): { readonly message: number; readonly m
   }
 };
 
-/** The *BUTTONUP message for a mouse button (WPARAM is 0 — no button still held). */
+/** The *BUTTONUP message for a mouse button. */
 const buttonUp = (button: MouseButton): number => {
   switch (button) {
     case 'right':
@@ -68,34 +62,50 @@ const buttonUp = (button: MouseButton): number => {
 /** Named keys whose VK code IS the character they type (WM_CHAR-producing). */
 const CHAR_PRODUCING_VK = new Set<number>([0x08, 0x09, 0x0d, 0x1b, 0x20]); // BS, Tab, Enter, Esc, Space
 
-/** Win32 virtual-key codes for the non-printable keys we map by Electron key name. */
-const NAMED_VIRTUAL_KEYS = new Map<string, number>([
-  ['Backspace', 0x08],
-  ['Tab', 0x09],
-  ['Enter', 0x0d],
-  ['Return', 0x0d],
-  ['Escape', 0x1b],
-  ['Space', 0x20],
-  ['PageUp', 0x21],
-  ['PageDown', 0x22],
-  ['End', 0x23],
-  ['Home', 0x24],
-  ['Left', 0x25],
-  ['Up', 0x26],
-  ['Right', 0x27],
-  ['Down', 0x28],
-  ['Delete', 0x2e],
+/** Win32 virtual-key code + US-layout set-1 scan code for the keys we map by Electron key name. */
+const NAMED_KEYS = new Map<string, readonly [vk: number, scan: number]>([
+  ['Backspace', [0x08, 0x0e]],
+  ['Tab', [0x09, 0x0f]],
+  ['Enter', [0x0d, 0x1c]],
+  ['Return', [0x0d, 0x1c]],
+  ['Escape', [0x1b, 0x01]],
+  ['Space', [0x20, 0x39]],
+  ['PageUp', [0x21, 0x49]],
+  ['PageDown', [0x22, 0x51]],
+  ['End', [0x23, 0x4f]],
+  ['Home', [0x24, 0x47]],
+  ['Left', [0x25, 0x4b]],
+  ['Up', [0x26, 0x48]],
+  ['Right', [0x27, 0x4d]],
+  ['Down', [0x28, 0x50]],
+  ['Delete', [0x2e, 0x53]],
 ]);
 
-/**
- * Resolve an Electron `keyCode` to a Win32 virtual-key code. Named keys come from
- * {@link NAMED_VIRTUAL_KEYS}; a single ASCII letter/digit shares its codepoint with
- * the VK code. Returns `undefined` for anything we do not map.
- */
+/** Scan code by VK. US layout on purpose: Electron derives `event.code` from the US layout too. */
+const SCAN_CODES = new Map<number, number>([
+  ...NAMED_KEYS.values(),
+  ...(
+    [
+      ['1234567890', 0x02],
+      ['QWERTYUIOP', 0x10],
+      ['ASDFGHJKL', 0x1e],
+      ['ZXCVBNM', 0x2c],
+    ] as const
+  ).flatMap(([row, first]) => [...row].map((c, i) => [c.charCodeAt(0), first + i] as const)),
+]);
+
+/** PgUp..Down and Delete: without KF_EXTENDED WebKit reports them as numpad keys. */
+const isExtendedKey = (vk: number): boolean => (vk >= 0x21 && vk <= 0x28) || vk === 0x2e;
+
+/** Key-message LPARAM: repeat count 1, scan code in bits 16-23, KF_EXTENDED in bit 24. */
+const keyLParam = (vk: number, flags = 0n): bigint =>
+  flags | 1n | (BigInt(SCAN_CODES.get(vk) ?? 0) << 16n) | (isExtendedKey(vk) ? 1n << 24n : 0n);
+
+/** Electron `keyCode` to Win32 VK: a named key, or an ASCII letter/digit (its codepoint is its VK). */
 const virtualKey = (keyCode: string): number | undefined => {
-  const named = NAMED_VIRTUAL_KEYS.get(keyCode);
+  const named = NAMED_KEYS.get(keyCode);
   if (named !== undefined) {
-    return named;
+    return named[0];
   }
   if (keyCode.length === 1) {
     const code = keyCode.toUpperCase().charCodeAt(0);
@@ -108,29 +118,43 @@ const virtualKey = (keyCode: string): number | undefined => {
   return undefined;
 };
 
+/** The MK_* button bits still down after `event`: mouseDown adds its button, mouseUp clears it. */
+export const heldButtonsAfter = (event: NativeInputEvent, held: number): number => {
+  if (event.type !== 'mouseDown' && event.type !== 'mouseUp') {
+    return held;
+  }
+  const { mk } = buttonDown(event.button ?? 'left');
+  return event.type === 'mouseDown' ? held | mk : held & ~mk;
+};
+
 /**
  * Map a synthesized {@link NativeInputEvent} to the single Win32 window message
  * that delivers it, or `undefined` for a key we do not map (a lenient no-op,
- * matching Electron). Pure.
+ * matching Electron). `held` is the MK_* set down before the event. Pure.
  */
-export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | undefined => {
+export const inputEventToMessage = (
+  event: NativeInputEvent,
+  held = 0,
+): WindowMessage | undefined => {
   switch (event.type) {
     case 'mouseMove':
-      return { message: WM_MOUSEMOVE, wParam: 0n, lParam: mouseLParam(event.x, event.y) };
-    case 'mouseDown': {
-      const { message, mk } = buttonDown(event.button ?? 'left');
-      return { message, wParam: BigInt(mk), lParam: mouseLParam(event.x, event.y) };
-    }
+      return { message: WM_MOUSEMOVE, wParam: BigInt(held), lParam: mouseLParam(event.x, event.y) };
+    case 'mouseDown':
+      return {
+        message: buttonDown(event.button ?? 'left').message,
+        wParam: BigInt(heldButtonsAfter(event, held)),
+        lParam: mouseLParam(event.x, event.y),
+      };
     case 'mouseUp':
       return {
         message: buttonUp(event.button ?? 'left'),
-        wParam: 0n,
+        wParam: BigInt(heldButtonsAfter(event, held)),
         lParam: mouseLParam(event.x, event.y),
       };
     case 'char': {
       // A named key types its control code (Enter -> CR) or nothing (arrows); a
       // single character types itself. Never the first letter of a key NAME.
-      const named = NAMED_VIRTUAL_KEYS.get(event.keyCode);
+      const named = NAMED_KEYS.get(event.keyCode)?.[0];
       const charCode =
         named !== undefined
           ? CHAR_PRODUCING_VK.has(named)
@@ -141,39 +165,40 @@ export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | un
             : undefined;
       return charCode === undefined
         ? undefined
-        : { message: WM_CHAR, wParam: BigInt(charCode), lParam: KEYDOWN_LPARAM };
+        : {
+            message: WM_CHAR,
+            wParam: BigInt(charCode),
+            lParam: keyLParam(virtualKey(event.keyCode) ?? 0),
+          };
     }
     case 'keyDown': {
       const vk = virtualKey(event.keyCode);
       return vk === undefined
         ? undefined
-        : { message: WM_KEYDOWN, wParam: BigInt(vk), lParam: KEYDOWN_LPARAM };
+        : { message: WM_KEYDOWN, wParam: BigInt(vk), lParam: keyLParam(vk) };
     }
     case 'keyUp': {
       const vk = virtualKey(event.keyCode);
       return vk === undefined
         ? undefined
-        : { message: WM_KEYUP, wParam: BigInt(vk), lParam: KEYUP_LPARAM };
+        : { message: WM_KEYUP, wParam: BigInt(vk), lParam: keyLParam(vk, KEYUP_FLAGS) };
     }
     default:
       return undefined;
   }
 };
 
-/** Keyboard messages must bypass the pump's queue (see below). */
 const KEYBOARD_MESSAGES = new Set<number>([WM_KEYDOWN, WM_KEYUP, WM_CHAR]);
 
 /**
- * Post a synthesized {@link NativeInputEvent} to a WKView's `hwnd` so WinCairo
- * WebKit delivers it as a trusted DOM event. Unmapped keys are silently ignored.
- *
- * Mouse messages are POSTed (async, no focus steal). Keyboard messages are SENT
- * directly to the view's native WndProc: a POSTed WM_KEYDOWN would pass through
- * the pump's `TranslateMessage`, which synthesizes a SECOND, real-keyboard-state
- * WM_CHAR — doubling and corrupting the typed text. SendMessageW skips the queue.
+ * Deliver a synthesized event to a WKView's `hwnd` as a trusted DOM event; `held` is the
+ * MK_* set down before it. Keyboard messages must be SENT, never POSTed: the pump's
+ * `TranslateMessage` would synthesize a second WM_CHAR from the real keyboard state,
+ * doubling the typed text. Modifier state comes from the physical keyboard, and a
+ * synthesized hover ends at once while the real cursor is outside the view (TME_LEAVE).
  */
-export const postWindowsInputEvent = (hwnd: bigint, event: NativeInputEvent): void => {
-  const msg = inputEventToMessage(event);
+export const postWindowsInputEvent = (hwnd: bigint, event: NativeInputEvent, held = 0): void => {
+  const msg = inputEventToMessage(event, held);
   if (msg === undefined) {
     return;
   }

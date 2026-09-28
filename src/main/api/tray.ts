@@ -1,75 +1,40 @@
 import { EventEmitter } from 'node:events';
-import { selectBackend } from '../platform/index';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { service } from '../platform/index';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { linuxTrayBackend } from '../platform/linux/sni-tray';
-import { macosTrayBackend } from '../platform/macos/cocoa-tray';
-import { windowsTrayBackend } from '../platform/windows/windows-tray';
+import { app } from './app';
 import type { Menu } from './menu';
 import type { NativeImage } from './native-image';
+import type { TrayImageOptions, TrayInstance } from '../platform/services';
 
 export type TrayImage = string | NativeImage;
 
-/**
- * A status-bar / system-tray icon — the drop-in equivalent of Electron's `Tray`.
- * The native status item is created eagerly in the constructor.
- *
- * Linux is a `StatusNotifierItem` over D-Bus, gated behind
- * `BUNMASKA_ENABLE_LINUX_TRAY`; without it (and in CI) the tray is an inert
- * no-op rather than a throw, so cross-platform code can construct a Tray safely.
- * {@link setContextMenu} is accepted but not yet shown on Linux or Windows.
- *
- * A bad or unreadable image path does not crash; the icon is simply not set.
- * `click` fires on macOS only when NO context menu is set — AppKit consumes the
- * click to present the menu. `right-click`/`double-click` are deferred.
- */
-
-/** Per-image options a backend may honour; the macOS template flag today. */
-export type TrayImageOptions = { readonly template?: boolean };
-
-export type TrayInstance = {
-  setToolTip(toolTip: string): void;
-  setTitle(title: string): void;
-  setImage(image: string, options?: TrayImageOptions): void;
-  /** `null` clears the installed menu. */
-  setContextMenu(menu: Menu | null): void;
-  onClick(callback: () => void): void;
-  /** Must be idempotent. */
-  destroy(): void;
-  isDestroyed(): boolean;
-};
-
-export type TrayBackend = {
-  /** `image` is a filesystem path, never a {@link NativeImage}. */
-  create(image: string, options?: TrayImageOptions): TrayInstance;
-};
-
-const macosBackend: TrayBackend = macosTrayBackend;
-const linuxBackend: TrayBackend = linuxTrayBackend;
-
-const { get: getBackend, setForTesting } = selectBackend<TrayBackend>('Tray', {
-  macos: () => macosBackend,
-  linux: () => linuxBackend,
-  windows: () => windowsTrayBackend,
-});
+const { get: getBackend, setForTesting } = service('tray');
 
 /** @internal */
 export const setTrayBackendForTesting = setForTesting;
 
-/** A NativeImage's template flag travels with the path the backends load. */
 const imageOptions = (image: TrayImage): TrayImageOptions =>
   typeof image === 'string' ? {} : { template: image.isTemplateImage() };
 
+/**
+ * `click` fires on macOS only while no context menu is set: AppKit consumes the click to show
+ * it. Linux needs `BUNMASKA_ENABLE_LINUX_TRAY=1`, else the tray is inert. A bad image path
+ * leaves the icon unset. Every method is a no-op after {@link destroy}.
+ */
 export class Tray extends EventEmitter {
   #instance: TrayInstance;
   #destroyed = false;
   #iconDir: string | undefined;
 
-  /** A {@link NativeImage} is materialized to a temp PNG the backends load by path. */
   constructor(image: TrayImage) {
     super();
-    this.#instance = getBackend().create(this.#resolveImagePath(image), imageOptions(image));
+    this.#instance = getBackend().create(
+      this.#resolveImagePath(image),
+      imageOptions(image),
+      app.getName(),
+    );
     this.#instance.onClick(() => {
       this.emit('click');
     });
@@ -85,7 +50,6 @@ export class Tray extends EventEmitter {
     return path;
   }
 
-  /** No-op after {@link destroy}. */
   setToolTip(toolTip: string): void {
     if (this.#destroyed) {
       return;
@@ -93,7 +57,7 @@ export class Tray extends EventEmitter {
     this.#instance.setToolTip(toolTip);
   }
 
-  /** Text beside the icon in the macOS status bar. No-op after destroy. */
+  /** Text beside the icon in the macOS status bar. */
   setTitle(title: string): void {
     if (this.#destroyed) {
       return;
@@ -101,7 +65,6 @@ export class Tray extends EventEmitter {
     this.#instance.setTitle(title);
   }
 
-  /** No-op after destroy. */
   setImage(image: TrayImage): void {
     if (this.#destroyed) {
       return;
@@ -109,7 +72,7 @@ export class Tray extends EventEmitter {
     this.#instance.setImage(this.#resolveImagePath(image), imageOptions(image));
   }
 
-  /** `null` clears it. Shown on click. No-op after destroy. */
+  /** `null` clears it. Shown on click on macOS only; Linux and Windows accept and ignore it. */
   setContextMenu(menu: Menu | null): void {
     if (this.#destroyed) {
       return;
@@ -124,6 +87,9 @@ export class Tray extends EventEmitter {
     }
     this.#destroyed = true;
     this.#instance.destroy();
+    if (this.#iconDir !== undefined) {
+      rmSync(this.#iconDir, { recursive: true, force: true });
+    }
   }
 
   isDestroyed(): boolean {

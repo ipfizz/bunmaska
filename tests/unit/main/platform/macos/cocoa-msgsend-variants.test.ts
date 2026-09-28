@@ -1,7 +1,8 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { BunmaskaError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
+  cgRectArgs,
   msgSendF64,
   msgSendI64,
   msgSendI64Ptr,
@@ -54,3 +55,13 @@ test.skipIf(currentPlatform() === 'macos')(
     expect(unguarded).toEqual([]);
   },
 );
+
+describe('cgRectArgs (D018)', () => {
+  test('arm64 passes a CGRect as four doubles in d0-d3', () => {
+    expect(cgRectArgs([1, 2, 3, 4], 'arm64')).toEqual([1, 2, 3, 4]);
+  });
+
+  test('x86_64 fills xmm0-7 first so the CGRect spills to the stack like a MEMORY struct', () => {
+    expect(cgRectArgs([1, 2, 3, 4], 'x64')).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4]);
+  });
+});

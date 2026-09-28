@@ -1,14 +1,9 @@
-import { parseAccelerator } from '../../api/accelerator';
-import type { GlobalShortcutBackend } from '../../api/global-shortcut';
+import { parseAccelerator } from '../../../common/accelerator';
+import type { GlobalShortcutBackend } from '../services';
 import { loadUser32 } from './win32-ffi';
+import { createMessageWindow, type MessageHandler } from './windows-message-window';
 
-/**
- * `RegisterHotKey(NULL, id, …)` claims a system-wide hot key and posts `WM_HOTKEY` to the
- * calling (Bun main) thread's queue; the cooperative pump's message inspector routes that
- * message back here via {@link WindowsGlobalShortcutBackend.dispatchHotkeyMessage}.
- */
-
-/** `WM_HOTKEY` — posted when a registered hot key fires; `wParam` is the hot-key id. */
+/** `wParam` is the hot-key id. */
 export const WM_HOTKEY = 0x0312;
 
 // RegisterHotKey `fsModifiers` flags.
@@ -38,6 +33,14 @@ const NAMED_VK = new Map<string, number>([
   ['PageUp', 0x21],
   ['PageDown', 0x22],
   ['Plus', 0xbb], // VK_OEM_PLUS
+  ['Insert', 0x2d],
+  ['nummult', 0x6a],
+  ['numadd', 0x6b],
+  ['numsub', 0x6d],
+  ['numdec', 0x6e],
+  ['numdiv', 0x6f],
+  ...Array.from({ length: 10 }, (_, digit): [string, number] => [`num${digit}`, 0x60 + digit]),
+  // ponytail: no media/volume keys yet; they are VK_VOLUME_MUTE (0xAD) through VK_MEDIA_PLAY_PAUSE (0xB3).
 ]);
 
 /** Common US-layout OEM punctuation virtual-key codes (layout-dependent). */
@@ -61,7 +64,6 @@ const FUNCTION_KEY = /^F([1-9]|1[0-9]|2[0-4])$/;
 const keyToVirtualKey = (key: string): number | undefined => {
   if (key.length === 1) {
     const code = key.charCodeAt(0);
-    // A–Z (0x41–0x5A) and 0–9 (0x30–0x39) map to their character code directly.
     if ((code >= 0x41 && code <= 0x5a) || (code >= 0x30 && code <= 0x39)) {
       return code;
     }
@@ -113,14 +115,41 @@ export type WindowsGlobalShortcutBackend = GlobalShortcutBackend & {
   dispatchHotkeyMessage(message: number, wParam: bigint): boolean;
 };
 
-/**
- * Build a Windows globalShortcut backend. A factory (not just a singleton) so
- * tests get an isolated id space; production uses {@link windowsGlobalShortcutBackend}.
- */
-export const createWindowsGlobalShortcutBackend = (): WindowsGlobalShortcutBackend => {
+/** The user32 calls the backend makes. */
+type HotkeyApi = Pick<
+  ReturnType<typeof loadUser32>['symbols'],
+  'RegisterHotKey' | 'UnregisterHotKey'
+>;
+
+export const createWindowsGlobalShortcutBackend = (
+  user32: () => HotkeyApi = () => loadUser32().symbols,
+  createWindow: (handler: MessageHandler) => { readonly hwnd: bigint } = createMessageWindow,
+): WindowsGlobalShortcutBackend => {
   const idByAccelerator = new Map<string, number>();
   const callbackById = new Map<number, () => void>();
-  let nextId = 1;
+
+  const dispatchHotkeyMessage = (message: number, wParam: bigint): boolean => {
+    if (message !== WM_HOTKEY) {
+      return false;
+    }
+    const callback = callbackById.get(Number(wParam));
+    if (callback === undefined) {
+      return false;
+    }
+    callback();
+    return true;
+  };
+
+  // Never register against the thread (hwnd NULL): a modal loop (message box, menu,
+  // window drag) drops thread messages. Posted to this window, WM_HOTKEY reaches the pump's
+  // inspector normally and the window's handler while a modal loop runs.
+  let window: { readonly hwnd: bigint } | undefined;
+  const hotkeyWindow = (): bigint => {
+    window ??= createWindow((message, wParam) => {
+      dispatchHotkeyMessage(message, wParam);
+    });
+    return window.hwnd;
+  };
 
   return {
     isSupported: (): boolean => true,
@@ -130,11 +159,14 @@ export const createWindowsGlobalShortcutBackend = (): WindowsGlobalShortcutBacke
       if (hotkey === undefined) {
         return false;
       }
-      const id = nextId;
-      if (loadUser32().symbols.RegisterHotKey(0n, id, hotkey.modifiers, hotkey.vk) === 0) {
+      // The lowest free id keeps ids inside RegisterHotKey's app range (0x0000-0xBFFF).
+      let id = 1;
+      while (callbackById.has(id)) {
+        id += 1;
+      }
+      if (user32().RegisterHotKey(hotkeyWindow(), id, hotkey.modifiers, hotkey.vk) === 0) {
         return false; // the OS refused the grab (reserved/already taken)
       }
-      nextId += 1;
       idByAccelerator.set(accelerator, id);
       callbackById.set(id, callback);
       return true;
@@ -145,31 +177,21 @@ export const createWindowsGlobalShortcutBackend = (): WindowsGlobalShortcutBacke
       if (id === undefined) {
         return;
       }
-      loadUser32().symbols.UnregisterHotKey(0n, id);
+      user32().UnregisterHotKey(hotkeyWindow(), id);
       idByAccelerator.delete(accelerator);
       callbackById.delete(id);
     },
 
     unregisterAll(): void {
-      const user32 = loadUser32().symbols;
+      const api = user32();
       for (const id of callbackById.keys()) {
-        user32.UnregisterHotKey(0n, id);
+        api.UnregisterHotKey(hotkeyWindow(), id);
       }
       idByAccelerator.clear();
       callbackById.clear();
     },
 
-    dispatchHotkeyMessage(message: number, wParam: bigint): boolean {
-      if (message !== WM_HOTKEY) {
-        return false;
-      }
-      const callback = callbackById.get(Number(wParam));
-      if (callback === undefined) {
-        return false;
-      }
-      callback();
-      return true;
-    },
+    dispatchHotkeyMessage,
   };
 };
 

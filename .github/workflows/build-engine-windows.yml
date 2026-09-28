@@ -1,20 +1,24 @@
 name: build-engine-windows
 
 # Builds OUR OWN WinCairo WebKit engine FROM SOURCE on a Windows runner, relocates
-# it into the Bunmaska engine-store layout, and proves it loads from the store —
+# it into the Bunmaska engine-store layout, and proves it loads from the store -
 # the Windows peer of `build-engine.yml` (which relocates apt's WebKitGTK on Linux).
 # Windows has no system WebKit and we never ship Playwright's build, so the engine
 # is our own from-source binary.
 #
 # This recipe mirrors the one proven locally end-to-end (a real BrowserWindow loaded
 # the from-source engine from the store: STORE_ENGINE_OK). Notes baked in from that:
-#   * WinCairo dropped MSVC — it builds with clang-cl, so we install LLVM 20.
+#   * WinCairo dropped MSVC - it builds with clang-cl, so we install LLVM 20.
 #   * WebKit's code-gen needs gperf on PATH.
 #   * A short WEBKIT_OUTPUTDIR avoids Windows' 250-char object-path limit in vcpkg.
 #   * patch-webkit-wincairo.py routes ~300 serializer inputs through a response file
 #     (otherwise the inline command line overflows cmd.exe's ~8191-char limit).
 #   * `ninja -k 0` finishes past a broken dev-tooling target (compile_commands.json)
 #     that no product DLL depends on; success = WebKit2.dll exists.
+#
+# The release signing key (D042) never enters `build`: hours of third-party inputs
+# (choco, LLVM, vcpkg, WebKit's scripts) run there and could exfiltrate it. `publish`
+# signs the uploaded artifact from a fresh checkout, behind the engine-release environment.
 #
 # Heavy (~hours, GBs): runs on demand / on the engine branch only.
 on:
@@ -24,12 +28,19 @@ on:
         description: 'WebKit git tag to build (STABLE train only - even minor, e.g. wpewebkit-2.52.5)'
         required: true
         default: 'wpewebkit-2.52.5'
+      rev:
+        description: 'Build revision; bump it to rebuild a tag (a published engine id never changes)'
+        required: false
+        default: 'bunmaska1'
       llvm:
         description: 'LLVM version for clang-cl (older WebKit trains may need an older clang)'
         required: false
         default: '20.1.8'
   push:
     branches: [feat/windows-engine]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -39,28 +50,40 @@ jobs:
     # whole pipeline was proven end-to-end on (2026-07).
     runs-on: windows-2022
     timeout-minutes: 350
+    outputs:
+      engine_id: ${{ steps.id.outputs.engine_id }}
     env:
       # Hosted engines track the STABLE WPE train only (even minor; WSAs land
       # there). Development tags (odd minor) are for local experiments, never
       # the feed.
       WEBKIT_TAG: ${{ github.event.inputs.webkit_tag || 'wpewebkit-2.52.5' }}
+      ENGINE_REV: ${{ github.event.inputs.rev || 'bunmaska1' }}
       # Short build-output root (WebKit honours WEBKIT_OUTPUTDIR): vcpkg's ICU build
       # generates pathologically deep try-compile object paths that blow past
       # Windows' 250-char limit when nested under the workspace.
       WEBKIT_OUTPUTDIR: C:\wkb
       LLVM_VER: ${{ github.event.inputs.llvm || '20.1.8' }}
       LLVM_DIR: C:\llvm\clang+llvm-${{ github.event.inputs.llvm || '20.1.8' }}-x86_64-pc-windows-msvc
-      # Publish steps are gated on these so forks / unconfigured runs still build
-      # + prove the engine, skipping pack/sign/upload when the secrets are absent.
-      HAVE_KEY: ${{ secrets.ENGINE_SIGNING_KEY != '' }}
-      # R2_PUBLISH_TOKEN is R2-only, separate from the Pages-scoped
-      # CLOUDFLARE_API_TOKEN deploy-web.yml uses (which has no R2 perms).
-      HAVE_R2: ${{ secrets.R2_PUBLISH_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - name: Checkout bunmaska
         uses: actions/checkout@v4
         with:
           path: bunmaska
+          persist-credentials: false
+
+      # Fail in seconds, not after the multi-hour build.
+      - name: Compute and validate the engine id
+        id: id
+        run: |
+          $ver = "$env:WEBKIT_TAG" -replace '^(wpe|webkit)webkit-?|^webkitgtk-', ''
+          if ($ver -notmatch '^\d+\.(\d+)\.\d+$' -or [int]$Matches[1] % 2 -ne 0) {
+            Write-Error "$env:WEBKIT_TAG is not a stable (even-minor) x.y.z WebKit release"; exit 1
+          }
+          if ($env:ENGINE_REV -notmatch '^bunmaska\d+$') {
+            Write-Error "rev must look like bunmaska<n>, got $env:ENGINE_REV"; exit 1
+          }
+          "engine_id=webkit-2-$ver-$env:ENGINE_REV-windows-x64" >> $env:GITHUB_OUTPUT
+        shell: pwsh
 
       # Clone WebKit to a SHORT path (C:\WebKit) at the pinned tag; shallow (history
       # is enormous, the build only needs the tree at that revision).
@@ -134,13 +157,6 @@ jobs:
           }
         shell: pwsh
 
-      - name: Compute the engine id from the tag
-        id: id
-        run: |
-          $ver = "$env:WEBKIT_TAG" -replace '^(wpe|webkit)webkit-?|^webkitgtk-', ''
-          "engine_id=webkit-2-$ver-bunmaska1-windows-x64" >> $env:GITHUB_OUTPUT
-        shell: pwsh
-
       # Relocate the from-source closure (Release/bin) into the store, mark installed.
       - name: Relocate into the engine store
         run: |
@@ -180,9 +196,42 @@ jobs:
           path: ${{ runner.temp }}\store\${{ steps.id.outputs.engine_id }}
           retention-days: 7
 
-      # Pack + sign the engine into the 3-file feed layout, then publish to R2.
-      # Gated on the signing key being present, so forks / unconfigured runs still
-      # build + prove the engine without needing the release secret.
+  publish:
+    name: pack, sign and publish the engine
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 30
+    # Configure required reviewers on this environment: it gates every use of the key.
+    environment: engine-release
+    # A publish read-modify-writes index.json; two at once would drop an engine.
+    concurrency:
+      group: engine-publish
+      cancel-in-progress: false
+    env:
+      ENGINE_ID: ${{ needs.build.outputs.engine_id }}
+      # Forks / unconfigured runs skip pack/sign/upload when the secrets are absent.
+      HAVE_KEY: ${{ secrets.ENGINE_SIGNING_KEY != '' }}
+      # R2_PUBLISH_TOKEN is R2-only, separate from the Pages-scoped
+      # CLOUDFLARE_API_TOKEN deploy-web.yml uses (which has no R2 perms).
+      HAVE_R2: ${{ secrets.R2_PUBLISH_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    # Pinned by SHA and no `bun install`: nothing mutable runs beside the key.
+    steps:
+      - name: Checkout bunmaska
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: bunmaska
+          persist-credentials: false
+
+      - name: Download the engine artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ env.ENGINE_ID }}
+          path: ${{ runner.temp }}\store\${{ env.ENGINE_ID }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: bunmaska/.bun-version
+
       - name: Pack + sign the engine for the feed
         if: ${{ env.HAVE_KEY == 'true' }}
         working-directory: bunmaska
@@ -191,9 +240,7 @@ jobs:
         run: |
           $key = "$env:RUNNER_TEMP\engine-signing-key.pem"
           Set-Content -Path $key -Value $env:ENGINE_SIGNING_KEY -NoNewline
-          bun tools/engine/pack-engine.ts `
-            "$env:RUNNER_TEMP\store\${{ steps.id.outputs.engine_id }}" `
-            "$env:RUNNER_TEMP\feed" $key
+          bun tools/engine/pack-engine.ts "$env:RUNNER_TEMP\store\$env:ENGINE_ID" "$env:RUNNER_TEMP\feed" $key
           Remove-Item $key -Force
         shell: pwsh
 
@@ -204,6 +251,5 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.R2_PUBLISH_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          bun tools/engine/publish-engine-r2.ts `
-            "$env:RUNNER_TEMP\feed" "${{ steps.id.outputs.engine_id }}" --bucket bunmaska-engines
+          bun tools/engine/publish-engine-r2.ts "$env:RUNNER_TEMP\feed" "$env:ENGINE_ID" --bucket bunmaska-engines
         shell: pwsh

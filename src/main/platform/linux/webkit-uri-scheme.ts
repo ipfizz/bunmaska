@@ -1,68 +1,30 @@
 import { CString, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
-import { type BuiltProtocolResponse, protocol } from '../../api/protocol';
 import { cstr } from '../cstr';
+import type { BuiltProtocolResponse, NativeProtocol } from '../native';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
 import { loadWebKitGtkFFI } from './webkitgtk-ffi';
 
-/**
- * Bridges WebKitGTK custom URI-scheme requests to the `protocol` module.
- *
- * JSCallback lifecycle: each scheme's callback is a {@link JSCallback} retained
- * in a module-level Set for the process lifetime. It is NEVER closed inside its
- * own invocation — closing the thunk mid-callback frees the native trampoline
- * GObject still points at (SIGSEGV). Schemes are registered once per process on
- * the default context; a second registration of the same scheme is a guarded
- * no-op (WebKit aborts on a duplicate registration).
- */
-
 const log = createLogger('linux-uri-scheme');
 
-/** The Bunmaska error domain for a failed custom-scheme request. */
 const ERROR_DOMAIN = 'BunmaskaProtocol';
-/** Error code for an unhandled/declined request. */
 const ERROR_CODE_NO_HANDLER = 1;
 
-/** Retains every URI-scheme {@link JSCallback} for the process lifetime. */
+/** Scheme thunks live for the process: WebKit keeps calling them and has no unregister. */
 const retainedCallbacks = new Set<JSCallback>();
-/** Schemes already registered on the (single, default) context — dedup guard. */
+/** WebKit aborts on a duplicate registration, so each scheme registers once per process. */
 const registeredSchemes = new Set<string>();
 
-/**
- * The dispatcher the callback uses to serve a URI. Defaults to the live
- * {@link protocol.dispatch}; overridable for unit tests.
- */
-let dispatcher: (url: string) => BuiltProtocolResponse | undefined = protocol.dispatch;
-
-/** Override the URI dispatcher. Test-only. */
-export const setUriSchemeDispatcherForTesting = (
-  fake: ((url: string) => BuiltProtocolResponse | undefined) | undefined,
-): void => {
-  dispatcher = fake ?? protocol.dispatch;
-};
-
-/** Reset the registration guard + drop retained callbacks. Test-only. */
-export const resetUriSchemeRegistryForTesting = (): void => {
-  for (const callback of retainedCallbacks) {
-    callback.close();
-  }
-  retainedCallbacks.clear();
-  registeredSchemes.clear();
-};
-
-/** Read the (transfer-none) request URI as a JS string. */
+/** The request URI is transfer-none: read it, never free it. */
 const requestUri = (request: Pointer): string => {
   const webkit = loadWebKitGtkFFI();
   const uriPtr = webkit.symbols.webkit_uri_scheme_request_get_uri(request);
   return uriPtr === null ? '' : new CString(uriPtr).toString();
 };
 
-/**
- * Complete `request` with an error (no handler / declined). Best-effort: builds
- * a GError, finishes the request with it, then frees the GError.
- */
+/** Fail `request`: no handler matched, or the handler threw. */
 const finishError = (request: Pointer): void => {
   const webkit = loadWebKitGtkFFI();
   const glib = loadGlibFFI();
@@ -78,12 +40,7 @@ const finishError = (request: Pointer): void => {
   }
 };
 
-/**
- * Serve `built` to `request`: copy the bytes into a `GBytes`, wrap it in a
- * `GMemoryInputStream`, then complete via `webkit_uri_scheme_request_finish`.
- * The stream is owned by `finish` (it takes its own ref); the local `GBytes`
- * (and the stream ref we hold) are dropped after the call.
- */
+/** Ownership: `finish` refs the stream and the stream refs the GBytes, so both of our refs drop here. */
 const finishWithBytes = (request: Pointer, built: BuiltProtocolResponse): void => {
   const webkit = loadWebKitGtkFFI();
   const glib = loadGlibFFI();
@@ -115,19 +72,18 @@ const finishWithBytes = (request: Pointer, built: BuiltProtocolResponse): void =
     BigInt(bytes.length),
     cstr(built.mimeType),
   );
-  // finish() took its own ref on the stream; drop the one g_memory_input_stream
-  // handed us (transfer-full) so the stream is freed once WebKit is done.
+  // Drop our transfer-full stream ref; WebKit frees the stream when done.
   loadGObjectFFI().symbols.g_object_unref(stream);
 };
 
-/**
- * @internal The body of the URI-scheme callback. Never throws out into the
- * callback — any error completes the request with an error instead.
- */
-export const handleUriSchemeRequest = (request: Pointer): void => {
+/** @internal Completes the request with an error rather than throwing into the native callback. */
+export const handleUriSchemeRequest = (
+  request: Pointer,
+  dispatch: NativeProtocol['dispatch'],
+): void => {
   try {
     const url = requestUri(request);
-    const built = dispatcher(url);
+    const built = dispatch(url);
     if (built === undefined) {
       finishError(request);
       return;
@@ -139,16 +95,14 @@ export const handleUriSchemeRequest = (request: Pointer): void => {
   }
 };
 
-/** ABI shape for `WebKitURISchemeRequestCallback`: `(request, user_data) -> void`. */
+/** `WebKitURISchemeRequestCallback`: `(request, user_data) -> void`. */
 export const URI_SCHEME_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
 
-/** Build the retained URI-scheme {@link JSCallback}. */
-const makeUriSchemeCallback = (): JSCallback =>
+const makeUriSchemeCallback = (dispatch: NativeProtocol['dispatch']): JSCallback =>
   new JSCallback((request: Pointer, _userData: Pointer): void => {
-    handleUriSchemeRequest(request);
+    handleUriSchemeRequest(request, dispatch);
   }, URI_SCHEME_CB_DEF);
 
-/** Get the WebKit context for `view` (or the process-wide default if `view` is null). */
 const contextFor = (view: Pointer | null): Pointer | null => {
   const webkit = loadWebKitGtkFFI();
   if (view === null) {
@@ -157,16 +111,12 @@ const contextFor = (view: Pointer | null): Pointer | null => {
   return webkit.symbols.webkit_web_view_get_context(view);
 };
 
-/**
- * Register a custom URI scheme on `view`'s WebKit context (or the default
- * context when `view` is null). Idempotent per scheme name: registering an
- * already-registered scheme is a no-op (WebKit aborts on a duplicate
- * registration on the same context).
- *
- * The callback {@link JSCallback} is retained for the process lifetime — never
- * closed inside its own invocation.
- */
-export const registerUriScheme = (scheme: string, view: Pointer | null): void => {
+/** Register `scheme` on `view`'s context (the default one when null); idempotent per scheme. */
+export const registerUriScheme = (
+  scheme: string,
+  view: Pointer | null,
+  dispatch: NativeProtocol['dispatch'],
+): void => {
   if (registeredSchemes.has(scheme)) {
     return;
   }
@@ -176,7 +126,7 @@ export const registerUriScheme = (scheme: string, view: Pointer | null): void =>
     return;
   }
   const webkit = loadWebKitGtkFFI();
-  const callback = makeUriSchemeCallback();
+  const callback = makeUriSchemeCallback(dispatch);
   if (callback.ptr === null) {
     callback.close();
     throw new Error(`failed to allocate a URI-scheme callback thunk for '${scheme}'`);
@@ -192,13 +142,12 @@ export const registerUriScheme = (scheme: string, view: Pointer | null): void =>
   registeredSchemes.add(scheme);
 };
 
-/**
- * Register every scheme currently registered with the `protocol` module on
- * `view`'s context. Called at web-view creation so custom schemes are wired
- * before any load. Each scheme is registered once per process (the dedup guard).
- */
-export const registerAllSchemes = (view: Pointer | null): void => {
-  for (const scheme of protocol.getRegisteredSchemes()) {
-    registerUriScheme(scheme, view);
+/** Wire every `protocol.handle` scheme; call before the view's first load. */
+export const registerAllSchemes = (view: Pointer | null, protocol?: NativeProtocol): void => {
+  if (protocol === undefined) {
+    return;
+  }
+  for (const scheme of protocol.schemes) {
+    registerUriScheme(scheme, view, protocol.dispatch);
   }
 };

@@ -20,14 +20,6 @@ import {
 const hasEngine = currentPlatform() === 'windows' && resolveWindowsEngineDir() !== undefined;
 
 describe.skipIf(!hasEngine)('WinCairo WebKit2 FFI', () => {
-  test('loads WebKit2.dll and resolves the core WK2 symbols', () => {
-    const wk = loadWebKit2();
-    expect(typeof wk.symbols.WKViewCreate).toBe('function');
-    expect(typeof wk.symbols.WKPageLoadURL).toBe('function');
-    expect(typeof wk.symbols.WKUserContentControllerAddScriptMessageHandler).toBe('function');
-    expect(typeof wk.symbols.WKUserScriptCreateWithSource).toBe('function');
-  });
-
   test('loadWebKit2 is idempotent (same library handle)', () => {
     expect(loadWebKit2()).toBe(loadWebKit2());
   });

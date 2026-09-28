@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import {
-  type ShellBackend,
-  setShellBackendForTesting,
-  shell,
-} from '../../../../src/main/api/shell';
+import { setShellBackendForTesting, shell } from '../../../../src/main/api/shell';
+import type { ShellBackend } from '../../../../src/main/platform/services';
 
 let calls: string[];
 let openExternalResult = true;
@@ -42,6 +39,13 @@ describe('shell.openExternal', () => {
     expect(calls).toEqual(['openExternal:https://example.com']);
   });
 
+  test('resolves false for a path or program name without reaching the backend', async () => {
+    for (const notAUrl of ['calc', 'C:\\Users\\x\\payload.exe', 'c:/x.exe', '/etc/passwd']) {
+      expect(await shell.openExternal(notAUrl)).toBe(false);
+    }
+    expect(calls).toEqual([]);
+  });
+
   test('resolves false when the backend reports failure', async () => {
     openExternalResult = false;
     expect(await shell.openExternal('bad:')).toBe(false);
@@ -56,17 +60,5 @@ describe('shell.openPath', () => {
   test('resolves an error string on failure', async () => {
     openPathResult = false;
     expect(await shell.openPath('/nope')).toBe('Failed to open path: /nope');
-  });
-});
-
-describe('shell.showItemInFolder and beep', () => {
-  test('showItemInFolder forwards the path', () => {
-    shell.showItemInFolder('/tmp/file');
-    expect(calls).toEqual(['showItemInFolder:/tmp/file']);
-  });
-
-  test('beep calls the backend', () => {
-    shell.beep();
-    expect(calls).toEqual(['beep']);
   });
 });

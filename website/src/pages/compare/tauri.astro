@@ -4,14 +4,14 @@ import Base from "../../layouts/Base.astro";
 import Nav from "../../components/Nav.astro";
 import Footer from "../../components/Footer.astro";
 
-const title = "Tauri without Rust: a Tauri alternative in TypeScript - bunmaska";
+const title = "Tauri without Rust: a Tauri alternative in TypeScript";
 const description =
   "Want Tauri's tiny, no-Chromium apps but all TypeScript instead of Rust? bunmaska keeps the Electron mental model on Bun and system WebKit. Trade-offs, honestly.";
 ---
 
 <Base title={title} description={description}>
   <Nav />
-  <main class="mx-auto max-w-[72ch] px-6 py-10 sm:py-16 lg:py-20">
+  <main id="main" class="mx-auto max-w-[72ch] px-6 py-10 sm:py-16 lg:py-20">
     <article class="prose">
       <p class="eyebrow">Compare</p>
       <h1>Tauri without Rust?</h1>
@@ -62,13 +62,3 @@ const description =
   </main>
   <Footer />
 </Base>
-
-<style>
-  .lead {
-    font-size: 1.05rem;
-    color: var(--text-muted);
-  }
-  .prose .btn {
-    text-decoration: none;
-  }
-</style>

@@ -1,9 +1,6 @@
-/**
- * Emits the auto-update feed for a built bundle: a `.tar.zst` of the `.app`/AppDir
- * plus the `update.json` manifest the runtime `autoUpdater` consumes.
- */
+/** `build --update`: the feed's `.tar.zst` and `update.json`, plus a `.sig` for each when signing. */
 
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import {
   type ArtifactOs,
@@ -26,7 +23,7 @@ export type UpdateArtifactSpec = {
   readonly channel: string;
   readonly os: ArtifactOs;
   readonly arch: Arch;
-  /** PEM Ed25519 private key; when set, a detached `.sig` is written beside the artifact. */
+  /** PEM Ed25519 private key; when set, `.sig`s are written beside the artifact and `update.json`. */
   readonly signingKeyPem?: string;
 };
 
@@ -63,22 +60,22 @@ export type UpdateArtifactResult = {
   readonly manifest: UpdateManifest;
   /** Present only when the spec carried a signing key. */
   readonly sigPath?: string;
+  /** `update.json.sig`; present only when the spec carried a signing key. */
+  readonly manifestSigPath?: string;
 };
 
 const tarThenZstd = async (bundlePath: string, outPath: string): Promise<void> => {
-  // tar with the system tar (portable), then compress the tar bytes with Bun's
-  // zstd — avoids depending on `tar --zstd` being present.
-  const tarPath = outPath.replace(/\.zst$/, '');
-  const proc = Bun.spawn(['tar', '-cf', tarPath, '-C', dirname(bundlePath), basename(bundlePath)], {
-    stdio: ['ignore', 'ignore', 'inherit'],
+  // A relative entry from cwd, never an absolute path: GNU tar on Windows reads C:\... as a remote host.
+  const proc = Bun.spawn(['tar', '-cf', '-', basename(bundlePath)], {
+    cwd: dirname(bundlePath),
+    stdio: ['ignore', 'pipe', 'inherit'],
   });
+  const tarBytes = await new Response(proc.stdout).bytes();
   const code = await proc.exited;
   if (code !== 0) {
     throw new Error(`update-artifact: tar exited with code ${code}`);
   }
-  const tarBytes = readFileSync(tarPath);
   writeFileSync(outPath, Bun.zstdCompressSync(tarBytes));
-  rmSync(tarPath, { force: true });
 };
 
 const defaultDeps: UpdateArtifactDeps = {
@@ -98,13 +95,20 @@ export const emitUpdateArtifact = async (
   await deps.tarZst(spec.bundlePath, artifactPath);
   const bytes = deps.readBytes(artifactPath);
   const manifest = buildUpdateManifest(spec, bytes);
+  const manifestText = serializeUpdateManifest(manifest);
   const manifestPath = join(spec.outDir, 'update.json');
-  deps.writeText(manifestPath, serializeUpdateManifest(manifest));
   if (spec.signingKeyPem === undefined) {
+    deps.writeText(manifestPath, manifestText);
     return { artifactPath, manifestPath, manifest };
   }
-  // Same detached format the runtime autoUpdater fetches as `<artifact>.sig`.
+  // Sign before writing so a bad key leaves no unsigned update.json behind.
+  const artifactSig = signArtifact(spec.signingKeyPem, bytes);
+  const manifestSig = signArtifact(spec.signingKeyPem, new TextEncoder().encode(manifestText));
+  // Same detached format the runtime autoUpdater fetches as `<file>.sig`.
   const sigPath = `${artifactPath}.sig`;
-  deps.writeText(sigPath, `${signArtifact(spec.signingKeyPem, bytes)}\n`);
-  return { artifactPath, manifestPath, manifest, sigPath };
+  const manifestSigPath = `${manifestPath}.sig`;
+  deps.writeText(manifestPath, manifestText);
+  deps.writeText(sigPath, `${artifactSig}\n`);
+  deps.writeText(manifestSigPath, `${manifestSig}\n`);
+  return { artifactPath, manifestPath, manifest, sigPath, manifestSigPath };
 };

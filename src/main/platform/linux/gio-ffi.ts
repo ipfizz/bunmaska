@@ -1,30 +1,23 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-
-/**
- * Loads GIO's default-handler URI launcher plus the GFile / GListModel / stream
- * helpers the Linux shell, dialog, and clipboard paths need.
- *
- * Convention (matches the existing Linux loaders): `gboolean` is modelled as
- * {@link FFIType.i32} (compare `=== 1`), NOT `bool`; the `GAppLaunchContext*`
- * and `GError**` args are real pointers passed as `null`; `cstring` args are
- * NUL-terminated UTF-8 strings.
- */
+import { dlopenLinux } from './glib-ffi';
 
 const LIBGIO_PATH = 'libgio-2.0.so.0';
 
-/** The GIO FFI symbol descriptor table. */
 export const GIO_FFI_SYMBOLS = {
   g_app_info_launch_default_for_uri: {
     args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
     returns: FFIType.i32,
   },
-  // Returns a transfer-full `char*` (the local filesystem path) for a GFile, or
-  // NULL if the GFile has no native path. The caller MUST `g_free` the result.
+  // (GFile*) -> char* local path (transfer-full: g_free; NULL when not native).
   g_file_get_path: {
     args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (const char* path) -> GFile* (transfer-full: g_object_unref). Never fails, even for a missing path.
+  g_file_new_for_path: {
+    args: [FFIType.cstring],
     returns: FFIType.pointer,
   },
   // (GListModel*) -> guint number of items
@@ -38,17 +31,14 @@ export const GIO_FFI_SYMBOLS = {
     returns: FFIType.pointer,
   },
   // (GBytes*) -> GInputStream* (transfer-full). Takes its own ref on the GBytes,
-  // so the caller unrefs its local GBytes after this returns. Backs the custom
-  // URL-scheme response body on Linux (the GInputStream WebKit reads from).
+  // so the caller unrefs its local GBytes after this returns.
   g_memory_input_stream_new_from_bytes: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (stream, count /*gsize*/, io_priority /*int; G_PRIORITY_DEFAULT=0*/, cancellable /*null*/,
-  //  GAsyncReadyCallback, user_data /*null*/) -> void. Non-blocking; the result is
-  // collected in the callback. Used to drain the stream GDK hands back when reading
-  // a non-text clipboard format (e.g. text/html) WITHOUT freezing the GMainContext
-  // that feeds it (a synchronous read deadlocks; see gtk-clipboard.ts).
+  // (stream, count /*gsize*/, io_priority /*G_PRIORITY_DEFAULT=0*/, cancellable /*null*/,
+  //  GAsyncReadyCallback, user_data /*null*/) -> void. Never the sync read: the clipboard
+  //  stream is fed by the pumped GMainContext, so blocking on it deadlocks (gtk-clipboard.ts).
   g_input_stream_read_bytes_async: {
     args: [
       FFIType.pointer,
@@ -68,7 +58,7 @@ export const GIO_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GIO_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GIO_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -82,7 +72,7 @@ export const loadGioFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGIO_PATH, GIO_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGIO_PATH, GIO_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

@@ -18,18 +18,20 @@ import { faqPageJsonLd, homeFaq } from "../faq";
 
 <Base jsonLd={faqPageJsonLd(homeFaq)}>
   <Nav />
-  <Hero />
-  <main class="max-w-6xl mx-auto">
-    <FeatureGrid />
-    <SizeStory />
-    <Moat />
-    <PinWebkits />
-    <Platforms />
-    <Compare />
-    <QuickStartWalkthrough />
-    <CLICommands />
-    <TradeOffs />
-    <FinalCTA />
+  <main id="main">
+    <Hero />
+    <div class="max-w-6xl mx-auto">
+      <FeatureGrid />
+      <SizeStory />
+      <Moat />
+      <PinWebkits />
+      <Platforms />
+      <Compare />
+      <QuickStartWalkthrough />
+      <CLICommands />
+      <TradeOffs />
+      <FinalCTA />
+    </div>
   </main>
   <Footer />
 </Base>

@@ -44,7 +44,7 @@ describe('CooperativePump.start / stop', () => {
     expect(m.cancelled()).toBe(true);
   });
 
-  test('start is idempotent — a second start does not schedule a second ticker', () => {
+  test('a second start does not schedule a second ticker', () => {
     let schedules = 0;
     const ticker: Ticker = () => {
       schedules += 1;
@@ -95,16 +95,19 @@ describe('CooperativePump draining', () => {
     expect(drains).toBe(1);
   });
 
-  test('a throwing drainOnce does not stop the pump (errors are swallowed per tick)', () => {
+  test('a throwing drainOnce reaches onError and does not stop the pump', () => {
     const m = manualTicker();
+    const errors: unknown[] = [];
+    const hiccup = new Error('native hiccup');
     const pump = new CooperativePump(
       () => {
-        throw new Error('native hiccup');
+        throw hiccup;
       },
-      { ticker: m.ticker },
+      { ticker: m.ticker, onError: (error) => errors.push(error) },
     );
     pump.start();
     expect(() => m.tick()).not.toThrow();
+    expect(errors).toEqual([hiccup]);
     expect(pump.isRunning).toBe(true);
   });
 });
@@ -159,7 +162,7 @@ describe('AdaptiveBlockingPump start / stop', () => {
     expect(pump.isRunning).toBe(true);
   });
 
-  test('start is idempotent — a second start does not drain twice', () => {
+  test('a second start does not drain twice', () => {
     let drains = 0;
     const pump = new AdaptiveBlockingPump(
       () => {
@@ -188,6 +191,28 @@ describe('AdaptiveBlockingPump start / stop', () => {
     s.run();
     expect(drains).toBe(1);
     expect(pump.isRunning).toBe(false);
+  });
+});
+
+describe('AdaptiveBlockingPump restart', () => {
+  test('stop then start in the same turn keeps a single tick chain', () => {
+    const queue: Array<() => void> = [];
+    let drains = 0;
+    const pump = new AdaptiveBlockingPump(
+      () => {
+        drains += 1;
+        return false;
+      },
+      { schedule: (tick) => queue.push(tick) },
+    );
+    pump.start();
+    pump.stop();
+    pump.start();
+    drains = 0;
+    for (const tick of queue.splice(0)) {
+      tick();
+    }
+    expect(drains).toBe(1);
   });
 });
 
@@ -241,15 +266,18 @@ describe('AdaptiveBlockingPump adaptive timeout', () => {
     expect(pump.timeoutMs).toBe(8);
   });
 
-  test('a throwing drain does not stop the pump and still reschedules', () => {
+  test('a throwing drain reaches onError and the pump still reschedules', () => {
     const s = manualScheduler();
+    const errors: unknown[] = [];
+    const hiccup = new Error('native hiccup');
     const pump = new AdaptiveBlockingPump(
       () => {
-        throw new Error('native hiccup');
+        throw hiccup;
       },
-      { schedule: s.schedule },
+      { schedule: s.schedule, onError: (error) => errors.push(error) },
     );
     pump.start();
+    expect(errors).toEqual([hiccup]);
     expect(pump.isRunning).toBe(true);
     expect(s.pending()).toBe(true);
   });

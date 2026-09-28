@@ -1,27 +1,23 @@
 import { EventEmitter } from 'node:events';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { makeCancelableEvent } from '../../common/cancelable-event';
+import { InvalidArgumentError } from '../../common/errors';
 import { type AppEnvironment, defaultAppEnvironment } from './app-environment';
 import { localeCountryCode } from './app-locale';
 import { resolveAppName, resolveAppVersion } from './app-metadata';
-import { type AppPathName, resolveAppPath } from './app-paths';
-import * as desktop from './app-desktop';
-import { Menu } from './menu';
+import { type AppPathName, isAppPathName, resolveAppPath } from './app-paths';
+import { type Dock, displayBadgeCount, getDock } from './app-desktop';
+import { installQuitHandler, Menu } from './menu';
+import { nativeApp } from '../native-app';
 import { createLockBackend } from './single-instance-backend';
 import { SingleInstanceManager } from './single-instance';
 
-export type { Dock } from './app-desktop';
-
-/**
- * Application lifecycle controller — the drop-in equivalent of Electron's `app`.
- *
- * Extends Node's {@link EventEmitter} so the full listener API matches
- * Electron's contract (D023). Events: `ready`, `before-quit`, `will-quit`,
- * `window-all-closed`, `quit`.
- */
+/** Electron's `app`; an EventEmitter so the full listener API matches (D023). */
 export class App extends EventEmitter {
   #ready = false;
   #quitting = false;
+  #windowCloser: (() => boolean) | undefined;
+  #shutdownHook: (() => void | Promise<void>) | undefined;
   #badgeCount = 0;
   #startHook: (() => void) | undefined;
   #env: AppEnvironment | undefined;
@@ -40,12 +36,7 @@ export class App extends EventEmitter {
     this.#env = env;
   }
 
-  /**
-   * Reset mutable state and app-level window-event listeners. Lifecycle
-   * listeners (`before-quit`/`will-quit`/`quit`) are left intact so the native
-   * bootstrap wiring survives.
-   * @internal
-   */
+  /** @internal Keeps lifecycle listeners, so the bootstrap wiring survives. */
   resetForTesting(): void {
     this.#env = undefined;
     this.#quitting = false;
@@ -75,7 +66,11 @@ export class App extends EventEmitter {
   /** The first call triggers the native bootstrap, if a start hook is wired. */
   whenReady(): Promise<void> {
     if (!this.#ready) {
-      this.#startHook?.();
+      try {
+        this.#startHook?.();
+      } catch (error) {
+        return Promise.reject(error);
+      }
     }
     if (this.#ready) {
       return Promise.resolve();
@@ -85,22 +80,18 @@ export class App extends EventEmitter {
     });
   }
 
-  /**
-   * Mark the app ready and emit `ready`. Idempotent.
-   * @internal Invoked by the native bootstrap.
-   */
+  /** @internal Idempotent; called by the native bootstrap. */
   markReady(): void {
     if (this.#ready) {
       return;
     }
     this.#ready = true;
-    this.emit('ready');
+    // Deferred like Electron's post-first-tick `ready`: a listener added later this
+    // tick still fires, and a throwing listener cannot abort the backend's start().
+    queueMicrotask(() => this.emit('ready'));
   }
 
-  /**
-   * Register the native bootstrap to run on the first {@link whenReady}.
-   * @internal
-   */
+  /** @internal Runs on the first {@link whenReady}. */
   setStartHook(hook: () => void): void {
     this.#startHook = hook;
   }
@@ -127,11 +118,7 @@ export class App extends EventEmitter {
     return resolveAppVersion(this.#environment().manifest);
   }
 
-  /**
-   * The default User-Agent applied to new windows whose session has no explicit
-   * override (Electron's `app.userAgentFallback`). `''` means "use the platform
-   * WebKit default". A per-session `session.setUserAgent` takes precedence.
-   */
+  /** `''` means the WebKit default; a per-session `session.setUserAgent` wins. */
   get userAgentFallback(): string {
     return this.#userAgentFallback;
   }
@@ -140,7 +127,7 @@ export class App extends EventEmitter {
     this.#userAgentFallback = value;
   }
 
-  /** The nearest directory with a `package.json`, else cwd. */
+  /** A compiled binary's own directory, else the nearest `package.json` directory, else cwd. */
   getAppPath(): string {
     return this.#environment().appPath;
   }
@@ -157,17 +144,25 @@ export class App extends EventEmitter {
       temp: env.temp,
       appName: this.getName(),
       execPath: env.execPath,
-      appPath: env.appPath,
       env: env.env,
     });
   }
 
+  /** Throws {@link InvalidArgumentError} on an unknown name or a relative path, like Electron. */
   setPath(name: AppPathName, path: string): void {
+    if (!isAppPathName(name)) {
+      throw new InvalidArgumentError(`Failed to set '${name}' path: unknown path name`);
+    }
+    if (!isAbsolute(path)) {
+      throw new InvalidArgumentError(`Failed to set '${name}' path: path must be absolute`);
+    }
     this.#pathOverrides.set(name, path);
   }
 
+  /** Without `path`, pins `logs` to the platform default. */
   setAppLogsPath(path?: string): void {
-    this.#pathOverrides.set('logs', path ?? this.getPath('logs'));
+    this.#pathOverrides.delete('logs');
+    this.setPath('logs', path ?? this.getPath('logs'));
   }
 
   /** A normalized BCP-47 tag. */
@@ -203,48 +198,45 @@ export class App extends EventEmitter {
     Menu.setApplicationMenu(menu);
   }
 
-  /** Set the macOS activation policy (no-op off macOS). */
+  /** No-op off macOS. */
   setActivationPolicy(policy: 'regular' | 'accessory' | 'prohibited'): void {
-    desktop.setActivationPolicy(policy);
+    nativeApp().appKit?.setActivationPolicy(policy);
   }
 
-  /** Hide all application windows — macOS (no-op off macOS). */
+  /** No-op off macOS. */
   hide(): void {
-    desktop.hideApp();
+    nativeApp().appKit?.hide();
   }
 
-  /** Show application windows after {@link hide} — macOS (no-op off macOS). */
+  /** No-op off macOS. */
   show(): void {
-    desktop.showApp();
+    nativeApp().appKit?.show();
   }
 
-  /** Whether the application is hidden (macOS); `false` off macOS. */
+  /** `false` off macOS. */
   isHidden(): boolean {
-    return desktop.isAppHidden();
+    return nativeApp().appKit?.isHidden() ?? false;
   }
 
-  /** Whether the application is the active app (macOS); `false` off macOS. */
+  /** `false` off macOS. */
   isActive(): boolean {
-    return desktop.isAppActive();
+    return nativeApp().appKit?.isActive() ?? false;
   }
 
-  /** Show the platform's standard about panel (no-op where unsupported). */
+  /** No-op where the platform has no standard about panel. */
   showAboutPanel(): void {
-    desktop.showAboutPanel();
+    nativeApp().showAboutPanel?.();
   }
 
-  /** The macOS dock object, or `undefined` on other platforms. */
-  get dock(): desktop.Dock | undefined {
-    return desktop.getDock();
+  /** `undefined` off macOS. */
+  get dock(): Dock | undefined {
+    return getDock();
   }
 
-  /**
-   * Set the app's badge count. On macOS shows it on the dock tile; the value is
-   * always cached for {@link getBadgeCount}. Returns whether it was displayed.
-   */
+  /** Always cached for {@link getBadgeCount}; returns whether the dock showed it (macOS only). */
   setBadgeCount(count = 0): boolean {
     this.#badgeCount = count;
-    return desktop.displayBadgeCount(count);
+    return displayBadgeCount(count);
   }
 
   getBadgeCount(): number {
@@ -268,7 +260,8 @@ export class App extends EventEmitter {
   relaunch(options?: { args?: string[]; execPath?: string }): void {
     const env = this.#environment();
     const execPath = options?.execPath ?? env.execPath;
-    const args = options?.args ?? process.argv.slice(1);
+    // A compiled binary's argv[1] is its embedded entry, which Bun re-injects on launch.
+    const args = options?.args ?? process.argv.slice(env.isPackaged ? 2 : 1);
     env.relaunch(execPath, args);
   }
 
@@ -286,16 +279,21 @@ export class App extends EventEmitter {
     this.#singleInstance = manager;
   }
 
-  /**
-   * Acquire the single-instance lock. Returns `true` if this is the primary
-   * instance; `false` if another instance already holds it (in which case it has
-   * been handed this process's argv/cwd via its `second-instance` event, and the
-   * caller should quit).
-   */
+  /** `false` when another instance holds the lock; it receives this argv/cwd asynchronously. */
   requestSingleInstanceLock(additionalData: unknown = undefined): boolean {
     const payload = { argv: [...process.argv], cwd: process.cwd(), additionalData };
     return this.#singleInstanceManager().request(payload, (p) => {
-      this.emit('second-instance', makeCancelableEvent(), p.argv, p.cwd, p.additionalData);
+      // Out of the socket handler, which swallows throws, and never before `ready` (Electron).
+      const emit = (): void => {
+        queueMicrotask(() => {
+          this.emit('second-instance', makeCancelableEvent(), p.argv, p.cwd, p.additionalData);
+        });
+      };
+      if (this.#ready) {
+        emit();
+      } else {
+        this.once('ready', emit);
+      }
     });
   }
 
@@ -307,37 +305,65 @@ export class App extends EventEmitter {
     this.#singleInstanceManager().release();
   }
 
+  /** Register what `quit` runs to close the windows; it returns whether all of them closed. @internal */
+  setWindowCloser(closer: () => boolean): void {
+    this.#windowCloser = closer;
+  }
+
+  /** Register the native teardown run after `quit`; a Promise defers the exit until it settles. @internal */
+  setShutdownHook(hook: () => void | Promise<void>): void {
+    this.#shutdownHook = hook;
+  }
+
+  /** Whether a quit is running; `window-all-closed` stays quiet meanwhile. @internal */
+  get quitting(): boolean {
+    return this.#quitting;
+  }
+
   /**
-   * Begin shutting the app down. Emits the cancelable `before-quit` then
-   * `will-quit` events (a listener may call `preventDefault()` on the passed
-   * event to abort the quit); if neither vetoes, emits `quit` with the exit code
-   * and exits the process. The native bootstrap listens for `quit` to stop the
-   * run loop before the process exits.
+   * Electron's quit: `before-quit`, then every window closes (any `close` veto
+   * cancels), then `will-quit`, `quit(event, exitCode)`, the native shutdown and
+   * the exit. A cancelled or throwing step leaves the app able to quit again.
    */
   quit(exitCode = 0): void {
     if (this.#quitting) {
       return;
     }
     this.#quitting = true;
-
-    const beforeQuit = makeCancelableEvent();
-    this.emit('before-quit', beforeQuit);
-    if (beforeQuit.defaultPrevented) {
-      this.#quitting = false;
+    let proceed = false;
+    try {
+      proceed = this.#runQuitEvents(exitCode);
+    } finally {
+      this.#quitting = proceed;
+    }
+    if (!proceed) {
       return;
     }
+    const exit = (): void => this.#environment().exit(exitCode);
+    const shutdown = this.#shutdownHook?.();
+    if (shutdown instanceof Promise) {
+      void shutdown.catch(() => undefined).then(exit);
+    } else {
+      exit();
+    }
+  }
 
+  #runQuitEvents(exitCode: number): boolean {
+    const beforeQuit = makeCancelableEvent();
+    this.emit('before-quit', beforeQuit);
+    if (beforeQuit.defaultPrevented || !(this.#windowCloser?.() ?? true)) {
+      return false;
+    }
     const willQuit = makeCancelableEvent();
     this.emit('will-quit', willQuit);
     if (willQuit.defaultPrevented) {
-      this.#quitting = false;
-      return;
+      return false;
     }
-
-    this.emit('quit', exitCode);
-    this.#environment().exit(exitCode);
+    this.emit('quit', makeCancelableEvent(), exitCode);
+    return true;
   }
 }
 
-/** The application lifecycle singleton — Electron's `app`. */
 export const app = new App();
+
+installQuitHandler(() => app.quit());

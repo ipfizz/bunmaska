@@ -1,15 +1,11 @@
 import { ptr } from 'bun:ffi';
-import type { MenuRealizer } from '../../api/menu';
-import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
+import { FFIError } from '../../../common/errors';
+import type { MenuRealizer, MenuWindowAction, NativeMenuItemSpec } from '../services';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 
-/**
- * Windows has no global menu, so `setApplicationMenu` installs a per-window menu BAR,
- * built with `CreateMenu` (vs `CreatePopupMenu` for context menus); a fresh HMENU is built
- * PER window, because an HMENU can only belong to one window. Menu clicks reach us as
- * `WM_COMMAND` on the window's JSCallback frame proc.
- */
+// The application menu is a bar per window (an HMENU belongs to one window); bar clicks
+// arrive as WM_COMMAND on the window's JSCallback frame proc (D043).
 
 // AppendMenuW flags.
 const MF_STRING = 0x0;
@@ -17,6 +13,9 @@ const MF_SEPARATOR = 0x800;
 const MF_POPUP = 0x10;
 const MF_CHECKED = 0x8;
 const MF_GRAYED = 0x1;
+
+/** `WM_COMMAND` carries the id in LOWORD(wParam), so ids live in 1..0xFFFF. */
+const MAX_COMMAND_ID = 0xffff;
 
 /** The AppendMenuW flags for a normal/checkbox/radio item. Pure. */
 export const menuItemFlags = (enabled: boolean, checked: boolean): number => {
@@ -30,129 +29,146 @@ export const menuItemFlags = (enabled: boolean, checked: boolean): number => {
   return flags;
 };
 
+/** The user32 calls the realizer makes. */
+type MenuApi = Pick<
+  ReturnType<typeof loadUser32>['symbols'],
+  'CreateMenu' | 'CreatePopupMenu' | 'AppendMenuW' | 'DestroyMenu'
+>;
+
 /** A window that can carry the application menu bar (its native `setMenuBar`). */
 export type AppMenuWindow = {
   /** Attach an HMENU bar, or remove it with `null`. The window owns the HMENU. */
   setMenuBar(menuBar: bigint | null): void;
+  /** Run a window role (minimize, close, zoom, togglefullscreen) on this window. */
+  performWindowAction(action: MenuWindowAction): void;
 };
 
 /** The Windows realizer plus the command dispatch the window calls after a popup. */
 export type WindowsMenuRealizer = MenuRealizer & {
-  /** Fire the `onClick` stored for `commandId` (a `TrackPopupMenu`/`WM_COMMAND` result). */
-  dispatchMenuCommand(commandId: number): void;
+  /** Run the item stored for `commandId` (a `TrackPopupMenu`/`WM_COMMAND` result) on `window`. */
+  dispatchMenuCommand(commandId: number, window: AppMenuWindow): void;
   /** Start mirroring the application menu onto `window` (and apply it if one is set). */
   registerAppMenuWindow(window: AppMenuWindow): void;
   /** Stop mirroring the application menu onto `window` (on window close). */
   unregisterAppMenuWindow(window: AppMenuWindow): void;
 };
 
-/**
- * Build a Windows menu realizer. A factory (not just a singleton) so tests get an
- * isolated command-id space; production uses {@link windowsMenuRealizer}.
- */
-export const createWindowsMenuRealizer = (): WindowsMenuRealizer => {
-  const callbackByCommandId = new Map<number, () => void>();
-  let nextCommandId = 1;
-  // Windows mirroring the application menu, the current app-menu spec, and the
-  // last realize() result (menu.ts calls realize() then setApplicationMenu(handle)
-  // back-to-back, so a single slot recovers the spec from the handle leak-free).
-  const appMenuWindows = new Set<AppMenuWindow>();
-  let appMenuItems: ReadonlyArray<NativeMenuItemSpec> | null = null;
-  let lastRealized: { handle: bigint; items: ReadonlyArray<NativeMenuItemSpec> } | undefined;
+type Command = (window: AppMenuWindow) => void;
 
-  const buildMenu = (items: ReadonlyArray<NativeMenuItemSpec>): bigint => {
-    const user32 = loadUser32().symbols;
-    const hmenu = user32.CreatePopupMenu();
+/** A role wins over a click (D035); quit has no native command, so it keeps its click. */
+const commandFor = ({ onClick, role, windowAction }: NativeMenuItemSpec): Command | undefined => {
+  if (windowAction !== undefined) {
+    return (window) => window.performWindowAction(windowAction);
+  }
+  // ponytail: editing roles are inert; WinCairo's C API has no editing-command call
+  return role === undefined || role === 'quit' ? onClick : undefined;
+};
+
+export const createWindowsMenuRealizer = (
+  user32: () => MenuApi = () => loadUser32().symbols,
+): WindowsMenuRealizer => {
+  // Every id on a menu that may still be shown, with what it runs (undefined for an inert role).
+  const commands = new Map<number, Command | undefined>();
+  let lastCommandId = 0;
+  const barIds = new Map<AppMenuWindow, number[]>();
+  let appMenuItems: ReadonlyArray<NativeMenuItemSpec> | null = null;
+  // menu.ts consumes each realize() result before the next one (a popup is destroyed
+  // once TrackPopupMenu returns; setApplicationMenu reads it at once), so one slot
+  // recovers the spec from the handle and frees the previous result's ids.
+  let lastRealized:
+    | { handle: bigint; items: ReadonlyArray<NativeMenuItemSpec>; ids: number[] }
+    | undefined;
+
+  const allocateId = (command: Command | undefined): number => {
+    for (let tries = 0; tries < MAX_COMMAND_ID; tries += 1) {
+      lastCommandId = (lastCommandId % MAX_COMMAND_ID) + 1;
+      if (!commands.has(lastCommandId)) {
+        commands.set(lastCommandId, command);
+        return lastCommandId;
+      }
+    }
+    throw new FFIError('menu: all 65535 command ids are in use');
+  };
+
+  const release = (ids: ReadonlyArray<number>): void => {
+    for (const id of ids) {
+      commands.delete(id);
+    }
+  };
+
+  /** Build a menu bar (`CreateMenu`, no separators) or a popup; `ids` collects its command ids. */
+  const build = (items: ReadonlyArray<NativeMenuItemSpec>, bar: boolean, ids: number[]): bigint => {
+    const api = user32();
+    const hmenu = bar ? api.CreateMenu() : api.CreatePopupMenu();
     for (const item of items) {
       if (item.type === 'separator') {
-        user32.AppendMenuW(hmenu, MF_SEPARATOR, 0n, null);
+        if (!bar) {
+          api.AppendMenuW(hmenu, MF_SEPARATOR, 0n, null);
+        }
         continue;
       }
-      const labelBuffer = wstr(item.label); // copied by AppendMenuW; alive across the call
+      const labelBuffer = wstr(item.label); // AppendMenuW copies the label
       if (item.type === 'submenu' && item.submenu !== undefined) {
-        const submenu = buildMenu(item.submenu);
         const flags = MF_POPUP | MF_STRING | (item.enabled ? 0 : MF_GRAYED);
-        user32.AppendMenuW(hmenu, flags, submenu, ptr(labelBuffer));
+        api.AppendMenuW(hmenu, flags, build(item.submenu, false, ids), ptr(labelBuffer));
         continue;
       }
-      const commandId = nextCommandId;
-      nextCommandId += 1;
-      // A role's behavior is native (no JS click); a plain item fires its onClick.
-      if (item.role === undefined && item.onClick !== undefined) {
-        callbackByCommandId.set(commandId, item.onClick);
-      }
-      user32.AppendMenuW(
+      const id = allocateId(commandFor(item));
+      ids.push(id);
+      api.AppendMenuW(
         hmenu,
         menuItemFlags(item.enabled, item.checked ?? false),
-        BigInt(commandId),
+        BigInt(id),
         ptr(labelBuffer),
       );
     }
     return hmenu;
   };
 
-  /** Build a menu BAR (CreateMenu container) from top-level items. Each is a popup
-   *  (submenu) or a clickable bar item; separators are skipped (meaningless in a bar). */
-  const buildMenuBar = (items: ReadonlyArray<NativeMenuItemSpec>): bigint => {
-    const user32 = loadUser32().symbols;
-    const bar = user32.CreateMenu();
-    for (const item of items) {
-      if (item.type === 'separator') {
-        continue;
-      }
-      const labelBuffer = wstr(item.label); // copied by AppendMenuW; alive across the call
-      if (item.type === 'submenu' && item.submenu !== undefined) {
-        const submenu = buildMenu(item.submenu);
-        const flags = MF_POPUP | MF_STRING | (item.enabled ? 0 : MF_GRAYED);
-        user32.AppendMenuW(bar, flags, submenu, ptr(labelBuffer));
-        continue;
-      }
-      const commandId = nextCommandId;
-      nextCommandId += 1;
-      if (item.role === undefined && item.onClick !== undefined) {
-        callbackByCommandId.set(commandId, item.onClick);
-      }
-      user32.AppendMenuW(
-        bar,
-        menuItemFlags(item.enabled, item.checked ?? false),
-        BigInt(commandId),
-        ptr(labelBuffer),
-      );
-    }
-    return bar;
+  const installBar = (window: AppMenuWindow): void => {
+    release(barIds.get(window) ?? []);
+    const ids: number[] = [];
+    barIds.set(window, ids);
+    window.setMenuBar(appMenuItems === null ? null : build(appMenuItems, true, ids));
   };
 
   return {
     realize(items: ReadonlyArray<NativeMenuItemSpec>): bigint {
-      const handle = buildMenu(items);
-      lastRealized = { handle, items };
+      release(lastRealized?.ids ?? []);
+      const ids: number[] = [];
+      const handle = build(items, false, ids);
+      lastRealized = { handle, items, ids };
       return handle;
     },
 
     setApplicationMenu(menu: bigint | null): void {
-      // Recover the spec from the handle realize() just produced, so a FRESH bar
-      // (one HMENU per window) can be built for every window. null clears.
-      const items =
-        menu === null ? null : lastRealized?.handle === menu ? lastRealized.items : appMenuItems;
-      appMenuItems = items ?? null;
-      for (const window of appMenuWindows) {
-        window.setMenuBar(items !== null && items !== undefined ? buildMenuBar(items) : null);
+      if (menu === null) {
+        appMenuItems = null;
+      } else if (lastRealized?.handle === menu) {
+        appMenuItems = lastRealized.items;
+        release(lastRealized.ids);
+        user32().DestroyMenu(menu);
+        lastRealized = undefined;
+      }
+      for (const window of barIds.keys()) {
+        installBar(window);
       }
     },
 
     registerAppMenuWindow(window: AppMenuWindow): void {
-      appMenuWindows.add(window);
+      barIds.set(window, []);
       if (appMenuItems !== null) {
-        window.setMenuBar(buildMenuBar(appMenuItems));
+        installBar(window);
       }
     },
 
     unregisterAppMenuWindow(window: AppMenuWindow): void {
-      appMenuWindows.delete(window);
+      release(barIds.get(window) ?? []);
+      barIds.delete(window);
     },
 
-    dispatchMenuCommand(commandId: number): void {
-      callbackByCommandId.get(commandId)?.();
+    dispatchMenuCommand(commandId: number, window: AppMenuWindow): void {
+      commands.get(commandId)?.(window);
     },
   };
 };

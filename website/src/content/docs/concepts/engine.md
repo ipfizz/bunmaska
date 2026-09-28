@@ -11,7 +11,7 @@ When that matters, you can **pin the exact WebKit build you tested**. This page 
 
 ## Not nvm - side by side
 
-The model is Playwright's browser registry, not a version manager. There is **no global "current" engine** and no `use --global`. Every app records the engine it was built against and resolves *that one* at launch, out of a content-addressed store where many versions coexist:
+The model is Playwright's browser registry, not a version manager. There is **no global "current" engine** and no `use --global`. Every app records the engine it was built against and resolves *that one* at launch, out of an id-addressed store where many versions coexist:
 
 ```
 ~/.bunmaska/webkit/
@@ -33,13 +33,13 @@ export default defineConfig({
 });
 ```
 
-`engine.webkit` accepts a full engine-id or `"system"` (the default - use the OS WebView, no pinning). The schema also accepts a bare upstream version like `"2.52.4"`, but that is not resolved yet - `build` bakes `system` and warns, so use the full id. At `bunmaska build` the id is baked into Linux and Windows bundles, so the pin travels with the app and is read at launch. macOS ignores the pin: it always runs the system WKWebView today (macOS pinning is on the roadmap).
+`engine.webkit` accepts a full engine-id or `"system"` (the default - use the OS WebView, no pinning). The schema also accepts a bare upstream version like `"2.52.4"`, but that is not resolved yet - `build` bakes `system` and warns, so use the full id. At `bunmaska build` the id is baked into Linux and Windows bundles, so the pin travels with the app and is read at launch. macOS ignores the pin: it always runs the system WKWebView today (macOS pinning is on the roadmap). An id names one OS and architecture, and a machine that doesn't match treats the pin as absent (`doctor` and `engine which` say so), so today one pin covers one platform per project. A malformed pin fails the config load.
 
-`engine.embed: true` copies the engine into the bundle on Windows (the same thing as `--embed-engine`). It is refused on Linux - embedding isn't built there - and does nothing on macOS.
+`engine.embed: true` copies the pinned engine into the bundle on Windows (the same thing as `--embed-engine <dir>`, pointed at the store): install it first, or the build stops and tells you to. It is refused on Linux - embedding isn't built there - and does nothing on macOS.
 
 ### The engine-id
 
-A flat, content-addressed string - `<engine>-<api>-<upstream>-<rev>-<os>-<arch>`:
+A flat string that names the build (it is an id, not a content hash) - `<engine>-<api>-<upstream>-<rev>-<os>-<arch>`:
 
 ```
 webkitgtk-6.0-2.52.4-bunmaska1-linux-x64
@@ -49,7 +49,10 @@ The `upstream` field is the actual WebKit release (the thing that changes how pa
 
 ## What happens at launch
 
-On Linux and Windows the app reads the engine-id it was **built against** - baked into the bundle from your `bunmaska.config` pin. It resolves that engine from the store, and if it isn't installed, the app **falls back to the system WebKit and says so on stderr** - it still launches, but it tells you the tested-build guarantee isn't being met. Pinning should never be the reason your app won't start.
+On Linux and Windows the app reads the engine-id it was **built against** - baked into the bundle from your `bunmaska.config` pin - and resolves that engine from the store.
+
+- **Linux:** if the engine isn't installed, the app **falls back to the system WebKit and says so on stderr** - it still launches, but it tells you the tested-build guarantee isn't being met. Pinning should never be the reason your app won't start.
+- **Windows:** there is no system WebKit to fall back to, so an app with no engine - none embedded, none in the store, no `BUNMASKA_WEBKIT_PATH` - fails to start with an error saying which of those to provide. Embed the engine in anything you ship (see [Shipping Your App](/docs/shipping)).
 
 You configure all of this in `bunmaska.config` - there are **no environment variables to set** on macOS and Linux; Windows can also point at an engine with `BUNMASKA_WEBKIT_PATH`. (A few internal overrides exist for tests and ops, the way Playwright has `PLAYWRIGHT_BROWSERS_PATH`; you'll never need them, so they're not documented here.)
 
@@ -71,7 +74,7 @@ bunmaska engine verify <id>      # structural integrity check
 bunmaska doctor                  # runtime, store, and the engine this project resolves
 ```
 
-Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything, and the extracted engine's own signed `engine.json` id must match the id you asked for (so a compromised mirror cannot swap one signed engine in for another). The official feed's signing key is a **trust anchor baked into Bunmaska** - public, verified automatically, nothing to configure. To run a private mirror, set `engine.feed = { url, publicKey }` in `bunmaska.config`.
+Remote installs verify an **Ed25519 detached signature** and the content hash before extracting anything. The store directory is then named from the id in the extracted engine's own (signed) `engine.json`, and the install fails if that disagrees with the feed's manifest, so a compromised mirror cannot slip one signed engine in under another engine's id. The official feed's signing key is a **trust anchor baked into Bunmaska** - public, verified automatically, nothing to configure. To run a private mirror, set `engine.feed = { url, publicKey }` in `bunmaska.config`.
 
 ## Self-hosting an engine feed (advanced)
 
@@ -97,9 +100,9 @@ That's the whole configuration surface: the pin and, if you're self-hosting, the
 
 Where each piece stands today:
 
-- **On Linux a pinned engine loads from the store; no Linux engine is hosted on the feed yet.** You can pin an engine, install a local build into the shared store, and have an app load *that* WebKit instead of the system one - with its whole dependency closure self-contained.
+- **On Linux a pinned engine loads from the store; no Linux engine is hosted on the feed yet.** You can pin an engine, install a local build into the shared store, and have an app load *that* WebKit instead of the system one, with most of its library closure beside it. Not all of it: driver-coupled libraries such as the GPU stack stay the system's on purpose, and the helper processes are still looked up at the install path compiled into the build rather than in the store, so a pinned Linux engine is not fully self-contained yet.
 - **Hosted Linux engines and the final render pass are next.** The feed serves a Windows (WinCairo) engine today (see [The Engine Repository](/docs/concepts/engine-repository)); Linux builds on the feed, and rendering through the relocated helper processes, are in progress.
 - **macOS pinning is designed** - it means shipping a signed `WebKit.framework` resolved from the store. The default stays system WKWebView; pinning is opt-in.
-- **Windows brings its own WebKit (WinCairo), never WebView2** (that's Chromium). The Win32 backend is in beta (x64); a hosted WinCairo engine is on the feed today (`bunmaska engine install <id>`), or embed your own build with `--embed-engine`.
+- **Windows brings its own WebKit (WinCairo), never WebView2** (that's Chromium). The Win32 backend is in beta (x64); a hosted WinCairo engine is on the feed today (`bunmaska engine install <id>`, then `engine.embed: true`), or embed your own build with `--embed-engine`.
 
 So today the default - the system WebKit - is what nearly every app should use. The pinned tier is the opt-in path to byte-for-byte "tested == shipped."

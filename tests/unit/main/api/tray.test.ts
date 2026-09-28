@@ -1,21 +1,20 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { app } from '../../../../src/main/api/app';
 import { Menu } from '../../../../src/main/api/menu';
-import {
-  setTrayBackendForTesting,
-  Tray,
-  type TrayBackend,
-  type TrayImage,
-  type TrayImageOptions,
-  type TrayInstance,
-} from '../../../../src/main/api/tray';
+import { setTrayBackendForTesting, Tray, type TrayImage } from '../../../../src/main/api/tray';
+import type {
+  TrayBackend,
+  TrayImageOptions,
+  TrayInstance,
+} from '../../../../src/main/platform/services';
 
 type FakeInstance = TrayInstance & {
   readonly image: string;
   toolTips: string[];
   titles: string[];
   images: string[];
-  menus: Array<Menu | null>;
+  menus: unknown[];
   destroyed: boolean;
   click: (() => void) | undefined;
 };
@@ -55,15 +54,18 @@ const makeInstance = (image: string): FakeInstance => {
 };
 
 let createOptions: (TrayImageOptions | undefined)[] = [];
+let createAppNames: (string | undefined)[] = [];
 
 beforeEach(() => {
   created = [];
   createOptions = [];
+  createAppNames = [];
   const fake: TrayBackend = {
-    create: (image, options) => {
+    create: (image, options, appName) => {
       const instance = makeInstance(image);
       created.push(instance);
       createOptions.push(options);
+      createAppNames.push(appName);
       return instance;
     },
   };
@@ -85,6 +87,16 @@ describe('Tray construction', () => {
     expect(created[0]?.image).toBe('/tmp/icon.png');
   });
 
+  test("tells the backend the app's name", () => {
+    app.setName('Notes Test');
+    try {
+      new Tray('/tmp/icon.png');
+    } finally {
+      app.resetForTesting();
+    }
+    expect(createAppNames).toEqual(['Notes Test']);
+  });
+
   test('starts not destroyed', () => {
     expect(new Tray('/tmp/icon.png').isDestroyed()).toBe(false);
   });
@@ -93,17 +105,30 @@ describe('Tray construction', () => {
     const { readFileSync } = await import('node:fs');
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
     const fakeImage = { toPNG: () => png, isTemplateImage: () => false } as unknown as TrayImage;
-    new Tray(fakeImage);
+    const tray = new Tray(fakeImage);
     const path = created[0]?.image ?? '';
     expect(path.endsWith('icon.png')).toBe(true);
-    expect(path).not.toBe('[object Object]');
     expect(Array.from(readFileSync(path))).toEqual(Array.from(png));
+    tray.destroy();
+  });
+
+  test('destroy removes the temp icon it materialized', async () => {
+    const { existsSync } = await import('node:fs');
+    const fakeImage = {
+      toPNG: () => Buffer.from([0x89]),
+      isTemplateImage: () => false,
+    } as unknown as TrayImage;
+    const tray = new Tray(fakeImage);
+    const path = created[0]?.image ?? '';
+    expect(existsSync(path)).toBe(true);
+    tray.destroy();
+    expect(existsSync(path)).toBe(false);
   });
 
   test('carries a NativeImage template flag to the backend', () => {
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
     const fakeImage = { toPNG: () => png, isTemplateImage: () => true } as unknown as TrayImage;
-    new Tray(fakeImage);
+    new Tray(fakeImage).destroy();
     expect(createOptions[0]).toEqual({ template: true });
     new Tray('/tmp/icon.png');
     expect(createOptions[1]).toEqual({});
@@ -174,8 +199,6 @@ describe('Tray lifecycle', () => {
     expect(() => tray.setTitle('x')).not.toThrow();
     expect(() => tray.setImage('/tmp/x.png')).not.toThrow();
     expect(() => tray.setContextMenu(null)).not.toThrow();
-    // Nothing should have been forwarded post-destroy.
-    expect(created[0]?.toolTips).toEqual([]);
-    expect(created[0]?.titles).toEqual([]);
+    expect(created[0]).toMatchObject({ toolTips: [], titles: [], images: [], menus: [] });
   });
 });

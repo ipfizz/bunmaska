@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   clampCropRect,
-  type NativeImage,
-  type NativeImageBackend,
-  type NativeImageHandle,
   nativeImage,
   resolveResizeDimensions,
   setNativeImageBackendForTesting,
 } from '../../../../src/main/api/native-image';
+import type { NativeImageBackend, NativeImageHandle } from '../../../../src/main/platform/services';
 
 /**
  * Unit tests for the pure `NativeImage` class against a FAKE backend, so the
@@ -115,6 +113,14 @@ describe('resolveResizeDimensions / clampCropRect (pure)', () => {
       height: 10,
     });
     expect(clampCropRect(100, 50, { x: 200, y: 0, width: 10, height: 10 })).toBeUndefined();
+  });
+  test('clamp: a negative origin clips to the intersection instead of shifting', () => {
+    expect(clampCropRect(100, 50, { x: -10, y: -5, width: 20, height: 10 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 5,
+    });
   });
 });
 
@@ -246,19 +252,6 @@ describe('NativeImage.toDataURL', () => {
   });
 });
 
-describe('NativeImage type', () => {
-  test('exposes the Electron-compatible instance surface', () => {
-    setNativeImageBackendForTesting(
-      makeFakeBackend({ handle: 1n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
-    );
-    const image: NativeImage = nativeImage.createEmpty();
-    expect(typeof image.getSize).toBe('function');
-    expect(typeof image.isEmpty).toBe('function');
-    expect(typeof image.toPNG).toBe('function');
-    expect(typeof image.toDataURL).toBe('function');
-  });
-});
-
 describe('NativeImage.toJPEG', () => {
   test('encodes via the backend at the given quality', () => {
     setNativeImageBackendForTesting(
@@ -296,5 +289,40 @@ describe('nativeImage.createFromDataURL', () => {
     );
     expect(nativeImage.createFromDataURL('not-a-data-url').isEmpty()).toBe(true);
     expect(decodeCalls).toHaveLength(0);
+  });
+
+  test('a percent-encoded payload decodes byte-wise, including non-UTF-8 bytes', () => {
+    setNativeImageBackendForTesting(
+      makeFakeBackend({ handle: 1n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
+    );
+    nativeImage.createFromDataURL('data:image/png,%89PNG%0D%0A');
+    expect(decodeCalls[0]?.source).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));
+  });
+
+  test('works when destructured off the module, as Electron code does', () => {
+    setNativeImageBackendForTesting(
+      makeFakeBackend({ handle: 1n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
+    );
+    const { createFromDataURL } = nativeImage;
+    expect(createFromDataURL('nope').isEmpty()).toBe(true);
+  });
+});
+
+describe('native handle lifetime', () => {
+  test('releases a decoded handle once its image is garbage-collected', async () => {
+    const released: NativeImageHandle[] = [];
+    setNativeImageBackendForTesting({
+      ...makeFakeBackend({ handle: 77n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
+      release: (handle) => released.push(handle),
+    });
+    (() => {
+      nativeImage.createFromPath('/tmp/x.png');
+      nativeImage.createEmpty();
+    })();
+    for (let i = 0; i < 50 && released.length === 0; i += 1) {
+      Bun.gc(true);
+      await Bun.sleep(5);
+    }
+    expect(released).toEqual([77n]);
   });
 });

@@ -3,33 +3,22 @@ import { makeCancelableEvent } from '../../common/cancelable-event';
 import type { NativeWindow, WindowEventType } from '../platform/native';
 import { ensureNativeStarted } from '../bootstrap';
 import { startDevReload } from '../dev-reload';
-import { makeDevWindowStateWriter, readDevWindowState } from '../dev-window-state';
+import { makeDevWindowStateWriter, restoreDevBounds } from '../dev-window-state';
 import { nativeApp } from '../native-app';
 import type { Rect } from '../platform/native';
 import { app } from './app';
 import { installWindowResolver, type PopupTarget } from './menu';
 import { loadPreloadScript } from './preload';
+import { protocol } from './protocol';
+import { screen } from './screen';
 import { session } from './session';
-import { type LoadFileOptions, WebContents } from './web-contents';
-
-/**
- * A top-level application window — the drop-in equivalent of Electron's
- * `BrowserWindow`. Extends Node {@link EventEmitter} (D023). Content operations
- * delegate to {@link WebContents} (D025); a process-wide registry backs the
- * `getAllWindows` / `fromId` statics.
- */
+import { type LoadFileOptions, objectDestroyedError, WebContents } from './web-contents';
 
 export type WebPreferences = {
   /**
-   * Path to a JavaScript file run before the page's own scripts, after the
-   * built-in `window.__bunmaska` bridge. Read synchronously at window
-   * construction.
-   *
-   * Runs in a dedicated ISOLATED world (Electron `contextIsolation: true`): it
-   * shares the page's DOM but has its own global, so `window.__bunmaska`,
-   * `ipcRenderer`, and anything the preload defines are invisible to page
-   * scripts. Use `contextBridge.exposeInMainWorld` to expose a controlled,
-   * async, structured-clone-copyable surface to the page.
+   * Script run before the page's own, in an isolated world (`contextIsolation: true`); expose
+   * to the page with `contextBridge.exposeInMainWorld`. Windows has no isolated world yet: the
+   * preload and `__bunmaska` are page-visible there, so treat loaded content as trusted.
    */
   readonly preload?: string;
 };
@@ -53,7 +42,7 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const DEFAULT_TITLE = 'Bunmaska';
 
-/** Non-preventable — re-emitted verbatim from the seam. */
+/** Non-preventable, re-emitted verbatim from the seam. */
 const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
   'focus',
   'blur',
@@ -68,26 +57,7 @@ const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
   'ready-to-show',
 ];
 
-/** Passed to `close` listeners; {@link preventDefault} vetoes the close. */
-export type WindowCloseEvent = {
-  preventDefault(): void;
-  readonly defaultPrevented: boolean;
-};
-
-const makeCloseEvent = (): WindowCloseEvent => {
-  let prevented = false;
-  return {
-    preventDefault(): void {
-      prevented = true;
-    },
-    get defaultPrevented(): boolean {
-      return prevented;
-    },
-  };
-};
-
 const registry = new Map<number, BrowserWindow>();
-/** So `Menu.popup` can anchor to a window without a menu→window import cycle. */
 const popupTargets = new WeakMap<BrowserWindow, PopupTarget>();
 let nextId = 1;
 
@@ -100,11 +70,12 @@ export const resetWindowRegistryForTesting = (): void => {
   nextId = 1;
 };
 
+/** Electron's `BrowserWindow`; content methods delegate to {@link WebContents} (D023, D025). */
 export class BrowserWindow extends EventEmitter {
   /** Process-unique and never reused within a run. */
   readonly id: number;
   readonly webContents: WebContents;
-  readonly #native: NativeWindow;
+  readonly #window: NativeWindow;
   #destroyed = false;
   #resizable: boolean;
   #opacity = 1;
@@ -114,34 +85,39 @@ export class BrowserWindow extends EventEmitter {
   constructor(options: BrowserWindowOptions = {}) {
     super();
     ensureNativeStarted();
-    // In dev, the first window installs the stdin reload listener so a renderer
-    // change refreshes the page in place instead of restarting the whole app.
     if (process.env['BUNMASKA_DEV'] === '1' && !devReloadInstalled) {
       devReloadInstalled = true;
-      startDevReload(() => {
-        for (const window of BrowserWindow.getAllWindows()) {
-          window.webContents.reload();
-        }
-      });
+      startDevReload(
+        () => {
+          for (const window of BrowserWindow.getAllWindows()) {
+            window.webContents.reload();
+          }
+        },
+        () => app.quit(),
+      );
     }
     this.id = nextId;
     nextId += 1;
 
     this.#resizable = options.resizable ?? true;
-    // Dev only: a supervisor restart is a fresh process, so the first window
-    // seeds its bounds from the state file to reopen where the developer left it.
+    // Dev only: a supervisor restart is a fresh process, so window 1 reopens at its last bounds.
     const devStatePath = process.env['BUNMASKA_DEV_STATE'];
-    const devBounds = this.id === 1 ? readDevWindowState(devStatePath) : undefined;
+    const devBounds =
+      this.id === 1
+        ? restoreDevBounds(devStatePath, () => screen.getAllDisplays().map((d) => d.workArea))
+        : undefined;
     if (devBounds !== undefined) {
       options = { ...options, width: devBounds.width, height: devBounds.height };
     }
     const preloadScript = loadPreloadScript(options.webPreferences?.preload);
-    this.#native = nativeApp().createWindow({
+    const schemes = protocol.getRegisteredSchemes();
+    this.#window = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,
       title: options.title ?? DEFAULT_TITLE,
-      show: options.show ?? true,
+      show: false,
       ...(preloadScript !== undefined ? { preloadScript } : {}),
+      ...(schemes.length > 0 ? { protocol: { schemes, dispatch: protocol.dispatch } } : {}),
       ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
       ...(options.frame !== undefined ? { frame: options.frame } : {}),
       ...(options.fullscreen !== undefined ? { fullscreen: options.fullscreen } : {}),
@@ -151,8 +127,6 @@ export class BrowserWindow extends EventEmitter {
       popupMenu: (handle, x, y) => this.#native.popupMenu(handle, x, y),
       closePopupMenu: () => this.#native.closePopupMenu(),
     });
-    // Apply the effective default User-Agent before this window's first
-    // navigation: a per-session override wins, else the app-wide fallback.
     const sessionUserAgent = session.defaultSession.getUserAgent();
     const effectiveUserAgent = sessionUserAgent !== '' ? sessionUserAgent : app.userAgentFallback;
     if (effectiveUserAgent !== '') {
@@ -164,17 +138,23 @@ export class BrowserWindow extends EventEmitter {
       this.#destroyed = true;
       this.webContents.markDestroyed();
       registry.delete(this.id);
-      this.emit('closed');
-      this.#emitWindowAllClosedIfLast();
+      try {
+        this.emit('closed');
+      } finally {
+        this.#emitWindowAllClosedIfLast();
+      }
     });
     // Returning true tells the backend to stay open.
     this.#native.onClose(() => {
-      const event = makeCloseEvent();
+      const event = makeCancelableEvent();
       this.emit('close', event);
       return event.defaultPrevented;
     });
     for (const type of WINDOW_EVENT_TYPES) {
       this.#native.onWindowEvent(type, () => {
+        if (this.#destroyed) {
+          return;
+        }
         this.emit(type);
         if (type === 'focus') {
           app.emit('browser-window-focus', makeCancelableEvent(), this);
@@ -193,15 +173,22 @@ export class BrowserWindow extends EventEmitter {
     }
     registry.set(this.id, this);
     app.emit('browser-window-created', makeCancelableEvent(), this);
+    // Shown last so the initial `show`/`focus` reach the handlers wired above.
+    if (options.show ?? true) {
+      this.#native.show();
+    }
   }
 
-  /**
-   * When the last window closes, emit `app`'s `window-all-closed`. Replicating
-   * Electron's default: if no listener handles it, quit the app (a subscriber
-   * takes over the decision by listening).
-   */
+  get #native(): NativeWindow {
+    if (this.#destroyed) {
+      throw objectDestroyedError();
+    }
+    return this.#window;
+  }
+
+  /** Electron's default: the last close quits unless `window-all-closed` has a listener. */
   #emitWindowAllClosedIfLast(): void {
-    if (registry.size > 0) {
+    if (registry.size > 0 || app.quitting) {
       return;
     }
     if (!app.emit('window-all-closed')) {
@@ -284,7 +271,7 @@ export class BrowserWindow extends EventEmitter {
     return [this.#minWidth, this.#minHeight];
   }
 
-  /** Best-effort on Linux/Wayland. */
+  /** No-op on Linux (GTK4 has no client-side positioning). */
   center(): void {
     this.#native.center();
   }
@@ -366,18 +353,28 @@ export class BrowserWindow extends EventEmitter {
   static fromId(id: number): BrowserWindow | undefined {
     return registry.get(id);
   }
+
+  static fromWebContents(webContents: WebContents): BrowserWindow | null {
+    return BrowserWindow.getAllWindows().find((w) => w.webContents === webContents) ?? null;
+  }
+
+  static getFocusedWindow(): BrowserWindow | null {
+    return BrowserWindow.getAllWindows().find((w) => w.isFocused()) ?? null;
+  }
 }
 
-// Let Menu.popup resolve a target window (focused → most-recent) without importing
-// BrowserWindow into menu.ts (which would cycle). The registry is creation-ordered.
+app.setWindowCloser(() => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.close();
+  }
+  return registry.size === 0;
+});
+
+// Menu.popup resolves its window through this, so menu.ts never imports this module (a cycle).
 installWindowResolver({
   focused: () => {
-    for (const window of registry.values()) {
-      if (window.isFocused()) {
-        return popupTargets.get(window);
-      }
-    }
-    return undefined;
+    const window = BrowserWindow.getFocusedWindow();
+    return window === null ? undefined : popupTargets.get(window);
   },
   mostRecent: () => {
     const windows = [...registry.values()];
@@ -385,4 +382,5 @@ installWindowResolver({
     return last === undefined ? undefined : popupTargets.get(last);
   },
   resolve: (window) => (window instanceof BrowserWindow ? popupTargets.get(window) : undefined),
+  focusedWindow: () => BrowserWindow.getFocusedWindow() ?? undefined,
 });

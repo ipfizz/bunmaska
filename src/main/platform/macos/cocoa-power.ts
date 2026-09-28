@@ -3,30 +3,14 @@ import {
   observeNotification,
   workspaceNotificationCenter,
 } from './cocoa-notification-observer';
+import type { PowerEventHandlers } from '../services';
 
-/**
- * macOS power + screen-lock events for `powerMonitor`.
- *
- * Sleep/wake are posted on the NSWorkspace notification center
- * (`NSWorkspaceWillSleepNotification` / `NSWorkspaceDidWakeNotification`); screen
- * lock/unlock are the (undocumented but stable, AppKit-wide) distributed
- * notifications `com.apple.screenIsLocked` / `com.apple.screenIsUnlocked`. All
- * four are wired through the shared notification observer (D034) and delivered on
- * the pumped run loop (D020/D021). Names are passed by value, mirroring the
- * appearance observer.
- */
+// Screen lock/unlock use the undocumented but long-stable com.apple.screenIs(Un)locked names.
 
 const WILL_SLEEP = 'NSWorkspaceWillSleepNotification';
 const DID_WAKE = 'NSWorkspaceDidWakeNotification';
 const SCREEN_LOCKED = 'com.apple.screenIsLocked';
 const SCREEN_UNLOCKED = 'com.apple.screenIsUnlocked';
-
-export type PowerEventHandlers = {
-  readonly onSuspend: () => void;
-  readonly onResume: () => void;
-  readonly onLockScreen: () => void;
-  readonly onUnlockScreen: () => void;
-};
 
 /** Register the four power/lock observers. Retained for the process lifetime. */
 export const observePowerEvents = (handlers: PowerEventHandlers): void => {

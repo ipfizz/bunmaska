@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import {
-  classifyChange,
   DEV_DEFAULT_ENTRY,
   type DevDeps,
   DevSupervisor,
-  editorTempDir,
-  makeContentFilter,
+  defaultDevDeps,
   resolveDevEntry,
 } from '../../../src/cli/dev';
+import { type ChangeAction, classifyChange } from '../../../src/cli/dev-classify';
+import { tempProject } from '../../helpers/temp-project';
 
 describe('resolveDevEntry', () => {
   test('prefers the explicit entry', () => {
@@ -20,70 +22,61 @@ describe('resolveDevEntry', () => {
   });
 });
 
-describe('classifyChange', () => {
-  test('restarts on a TypeScript (main-process) change', () => {
-    expect(classifyChange('src/main.ts')).toBe('restart');
-    expect(classifyChange('src/window.tsx')).toBe('restart');
-    expect(classifyChange('bunmaska.config.ts')).toBe('restart');
-  });
+type HarnessOptions = {
+  readonly classify?: (relPath: string) => ChangeAction;
+  readonly rebuild?: () => void | Promise<void>;
+  /** Children ignore a plain kill; the test settles each exit itself. */
+  readonly manualExit?: boolean;
+  readonly killGraceMs?: number;
+};
 
-  test('live-reloads on a renderer asset change', () => {
-    expect(classifyChange('src/index.html')).toBe('reload');
-    expect(classifyChange('src/styles.css')).toBe('reload');
-  });
+const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-  test('restarts on a preload change, which a reload cannot pick up', () => {
-    // The preload is bundled once in the BrowserWindow constructor, so reloading
-    // re-injects the stale script.
-    expect(classifyChange('src/preload.js')).toBe('restart');
-    expect(classifyChange('app/preload.cjs')).toBe('restart');
-  });
-
-  test('reloads on a renderer bundle under dist', () => {
-    // Ignoring dist meant a rebuilt renderer could never reach the window.
-    expect(classifyChange('dist/renderer/assets/app.js')).toBe('reload');
-    expect(classifyChange('dist/renderer/index.html')).toBe('reload');
-  });
-
-  test('ignores dependency/VCS dirs and dotfiles', () => {
-    expect(classifyChange('node_modules/x/index.js')).toBe('ignore');
-    expect(classifyChange('.git/HEAD')).toBe('ignore');
-    expect(classifyChange('src/.main.ts.swp')).toBe('ignore');
-    expect(classifyChange('')).toBe('ignore');
-  });
-
-  test('ignores the app bundles bunmaska build writes into the project root', () => {
-    expect(classifyChange('MyApp.app/Contents/MacOS/index.html')).toBe('ignore');
-    expect(classifyChange('MyApp.AppDir/usr/bin/myapp')).toBe('ignore');
-    expect(classifyChange('build/x.js')).toBe('ignore');
-    expect(classifyChange('out/x.js')).toBe('ignore');
-  });
-});
-
-/** A controllable test harness over the supervisor's seams. */
-const makeHarness = (): {
-  deps: DevDeps;
-  spawns: string[];
-  kills: number;
-  reloads: number;
-  watcherClosed: () => boolean;
-  fireChange: (relPath: string) => void;
-  runTimer: () => Promise<void>;
-  pendingTimers: () => number;
-} => {
+/** A controllable harness over the supervisor's seams. */
+const makeHarness = (opts: HarnessOptions = {}) => {
   const spawns: string[] = [];
+  const restarts: boolean[] = [];
+  const logs: string[] = [];
+  const exits: Array<() => void> = [];
   let kills = 0;
+  let forceKills = 0;
   let reloads = 0;
+  let rebuilds = 0;
   let closed = false;
   let onChange: ((relPath: string) => void) | undefined;
   let timerFn: (() => void) | undefined;
   const deps: DevDeps = {
     debounceMs: 100,
-    spawn: (entry) => {
+    ...(opts.killGraceMs !== undefined ? { killGraceMs: opts.killGraceMs } : {}),
+    ...(opts.classify !== undefined ? { classify: opts.classify } : {}),
+    ...(opts.rebuild !== undefined
+      ? {
+          rebuild: () => {
+            rebuilds += 1;
+            return opts.rebuild?.();
+          },
+        }
+      : {}),
+    spawn: (entry, spawnOpts) => {
       spawns.push(entry);
+      restarts.push(spawnOpts?.restart === true);
+      let settle: () => void = () => undefined;
+      const exited = new Promise<void>((r) => {
+        settle = r;
+      });
+      exits.push(settle);
       return {
-        kill: () => {
+        exited,
+        kill: (force) => {
+          if (force === true) {
+            forceKills += 1;
+            settle();
+            return;
+          }
           kills += 1;
+          if (opts.manualExit !== true) {
+            settle();
+          }
         },
         reload: () => {
           reloads += 1;
@@ -107,27 +100,43 @@ const makeHarness = (): {
         timerFn = undefined;
       },
     },
-    log: () => undefined,
+    log: (m) => {
+      logs.push(m);
+    },
   };
   return {
     deps,
     spawns,
+    restarts,
+    logs,
     get kills() {
       return kills;
+    },
+    get forceKills() {
+      return forceKills;
     },
     get reloads() {
       return reloads;
     },
+    get rebuilds() {
+      return rebuilds;
+    },
     watcherClosed: () => closed,
-    fireChange: (relPath) => onChange?.(relPath),
-    runTimer: async () => {
+    fire: (relPath: string) => onChange?.(relPath),
+    /** Fire the pending debounce, then let the resulting async work settle. */
+    tick: async () => {
       timerFn?.();
-      // A restart awaits the old child's `exited`; yield so it can finish.
-      await new Promise((r) => setTimeout(r, 0));
+      await flush();
     },
     pendingTimers: () => (timerFn === undefined ? 0 : 1),
+    /** Settle the exit of the `index`-th spawned child (default: the latest). */
+    settleExit: (index = exits.length - 1) => exits[index]?.(),
   };
 };
+
+const noop = (): void => undefined;
+
+const rendererAt = (relPath: string): ChangeAction => classifyChange(relPath, 'src/renderer');
 
 describe('DevSupervisor', () => {
   test('spawns the entry on construction', () => {
@@ -139,20 +148,39 @@ describe('DevSupervisor', () => {
   test('a TypeScript change restarts the child after the debounce fires', async () => {
     const h = makeHarness();
     const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    h.fireChange('src/main.ts');
-    expect(h.spawns).toHaveLength(1); // not yet — debounced
-    await h.runTimer();
+    h.fire('src/main.ts');
+    expect(h.spawns).toHaveLength(1);
+    await h.tick();
     expect(h.spawns).toEqual(['src/main.ts', 'src/main.ts']);
     expect(sup.starts).toBe(2);
     expect(sup.reloads).toBe(0);
   });
 
+  test('the first spawn is not a restart; every respawn is', async () => {
+    // The respawned app reads this to show its window without stealing focus.
+    const h = makeHarness();
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/main.ts');
+    await h.tick();
+    expect(h.restarts).toEqual([false, true]);
+  });
+
+  test('by default an edit to a .js module the entry imports restarts', async () => {
+    using p = tempProject({ 'main.js': "require('./ipc.js');", 'ipc.js': '' });
+    const h = makeHarness();
+    new DevSupervisor(p.dir, 'main.js', h.deps);
+    h.fire('ipc.js');
+    await h.tick();
+    expect(h.spawns).toHaveLength(2);
+    expect(h.reloads).toBe(0);
+  });
+
   test('a renderer asset change live-reloads instead of restarting', async () => {
     const h = makeHarness();
     const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    h.fireChange('src/index.html');
-    await h.runTimer();
-    expect(h.spawns).toHaveLength(1); // no respawn — the window stays open
+    h.fire('src/index.html');
+    await h.tick();
+    expect(h.spawns).toHaveLength(1);
     expect(h.reloads).toBe(1);
     expect(sup.reloads).toBe(1);
     expect(sup.starts).toBe(1);
@@ -161,9 +189,9 @@ describe('DevSupervisor', () => {
   test('a restart supersedes a reload coalesced into the same window', async () => {
     const h = makeHarness();
     const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    h.fireChange('src/index.html'); // would reload
-    h.fireChange('src/main.ts'); // but a TS change wins
-    await h.runTimer();
+    h.fire('src/index.html');
+    h.fire('src/main.ts');
+    await h.tick();
     expect(sup.starts).toBe(2);
     expect(h.reloads).toBe(0);
   });
@@ -171,18 +199,18 @@ describe('DevSupervisor', () => {
   test('an ignored change never schedules anything', () => {
     const h = makeHarness();
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    h.fireChange('node_modules/x.js');
+    h.fire('node_modules/x.js');
     expect(h.pendingTimers()).toBe(0);
   });
 
   test('rapid changes coalesce into a single action', async () => {
     const h = makeHarness();
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    h.fireChange('src/a.ts');
-    h.fireChange('src/b.ts');
-    h.fireChange('src/c.ts');
-    await h.runTimer();
-    expect(h.spawns).toHaveLength(2); // initial + one coalesced restart
+    h.fire('src/a.ts');
+    h.fire('src/b.ts');
+    h.fire('src/c.ts');
+    await h.tick();
+    expect(h.spawns).toHaveLength(2);
   });
 
   test('stop closes the watcher, kills the child, and ignores later changes', () => {
@@ -190,112 +218,101 @@ describe('DevSupervisor', () => {
     const sup = new DevSupervisor('/proj', 'src/main.ts', h.deps);
     sup.stop();
     expect(h.watcherClosed()).toBe(true);
-    h.fireChange('src/main.ts');
+    expect(h.kills).toBe(1);
+    h.fire('src/main.ts');
     expect(h.pendingTimers()).toBe(0);
     expect(h.spawns).toHaveLength(1);
   });
 });
 
-describe('classifyChange with a renderer root', () => {
-  test('a source change under the renderer root rebuilds instead of restarting', () => {
-    // This is the React fix: a component edit re-bundles and reloads, it no
-    // longer tears the window down.
-    expect(classifyChange('src/renderer/App.tsx', 'src/renderer')).toBe('rebuild');
-    expect(classifyChange('src/renderer/styles.css', 'src/renderer')).toBe('rebuild');
-  });
-
-  test('a main-process source outside the renderer root still restarts', () => {
-    expect(classifyChange('src/main.ts', 'src/renderer')).toBe('restart');
-    expect(classifyChange('bunmaska.config.ts', 'src/renderer')).toBe('restart');
-  });
-
-  test('the renderer output under dist still plain-reloads', () => {
-    expect(classifyChange('dist/renderer/main.js', 'src/renderer')).toBe('reload');
-  });
-
-  test('a preload under the renderer root still restarts', () => {
-    expect(classifyChange('src/renderer/preload.js', 'src/renderer')).toBe('restart');
-  });
-});
-
 describe('DevSupervisor rebuild action', () => {
-  const makeRebuildHarness = () => {
-    let rebuilds = 0;
-    let reloads = 0;
-    const spawns: string[] = [];
-    let timerFn: (() => void) | undefined;
-    let onChange: ((relPath: string) => void) | undefined;
-    const deps: DevDeps = {
-      classify: (relPath) => classifyChange(relPath, 'src/renderer'),
-      rebuild: () => {
-        rebuilds += 1;
-      },
-      spawn: (entry) => {
-        spawns.push(entry);
-        return {
-          kill: () => undefined,
-          reload: () => {
-            reloads += 1;
-          },
-          exited: new Promise(() => undefined),
-        };
-      },
-      watch: (_dir, cb) => {
-        onChange = cb;
-        return { close: () => undefined };
-      },
-      timers: {
-        set: (fn) => {
-          timerFn = fn;
-          return 1;
-        },
-        clear: () => {
-          timerFn = undefined;
-        },
-      },
-      log: () => undefined,
-    };
-    return {
-      deps,
-      spawns,
-      get rebuilds() {
-        return rebuilds;
-      },
-      get reloads() {
-        return reloads;
-      },
-      fire: (p: string) => onChange?.(p),
-      tick: async () => {
-        timerFn?.();
-        await new Promise((r) => setTimeout(r, 0));
-      },
-    };
-  };
-
   test('a renderer change rebuilds without restarting or reloading directly', async () => {
-    const h = makeRebuildHarness();
+    const h = makeHarness({ classify: rendererAt, rebuild: noop });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fire('src/renderer/App.tsx');
     await h.tick();
     expect(h.rebuilds).toBe(1);
-    expect(h.spawns).toHaveLength(1); // no restart
-    expect(h.reloads).toBe(0); // the reload arrives later, from the output write
+    expect(h.spawns).toHaveLength(1);
+    // The reload arrives later, from the output write.
+    expect(h.reloads).toBe(0);
   });
 
-  test('a restart coalesced with a rebuild wins', async () => {
-    const h = makeRebuildHarness();
+  test('a restart coalesced with a renderer change rebuilds before spawning', async () => {
+    const builds: Array<() => void> = [];
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => new Promise<void>((r) => builds.push(r)),
+    });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fire('src/renderer/App.tsx');
     h.fire('src/main.ts');
     await h.tick();
-    expect(h.rebuilds).toBe(0);
-    // kill fired; respawn is parked on the never-settling exited, which is the
-    // await-exit behaviour, so no second spawn yet.
+    expect(h.rebuilds).toBe(1);
+    // Spawning now would load the bundle built before the edit.
     expect(h.spawns).toHaveLength(1);
+    builds[0]?.();
+    await flush();
+    expect(h.spawns).toHaveLength(2);
+  });
+
+  test('a renderer change during a restart delays the spawn until it is rebuilt', async () => {
+    const builds: Array<() => void> = [];
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => new Promise<void>((r) => builds.push(r)),
+    });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/main.ts');
+    await h.tick();
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    builds[0]?.();
+    await flush();
+    expect(h.rebuilds).toBe(2);
+    expect(h.spawns).toHaveLength(1);
+    builds[1]?.();
+    await flush();
+    expect(h.spawns).toHaveLength(2);
+  });
+
+  test('a throwing rebuild is logged and does not wedge later rebuilds', async () => {
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => Promise.reject(new Error('bundler exploded')),
+    });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    h.fire('src/renderer/App.tsx');
+    await h.tick();
+    expect(h.rebuilds).toBe(2);
+    expect(h.logs.join(' ')).toContain('bundler exploded');
+  });
+
+  test('rebuilds requested mid-build run once after it, never concurrently', async () => {
+    const builds: Array<() => void> = [];
+    const h = makeHarness({
+      classify: rendererAt,
+      rebuild: () => new Promise<void>((r) => builds.push(r)),
+    });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/renderer/a.tsx');
+    await h.tick();
+    h.fire('src/renderer/b.tsx');
+    await h.tick();
+    h.fire('src/renderer/c.tsx');
+    await h.tick();
+    expect(h.rebuilds).toBe(1);
+    builds[0]?.();
+    await flush();
+    expect(h.rebuilds).toBe(2);
+    builds[1]?.();
+    await flush();
+    expect(h.rebuilds).toBe(2);
   });
 
   test('a rebuild coalesced with a reload wins', async () => {
-    const h = makeRebuildHarness();
+    const h = makeHarness({ classify: rendererAt, rebuild: noop });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
     h.fire('dist/renderer/main.js');
     h.fire('src/renderer/App.tsx');
@@ -306,82 +323,58 @@ describe('DevSupervisor rebuild action', () => {
 });
 
 describe('DevSupervisor child lifecycle', () => {
-  /** A harness whose children expose a controllable `exited`. */
-  const makeLifecycle = () => {
-    const spawns: string[] = [];
-    const logs: string[] = [];
-    let settleLast: (() => void) | undefined;
-    let timerFn: (() => void) | undefined;
-    let onChange: ((relPath: string) => void) | undefined;
-    let reloads = 0;
-    const deps: DevDeps = {
-      spawn: (entry) => {
-        spawns.push(entry);
-        let settle: () => void = () => undefined;
-        const exited = new Promise<void>((r) => {
-          settle = r;
-        });
-        settleLast = settle;
-        return {
-          exited,
-          kill: () => undefined,
-          reload: () => {
-            reloads += 1;
-          },
-        };
-      },
-      watch: (_dir, cb) => {
-        onChange = cb;
-        return { close: () => undefined };
-      },
-      timers: {
-        set: (fn) => {
-          timerFn = fn;
-          return 1;
-        },
-        clear: () => {
-          timerFn = undefined;
-        },
-      },
-      log: (m) => {
-        logs.push(m);
-      },
-    };
-    return {
-      deps,
-      spawns,
-      logs,
-      get reloads() {
-        return reloads;
-      },
-      fire: (p: string) => onChange?.(p),
-      tick: async () => {
-        timerFn?.();
-        await new Promise((r) => setTimeout(r, 0));
-      },
-      settleExit: () => settleLast?.(),
-    };
-  };
-
   test('a restart waits for the old child to exit before spawning the new one', async () => {
-    const h = makeLifecycle();
+    const h = makeHarness({ manualExit: true });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    const first = h.settleExit; // the child spawned in the constructor
     h.fire('src/main.ts');
     await h.tick();
-    // Killed, but its exit has not settled — spawning now would leave two live
-    // apps racing for the window and the single-instance lock.
+    // Killed but not yet exited: spawning now would leave two live apps racing
+    // for the window and the single-instance lock.
     expect(h.spawns).toHaveLength(1);
-    first();
-    await new Promise((r) => setTimeout(r, 0));
+    h.settleExit(0);
+    await flush();
+    expect(h.spawns).toHaveLength(2);
+  });
+
+  test('a child that ignores the kill is force-killed so restarts never wedge', async () => {
+    const h = makeHarness({ manualExit: true, killGraceMs: 5 });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/main.ts');
+    await h.tick();
+    await Bun.sleep(30);
+    expect(h.forceKills).toBe(1);
+    expect(h.spawns).toHaveLength(2);
+    expect(h.logs.join(' ')).toContain('force-killed');
+  });
+
+  test('a failed respawn is logged and the next edit retries it', async () => {
+    const h = makeHarness();
+    let failSpawn = false;
+    const deps: DevDeps = {
+      ...h.deps,
+      spawn: (entry, opts) => {
+        if (failSpawn) {
+          throw new Error('spawn ENOENT');
+        }
+        return h.deps.spawn(entry, opts);
+      },
+    };
+    new DevSupervisor('/proj', 'src/main.ts', deps);
+    failSpawn = true;
+    h.fire('src/main.ts');
+    await h.tick();
+    expect(h.logs.join(' ')).toContain('spawn ENOENT');
+    failSpawn = false;
+    h.fire('src/main.ts');
+    await h.tick();
     expect(h.spawns).toHaveLength(2);
   });
 
   test('a reload after the app quits says so instead of reporting success', async () => {
-    const h = makeLifecycle();
+    const h = makeHarness({ manualExit: true });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);
-    h.settleExit(); // the user quit the app
-    await new Promise((r) => setTimeout(r, 0));
+    h.settleExit();
+    await flush();
     h.fire('src/index.html');
     await h.tick();
     expect(h.reloads).toBe(0);
@@ -389,101 +382,24 @@ describe('DevSupervisor child lifecycle', () => {
   });
 });
 
-describe('DevSupervisor restart marking', () => {
-  test('the first spawn is not a restart; every respawn is', async () => {
-    // The respawned app reads this to show its window without stealing focus.
-    const spawns: Array<{ restart: boolean }> = [];
-    let timerFn: (() => void) | undefined;
-    let onChange: ((p: string) => void) | undefined;
-    const deps: DevDeps = {
-      spawn: (_entry, opts) => {
-        spawns.push({ restart: opts?.restart === true });
-        return { kill: () => undefined, reload: () => undefined, exited: Promise.resolve() };
-      },
-      watch: (_dir, cb) => {
-        onChange = cb;
-        return { close: () => undefined };
-      },
-      timers: {
-        set: (fn) => {
-          timerFn = fn;
-          return 1;
-        },
-        clear: () => undefined,
-      },
-      log: () => undefined,
-    };
-    new DevSupervisor('/proj', 'src/main.ts', deps);
-    onChange?.('src/main.ts');
-    timerFn?.();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(spawns).toEqual([{ restart: false }, { restart: true }]);
-  });
-});
-
-describe('makeContentFilter', () => {
-  test('drops a save that did not change the bytes', () => {
-    const filter = makeContentFilter(() => 'same');
-    expect(filter.changed('src/main.ts')).toBe(true);
-    expect(filter.changed('src/main.ts')).toBe(false);
-  });
-
-  test('passes a real edit through', () => {
-    const files = new Map([['src/main.ts', 'v1']]);
-    const filter = makeContentFilter((p) => files.get(p));
-    expect(filter.changed('src/main.ts')).toBe(true);
-    files.set('src/main.ts', 'v2');
-    expect(filter.changed('src/main.ts')).toBe(true);
-  });
-
-  test('tracks each path independently', () => {
-    const filter = makeContentFilter(() => 'same');
-    expect(filter.changed('a.ts')).toBe(true);
-    expect(filter.changed('b.ts')).toBe(true);
-    expect(filter.changed('a.ts')).toBe(false);
-  });
-
-  test('always passes a vanished file through, and re-arms it', () => {
-    const files = new Map([['a.ts', 'v1']]);
-    const filter = makeContentFilter((p) => files.get(p));
-    expect(filter.changed('a.ts')).toBe(true);
-    files.delete('a.ts');
-    expect(filter.changed('a.ts')).toBe(true);
-    files.set('a.ts', 'v1');
-    expect(filter.changed('a.ts')).toBe(true);
-  });
-
-  test('changedIfSeen seeds an unseen path silently and fires only on a later change', () => {
-    // The rescan mode: firing on first sight would restart the app for every
-    // untouched sibling of an editor temp file.
-    const files = new Map([['a.ts', 'v1']]);
-    const filter = makeContentFilter((p) => files.get(p));
-    expect(filter.changedIfSeen('a.ts')).toBe(false); // seeded, not fired
-    files.set('a.ts', 'v2');
-    expect(filter.changedIfSeen('a.ts')).toBe(true);
-    expect(filter.changedIfSeen('a.ts')).toBe(false);
-  });
-
-  test('changed and changedIfSeen share one baseline', () => {
-    const files = new Map([['a.ts', 'v1']]);
-    const filter = makeContentFilter((p) => files.get(p));
-    expect(filter.changed('a.ts')).toBe(true); // seeds via the normal path
-    expect(filter.changedIfSeen('a.ts')).toBe(false); // same bytes, no fire
-    files.set('a.ts', 'v2');
-    expect(filter.changedIfSeen('a.ts')).toBe(true);
-  });
-});
-
-describe('editorTempDir', () => {
-  test('recognises a dot-named temp file and returns its directory', () => {
-    // BSD sed renames through .!<pid>!<name>; FSEvents can deliver ONLY this.
-    expect(editorTempDir('src/renderer/.!1234!main.ts')).toBe('src/renderer');
-    expect(editorTempDir('.main.ts.swp')).toBe('');
-  });
-
-  test('is not fooled by regular files or ignored trees', () => {
-    expect(editorTempDir('src/main.ts')).toBeUndefined();
-    expect(editorTempDir('node_modules/.cache/x')).toBeUndefined();
-    expect(editorTempDir('MyApp.app/.hidden')).toBeUndefined();
+describe('defaultDevDeps', () => {
+  test('the child runs on this bun without one on PATH and receives reload commands', async () => {
+    const devReload = resolve(import.meta.dir, '../../../src/main/dev-reload.ts');
+    using p = tempProject({
+      'app.ts': [
+        "import { writeFileSync } from 'node:fs';",
+        `import { startDevReload } from ${JSON.stringify(devReload)};`,
+        'const deadline = setTimeout(() => process.exit(2), 5000);',
+        'startDevReload(() => {',
+        "  writeFileSync('reloaded.txt', process.env.BUNMASKA_DEV ?? '');",
+        '  clearTimeout(deadline);',
+        '  process.exit(0);',
+        '});',
+      ].join('\n'),
+    });
+    const child = defaultDevDeps(p.dir, () => undefined, { PATH: '' }).spawn('app.ts');
+    child.reload();
+    expect(await child.exited).toBe(0);
+    expect(readFileSync(join(p.dir, 'reloaded.txt'), 'utf8')).toBe('1');
   });
 });

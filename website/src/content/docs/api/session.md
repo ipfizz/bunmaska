@@ -39,6 +39,8 @@ A `Session` is not constructed directly - you reach it through `session.defaultS
 
 A `Cookies` object for the session's cookie store. _macOS, Linux_ - on Windows every method rejects with an `UnsupportedPlatformError`, because the WinCairo WebKit C API exposes no cookie read/write entry points (it can delete-all, which `clearStorageData` uses, but not enumerate or set).
 
+One macOS surprise worth knowing before you debug a "leaked" login: WebKit keys its default data store by process, and every unbundled run (`bunmaska dev`, `bun main.ts`) is the same `bun` process, so they all share one cookie jar and one set of web storage. A built `.app` gets a store of its own.
+
 ```ts
 import { session } from 'bunmaska';
 
@@ -53,7 +55,7 @@ Query and modify the session's cookies - Electron's `Cookies` subset, minus even
 
 `get(filter?: { url?: string; name?: string; domain?: string; path?: string }): Promise<Cookie[]>` _macOS, Linux_
 
-Resolves with the cookies matching `filter`; an empty or omitted filter returns all cookies. `url` matches by the URL's host and path (RFC 6265 domain-matching); `domain` matches the cookie's domain or any subdomain of it.
+Resolves with the cookies matching `filter`; an empty or omitted filter returns all cookies. `url` matches the cookies a request to it would carry (RFC 6265): a host-only cookie only for its exact host, a domain cookie for that domain and its subdomains, the path by prefix, and a `secure` cookie only for `https:`/`wss:`. `domain` matches the cookie's domain or any subdomain of it.
 
 Each `Cookie` is `{ name, value, domain, path, secure, httpOnly, expirationDate? }` - `expirationDate` is unix seconds, and its absence means a session cookie.
 
@@ -66,9 +68,9 @@ const forSite = await session.defaultSession.cookies.get({ url: 'https://example
 
 `set(details: { url: string; name?: string; value?: string; domain?: string; path?: string; secure?: boolean; httpOnly?: boolean; expirationDate?: number }): Promise<void>` _macOS, Linux_
 
-Stores a cookie. `url` is required (it throws without one); `domain` and `path` are derived from it when absent. Omitting `expirationDate` makes a session cookie.
+Stores a cookie. `url` is required (it throws without one). Without a `domain`, the cookie is host-only: it belongs to the url's host and is not sent to subdomains. An explicit `domain` is stored with a leading dot, so it covers subdomains too. `path` defaults to `/` (not the url's directory, as RFC 6265 would pick). Omitting `expirationDate` makes a session cookie; Linux clamps an expiry more than about 68 years out.
 
-One platform caveat: **macOS accepts but cannot persist `httpOnly`** - `NSHTTPCookie` exposes no public property key for it, so the flag is dropped on write. Linux persists it.
+`httpOnly` and `secure` persist on both platforms. `sameSite` cannot be set: macOS stores Electron's default, `lax`.
 
 ```ts
 await session.defaultSession.cookies.set({
@@ -131,7 +133,7 @@ app.whenReady().then(() => {
 
 Clears the default data store's website data and resolves when the clear completes.
 
-This is the all-or-nothing form. Bunmaska does not yet accept Electron's `options` argument (`origin` / `storages`), so you cannot scope the clear to a specific origin or storage type.
+This is the all-or-nothing form. Passing Electron's `options` argument (`origin` / `storages`) rejects with an `UnsupportedPlatformError` rather than quietly widening your careful little clear into a full wipe.
 
 Platform notes on exactly _what_ gets cleared:
 
@@ -154,8 +156,8 @@ async function signOut() {
 The default session is deliberately minimal right now. Compared to Electron's `session` module, the following are **not** implemented:
 
 - **`session.fromPartition()` / `session.fromPath()`** - no partitioned or path-based sessions; there is only `defaultSession`. The `cache` option and `persist:` semantics don't exist.
-- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options are ignored/absent; only the unscoped clear exists. It works on macOS (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up); Linux rejects.
-- **Cookie extras** - `cookies.get`/`set`/`remove` exist (macOS/Linux; Windows rejects), but not the `changed` event, `flushStore()`, or set-details fields beyond the documented ones (`sameSite` is not stored).
+- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options reject with an `UnsupportedPlatformError`; only the unscoped clear exists. It works on macOS (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up); Linux rejects.
+- **Cookie extras** - `cookies.get`/`set`/`remove` exist (macOS/Linux; Windows rejects), but not the `changed` event, `flushStore()`, or set-details fields beyond the documented ones (`sameSite` cannot be set; macOS stores `lax`).
 - **Cache (`ses.getCacheSize()`, `ses.clearCache()`)** - no granular cache inspection or HTTP-cache-only clear (use `clearStorageData()`, which clears everything on macOS and cookies + fetch caches on Windows).
 - **Proxy (`ses.setProxy()`, `ses.resolveProxy()`, `ses.forceReloadProxyConfig()`)** - no proxy configuration.
 - **Network interception (`ses.webRequest`, `ses.protocol`, `ses.fetch()`)** - no request interception, custom protocols, or main-process fetch.

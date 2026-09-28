@@ -1,32 +1,31 @@
-import { FFIType } from 'bun:ffi';
+import { FFIType, ptr } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
-import {
-  generateChannelId,
-  generateIsolatedChannelSetup,
-  generateIsolatedHostSource,
-  generatePageWorldStub,
-} from '../../../renderer/api/cross-world-bridge';
-import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { protocol } from '../../api/protocol';
 import { isDevRestart } from '../../dev-reload';
 import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
 import { AdaptiveBlockingPump } from '../../run-loop';
-import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { DOM_READY_HANDLER_NAME } from '../dom-ready';
 import type {
   NativeAppKit,
   NativeApplication,
   NativeNavigationEvent,
+  NativeProtocol,
   NativeWebContents,
   NativeWindow,
   NativeWindowOptions,
   Rect,
   WindowEventType,
 } from '../native';
-import { windowControlsScript } from '../window-controls';
+import {
+  dispatchScript,
+  EXEC_HANDLER_NAME,
+  IPC_HANDLER_NAME,
+  injectedScripts,
+  PRELOAD_WORLD_NAME,
+} from '../web-scripts';
 import * as cocoaApp from './cocoa-app';
 import { createAppDelegate } from './cocoa-app-delegate';
-import { cancelOneShotBlock, makeOneShotBlock } from './cocoa-block';
+import { makeOneShotBlock } from './cocoa-block';
 import { getContentWorld, pageWorld } from './cocoa-content-world';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import { cancelMenuTracking, popUpMenu } from './cocoa-menu';
@@ -40,7 +39,10 @@ import {
   msgSendPtr3,
   msgSendPtr4,
   msgSendPtrI64U8Ptr,
+  msgSendPtrI64,
   msgSendPtrPtr,
+  msgSendPtrReturnsU8,
+  msgSendRectU8,
   msgSendReturnsI64,
   msgSendReturnsU8,
   msgSendSize,
@@ -50,12 +52,10 @@ import { nsDataToBytes } from './cocoa-native-image';
 import { createNavigationDelegate } from './cocoa-navigation-delegate';
 import { createMacOSDrain } from './cocoa-run-loop';
 import { primaryDisplayHeight } from './cocoa-screen';
-import { msgSendRectU8 } from './cocoa-msgsend-variants';
-import { readWindowBounds } from './cocoa-window-bounds';
-import { cocoa } from './cocoa-runtime';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
+import { cocoa } from './cocoa-runtime';
+import { defineObjcClass } from './cocoa-runtime-class';
 import {
-  BORDERLESS_WINDOW_STYLE,
   type CocoaWindowStyle,
   computeWindowStyleMask,
   STANDARD_WINDOW_STYLE,
@@ -66,12 +66,6 @@ import { loadWebKit } from './cocoa-webkit';
 import { createWindowDelegate } from './cocoa-window-delegate';
 import type { Handle } from './objc';
 
-/**
- * The macOS native backend: `NativeApplication` / `NativeWindow` /
- * `NativeWebContents` on the AppKit + WebKit FFI primitives and the cooperative
- * CF run-loop pump (D020). Objective-C handles stay bigints (D016/D029).
- */
-
 const log = createLogger('macos-backend');
 
 const NS_BACKING_STORE_BUFFERED = 2n;
@@ -79,7 +73,6 @@ const NS_ACTIVATION_POLICY_REGULAR = 0n;
 
 /** `NSEventMaskAny` (NSUIntegerMax): dequeue every kind of AppKit event. */
 const NS_EVENT_MASK_ANY: Handle = 0xffffffffffffffffn;
-/** `dequeue:YES` for `nextEventMatchingMask:`. */
 const DEQUEUE_YES: Handle = 1n;
 /** Upper bound on events dispatched per pump tick, so a flood can't starve Bun. */
 const APP_EVENT_BUDGET = 256;
@@ -114,16 +107,13 @@ const nsImageToPng = (image: Handle): Uint8Array => {
   );
   return nsDataToBytes(png);
 };
-/** `NSFloatingWindowLevel` — above normal windows. */
+/** `NSFloatingWindowLevel`. */
 const NS_FLOATING_WINDOW_LEVEL = 3n;
 const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
-const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
-/** Page-world handler name `executeJavaScript` posts its result to (D022). */
-const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
-/** Reject a pending printToPDF/capturePage after this long (ms) — a bounded render op. */
+/** Electron runs preloads in the main frame only; an iframe must never get the bridge. */
+const FOR_MAIN_FRAME_ONLY = 1;
+/** Milliseconds before a pending printToPDF/capturePage rejects. */
 const RENDER_TIMEOUT_MS = 30_000;
-/** Name of the isolated `WKContentWorld` the bridge + user preload run in. */
-export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 
 /** A pending `executeJavaScript` awaiting its page-world result message. */
 type PendingExec = {
@@ -132,14 +122,7 @@ type PendingExec = {
   readonly timer: ReturnType<typeof setTimeout>;
 };
 
-const dispatchScript = (envelopeJson: string): string =>
-  `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(envelopeJson)});`;
-
-/**
- * Turn on `developerExtrasEnabled` on a `WKPreferences` via KVC so the inspector
- * is available. Best-effort: the key is undocumented SPI, so a failure to set it
- * must not abort window creation.
- */
+/** Enable the inspector through the undocumented `developerExtrasEnabled` KVC key; best-effort. */
 const enableDeveloperExtras = (preferences: Handle): void => {
   if (preferences === 0n) {
     return;
@@ -159,41 +142,89 @@ const enableDeveloperExtras = (preferences: Handle): void => {
 };
 
 /**
- * Register every scheme currently registered with the `protocol` module onto a
- * `WKWebViewConfiguration` via `setURLSchemeHandler:forURLScheme:`. Must run
- * BEFORE the web view is created from this config (WebKit forbids adding a
- * scheme handler afterwards). One shared handler serves all schemes; a failure
- * to register one scheme (e.g. a forbidden/built-in scheme) is logged and
- * skipped so it cannot abort window creation.
+ * Put every `protocol.handle` scheme on `configuration`; WebKit only accepts
+ * scheme handlers before the web view exists. `setURLSchemeHandler:` raises an
+ * uncatchable NSInvalidArgumentException for a scheme WebKit serves itself:
+ * protocol.handle rejects the known ones, and `handlesURLScheme:` catches any it misses.
  */
-const registerCustomSchemes = (configuration: Handle): void => {
-  const schemes = protocol.getRegisteredSchemes();
-  if (schemes.length === 0) {
+const registerCustomSchemes = (
+  configuration: Handle,
+  protocol: NativeProtocol | undefined,
+): void => {
+  if (protocol === undefined || protocol.schemes.length === 0) {
     return;
   }
   const rt = cocoa();
-  const handler = createUrlSchemeHandler();
-  for (const scheme of schemes) {
-    try {
-      msgSendPtrPtr(
-        configuration,
-        rt.selectors.get('setURLSchemeHandler:forURLScheme:'),
-        handler.handle,
+  const schemeHandler = createUrlSchemeHandler(protocol.dispatch).handle;
+  for (const scheme of protocol.schemes) {
+    const unsupported =
+      msgSendPtrReturnsU8(
+        rt.classes.get('WKWebView'),
+        rt.selectors.get('handlesURLScheme:'),
         nsString(scheme),
-      );
-    } catch (error) {
-      log.warn(`could not register custom scheme '${scheme}'`, error);
+      ) === 1;
+    if (unsupported) {
+      log.warn(`protocol.handle('${scheme}') is ignored on macOS: WebKit cannot intercept it`);
+      continue;
     }
+    msgSendPtrPtr(
+      configuration,
+      rt.selectors.get('setURLSchemeHandler:forURLScheme:'),
+      schemeHandler,
+      nsString(scheme),
+    );
   }
 };
 
-const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle =>
-  options.frame === false
-    ? BORDERLESS_WINDOW_STYLE
-    : { ...STANDARD_WINDOW_STYLE, resizable: options.resizable !== false };
+const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle => ({
+  ...STANDARD_WINDOW_STYLE,
+  titled: options.frame !== false,
+  resizable: options.resizable !== false,
+});
+
+let framelessWindowClass: Handle | undefined;
+
+/**
+ * An NSWindow for frame: false. Without a title bar AppKit answers NO to becoming
+ * key or main, and -performClose: only beeps, so both are overridden.
+ */
+const ensureFramelessWindowClass = (): Handle => {
+  framelessWindowClass ??= defineObjcClass('BunmaskaFramelessWindow', 'NSWindow', [
+    {
+      selector: 'canBecomeKeyWindow',
+      typeEncoding: 'c@:',
+      args: [],
+      returns: 'bool',
+      impl: () => 1,
+    },
+    {
+      selector: 'canBecomeMainWindow',
+      typeEncoding: 'c@:',
+      args: [],
+      returns: 'bool',
+      impl: () => 1,
+    },
+    {
+      selector: 'performClose:',
+      typeEncoding: 'v@:@',
+      args: ['object'],
+      impl: (self) => {
+        const rt = cocoa();
+        const delegate = rt.msgSend(self, rt.selectors.get('delegate'));
+        const allowed =
+          delegate === 0n ||
+          msgSendPtrReturnsU8(delegate, rt.selectors.get('windowShouldClose:'), self) === 1;
+        if (allowed) {
+          rt.msgSend(self, rt.selectors.get('close'));
+        }
+      },
+    },
+  ]);
+  return framelessWindowClass;
+};
 
 class MacOSWebContents implements NativeWebContents {
-  readonly #webview: Handle;
+  #webview: Handle;
   readonly #isolatedWorld: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
   #didFinishLoad = false;
@@ -219,14 +250,14 @@ class MacOSWebContents implements NativeWebContents {
    * `{ execId, ok, result?, error? }` outcome of an `executeJavaScript` call.
    */
   deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
+    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string } | null;
     try {
       outcome = JSON.parse(json);
     } catch (error) {
       log.warn('dropping malformed exec result', error);
       return;
     }
-    if (typeof outcome.execId !== 'number') {
+    if (typeof outcome?.execId !== 'number') {
       return;
     }
     const pending = this.#pendingExecs.get(outcome.execId);
@@ -243,15 +274,14 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   /**
-   * @internal Mark destroyed and settle every still-pending exec; called on
-   * window close BEFORE the web view is torn down. In-flight execs resolve to
-   * `undefined` — a normally closed window is not a hard error and a
-   * fire-and-forget caller must not receive an unhandled rejection. Any later
-   * `executeJavaScript` is rejected by the `#destroyed` guard without touching
-   * the freed web view.
+   * @internal Close-path teardown. In-flight execs resolve to `undefined`: a
+   * closed window is not an error, and a fire-and-forget caller must not get an
+   * unhandled rejection.
    */
   rejectPendingExecs(): void {
     this.#destroyed = true;
+    // Messaging nil is a no-op, so every later call is safe once the view is released.
+    this.#webview = 0n;
     for (const [, pending] of this.#pendingExecs) {
       clearTimeout(pending.timer);
       pending.resolve(undefined);
@@ -261,8 +291,7 @@ class MacOSWebContents implements NativeWebContents {
 
   /** @internal Called by the navigation delegate for each navigation event. */
   deliverNavigation(event: NativeNavigationEvent): void {
-    // Same contract as the Linux backend: envelopes sent before the first
-    // finished load are queued and flushed here, not silently dropped.
+    // Sends before the first finished load are queued, not dropped (same contract as Linux).
     if (event.type === 'did-finish-load' && !this.#didFinishLoad) {
       this.#didFinishLoad = true;
       const queued = [...this.#pendingEnvelopes];
@@ -349,10 +378,8 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   /**
-   * Evaluate `code` in the PAGE world (Electron's main world) and resolve to its
-   * completion value. A completion-handler block crashes Bun (D022), so the
-   * result returns out-of-band: a wrapper runs the code and posts the outcome to
-   * the page-world `bunmaskaExec` handler, which settles the matching Promise.
+   * Evaluate `code` in the page world (Electron's main world). The result comes
+   * back through the page-world `bunmaskaExec` handler, not a completion block (D022b).
    */
   executeJavaScript(code: string): Promise<unknown> {
     if (this.#destroyed) {
@@ -366,22 +393,18 @@ class MacOSWebContents implements NativeWebContents {
         reject(new Error(`executeJavaScript timed out after ${EXEC_TIMEOUT_MS}ms`));
       }, EXEC_TIMEOUT_MS);
       this.#pendingExecs.set(execId, { resolve, reject, timer });
-      this.#evaluateInWorld(buildExecWrapper(execId, EXEC_RESULT_HANDLER_NAME, code), pageWorld());
+      this.#evaluateInWorld(buildExecWrapper(execId, EXEC_HANDLER_NAME, code), pageWorld());
     });
   }
 
-  /**
-   * Render the page to PDF via `-[WKWebView createPDFWithConfiguration:nil
-   * completionHandler:]`. The completion handler is a hand-built ObjC Block
-   * (D022b) that fires on the pumped run loop; we resolve its `NSData` bytes.
-   */
+  /** PDF bytes from `createPDFWithConfiguration:completionHandler:` (a D022b block). */
   printToPDF(): Promise<Uint8Array> {
     if (this.#destroyed) {
       return Promise.reject(new Error('printToPDF failed: web contents destroyed'));
     }
     return new Promise<Uint8Array>((resolve, reject) => {
+      // WebKit still calls the block later (nil on close), so a timeout only rejects.
       const timer = setTimeout(() => {
-        cancelOneShotBlock(block);
         reject(new Error(`printToPDF timed out after ${RENDER_TIMEOUT_MS}ms`));
       }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
@@ -389,12 +412,12 @@ class MacOSWebContents implements NativeWebContents {
           clearTimeout(timer);
           const data = BigInt(pdfData ?? 0);
           if (data === 0n) {
-            reject(new Error(`printToPDF failed (NSError ${error ?? 'nil'})`));
+            reject(new Error(`printToPDF failed (NSError ${error || 'nil'})`));
             return;
           }
           resolve(nsDataToBytes(data));
         },
-        [FFIType.ptr, FFIType.ptr],
+        [FFIType.u64, FFIType.u64],
       );
       msgSendPtrPtr(
         this.#webview,
@@ -405,18 +428,13 @@ class MacOSWebContents implements NativeWebContents {
     });
   }
 
-  /**
-   * Snapshot the page via `-[WKWebView takeSnapshotWithConfiguration:nil
-   * completionHandler:]` (a hand-built ObjC Block, D022b) and resolve the PNG
-   * bytes of the resulting `NSImage`.
-   */
+  /** PNG bytes from `takeSnapshotWithConfiguration:completionHandler:` (a D022b block). */
   capturePage(): Promise<Uint8Array> {
     if (this.#destroyed) {
       return Promise.reject(new Error('capturePage failed: web contents destroyed'));
     }
     return new Promise<Uint8Array>((resolve, reject) => {
       const timer = setTimeout(() => {
-        cancelOneShotBlock(block);
         reject(new Error(`capturePage timed out after ${RENDER_TIMEOUT_MS}ms`));
       }, RENDER_TIMEOUT_MS);
       const block = makeOneShotBlock(
@@ -424,7 +442,7 @@ class MacOSWebContents implements NativeWebContents {
           clearTimeout(timer);
           const img = BigInt(image ?? 0);
           if (img === 0n) {
-            reject(new Error(`capturePage failed (NSError ${error ?? 'nil'})`));
+            reject(new Error(`capturePage failed (NSError ${error || 'nil'})`));
             return;
           }
           try {
@@ -433,7 +451,7 @@ class MacOSWebContents implements NativeWebContents {
             reject(cause instanceof Error ? cause : new Error(String(cause)));
           }
         },
-        [FFIType.ptr, FFIType.ptr],
+        [FFIType.u64, FFIType.u64],
       );
       msgSendPtrPtr(
         this.#webview,
@@ -448,13 +466,7 @@ class MacOSWebContents implements NativeWebContents {
     throw new UnsupportedPlatformError('webContents.sendInputEvent is not yet supported on macOS');
   }
 
-  /**
-   * Open the web inspector. Developer extras are enabled at view creation, so
-   * the inspector is always available via right-click → Inspect Element; this
-   * also drives it open programmatically through the private `-[WKWebView
-   * _inspector]` + `-[_WKInspector show]` selectors. Those are private SPI: the
-   * whole call is best-effort and never throws if the selectors are absent.
-   */
+  /** Show the inspector through the private `-[WKWebView _inspector]` SPI; never throws. */
   openDevTools(): void {
     try {
       const rt = cocoa();
@@ -486,11 +498,14 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   setUserAgent(userAgent: string): void {
-    // WKWebView.customUserAgent; takes effect on the next navigation.
+    // Takes effect on the next navigation.
     msgSendPtr(this.#webview, cocoa().selectors.get('setCustomUserAgent:'), nsString(userAgent));
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
+    if (this.#destroyed) {
+      return;
+    }
     if (!this.#didFinishLoad) {
       this.#pendingEnvelopes.push(envelopeJson);
       return;
@@ -499,11 +514,7 @@ class MacOSWebContents implements NativeWebContents {
     this.#evaluateInWorld(dispatchScript(envelopeJson), this.#isolatedWorld);
   }
 
-  /**
-   * Evaluate `code` in a specific `WKContentWorld` via
-   * `evaluateJavaScript:inFrame:inContentWorld:completionHandler:` (macOS 11+).
-   * `frame = 0n` (main frame), completion handler `0n` (fire-and-forget, D022).
-   */
+  /** Fire-and-forget in `world`'s main frame: nil frame, nil completion handler (D021). */
   #evaluateInWorld(code: string, world: Handle): void {
     const rt = cocoa();
     msgSendPtr4(
@@ -530,23 +541,20 @@ class MacOSWebContents implements NativeWebContents {
 }
 
 class MacOSWindow implements NativeWindow {
-  readonly #window: Handle;
+  #window: Handle;
   readonly #contents: MacOSWebContents;
   readonly #teardown: () => void;
   readonly #releaseNative: () => void;
-  #bounds: Rect;
-  #frameKnown = false;
   #tornDown = false;
-  #released = false;
   #onClosed: (() => void) | undefined;
   #onClose: (() => boolean) | undefined;
   #activePopupMenu: Handle = 0n;
+  #zoomed = false;
   readonly #eventHandlers = new Map<WindowEventType, () => void>();
 
   constructor(
     window: Handle,
     contents: MacOSWebContents,
-    bounds: Rect,
     teardown: () => void,
     releaseNative: () => void,
   ) {
@@ -554,51 +562,41 @@ class MacOSWindow implements NativeWindow {
     this.#contents = contents;
     this.#teardown = teardown;
     this.#releaseNative = releaseNative;
-    this.#bounds = bounds;
   }
 
   get webContents(): NativeWebContents {
     return this.#contents;
   }
 
-  /**
-   * @internal `windowShouldClose:` hook. Consults the registered JS close
-   * listener (preventable). Returns true to VETO. Called by the window delegate.
-   */
+  /** @internal `windowShouldClose:` hook; true vetoes the close. */
   shouldClose(): boolean {
     return this.#onClose?.() === true;
   }
 
   /**
-   * @internal `windowWillClose:` hook. AppKit has committed to closing on EVERY
-   * path here — title-bar button, programmatic `-close`, or `app.quit()`. Run
-   * the idempotent teardown (settle pending execs, detach script handlers) so a
-   * later `executeJavaScript` can never touch a freed `WKWebView`, then fire the
-   * `closed` bookkeeping. THIS is the close-path use-after-free fix.
+   * @internal `windowWillClose:` hook, reached on every AppKit close path
+   * (title-bar button, performClose:, -close). Tears down before any listener
+   * runs, so nothing touches the web view after it.
    */
   willClose(): void {
     if (this.#tornDown) {
       return;
     }
     this.#tornDown = true;
+    // Messaging nil is a no-op, so every later call is safe once the window is released.
+    this.#window = 0n;
+    // Release our +1s a tick later: AppKit's -close is still on the stack here.
+    // Scheduled first, so a throwing listener cannot skip it.
+    setTimeout(this.#releaseNative, 0);
     this.#teardown();
     this.#onClosed?.();
-    // Balance our alloc of the NSWindow + WKWebView (both kept alive by
-    // setReleasedWhenClosed:NO) on a LATER tick — AppKit's -close is still on the
-    // stack here, so releasing now would risk the use-after-free that flag avoids.
-    setTimeout(() => {
-      if (this.#released) {
-        return;
-      }
-      this.#released = true;
-      this.#releaseNative();
-    }, 0);
   }
 
   /** @internal Surface a non-preventable lifecycle event. Called by the delegate. */
-  #zoomed = false;
-
   emitEvent(type: WindowEventType): void {
+    if (this.#tornDown) {
+      return;
+    }
     // AppKit posts no zoom notification, so maximize/unmaximize are derived by
     // diffing isZoomed across resizes - the only hook that fires on both.
     if (type === 'resize') {
@@ -606,16 +604,6 @@ class MacOSWindow implements NativeWindow {
       if (zoomed !== this.#zoomed) {
         this.#zoomed = zoomed;
         this.emitEvent(zoomed ? 'maximize' : 'unmaximize');
-      }
-    }
-    // A user drag/resize is the one path that moves the frame without going
-    // through our setters; the delegate fires AFTER the window server settles,
-    // so this is the safe moment to trust its answer.
-    if (type === 'move' || type === 'resize') {
-      const real = readWindowBounds(this.#window);
-      if (real !== undefined) {
-        this.#bounds = real;
-        this.#frameKnown = true;
       }
     }
     this.#eventHandlers.get(type)?.();
@@ -638,26 +626,38 @@ class MacOSWindow implements NativeWindow {
       [rect.x, bottomLeftY, rect.width, rect.height],
       true,
     );
-    this.#bounds = { ...rect };
-    this.#frameKnown = true;
   }
 
-  /** Anchor for a setter: tracked once known, else the server, else tracked. */
-  #currentFrame(): Rect {
-    if (this.#frameKnown) {
-      return this.#bounds;
+  /**
+   * The FRAME rect, top-left global. `-frame` returns a struct by value (D018), so
+   * it is read through KVC into an out buffer. Unlike the window-server list, this
+   * is current right after setFrame: and for a never-shown window.
+   */
+  #frame(): Rect {
+    if (this.#tornDown) {
+      return { x: 0, y: 0, width: 0, height: 0 };
     }
-    return readWindowBounds(this.#window) ?? this.#bounds;
+    const rt = cocoa();
+    const value = msgSendPtr(this.#window, rt.selectors.get('valueForKey:'), nsString('frame'));
+    const out = new Float64Array(4);
+    msgSendPtrI64(
+      value,
+      rt.selectors.get('getValue:size:'),
+      BigInt(ptr(out)),
+      BigInt(out.byteLength),
+    );
+    const [x = 0, y = 0, width = 0, height = 0] = out;
+    return { x, y: primaryDisplayHeight() - y - height, width, height };
   }
 
   setSize(width: number, height: number): void {
     // Electron's setSize is the WINDOW (frame) size; keep the top-left anchored.
-    const current = this.#currentFrame();
+    const current = this.#frame();
     this.#setFrameTopLeft({ x: current.x, y: current.y, width, height });
   }
 
   setPosition(x: number, y: number): void {
-    const current = this.#currentFrame();
+    const current = this.#frame();
     this.#setFrameTopLeft({ x, y, width: current.width, height: current.height });
   }
 
@@ -666,23 +666,10 @@ class MacOSWindow implements NativeWindow {
   }
 
   getBounds(): Rect {
-    // The tracked rect is authoritative once a frame was set or observed: the
-    // window server updates ASYNCHRONOUSLY, so reading it right after our own
-    // setFrame would return the stale pre-set rect. Until then (a never-moved
-    // window whose tracked rect is the creation CONTENT size), one server read
-    // upgrades to the real frame.
-    if (!this.#frameKnown) {
-      const real = readWindowBounds(this.#window);
-      if (real !== undefined) {
-        this.#bounds = real;
-        this.#frameKnown = true;
-      }
-    }
-    return { ...this.#bounds };
+    return this.#frame();
   }
 
   setResizable(resizable: boolean): void {
-    // Read-modify-write the style mask so other bits (titled/closable/…) survive.
     const mask = msgSendReturnsI64(this.#window, cocoa().selectors.get('styleMask'));
     const next = resizable ? mask | NS_RESIZABLE_STYLE_MASK : mask & ~NS_RESIZABLE_STYLE_MASK;
     msgSendI64(this.#window, cocoa().selectors.get('setStyleMask:'), next);
@@ -702,21 +689,22 @@ class MacOSWindow implements NativeWindow {
   }
 
   show(): void {
+    if (this.#tornDown) {
+      return;
+    }
     const rt = cocoa();
     if (isDevRestart()) {
       // A dev respawn orders the window in behind the editor instead of on top.
       msgSendPtr(this.#window, rt.selectors.get('orderFront:'), 0n);
     } else {
       msgSendPtr(this.#window, rt.selectors.get('makeKeyAndOrderFront:'), 0n);
-      // Activate the app so the shown window comes to the foreground.
       const app = rt.msgSend(
         rt.classes.get('NSApplication'),
         rt.selectors.get('sharedApplication'),
       );
       msgSendU8(app, rt.selectors.get('activateIgnoringOtherApps:'), 1);
     }
-    // AppKit has no `windowDidShow:` notification, so `show` is emitted here. A
-    // becomeKey notification also fires `focus` via the delegate.
+    // AppKit has no windowDidShow: notification; focus arrives via windowDidBecomeKey:.
     this.emitEvent('show');
   }
 
@@ -730,7 +718,14 @@ class MacOSWindow implements NativeWindow {
   }
 
   focus(): void {
-    msgSendPtr(this.#window, cocoa().selectors.get('makeKeyAndOrderFront:'), 0n);
+    // Electron: a no-op while hidden, and activates the app only when none is active.
+    if (!this.isVisible()) {
+      return;
+    }
+    const rt = cocoa();
+    const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
+    msgSendU8(app, rt.selectors.get('activateIgnoringOtherApps:'), 0);
+    msgSendPtr(this.#window, rt.selectors.get('makeKeyAndOrderFront:'), 0n);
   }
 
   minimize(): void {
@@ -788,11 +783,8 @@ class MacOSWindow implements NativeWindow {
     if (this.#tornDown) {
       return;
     }
-    // Route through the SAME delegate path the title-bar red button uses:
-    // `-performClose:` (NOT `-close`, which bypasses the delegate) triggers
-    // `windowShouldClose:` (the veto) then, if allowed, `windowWillClose:`
-    // (teardown + `closed`). No teardown here — `willClose()` owns it,
-    // idempotently — so a vetoed programmatic close leaves the window fully alive.
+    // performClose: asks windowShouldClose: (the veto) like the title-bar button;
+    // -close would skip it. willClose() owns the teardown.
     msgSendPtr(this.#window, cocoa().selectors.get('performClose:'), 0n);
   }
 
@@ -800,8 +792,7 @@ class MacOSWindow implements NativeWindow {
     if (this.#tornDown) {
       return;
     }
-    // `-close` (not `-performClose:`) fires windowWillClose: (teardown + closed)
-    // WITHOUT windowShouldClose:, so it bypasses the preventable veto.
+    // -close skips windowShouldClose:, so the veto cannot stop it.
     cocoa().msgSend(this.#window, cocoa().selectors.get('close'));
   }
 
@@ -846,7 +837,8 @@ class MacOSApplication implements NativeApplication {
   #onActivate: ((hasVisibleWindows: boolean) => void) | undefined;
   #onOpenUrl: ((url: string) => void) | undefined;
   #onOpenFile: ((path: string) => void) | undefined;
-  // Handles the cooperative pump uses to dispatch AppKit input events each tick.
+  #onQuitRequest: (() => void) | undefined;
+  // Cached arguments for the per-tick AppKit event pump.
   #nextEventSel: Handle = 0n;
   #sendEventSel: Handle = 0n;
   #distantPast: Handle = 0n;
@@ -865,6 +857,7 @@ class MacOSApplication implements NativeApplication {
       activate: (hasVisibleWindows) => this.#onActivate?.(hasVisibleWindows),
       openUrl: (url) => this.#onOpenUrl?.(url),
       openFile: (path) => this.#onOpenFile?.(path),
+      quitRequested: () => this.#onQuitRequest?.(),
     });
     this.#appDelegate = delegate.handle;
     msgSendPtr(this.#app, rt.selectors.get('setDelegate:'), this.#appDelegate);
@@ -874,8 +867,7 @@ class MacOSApplication implements NativeApplication {
       msgSendU8(this.#app, rt.selectors.get('activateIgnoringOtherApps:'), 1);
     }
 
-    // `nextEventMatchingMask:` runs every pump tick; cache its arguments. The
-    // mode string is autoreleased, so retain it for the app's lifetime.
+    // The mode string is autoreleased; retain it for the app's lifetime.
     this.#nextEventSel = rt.selectors.get('nextEventMatchingMask:untilDate:inMode:dequeue:');
     this.#sendEventSel = rt.selectors.get('sendEvent:');
     this.#distantPast = rt.msgSend(rt.classes.get('NSDate'), rt.selectors.get('distantPast'));
@@ -893,11 +885,7 @@ class MacOSApplication implements NativeApplication {
     }
   }
 
-  /**
-   * Deliver pending AppKit input events to their windows — the standard
-   * `nextEventMatchingMask:` / `sendEvent:` loop, run non-blockingly
-   * (`untilDate:` distantPast) so it drains the queue and returns each tick.
-   */
+  /** Dispatch queued AppKit input events without blocking (untilDate: distantPast). */
   #pumpAppEvents(): void {
     if (this.#app === 0n) {
       return;
@@ -938,6 +926,10 @@ class MacOSApplication implements NativeApplication {
     this.#onOpenFile = callback;
   }
 
+  onQuitRequest(callback: () => void): void {
+    this.#onQuitRequest = callback;
+  }
+
   readonly appKit: NativeAppKit = {
     setActivationPolicy: cocoaApp.setActivationPolicy,
     hide: cocoaApp.hide,
@@ -957,8 +949,10 @@ class MacOSApplication implements NativeApplication {
     const rt = cocoa();
     const frame: readonly [number, number, number, number] = [0, 0, options.width, options.height];
 
+    const windowClass =
+      options.frame === false ? ensureFramelessWindowClass() : rt.classes.get('NSWindow');
     const window = msgSendInitWithContentRect(
-      rt.msgSend(rt.classes.get('NSWindow'), rt.selectors.get('alloc')),
+      rt.msgSend(windowClass, rt.selectors.get('alloc')),
       rt.selectors.get('initWithContentRect:styleMask:backing:defer:'),
       frame,
       BigInt(computeWindowStyleMask(styleFromOptions(options))),
@@ -966,70 +960,55 @@ class MacOSApplication implements NativeApplication {
       false,
     );
 
-    // AppKit defaults releasedWhenClosed to YES for programmatic NSWindows, so a
-    // close would dealloc it while we still hold the handle (use-after-free). We
-    // own the lifetime — release explicitly in teardown instead.
+    // releasedWhenClosed:YES (the default) frees the window under our handle on
+    // close; releaseNative balances our +1 instead.
     msgSendU8(window, rt.selectors.get('setReleasedWhenClosed:'), 0);
+    // Electron's default placement.
+    rt.msgSend(window, rt.selectors.get('center'));
 
     const configuration = rt.msgSend(
       rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
       rt.selectors.get('init'),
     );
 
-    // Enable developer extras so the web inspector is available (right-click →
-    // Inspect Element, and webContents.openDevTools()). `developerExtrasEnabled`
-    // is a KVC key on WKPreferences; set via setValue:forKey: with an NSNumber.
     enableDeveloperExtras(rt.msgSend(configuration, rt.selectors.get('preferences')));
 
-    // Wire every custom scheme registered via `protocol.handle` onto THIS
-    // configuration with `setURLSchemeHandler:forURLScheme:` — it can only be set
-    // on the config BEFORE the web view is created (not after). One shared
-    // `WKURLSchemeHandler` instance serves all schemes; it routes each request
-    // through `protocol.dispatch`. Schemes registered after this window is
-    // created are NOT served by it (Electron has the same before-create rule).
-    registerCustomSchemes(configuration);
+    registerCustomSchemes(configuration, options.protocol);
 
-    // The web view (and thus its contents) does not exist until after the
-    // configuration is built, so the handler forwards to a late-bound contents
-    // reference rather than capturing it directly.
+    // The handlers exist before the web view, so they reach its contents late-bound.
     let contents: MacOSWebContents | undefined;
     const userContentController = rt.msgSend(
       configuration,
       rt.selectors.get('userContentController'),
     );
 
-    // Inject the bridge + user preload into a dedicated isolated world so they
-    // are invisible to page scripts (Electron `contextIsolation: true`).
+    // The bridge and preload run in an isolated world, invisible to page scripts.
     const isolatedWorld = getContentWorld(PRELOAD_WORLD_NAME);
 
     const handler = createScriptMessageHandler((envelopeJson) =>
       contents?.deliverRendererEnvelope(envelopeJson),
     );
-    // Register the handler IN the isolated world so its `webkit.messageHandlers`
-    // binding is reachable only from there.
+    // Only the isolated world can reach this handler.
     msgSendPtr3(
       userContentController,
       rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
       handler.handle,
       isolatedWorld,
-      nsString(SCRIPT_MESSAGE_HANDLER_NAME),
+      nsString(IPC_HANDLER_NAME),
     );
 
-    // Second handler in the PAGE world: the return channel for the public
-    // `executeJavaScript`, whose wrapper posts its result here (D022). The page
-    // world is a WebKit-interned singleton, so `pageWorld()` returns the same
-    // handle at teardown — no need to retain the autoreleased value here.
+    // executeJavaScript's return channel (D022b). pageWorld() is interned by WebKit,
+    // so teardown gets the same handle without a retain here.
     const execHandler = createScriptMessageHandler((json) => contents?.deliverExecResult(json));
     msgSendPtr3(
       userContentController,
       rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
       execHandler.handle,
       pageWorld(),
-      nsString(EXEC_RESULT_HANDLER_NAME),
+      nsString(EXEC_HANDLER_NAME),
     );
 
-    // Page-world dom-ready channel: an injected script posts here on
-    // DOMContentLoaded, surfacing Electron's `dom-ready`.
+    // The page world's DOMContentLoaded surfaces Electron's dom-ready.
     const domReadyHandler = createScriptMessageHandler(() =>
       contents?.deliverNavigation({ type: 'dom-ready' }),
     );
@@ -1047,35 +1026,24 @@ class MacOSApplication implements NativeApplication {
         rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:inContentWorld:'),
         nsString(source),
         WK_INJECTION_TIME_AT_DOCUMENT_START,
-        0,
+        FOR_MAIN_FRAME_ONLY,
         world,
       );
       msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
+      rt.msgSend(userScript, rt.selectors.get('release'));
     };
 
-    // Per-window cross-world channel id for contextBridge (Phase B). The page
-    // stub and the isolated host both bake it in at inject time.
-    const channelId = generateChannelId();
-
-    // Isolated world: record the channel id, then the bridge, then the
-    // contextBridge host (installs `__bunmaska.exposeInMainWorld`), then the user
-    // preload — so `window.__bunmaska` + the channel + exposeInMainWorld all exist
-    // when the user preload runs and calls exposeInMainWorld.
-    addUserScript(generateIsolatedChannelSetup(channelId), isolatedWorld);
-    addUserScript(generatePreloadBootstrap(), isolatedWorld);
-    addUserScript(generateIsolatedHostSource(channelId), isolatedWorld);
-    if (options.preloadScript !== undefined) {
-      addUserScript(options.preloadScript, isolatedWorld);
+    const scripts = injectedScripts({
+      preloadScript: options.preloadScript,
+      frame: options.frame,
+      domReadyWorld: 'page',
+    });
+    for (const source of scripts.isolated) {
+      addUserScript(source, isolatedWorld);
     }
-    // Page world: the cross-world stub that materialises contextBridge surfaces,
-    // and the dom-ready notifier.
-    addUserScript(generatePageWorldStub(channelId), pageWorld());
-    // Custom (frameless) title bars: the page-world script only mirrors `--app-region`
-    // onto `-webkit-app-region`, which WKWebView drags natively. The window-op controls
-    // (`window.__bunmaska.window`) belong on the isolated-world bridge (a follow-up),
-    // never the page world — a `__bunmaska` handle there would defeat context isolation.
-    addUserScript(windowControlsScript(), pageWorld());
-    addUserScript(generateDomReadyScript(), pageWorld());
+    for (const source of scripts.page) {
+      addUserScript(source, pageWorld());
+    }
 
     const webview = msgSendInitWithFrameConfig(
       rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),
@@ -1083,15 +1051,13 @@ class MacOSApplication implements NativeApplication {
       frame,
       configuration,
     );
+    // The web view copies the configuration; the copy shares its user content controller.
+    rt.msgSend(configuration, rt.selectors.get('release'));
     contents = new MacOSWebContents(webview, isolatedWorld);
 
-    // Forward-declared so the navigation + window delegate closures can reference
-    // it; assigned once the teardown closure (below) exists. The closures only
-    // run on later native callbacks, after the assignment.
+    // Assigned below; the delegate closures only run on later native callbacks.
     let nativeWindow: MacOSWindow;
 
-    // `ready-to-show` is emitted once, on the FIRST finished load, reusing the
-    // navigation delegate's did-finish-load signal.
     let readyToShowEmitted = false;
     const navigationDelegate = createNavigationDelegate((event) => {
       contents?.deliverNavigation(event);
@@ -1102,30 +1068,25 @@ class MacOSApplication implements NativeApplication {
     });
     msgSendPtr(webview, rt.selectors.get('setNavigationDelegate:'), navigationDelegate.handle);
 
-    // WKUIDelegate: route window.open / target=_blank to the JS handler (returns
-    // nil so no child web view is created). Retained by its registry, like the
-    // nav delegate.
+    // window.open and target=_blank go to the JS handler; nil means no child view.
     const uiDelegate = createUIDelegate((url) => contents?.deliverWindowOpen(url));
     msgSendPtr(webview, rt.selectors.get('setUIDelegate:'), uiDelegate.handle);
 
     msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
     msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));
 
-    // Teardown run on window close: detach both handlers from their worlds, drop
-    // their registry entries + release the native instances, and reject any
-    // exec Promise still awaiting a result it can no longer receive.
     const teardown = (): void => {
       msgSendPtrPtr(
         userContentController,
         rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(SCRIPT_MESSAGE_HANDLER_NAME),
+        nsString(IPC_HANDLER_NAME),
         isolatedWorld,
       );
       handler.dispose();
       msgSendPtrPtr(
         userContentController,
         rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(EXEC_RESULT_HANDLER_NAME),
+        nsString(EXEC_HANDLER_NAME),
         pageWorld(),
       );
       execHandler.dispose();
@@ -1139,15 +1100,9 @@ class MacOSApplication implements NativeApplication {
       contents?.rejectPendingExecs();
     };
 
-    // Deferred, post-close balance of the two objects we alloc'd and kept alive
-    // with setReleasedWhenClosed:NO. Detach the delegate first so no late
-    // notification fires, then release the WKWebView and the NSWindow (the window
-    // dealloc cascades to its content view). The delegate's JSCallback IMPs are
-    // process-lifetime (defineObjcClass) and are NOT released here.
+    // Detach the delegate before releasing, so no late notification fires.
     const releaseNative = (): void => {
       msgSendPtr(window, rt.selectors.get('setDelegate:'), 0n);
-      // The three delegates were alloc'd per window and previously leaked with
-      // their registry entries on every close.
       navigationDelegate.destroy();
       uiDelegate.destroy();
       windowDelegate.destroy();
@@ -1155,24 +1110,8 @@ class MacOSApplication implements NativeApplication {
       cocoa().msgSend(window, rt.selectors.get('release'));
     };
 
-    nativeWindow = new MacOSWindow(
-      window,
-      contents,
-      {
-        x: 0,
-        y: 0,
-        width: options.width,
-        height: options.height,
-      },
-      teardown,
-      releaseNative,
-    );
+    nativeWindow = new MacOSWindow(window, contents, teardown, releaseNative);
 
-    // Set the NSWindowDelegate: it routes `windowShouldClose:` (the preventable
-    // veto) and `windowWillClose:` (teardown + `closed`) plus the key/resize/
-    // miniaturize lifecycle notifications into the window. The delegate's IMP
-    // JSCallbacks are retained for the process lifetime by `defineObjcClass`, so
-    // they are never freed inside their own invocation (JSCallback discipline).
     const windowDelegate = createWindowDelegate({
       shouldClose: () => nativeWindow.shouldClose(),
       willClose: () => nativeWindow.willClose(),

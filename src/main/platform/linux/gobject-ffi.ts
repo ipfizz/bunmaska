@@ -1,37 +1,14 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-
-/**
- * Loads GObject's signal-connection and refcount primitives plus the
- * construct-only `g_object_new` path used to build a `WebKitWebView` with a
- * pre-wired `WebKitUserContentManager`.
- *
- * `libgobject-2.0` is a hard dependency of GTK 4, so it is always present
- * wherever `libgtk-4` is. Convention: `gboolean` is {@link FFIType.i32};
- * `gulong`/`GType` are {@link FFIType.u64} (BigInt); `GConnectFlags` is
- * {@link FFIType.u32}; all handles are real pointers.
- */
+import { dlopenLinux } from './glib-ffi';
 
 const LIBGOBJECT_PATH = 'libgobject-2.0.so.0';
 
 /** Default `GConnectFlags` (no after/swapped) for `g_signal_connect_data`. */
 export const G_CONNECT_DEFAULT = 0;
 
-/**
- * The GObject FFI symbol descriptor table.
- *
- * `g_signal_connect_data` is the real symbol behind the `g_signal_connect`
- * C macro; pass `c_handler = jsCallback.ptr`, `data = 0`, `destroy_data = 0`,
- * `connect_flags = 0`. It returns the `gulong` handler id kept as a BigInt.
- *
- * `g_object_new` is true C varargs; the fixed 4-arity `[u64, cstring, ptr, ptr]`
- * is valid ONLY for the literal call
- * `(webkit_web_view_get_type(), "user-content-manager", ucm, NULL)`. The
- * trailing pointer MUST be a real null terminator or g_object_new walks past the
- * varargs and corrupts/crashes.
- */
+/** `gulong` handler ids and `GType`s are u64 (BigInt), never pointer. */
 export const GOBJECT_FFI_SYMBOLS = {
   g_signal_connect_data: {
     args: [
@@ -48,28 +25,24 @@ export const GOBJECT_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.u64],
     returns: FFIType.void,
   },
-  g_object_ref: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   g_object_unref: {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // C varargs pinned to (type, name, value, NULL): one pointer-valued property, or a NULL name
+  // for none. The trailing NULL terminator is mandatory or g_object_new walks past the args.
   g_object_new: {
     args: [FFIType.u64, FFIType.cstring, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // C varargs; the fixed `[ptr, cstring, ptr (out), ptr (null)]` arity is valid
-  // ONLY for reading a SINGLE property into a caller-allocated out buffer, e.g.
-  // `g_object_get(settings, "gtk-application-prefer-dark-theme", &gboolean, NULL)`.
+  // C varargs pinned to (object, name, &out, NULL): reads ONE property into a caller-owned buffer.
   g_object_get: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GOBJECT_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GOBJECT_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -83,7 +56,7 @@ export const loadGObjectFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGOBJECT_PATH, GOBJECT_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGOBJECT_PATH, GOBJECT_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

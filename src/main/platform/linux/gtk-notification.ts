@@ -1,40 +1,19 @@
-import { JSCallback, type Pointer } from 'bun:ffi';
-import type {
-  NotificationBackend,
-  NotificationHandle,
-  NotificationSpec,
-} from '../../api/notification';
+import { JSCallback } from 'bun:ffi';
+import type { NotificationBackend, NotificationHandle, NotificationSpec } from '../services';
 import { cstr } from '../cstr';
-import { connectSignal } from './gtk-signals';
 import { loadGlibFFI } from './glib-ffi';
+import { loadGObjectFFI } from './gobject-ffi';
+import { connectSignal, deferCallbackClose } from './gtk-signals';
 import { loadLibnotifyFFI } from './libnotify-ffi';
 
-/**
- * Linux notifications via libnotify — the Linux half of Bunmaska's `Notification`.
- *
- * JSCallback lifecycle (a past SIGSEGV class): the `closed` handler thunk MUST
- * stay reachable for the life of the connection — Bun GCs an unreferenced
- * {@link JSCallback}, and the daemon would then call into freed memory. Each live
- * notification therefore RETAINS its callback in the returned handle's closure,
- * and {@link JSCallback.close} is deferred to a later tick (never called
- * synchronously inside the handler's own invocation).
- */
+/** `NotifyNotification::closed`: `(notification, user_data) -> void`. */
+const CLOSED_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
 
-/** ABI shape for `NotifyNotification::closed`: `(notification, user_data) -> void`. */
-export const CLOSED_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
-
-/**
- * Every `closed`-signal {@link JSCallback} currently wired to a live
- * notification. Retained at module scope so Bun cannot GC the native thunk while
- * the daemon still holds its pointer (the SIGSEGV-avoidance retain). Each entry
- * is removed (and the callback closed on a later tick) when its notification
- * fires `closed` or is explicitly closed.
- */
+/** Keeps each `closed` thunk reachable until it fires; closed on a later tick (`deferCallbackClose`). */
 const liveCallbacks = new Set<JSCallback>();
 
 let initialized = false;
 
-/** Ensure `notify_init('Bunmaska')` has run once. Returns whether init succeeded. */
 const ensureInit = (): boolean => {
   const notify = loadLibnotifyFFI();
   if (initialized || notify.symbols.notify_is_initted() !== 0) {
@@ -46,22 +25,25 @@ const ensureInit = (): boolean => {
   return ok;
 };
 
+// ponytail: show/close are libnotify's 25 s sync D-Bus calls; bound them via linux-dbus callMethodSync (5 s).
 const present = (spec: NotificationSpec): NotificationHandle => {
   const notify = loadLibnotifyFFI();
+  const gobject = loadGObjectFFI().symbols;
   ensureInit();
 
   const notification = notify.symbols.notify_notification_new(
     cstr(spec.title),
     cstr(spec.body),
-    // `cstring` cannot be null via the FFI binding, so an empty icon name (no
-    // icon) is passed instead of NULL — equivalent for our purposes.
-    cstr(''),
+    null,
   );
   if (notification === null) {
     throw new Error('notify_notification_new() returned null');
   }
+  if (spec.appName !== undefined) {
+    notify.symbols.notify_notification_set_app_name(notification, cstr(spec.appName));
+  }
   if (spec.silent) {
-    // The freedesktop `suppress-sound` hint; set_hint sinks the floating GVariant.
+    // set_hint sinks the floating GVariant.
     notify.symbols.notify_notification_set_hint(
       notification,
       cstr('suppress-sound'),
@@ -69,27 +51,32 @@ const present = (spec: NotificationSpec): NotificationHandle => {
     );
   }
 
-  // No daemon (headless CI) makes show return FALSE — expected, not an error.
-  notify.symbols.notify_notification_show(notification, null);
+  // No daemon (headless CI) makes show return FALSE and `closed` never fires, so release now.
+  if (notify.symbols.notify_notification_show(notification, null) === 0) {
+    gobject.g_object_unref(notification);
+    return { close: () => undefined, onClosed: () => undefined };
+  }
+
+  let onClosed: (() => void) | undefined;
+  let open = true;
+  const callback = new JSCallback((): void => {
+    open = false;
+    liveCallbacks.delete(callback);
+    gobject.g_signal_handler_disconnect(notification, connection.handlerId);
+    deferCallbackClose([callback, { close: () => gobject.g_object_unref(notification) }]);
+    onClosed?.();
+  }, CLOSED_CB_DEF);
+  liveCallbacks.add(callback);
+  const connection = connectSignal(notification, 'closed', callback);
 
   return {
     close: () => {
-      notify.symbols.notify_notification_close(notification, null);
+      if (open) {
+        notify.symbols.notify_notification_close(notification, null);
+      }
     },
-    // Wire the daemon's `closed` signal to `cb`. The thunk is retained in
-    // `liveCallbacks` until it fires; it is closed on a LATER tick (never
-    // synchronously inside its own invocation — that would free the trampoline
-    // the daemon is about to return into).
     onClosed: (cb) => {
-      const callback = new JSCallback((_notification: Pointer, _userData: Pointer): void => {
-        cb();
-        setTimeout(() => {
-          liveCallbacks.delete(callback);
-          callback.close();
-        }, 0);
-      }, CLOSED_CB_DEF);
-      liveCallbacks.add(callback);
-      connectSignal(notification, 'closed', callback);
+      onClosed = cb;
     },
   };
 };
@@ -102,7 +89,7 @@ const isSupported = (): boolean => {
   }
 };
 
-/** The Linux native notification backend (libnotify). */
+/** The libnotify notification backend. */
 export const linuxNotificationBackend: NotificationBackend = {
   isSupported,
   present,

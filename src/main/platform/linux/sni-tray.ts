@@ -1,10 +1,10 @@
 import { CString, JSCallback, type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
-import type { TrayBackend, TrayInstance } from '../../api/tray';
+import { reportCallbackError } from '../../../common/report-error';
+import type { TrayBackend, TrayInstance } from '../services';
 import { cstr } from '../cstr';
 import {
   DBUS_GET_PROPERTY_CB_DEF,
   DBUS_METHOD_CALL_CB_DEF,
-  DBUS_SET_PROPERTY_CB_DEF,
   loadGDBusFFI,
   VTABLE_SLOTS,
 } from './gdbus-ffi';
@@ -14,48 +14,27 @@ import { loadGObjectFFI } from './gobject-ffi';
 import {
   callMethodSync,
   emitSignal,
-  getUniqueName,
   nodeInfoLookupInterface,
   nodeInfoNewForXml,
   probeSessionBusUnchecked,
   registerObject,
+  subscribeSignal,
   unregisterObject,
 } from './linux-dbus';
 
 /**
- * Linux `Tray` via StatusNotifierItem (SNI) over D-Bus. We EXPORT an
- * `org.kde.StatusNotifierItem` object on the session bus (a host — KDE, the GNOME
- * AppIndicator extension, Waybar, swaybar — draws the icon by reading our properties), and
- * register it with `org.kde.StatusNotifierWatcher`.
- *
- * v1 ships icon + tooltip + LEFT-CLICK (the host's `Activate` → our `click`). The context
- * menu is DEFERRED: SNI's `Menu` points at a separate `com.canonical.dbusmenu` service
- * (another large export) — so `setContextMenu` is an accepted soft no-op on Linux v1 (it
- * does not throw; cross-platform callers that set a menu unconditionally still work).
- *
- * DEADLOCK/HANG-SAFE: the only blocking call is the bounded {@link callMethodSync} (5s); the
- * vtable callbacks fire on the GMainContext via the cooperative pump. CI-HANG-SAFE: gated
- * behind `BUNMASKA_ENABLE_LINUX_TRAY` (CI never sets it) → `create` returns an INERT no-op
- * instance, no bus touched, no object exported.
- *
- * LIFETIME (load-bearing, blind — verified by review, not CI): `register_object` COPIES the
- * vtable, so the live wires are the THREE JSCallbacks (the copied vtable holds their raw
- * fn-pointers) — they are retained FOREVER (never closed, mirroring the signal-subscription
- * discipline; closing would risk the in-flight-reply / own-invocation SIGSEGV class). The
- * `IconPixmap` is `g_variant_new_from_data(notify=NULL)`, so its backing ARGB `Uint8Array`
- * MUST outlive every reply that references it — every icon buffer is retained for the
- * process lifetime. Property getters MUST be on the pumped main thread (the THREAD INVARIANT
- * in linux-dbus.ts) or the host's queries dispatch to a context nothing iterates.
+ * Tray as a StatusNotifierItem on the session bus, gated by BUNMASKA_ENABLE_LINUX_TRAY (unset in
+ * CI, which gets an inert tray). Create it on the pumped main thread (the linux-dbus THREAD
+ * INVARIANT). The vtable JSCallbacks are retained forever and never closed: GDBus's copy of the
+ * vtable holds their raw function pointers.
  */
 
-const OBJECT_PATH = '/StatusNotifierItem';
+const OBJECT_PATH_PREFIX = '/StatusNotifierItem';
 const SNI_IFACE = 'org.kde.StatusNotifierItem';
 const WATCHER_NAME = 'org.kde.StatusNotifierWatcher';
 const WATCHER_PATH = '/StatusNotifierWatcher';
-const APP_ID = 'bunmaska';
 
-/** The interface we export. Only properties we actually serve are declared (a host uses
- *  defaults for anything absent), so GetAll never hits an unserved property. */
+/** Only served properties are declared, so GetAll never hits an unserved one. */
 export const SNI_XML = `<node>
  <interface name="org.kde.StatusNotifierItem">
   <property name="Category" type="s" access="read"/>
@@ -74,22 +53,20 @@ export const SNI_XML = `<node>
   <signal name="NewIcon"/>
   <signal name="NewToolTip"/>
   <signal name="NewTitle"/>
+  <signal name="NewStatus"><arg name="status" type="s"/></signal>
  </interface>
 </node>`;
 
-/** Whether the live SNI path is enabled. CI leaves this unset → an inert no-op tray. */
+/** Unset in CI, which gets an inert tray. */
 const liveTrayEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_TRAY'] === '1';
 
-// Process-lifetime retains (never freed — see the module note): the vtable JSCallbacks
-// (the copied vtable holds their raw fn-pointers) + every icon ARGB buffer (referenced by
-// from_data variants with notify=NULL) + the node infos + vtable arrays.
+// Never freed: the vtable JSCallbacks, node infos and vtable arrays of every registered tray.
 const retained: {
   callbacks: JSCallback[];
-  buffers: Uint8Array[];
   misc: unknown[];
-} = { callbacks: [], buffers: [], misc: [] };
+} = { callbacks: [], misc: [] };
 
-/** Cached `GVariantType*` per type string (allocated once, retained for the process). */
+/** One `GVariantType*` per type string, never freed. */
 const variantTypes = new Map<string, Pointer>();
 const variantType = (typeString: string): Pointer => {
   const cached = variantTypes.get(typeString);
@@ -105,10 +82,9 @@ const variantType = (typeString: string): Pointer => {
 };
 
 /**
- * Convert GdkPixbuf rows (RGB or RGBA, `rowstride`-padded) to tightly-packed ARGB32 in
- * NETWORK (big-endian) byte order — the SNI IconPixmap wire format. PURE (no FFI): width/
- * height stay native (the `i` members go through g_variant_new_int32); only these pixel
- * bytes are pre-swapped. A 3-channel (no-alpha) source synthesizes A=0xFF.
+ * GdkPixbuf rows (RGB or RGBA, rowstride-padded) to packed ARGB32 in NETWORK byte order, the
+ * IconPixmap wire format. Only pixel bytes are swapped: width and height stay native through
+ * g_variant_new_int32. A 3-channel source gets A=0xFF.
  */
 export const rgbaToArgb32Network = (
   pixels: Uint8Array,
@@ -139,7 +115,7 @@ export const rgbaToArgb32Network = (
 
 type Icon = { argb: Uint8Array; width: number; height: number };
 
-/** Decode an icon file into ARGB32 pixels, or null if unreadable. Unrefs the pixbuf. */
+/** Null when the file is unreadable. */
 const decodeIcon = (path: string): Icon | null => {
   const pix = loadGdkPixbufFFI();
   const pixbuf = pix.symbols.gdk_pixbuf_new_from_file(cstr(path), null);
@@ -156,28 +132,20 @@ const decodeIcon = (path: string): Icon | null => {
     const view = new Uint8Array(toArrayBuffer(pixelsPtr, 0, height * rowstride));
     icon = { argb: rgbaToArgb32Network(view, width, height, rowstride, nChannels), width, height };
   }
-  loadGObjectFFI().symbols.g_object_unref(pixbuf); // copied into `argb`; drop the pixbuf.
+  loadGObjectFFI().symbols.g_object_unref(pixbuf); // the pixels were copied into `argb`
   return icon;
 };
 
-/** Build a floating `a(iiay)` with the one icon frame (retains `icon.argb` for from_data). */
+/** A floating one-frame `a(iiay)`; its `ay` is a copy of `icon.argb`. */
 const buildIconPixmap = (icon: Icon): Pointer | null => {
   const g = loadGlibFFI().symbols;
-  retained.buffers.push(icon.argb); // referenced by from_data (notify=NULL) → must outlive the variant.
   const builder = g.g_variant_builder_new(variantType('a(iiay)'));
   g.g_variant_builder_open(builder, variantType('(iiay)'));
   g.g_variant_builder_add_value(builder, g.g_variant_new_int32(icon.width));
   g.g_variant_builder_add_value(builder, g.g_variant_new_int32(icon.height));
   g.g_variant_builder_add_value(
     builder,
-    g.g_variant_new_from_data(
-      variantType('ay'),
-      ptr(icon.argb),
-      BigInt(icon.argb.length),
-      1,
-      null,
-      null,
-    ),
+    g.g_variant_new_fixed_array(variantType('y'), ptr(icon.argb), BigInt(icon.argb.length), 1n),
   );
   g.g_variant_builder_close(builder);
   const value = g.g_variant_builder_end(builder);
@@ -185,7 +153,7 @@ const buildIconPixmap = (icon: Icon): Pointer | null => {
   return value;
 };
 
-/** Build a floating empty `a(iiay)` (no frames). */
+/** A floating `a(iiay)` with no frames. */
 const buildEmptyPixmap = (): Pointer | null => {
   const g = loadGlibFFI().symbols;
   const builder = g.g_variant_builder_new(variantType('a(iiay)'));
@@ -194,7 +162,7 @@ const buildEmptyPixmap = (): Pointer | null => {
   return value;
 };
 
-/** Build a floating `(sa(iiay)ss)` ToolTip = (iconName, [], title, description). */
+/** A floating `(sa(iiay)ss)`: (iconName, no pixmaps, title, description). */
 const buildToolTip = (title: string, text: string): Pointer | null => {
   const g = loadGlibFFI().symbols;
   const builder = g.g_variant_builder_new(variantType('(sa(iiay)ss)'));
@@ -207,7 +175,27 @@ const buildToolTip = (title: string, text: string): Pointer | null => {
   return value;
 };
 
-/** A fully-inert no-op tray (gate off / no bus / export failed) — never touches the bus. */
+/** Fill a getter's `GError**`: GDBus g_asserts (aborts) on a NULL Get value without one. */
+const setGError = (out: Pointer | null, message: string): void => {
+  if (out === null) {
+    return; // GetAll passes NULL and skips the property.
+  }
+  const g = loadGlibFFI().symbols;
+  const domain = g.g_quark_from_string(cstr('bunmaska-tray'));
+  const gerror = g.g_error_new_literal(domain, 0, cstr(message));
+  new BigUint64Array(toArrayBuffer(out, 0, 8))[0] = BigInt(gerror ?? 0);
+};
+
+/** A floating one-string tuple `(s)`, or null. */
+const stringTuple = (value: string): Pointer | null => {
+  const g = loadGlibFFI().symbols;
+  const child = g.g_variant_new_string(cstr(value));
+  return child === null
+    ? null
+    : g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(child)])), 1n);
+};
+
+/** For a disabled gate, a missing bus or a failed export; never touches the bus. */
 const inertInstance = (): TrayInstance => {
   let destroyed = false;
   return {
@@ -224,24 +212,26 @@ const inertInstance = (): TrayInstance => {
 };
 
 type State = {
+  readonly id: string;
+  status: 'Active' | 'Passive';
   title: string;
   toolTip: string;
   icon: Icon | null;
   click: (() => void) | null;
 };
 
-/** Serve one SNI property as a floating GVariant, or null for an unknown name. */
+/** A floating GVariant, or null for a name GDBus would already have rejected. */
 const getPropertyValue = (state: State, name: string): Pointer | null => {
   const g = loadGlibFFI().symbols;
   switch (name) {
     case 'Category':
       return g.g_variant_new_string(cstr('ApplicationStatus'));
     case 'Id':
-      return g.g_variant_new_string(cstr(APP_ID));
+      return g.g_variant_new_string(cstr(state.id));
     case 'Title':
       return g.g_variant_new_string(cstr(state.title));
     case 'Status':
-      return g.g_variant_new_string(cstr('Active'));
+      return g.g_variant_new_string(cstr(state.status));
     case 'IconName':
       return g.g_variant_new_string(cstr(''));
     case 'IconPixmap':
@@ -257,12 +247,16 @@ const getPropertyValue = (state: State, name: string): Pointer | null => {
   }
 };
 
-/** Build + register the live SNI object; returns a `TrayInstance`, or null on any failure. */
-const createLive = (conn: Pointer, initialImage: string): TrayInstance | null => {
+let trayCount = 0;
+
+/** Null on any failure. */
+const createLive = (conn: Pointer, initialImage: string, appName: string): TrayInstance | null => {
   const gdbus = loadGDBusFFI();
+  // One object path per tray: a second registration at a shared path fails on one connection.
+  const objectPath = `${OBJECT_PATH_PREFIX}/${trayCount++}`;
   const node = nodeInfoNewForXml(SNI_XML);
   if (node === null) {
-    return null; // malformed XML — never crash (guard the NULL deref).
+    return null; // malformed XML
   }
   const iface = nodeInfoLookupInterface(node, SNI_IFACE);
   if (iface === null) {
@@ -270,21 +264,27 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   }
 
   const state: State = {
-    title: 'Bunmaska',
+    id: appName,
+    status: 'Active',
+    title: appName,
     toolTip: '',
     icon: decodeIcon(initialImage),
     click: null,
   };
 
-  // The three vtable handlers — each wrapped so a JS throw can't cross the FFI boundary and
-  // kill the pump. Retained FOREVER (the copied vtable holds their raw fn-pointers).
-  const getProp = new JSCallback((_c, _s, _p, _i, propName, _e, _u): Pointer | null => {
+  // Both handlers catch: a throw must not unwind into the GDBus dispatch.
+  const getProp = new JSCallback((_c, _s, _p, _i, propName, error, _u): Pointer | null => {
+    let value: Pointer | null = null;
     try {
-      return getPropertyValue(state, propName === null ? '' : new CString(propName).toString());
-    } catch {
-      // A failed getter returns null → GDBus synthesizes an error for that one property.
-      return null;
+      value = getPropertyValue(state, propName === null ? '' : new CString(propName).toString());
+    } catch (error) {
+      reportCallbackError(error);
+      value = null;
     }
+    if (value === null) {
+      setGError(error, 'StatusNotifierItem property unavailable');
+    }
+    return value;
   }, DBUS_GET_PROPERTY_CB_DEF);
 
   const methodCall = new JSCallback((_c, _s, _p, _i, method, _params, invocation, _u): void => {
@@ -292,43 +292,48 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
       if ((method === null ? '' : new CString(method).toString()) === 'Activate') {
         state.click?.();
       }
-    } catch {
-      // A faulty click handler must not crash the GMainContext dispatch.
+    } catch (error) {
+      // A throwing click handler must not skip the reply below.
+      reportCallbackError(error);
     }
     // Complete every method with an empty reply so the host is never left hanging.
     gdbus.symbols.g_dbus_method_invocation_return_value(invocation, null);
   }, DBUS_METHOD_CALL_CB_DEF);
 
-  const setProp = new JSCallback((): number => 0, DBUS_SET_PROPERTY_CB_DEF); // all read-only
-
+  // Never registered, so native code holds neither: safe to close on the failure paths.
+  const closeCallbacks = (): null => {
+    methodCall.close();
+    getProp.close();
+    return null;
+  };
   const mcPtr = methodCall.ptr;
   const gpPtr = getProp.ptr;
-  const spPtr = setProp.ptr;
-  if (mcPtr === null || gpPtr === null || spPtr === null) {
-    return null;
+  if (mcPtr === null || gpPtr === null) {
+    return closeCallbacks();
   }
 
-  const vtable = new BigUint64Array(VTABLE_SLOTS); // [method_call, get_property, set_property, 0×8]
+  // [method_call, get_property, set_property = NULL, padding x8]: every property is read-only,
+  // so GDBus rejects a Set before it would dispatch one.
+  const vtable = new BigUint64Array(VTABLE_SLOTS);
   vtable[0] = BigInt(mcPtr);
   vtable[1] = BigInt(gpPtr);
-  vtable[2] = BigInt(spPtr);
 
-  const regId = registerObject(conn, OBJECT_PATH, iface, ptr(vtable));
+  const regId = registerObject(conn, objectPath, iface, ptr(vtable));
   if (regId === 0) {
-    return null;
+    return closeCallbacks();
   }
-  retained.callbacks.push(methodCall, getProp, setProp); // load-bearing: the vtable copy points here.
+  retained.callbacks.push(methodCall, getProp); // load-bearing: the vtable copy points here.
   retained.misc.push(node, vtable);
 
-  // Register with the watcher via the bounded method call. The watcher reads our sender's
-  // unique name, so g_bus_own_name is unnecessary. Absent watcher ⇒ fast null ⇒ icon
-  // simply doesn't appear (no hang).
-  const uniqueName = getUniqueName(conn);
-  const g = loadGlibFFI().symbols;
-  const nameVariant = uniqueName === null ? null : g.g_variant_new_string(cstr(uniqueName));
-  if (nameVariant !== null) {
-    const args = g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(nameVariant)])), 1n);
-    callMethodSync(
+  let destroyed = false;
+  // Registered by object path: the watcher pairs it with our sender's unique name (the
+  // libappindicator form). Absent watcher => fast null => the icon simply doesn't appear.
+  const registerWithWatcher = (): void => {
+    const args = stringTuple(objectPath);
+    if (args === null) {
+      return;
+    }
+    const reply = callMethodSync(
       conn,
       WATCHER_NAME,
       WATCHER_PATH,
@@ -336,23 +341,42 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
       'RegisterStatusNotifierItem',
       args,
     );
-  }
+    if (reply !== null) {
+      loadGlibFFI().symbols.g_variant_unref(reply);
+    }
+  };
+  registerWithWatcher();
+  // A watcher that starts or restarts after us has no record of this item.
+  subscribeSignal(
+    conn,
+    {
+      sender: 'org.freedesktop.DBus',
+      interface: 'org.freedesktop.DBus',
+      member: 'NameOwnerChanged',
+      path: '/org/freedesktop/DBus',
+      arg0: WATCHER_NAME,
+    },
+    () => {
+      if (!destroyed) {
+        registerWithWatcher();
+      }
+    },
+  );
 
-  let destroyed = false;
   return {
     setToolTip: (toolTip) => {
       state.toolTip = toolTip;
-      emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewToolTip', null);
+      emitSignal(conn, objectPath, SNI_IFACE, 'NewToolTip', null);
     },
     setTitle: (title) => {
       state.title = title;
-      emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewTitle', null);
+      emitSignal(conn, objectPath, SNI_IFACE, 'NewTitle', null);
     },
     setImage: (image) => {
-      state.icon = decodeIcon(image); // old argb stays retained (an in-flight reply may use it).
-      emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewIcon', null); // argument-less; host re-fetches.
+      state.icon = decodeIcon(image);
+      emitSignal(conn, objectPath, SNI_IFACE, 'NewIcon', null); // argument-less; host re-fetches.
     },
-    setContextMenu: () => undefined, // deferred: dbusmenu is a follow-up (soft no-op, never throws).
+    setContextMenu: () => undefined, // ponytail: no com.canonical.dbusmenu export, so a no-op.
     onClick: (callback) => {
       state.click = callback;
     },
@@ -361,15 +385,20 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
         return;
       }
       destroyed = true;
+      // Hosts keep an item until our connection closes; Passive hides it (as libappindicator does).
+      state.status = 'Passive';
+      const passive = stringTuple('Passive');
+      if (passive !== null) {
+        emitSignal(conn, objectPath, SNI_IFACE, 'NewStatus', passive);
+      }
       unregisterObject(conn, regId); // do NOT close the callbacks (retained forever).
     },
     isDestroyed: () => destroyed,
   };
 };
 
-/** The Linux tray backend (StatusNotifierItem over D-Bus). */
 export const linuxTrayBackend: TrayBackend = {
-  create: (image) => {
+  create: (image, _options, appName = 'Bunmaska') => {
     if (!liveTrayEnabled()) {
       return inertInstance();
     }
@@ -377,6 +406,6 @@ export const linuxTrayBackend: TrayBackend = {
     if (conn === null) {
       return inertInstance();
     }
-    return createLive(conn, image) ?? inertInstance();
+    return createLive(conn, image, appName) ?? inertInstance();
   },
 };

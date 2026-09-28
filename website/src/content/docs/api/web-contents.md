@@ -4,9 +4,11 @@ description: "Render and control the web page inside a BrowserWindow - Bunmaska'
 order: 3
 ---
 
-`webContents` controls and observes the page rendered inside a [`BrowserWindow`](browser-window.md). You don't construct it directly - you reach it through `win.webContents`, and most content methods on `BrowserWindow` delegate straight to it. It extends Node's `EventEmitter`, and on construction it bridges the native web view to `ipcMain`, so `ipcMain.handle` / `ipcRenderer.invoke` and `webContents.send` / `ipcRenderer.on` work with no per-window wiring.
+`webContents` controls and observes the page rendered inside a [`BrowserWindow`](/docs/api/browser-window). You don't construct it directly - you reach it through `win.webContents`, and most content methods on `BrowserWindow` delegate straight to it. It extends Node's `EventEmitter`, and on construction it bridges the native web view to `ipcMain`, so `ipcMain.handle` / `ipcRenderer.invoke` and `webContents.send` / `ipcRenderer.on` work with no per-window wiring.
 
-A heads-up on scope: Bunmaska has exactly one frame per view. There is no Chromium underneath, so anything that depends on the multi-frame / multi-process model (subframes, `mainFrame`, `RenderProcessGone`, the debugger / CDP) simply isn't here. What follows is what the class actually exposes.
+A heads-up on scope: Bunmaska models exactly one frame per view - the top frame. Pages can still contain iframes, but the preload, the IPC bridge and `dom-ready` belong to the top frame only. There is no Chromium underneath, so anything that depends on the multi-frame / multi-process model (`mainFrame`, subframe events, `RenderProcessGone`, the debugger / CDP) simply isn't here. What follows is what the class actually exposes.
+
+Once the owning window closes, `isDestroyed()` returns `true` and every other method throws `TypeError: Object has been destroyed`, as in Electron.
 
 ## Methods
 
@@ -129,7 +131,7 @@ Returns `boolean` - whether there is a next history entry to go forward to.
 
 * `code` string
 
-Returns `Promise<unknown>` - evaluates `code` in the page and resolves to the script's completion value, matching Electron's semantics: a bare expression resolves to its value, a returned `Promise` resolves to its fulfilled value, and a thrown error rejects. Only JSON-serializable results survive the trip (think `JSON.stringify`). There is no `userGesture` argument.
+Returns `Promise<unknown>` - evaluates `code` in the page and resolves to the script's completion value, matching Electron's semantics: a bare expression resolves to its value, a returned `Promise` resolves to its fulfilled value, and a thrown error rejects. Only JSON-serializable results survive the trip (think `JSON.stringify`); a result JSON cannot encode rejects right away instead of hanging. The code runs through the page's own `eval`, so a page whose Content-Security-Policy lacks `'unsafe-eval'` rejects it. There is no `userGesture` argument.
 
 ```ts
 const title = await win.webContents.executeJavaScript('document.title');
@@ -141,7 +143,7 @@ console.log(title, ua);
 
 * `css` string
 
-Returns `Promise<string>` - injects a `<style>` block into the page and resolves to a key you can later pass to [`removeInsertedCSS`](#contentsremoveinsertedcsskey). Implemented purely through the page-world exec channel (no native CSS call), so it behaves the same on all three platforms. Note: there is no `options` argument.
+Returns `Promise<string>` - injects a `<style>` block into the page and resolves to a key you can later pass to [`removeInsertedCSS`](#contentsremoveinsertedcsskey). Implemented purely through the page-world exec channel (no native CSS call), so it behaves the same on all three platforms - and, like `executeJavaScript`, a CSP without `'unsafe-eval'` rejects it. Note: there is no `options` argument.
 
 ```ts
 const key = await win.webContents.insertCSS('body { background: #111; color: #eee; }');
@@ -170,7 +172,7 @@ await writeFile('out.pdf', pdf);
 
 ### `contents.capturePage()`
 
-Returns `Promise<NativeImage>` - captures the visible page to a [`NativeImage`](native-image.md). _macOS, Linux._ On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no UI-process snapshot entry point (confirmed by parsing the DLL exports), so it rejects there. No `rect` / `opts` arguments.
+Returns `Promise<NativeImage>` - captures the visible page to a [`NativeImage`](/docs/api/native-image). _macOS, Linux._ On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no UI-process snapshot entry point (confirmed by parsing the DLL exports), so it rejects there. No `rect` / `opts` arguments.
 
 ```ts
 const image = await win.webContents.capturePage(); // macOS + Linux
@@ -181,7 +183,7 @@ await writeFile('shot.png', image.toPNG());
 
 * `factor` number - `1` = 100%.
 
-Sets the page zoom factor natively.
+Sets the page zoom factor natively. A factor that is not a finite number above `0` throws `InvalidArgumentError`, as Electron throws.
 
 ```ts
 win.webContents.setZoomFactor(1.25);
@@ -257,7 +259,7 @@ Honest follow-up limits: there are no keyboard modifiers yet, synthesized drags 
 
 * `handler` Function - receives `{ url }` and returns `{ action: 'allow' | 'deny' }`.
 
-Sets the handler consulted when the page requests a new window (`window.open` / `target=_blank`). Honest caveat: the native popup is **always blocked** on every platform - child-window creation isn't supported, so `{ action: 'allow' }` is unimplemented everywhere. Returning `{ action: 'allow' }` logs a warning and still blocks the window, so the practical pattern is to open the URL externally and return `deny`. The handler's return shape is `{ action }` only - no `overrideBrowserWindowOptions`, and there is no `did-create-window` event. On Windows the handler is not invoked yet: `window.open` is blocked silently there (engine work pending).
+Sets the handler consulted when the page requests a new window (`window.open` / `target=_blank`). Honest caveat: the native popup is **always blocked** on every platform - child-window creation isn't supported, so `{ action: 'allow' }` is unimplemented everywhere. Returning `{ action: 'allow' }` logs a warning and still blocks the window, so the practical pattern is to open the URL externally and return `deny`. The handler's return shape is `{ action }` only - no `overrideBrowserWindowOptions`, and there is no `did-create-window` event. On Windows the handler is not invoked yet: setting one logs a warning, and `window.open` is blocked (engine work pending).
 
 ```ts
 import { shell } from 'bunmaska';
@@ -270,7 +272,7 @@ win.webContents.setWindowOpenHandler(({ url }) => {
 
 ### `contents.openDevTools()`
 
-Opens the developer tools (web inspector) for this view. Best-effort: on macOS it relies on a private inspector SPI and logs a warning if unavailable; on Linux it uses the WebKitGTK inspector. On Windows it is **stubbed** (no-op) - the WinCairo inspector is not wired. No `options` argument (no docking mode).
+Opens the developer tools (web inspector) for this view. Best-effort: on macOS it relies on a private inspector SPI and logs a warning if unavailable; on Linux it uses the WebKitGTK inspector. On Windows it is **stubbed** (a no-op that logs a warning) - the WinCairo inspector is not wired. No `options` argument (no docking mode).
 
 ```ts
 win.webContents.openDevTools();
@@ -294,7 +296,7 @@ Returns `boolean` - whether the devtools were last opened by Bunmaska and not si
 
 ### `contents.isDestroyed()`
 
-Returns `boolean` - whether the owning window has been closed/destroyed.
+Returns `boolean` - whether the owning window has been closed/destroyed. After that, every other method throws `TypeError: Object has been destroyed`.
 
 ```ts
 if (!win.webContents.isDestroyed()) {
@@ -307,19 +309,26 @@ if (!win.webContents.isDestroyed()) {
 * `channel` string
 * `...args` any[]
 
-Sends an event on `channel` to the renderer, where `ipcRenderer.on(channel, ...)` receives it. Arguments are structured-clone serialized through the IPC envelope. A `send` before the page's first load finishes is queued on all platforms and flushed once it does - at `dom-ready` on Windows, at `did-finish-load` on macOS and Linux - so a message fired right after `loadFile` is not lost.
+Sends an event on `channel` to the renderer, where `ipcRenderer.on(channel, ...)` in the preload receives it. Arguments are **JSON**-serialized, not structured-cloned as in Electron: a function, symbol or `bigint` throws `InvalidArgumentError`, a `Date` arrives as a string, `Map` / `Set` / typed arrays arrive as plain objects, and `undefined` properties vanish. Send plain data. A `send` before the page's first load is queued on all platforms and flushed once the bridge is up - at `dom-ready` on Linux and Windows, at `did-finish-load` on macOS - so a message fired right after `loadFile` is not lost.
 
 ```ts
 win.webContents.send('update-available', { version: '1.2.0' });
 ```
 
 ```ts
-// renderer
-import { ipcRenderer } from 'bunmaska/renderer';
+// preload.js - ipcRenderer lives here, not in the page
+import { contextBridge, ipcRenderer } from 'bunmaska/renderer';
 
+let latest = null;
 ipcRenderer.on('update-available', (_event, info) => {
-  console.log('new version', info.version);
+  latest = info;
 });
+contextBridge.exposeInMainWorld('updates', { latest: () => latest });
+```
+
+```js
+// page
+const info = await window.updates.latest(); // exposed functions are async
 ```
 
 ## Events
@@ -342,7 +351,7 @@ Emitted when the load stops (the spinner stops).
 
 ### Event: 'dom-ready'
 
-Emitted when the document in the page is ready.
+Emitted when the top frame's document is ready (`DOMContentLoaded`). Iframes do not emit it.
 
 ```ts
 win.webContents.on('dom-ready', () => {
@@ -384,7 +393,11 @@ Returns:
 * `errorDescription` string
 * `validatedURL` string - the current URL at the time of failure.
 
-Emitted when a load fails. On Linux the error code/description may be coarse (`-1` / `''`) because WebKitGTK surfaces less detail.
+Emitted when a load fails. Error codes differ from Chromium's, so branch on them with care:
+
+- **macOS** maps the common `NSURLErrorDomain` codes to the Chromium net errors Electron reports - cancelled (`-999`) to `-3`, timed out (`-1001`) to `-7`, host not found (`-1003`) to `-105`, offline (`-1009`) to `-106` - and passes every other code through unchanged.
+- **Linux** reports WebKitGTK's own `GError` code and message.
+- **Windows** reports WebKit's own error code and description.
 
 ```ts
 win.webContents.on('did-fail-load', (_event, code, description, url) => {
@@ -413,6 +426,7 @@ Electron's `webContents` is huge; Bunmaska implements the navigation + scripting
 - **DevTools protocol** - no `debugger` (CDP), no `inspectElement`, no `setDevToolsWebContents`. DevTools is open/close/toggle only.
 - **Input & focus** - no `before-input-event` / `input-event`, `focus()` / `isFocused()`, `beginFrameSubscription`, `startDrag`. (`sendInputEvent` does exist, on Windows - see above.)
 - **Printing & content** - `print()` (only `printToPDF`, macOS-only; engine-blocked on Windows), `savePage`, `getPrintersAsync`, `findInPage` / `stopFindInPage`.
+- **Page dialogs** - `alert()`, `confirm()` and `<input type="file">` open native sheets on macOS; `prompt()` returns `null` there, as it does in Electron. On Linux and Windows Bunmaska adds no handling of its own.
 - **Editing & clipboard commands** - `undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`/`replace`, `cut`-style menu wiring, `replaceMisspelling`.
 - **Media / audio** - `isAudioMuted` / `setAudioMuted`, `setBackgroundThrottling`, `getOSProcessId`, `getProcessId`.
 - **`setWindowOpenHandler` with `allow`** - child-window creation is unsupported, so `{ action: 'allow' }` is logged and ignored; there is no `did-create-window`, and the handler return type omits `overrideBrowserWindowOptions`. On Windows the handler is not invoked at all yet.

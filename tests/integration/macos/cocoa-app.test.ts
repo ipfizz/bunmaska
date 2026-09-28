@@ -1,25 +1,32 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import {
-  bounceDock,
   getDockBadge,
-  isActive,
-  isHidden,
   setActivationPolicy,
   setDockBadge,
-  showAboutPanel,
 } from '../../../src/main/platform/macos/cocoa-app';
+import {
+  msgSendI64,
+  msgSendReturnsI64,
+} from '../../../src/main/platform/macos/cocoa-msgsend-variants';
+import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
-/** Drives the real NSApplication app-level operations on macOS. */
 if (currentPlatform() === 'macos') {
   describe('cocoa-app NSApplication operations', () => {
-    test('setActivationPolicy does not throw', () => {
-      expect(() => setActivationPolicy('regular')).not.toThrow();
-    });
-
-    test('isActive / isHidden return booleans', () => {
-      expect(typeof isActive()).toBe('boolean');
-      expect(typeof isHidden()).toBe('boolean');
+    test('setActivationPolicy applies the NSApplicationActivationPolicy value', () => {
+      const rt = cocoa();
+      const nsApp = rt.msgSend(
+        rt.classes.get('NSApplication'),
+        rt.selectors.get('sharedApplication'),
+      );
+      const policy = (): bigint => msgSendReturnsI64(nsApp, rt.selectors.get('activationPolicy'));
+      const before = policy();
+      try {
+        setActivationPolicy('accessory');
+        expect(policy()).toBe(1n);
+      } finally {
+        msgSendI64(nsApp, rt.selectors.get('setActivationPolicy:'), before);
+      }
     });
 
     test('dock badge round-trips and clears', () => {
@@ -27,12 +34,6 @@ if (currentPlatform() === 'macos') {
       expect(getDockBadge()).toBe('7');
       setDockBadge('');
       expect(getDockBadge()).toBe('');
-    });
-
-    // Not invoked: showAboutPanel opens a window, bounceDock bounces the dock.
-    test('bounceDock and showAboutPanel resolve as callable exports', () => {
-      expect(typeof bounceDock).toBe('function');
-      expect(typeof showAboutPanel).toBe('function');
     });
   });
 }

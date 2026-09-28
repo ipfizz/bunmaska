@@ -17,17 +17,19 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { app, BrowserWindow, ipcMain } from "bunmaska";
 ```
 
-Or use the explicit compatibility shim, which **throws an actionable error naming the exact missing module** instead of handing you a silent `undefined` to debug:
+Or use the explicit compatibility shim through its default export, which **throws an actionable error naming the exact missing module** instead of handing you a silent `undefined` to debug:
 
 ```ts
-import { app, BrowserWindow } from "bunmaska/electron";
+import electron from "bunmaska/electron";
+
+const { app, BrowserWindow } = electron;
 ```
 
-Reaching for a known-but-unimplemented module (say `electron.netLog`) fails loudly and tells you what's missing. You find the gaps in the first five minutes, not in production.
+Reaching for a known-but-unimplemented module (say `electron.netLog`) fails loudly and tells you what's missing. You find the gaps in the first five minutes, not in production. (Named imports from `bunmaska/electron` work too, but a named import of a missing module fails earlier, at module link time, with the runtime's generic "export not found" error instead.)
 
 ## What ports cleanly
 
-Windows, web contents, IPC, context isolation, menus, dialogs, clipboard (incl. images), tray, protocol handlers, power monitoring, `safeStorage`, `nativeImage`, `nativeTheme`, `globalShortcut`, notifications, screen info - across macOS, Linux, and Windows. A handful of cells differ per platform (e.g. custom protocols and `printToPDF`/`capturePage` are engine-blocked on Windows); see the [parity matrix](/docs/migrating/parity) for method-level detail.
+Windows, web contents, IPC, context isolation (macOS and Linux), menus, dialogs, clipboard (incl. images), tray, protocol handlers, power monitoring, `safeStorage`, `nativeImage`, `nativeTheme`, `globalShortcut`, notifications, screen info - across macOS, Linux, and Windows. A handful of cells differ per platform (e.g. custom protocols and `printToPDF`/`capturePage` are engine-blocked on Windows); see the [parity matrix](/docs/migrating/parity) for method-level detail.
 
 ## What needs real work
 

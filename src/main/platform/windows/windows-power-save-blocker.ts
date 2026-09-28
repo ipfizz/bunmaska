@@ -1,15 +1,8 @@
-import type {
-  NativeBlocker,
-  PowerSaveBlockerBackend,
-  PowerSaveBlockerType,
-} from '../../api/power-save-blocker';
+import type { NativeBlocker, PowerSaveBlockerBackend, PowerSaveBlockerType } from '../services';
 import { loadKernel32 } from './win32-ffi';
 
-/**
- * Windows exposes a single per-thread execution state via `SetThreadExecutionState`, NOT a
- * stack of independent assertions — so this tracks every live blocker and re-applies the
- * COMBINED flags on each acquire/release. `ES_CONTINUOUS` makes the state persist.
- */
+// SetThreadExecutionState is ONE per-thread state, not a stack of assertions: re-apply the
+// combined flags of every live blocker on each acquire/release.
 
 const ES_CONTINUOUS = 0x80000000;
 const ES_SYSTEM_REQUIRED = 0x00000001;

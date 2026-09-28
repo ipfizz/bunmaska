@@ -1,139 +1,63 @@
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
+import { DOM_READY_HANDLER_NAME } from '../dom-ready';
+import { ExecResultChannel } from '../exec-result-channel';
+import type {
+  NativeInputEvent,
+  NativeNavigationEvent,
+  NativeProtocol,
+  NativeWebContents,
+} from '../native';
 import {
-  generateChannelId,
-  generateIsolatedChannelSetup,
-  generateIsolatedHostSource,
-  generatePageWorldStub,
-} from '../../../renderer/api/cross-world-bridge';
-import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
-import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
-import type { NativeInputEvent, NativeNavigationEvent, NativeWebContents } from '../native';
-import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
+  dispatchScript,
+  EXEC_HANDLER_NAME,
+  IPC_HANDLER_NAME,
+  injectedScripts,
+} from '../web-scripts';
+import { WINDOW_HANDLER_NAME } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
 
-/**
- * The renderer posts envelopes via `window.webkit.messageHandlers.bunmaska`; the main
- * process pushes envelopes back by evaluating `window.__bunmaska._dispatch(...)`
- * fire-and-forget (D022). `executeJavaScript` returns out-of-band through a `bunmaskaExec`
- * page-world handler — a per-call native completion callback would be freed
- * mid-invocation. The `BunmaskaPreload` isolation used on macOS/Linux is a follow-up.
- */
-
-/** The script-message handler name the preload bridge posts envelopes to. */
-const HANDLER_NAME = 'bunmaska';
-/** Page-world handler name `executeJavaScript` posts its result to. */
-const EXEC_HANDLER_NAME = 'bunmaskaExec';
-
 const log = createLogger('windows-web-contents');
-
-/** A pending `executeJavaScript` awaiting its page-world result message. */
-interface PendingExec {
-  readonly resolve: (value: unknown) => void;
-  readonly reject: (reason: Error) => void;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
-/**
- * Out-of-band `executeJavaScript` channel. Injects a wrapper that posts
- * `{ execId, ok, result?, error? }` to the `bunmaskaExec` handler (registered once, torn
- * down with the window), and settles the matching Promise here. No per-call native
- * callback to free.
- */
-class WindowsExecResultChannel {
-  readonly #evalInPage: (wrapped: string) => void;
-  readonly #pending = new Map<number, PendingExec>();
-  #nextExecId = 1;
-  #destroyed = false;
-
-  constructor(evalInPage: (wrapped: string) => void) {
-    this.#evalInPage = evalInPage;
-  }
-
-  executeJavaScript(code: string): Promise<unknown> {
-    if (this.#destroyed) {
-      return Promise.reject(new Error('executeJavaScript failed: web contents destroyed'));
-    }
-    const execId = this.#nextExecId;
-    this.#nextExecId += 1;
-    return new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#pending.delete(execId);
-        reject(new Error(`executeJavaScript timed out after ${EXEC_TIMEOUT_MS}ms`));
-      }, EXEC_TIMEOUT_MS);
-      this.#pending.set(execId, { resolve, reject, timer });
-      this.#evalInPage(buildExecWrapper(execId, EXEC_HANDLER_NAME, code));
-    });
-  }
-
-  /** Settle the pending exec for the `{ execId, ok, result?, error? }` JSON. */
-  deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
-    try {
-      outcome = JSON.parse(json);
-    } catch (error) {
-      log.warn('dropping malformed exec result', error);
-      return;
-    }
-    if (typeof outcome.execId !== 'number') {
-      return;
-    }
-    const pending = this.#pending.get(outcome.execId);
-    if (pending === undefined) {
-      return;
-    }
-    clearTimeout(pending.timer);
-    this.#pending.delete(outcome.execId);
-    if (outcome.ok) {
-      pending.resolve(outcome.result);
-    } else {
-      pending.reject(new Error(outcome.error ?? 'executeJavaScript failed'));
-    }
-  }
-
-  /** Settle every still-pending exec to `undefined` and block new ones (teardown). */
-  rejectPending(): void {
-    this.#destroyed = true;
-    for (const [, pending] of this.#pending) {
-      clearTimeout(pending.timer);
-      pending.resolve(undefined);
-    }
-    this.#pending.clear();
-  }
-}
 
 /** Windows {@link NativeWebContents}: a WinCairo `WKView` wired for IPC + JS eval. */
 export class WindowsWebContents implements NativeWebContents {
   readonly #webView: WindowsWebView;
-  readonly #exec: WindowsExecResultChannel;
+  readonly #exec: ExecResultChannel;
   #domReady = false;
   readonly #pendingEnvelopes: string[] = [];
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
   readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
   readonly #windowOpCallbacks: Array<(op: string) => void> = [];
 
-  constructor(hwnd: bigint, width: number, height: number, preloadScript?: string) {
-    const channelId = generateChannelId();
-    const userScripts: string[] = [
-      generateIsolatedChannelSetup(channelId),
-      generatePreloadBootstrap(),
-      generateIsolatedHostSource(channelId),
-      ...(preloadScript !== undefined ? [preloadScript] : []),
-      generatePageWorldStub(channelId),
-      // Windows has no separate isolated world, so the page world IS the bridge
-      // world: it's correct (and necessary) to expose the window-op controls here.
-      windowControlsScript({ nativeOpChannel: true }),
-      generateDomReadyScript(),
-    ];
+  constructor(
+    hwnd: bigint,
+    width: number,
+    height: number,
+    preloadScript?: string,
+    frame?: boolean,
+    protocol?: NativeProtocol,
+  ) {
+    const schemes = protocol?.schemes ?? [];
+    if (schemes.length > 0) {
+      // ponytail: the WinCairo C API has no URL-scheme handler hook at wpewebkit-2.52.5.
+      log.warn(`protocol.handle schemes are not served on Windows yet: ${schemes.join(', ')}`);
+    }
+    // ponytail: no context isolation (S03), preload + window.__bunmaska share the page world;
+    // isolation needs a WKBundle script world, i.e. compiled code (D011).
+    const scripts = injectedScripts({
+      preloadScript,
+      frame,
+      domReadyWorld: 'page',
+      nativeOpChannel: true,
+    });
     this.#webView = WindowsWebView.create({
       hwnd,
       width,
       height,
-      userScripts,
+      userScripts: [...scripts.isolated, ...scripts.page],
       messageHandlers: [
         {
-          name: HANDLER_NAME,
+          name: IPC_HANDLER_NAME,
           onMessage: (json) => {
             for (const callback of this.#rendererEnvelopeCallbacks) {
               callback(json);
@@ -155,9 +79,7 @@ export class WindowsWebContents implements NativeWebContents {
       ],
       onNavigationEvent: (event) => this.#dispatchNavigation(event),
     });
-    this.#exec = new WindowsExecResultChannel((wrapped) =>
-      this.#webView.evaluateJavaScript(wrapped),
-    );
+    this.#exec = new ExecResultChannel((wrapped) => this.#webView.evaluateJavaScript(wrapped));
   }
 
   /** Flush queued envelopes once the bridge is live, then surface `dom-ready`. */
@@ -179,12 +101,11 @@ export class WindowsWebContents implements NativeWebContents {
     }
   }
 
-  /** Register a handler for window ops a custom title bar triggers (drag/minimize/…). */
+  /** Register a handler for window ops a custom title bar triggers (drag, minimize, ...). */
   onWindowOp(callback: (op: string) => void): void {
     this.#windowOpCallbacks.push(callback);
   }
 
-  /** Route a `{ op }` message from the built-in title-bar script to its handlers. */
   #dispatchWindowOp(json: string): void {
     let op: unknown;
     try {
@@ -201,9 +122,7 @@ export class WindowsWebContents implements NativeWebContents {
   }
 
   #dispatchToRenderer(json: string): void {
-    this.#webView.evaluateJavaScript(
-      `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(json)});`,
-    );
+    this.#webView.evaluateJavaScript(dispatchScript(json));
   }
 
   loadURL(url: string): void {
@@ -256,7 +175,7 @@ export class WindowsWebContents implements NativeWebContents {
 
   // Engine-blocked on WinCairo: the UI-process WK2 C API on this build exports no
   // PDF sink (`WKPageDrawPagesToPDF` is Cocoa-only; only Begin/Compute/EndPrinting
-  // are present, which paginate but yield no PDF data). Revisit if upstream adds one.
+  // are present, which paginate but yield no PDF data).
   printToPDF(): Promise<Uint8Array> {
     return Promise.reject(
       new UnsupportedPlatformError(
@@ -277,11 +196,12 @@ export class WindowsWebContents implements NativeWebContents {
   }
 
   openDevTools(): void {
-    // WinCairo exposes a Web Inspector; wiring it is a seam-fill follow-up.
+    // ponytail: wire WKInspectorShow(WKPageGetInspector(page)) with developer extras enabled.
+    log.warn('openDevTools is not supported on Windows yet: no inspector opens');
   }
 
   closeDevTools(): void {
-    // See openDevTools.
+    // No inspector ever opens (see openDevTools).
   }
 
   setZoomFactor(factor: number): void {
@@ -318,13 +238,13 @@ export class WindowsWebContents implements NativeWebContents {
   }
 
   setWindowOpenHandler(_callback: (url: string) => void): void {
-    // WKPageUIClient createNewPage forwarding; wired in the seam-fill phase
-    // (today window.open is blocked, the v1 default).
+    // ponytail: URL dropped (popup still blocked); forward it via WKPageUIClient createNewPage.
+    log.warn('setWindowOpenHandler is not supported on Windows yet: the handler is never called');
   }
 
-  /** @internal Reject pending execs and release the view. Called on window close. */
+  /** @internal Settle pending execs and blank the view. Called on window close. */
   dispose(): void {
-    this.#exec.rejectPending();
+    this.#exec.destroy();
     this.#webView.dispose();
   }
 }

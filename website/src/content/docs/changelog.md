@@ -4,7 +4,40 @@ description: Every published release gets an entry here - what shipped, what bro
 order: 2
 ---
 
-The current version is **`0.1.0-alpha.8`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
+The current version is **`0.1.0-alpha.9`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
+
+## `0.1.0-alpha.9`
+
+The pre-beta review: every module read line by line against Electron's contract, and a few hundred commits fixing what that turned up. We found more than we would like to admit, which is rather the point of looking. The engine catalogue and the React starter move to alpha.10. The parts you might notice:
+
+**Behaviour changes**
+
+- `app.quit()` runs Electron's whole sequence: `before-quit`, then every window closes (any `close` veto cancels the quit), then `will-quit` and `quit`. On macOS, Cmd+Q, the Dock's Quit and logout go through it too, and the `quit` menu role now works on Linux and Windows. The `quit` listener receives `(event, exitCode)`, as in Electron.
+- A closed `BrowserWindow` or its `webContents` throws `TypeError: Object has been destroyed` instead of poking freed native objects; `isDestroyed()` tells you first.
+- `protocol.handle` refuses built-in schemes (`https`, `file`, ...) and malformed names up front, instead of aborting at window creation on macOS. `protocol.handlerFor` and `protocol.clearForTesting` are gone.
+- IPC arguments JSON would mangle (`Map`, `Set`, typed arrays) throw in the preload instead of arriving as `{}`, and an `invoke` whose reply cannot be serialized rejects instead of hanging. `contextBridge` calls no longer time out after 30 seconds (Electron has no timeout either), and the preload and bridge run in the top frame only.
+- Auto-updates sign `update.json` as well as the artifact, so a feed is four files. `quitAndInstall` throws for an app that is not an installed bundle instead of quietly quitting, and the helper relaunches the old app if the swap fails.
+- `bunmaska build` ships only allowlisted file types beside the executable (a signing key next to your entry now stays home), requires macOS 13, and refuses `--notarize` without a Developer ID `--sign`. A config `icon` a target cannot use is skipped with a warning instead of failing the build.
+- An uncaught main-process exception shows Electron's error box and the app keeps running, instead of the process exiting. Your own `uncaughtException` listener still wins.
+- `session.clearStorageData` rejects `origin` / `storages` filters rather than quietly clearing everything.
+
+**New**
+
+- `BrowserWindow.fromWebContents`, `BrowserWindow.getFocusedWindow`, `event.reply` for `ipcMain.on`, Electron's `click(menuItem, window, event)` with checkbox and radio toggling, and the optional leading window argument on `dialog` methods.
+- Electron's default application menu on macOS for apps that set none, so Cmd+Q and copy/paste work out of the box. Built apps ship a `package.json` beside the executable, so `app.getName()`, `app.getVersion()` and `autoUpdater` see your app instead of `bunmaska-app` at `0.0.0`.
+- Numpad and `Insert` global shortcuts on every platform.
+- Real display origins, work areas and cursor position on macOS; the `move` event and an enforced `setMinimumSize` on Windows; `httpOnly` cookies that persist on macOS; JPEG quality on Linux; `engine.embed: true` for Windows builds.
+
+**Fixes** (a small selection)
+
+- Closed macOS windows, menus and WebKit configurations are released, and so are Linux dialogs, tray icons and notifications. A collected `NativeImage` frees its native image on every platform.
+- Linux apps install under `usr/lib/<slug>` with a single `usr/bin` link, the `.deb` pins the GTK 4.10 and WebKitGTK 2.42 floors, and notifications, tray items and sleep inhibitors carry your app's name instead of ours.
+- Several crash classes: callbacks throwing through native frames, an X error on a shortcut another app holds, by-value struct arguments on x86_64.
+- The dev loop rebuilds the renderer before every restart, restarts for `.js` main modules, tells you to restart after a config edit, and force-kills an app that ignores `SIGTERM`.
+
+**Docs**
+
+- Every API page was re-checked against the code, and the [parity page](/docs/migrating/parity) gained a list of deliberate deviations from Electron, plus the gaps this review left open.
 
 ## `0.1.0-alpha.8`
 
@@ -150,7 +183,7 @@ The pinned-WebKit engine store - the opt-in path to "tested == shipped." Most ap
 
 **Highlights**
 
-- **Side-by-side engine store** at `~/.bunmaska/webkit/` - content-addressed, many versions coexist, each app resolves its own pin (no global switch). Install marker, content-hash integrity, refcount, and garbage collection.
+- **Side-by-side engine store** at `~/.bunmaska/webkit/` - id-addressed, many versions coexist, each app resolves its own pin (no global switch). Install marker, content-hash integrity, refcount, and garbage collection.
 - **Launch resolver** - env > baked `engine.id` > marker check > loud fallback to the system WebKit if a pin is missing (the app still launches).
 - **`bunmaska engine` CLI** (`list` / `which` / `install` / `use` / `prune` / `verify`) and **`bunmaska doctor`**.
 - **Signed feed install** - `engine install <url>` verifies an Ed25519 signature + content hash before extracting.

@@ -6,25 +6,11 @@ import { loadGObjectFFI } from '../../../src/main/platform/linux/gobject-ffi';
 import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
 
 if (currentPlatform() === 'linux') {
-  describe('GObject FFI on Linux', () => {
-    test('resolves the signal + refcount + construct symbols', () => {
-      const lib = loadGObjectFFI();
-      for (const name of [
-        'g_signal_connect_data',
-        'g_signal_handler_disconnect',
-        'g_object_ref',
-        'g_object_unref',
-        'g_object_new',
-      ] as const) {
-        expect(typeof lib.symbols[name]).toBe('function');
-      }
-    });
+  const hasDisplay = loadGtkFFI().symbols.gtk_init_check() !== 0;
 
+  describe.skipIf(!hasDisplay)('GObject FFI on a real display', () => {
     test('connects and disconnects a real signal handler on a GtkWindow', () => {
       const gtk = loadGtkFFI();
-      if (gtk.symbols.gtk_init_check() === 0) {
-        return; // No display.
-      }
       const gobject = loadGObjectFFI();
       const window = gtk.symbols.gtk_window_new();
 

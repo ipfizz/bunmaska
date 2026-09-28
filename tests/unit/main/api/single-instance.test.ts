@@ -59,6 +59,10 @@ describe('encode/decode payload', () => {
   test('decode returns undefined when argv is missing', () => {
     expect(decodePayload(JSON.stringify({ cwd: '/x' }))).toBeUndefined();
   });
+
+  test('decode returns undefined when argv holds a non-string', () => {
+    expect(decodePayload(JSON.stringify({ argv: ['a', 1, {}], cwd: '/x' }))).toBeUndefined();
+  });
 });
 
 describe('SingleInstanceManager.request', () => {

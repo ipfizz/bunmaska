@@ -4,7 +4,7 @@ import { msgSendU8 } from '../../../src/main/platform/macos/cocoa-msgsend-varian
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 if (currentPlatform() === 'macos') {
-  describe('msgSendU8 — one-extra-u8-arg variant', () => {
+  describe('msgSendU8 - one-extra-u8-arg variant', () => {
     test('[NSNumber numberWithBool:1] returns a non-zero NSNumber instance', () => {
       const rt = cocoa();
       const nsNumber = rt.classes.get('NSNumber');
@@ -16,7 +16,7 @@ if (currentPlatform() === 'macos') {
       expect(result).not.toBe(nsNumber);
     });
 
-    test('[NSNumber numberWithBool:0] and [NSNumber numberWithBool:1] both return non-zero', () => {
+    test('the BOOL arg reaches the callee: YES and NO give distinct NSNumbers', () => {
       const rt = cocoa();
       const nsNumber = rt.classes.get('NSNumber');
       const sel = rt.selectors.get('numberWithBool:');
@@ -24,8 +24,8 @@ if (currentPlatform() === 'macos') {
       const yes = msgSendU8(nsNumber, sel, 1);
       const no = msgSendU8(nsNumber, sel, 0);
 
-      expect(yes).not.toBe(0n);
       expect(no).not.toBe(0n);
+      expect(yes).not.toBe(no);
     });
   });
 }

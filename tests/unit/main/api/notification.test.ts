@@ -1,12 +1,15 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { app } from '../../../../src/main/api/app';
 import {
   Notification,
-  type NotificationBackend,
-  type NotificationHandle,
-  type NotificationSpec,
   setNotificationBackendForTesting,
 } from '../../../../src/main/api/notification';
+import type {
+  NotificationBackend,
+  NotificationHandle,
+  NotificationSpec,
+} from '../../../../src/main/platform/services';
 
 let presented: NotificationSpec[];
 let closedCalls: number;
@@ -35,6 +38,16 @@ beforeEach(() => {
     },
   };
   setNotificationBackendForTesting(fake);
+});
+
+test("show tells the backend the app's name", () => {
+  app.setName('Notes Test');
+  try {
+    new Notification({ title: 't' }).show();
+  } finally {
+    app.resetForTesting();
+  }
+  expect(presented[0]?.appName).toBe('Notes Test');
 });
 
 afterEach(() => {
@@ -74,7 +87,9 @@ describe('Notification.show', () => {
   test('presents the notification via the backend with the current fields', () => {
     const n = new Notification({ title: 'T', body: 'B', subtitle: 'S', silent: true });
     n.show();
-    expect(presented).toEqual([{ title: 'T', body: 'B', subtitle: 'S', silent: true }]);
+    expect(presented).toEqual([
+      { title: 'T', body: 'B', subtitle: 'S', silent: true, appName: app.getName() },
+    ]);
   });
 
   test('emits a show event', () => {
@@ -96,11 +111,12 @@ describe('Notification.show', () => {
     expect(presented[0]?.body).toBe('body2');
   });
 
-  test('a second show presents again (re-show)', () => {
+  test('a second show dismisses the first before presenting again, as in Electron', () => {
     const n = new Notification({ title: 'T' });
     n.show();
     n.show();
     expect(presented.length).toBe(2);
+    expect(closedCalls).toBe(1);
   });
 });
 

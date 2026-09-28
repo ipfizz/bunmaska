@@ -1,10 +1,9 @@
 ---
-import ThemeToggle from "./ui/ThemeToggle.tsx";
-import { VERSION, GITHUB, STARS, starsLabel } from "../site";
+import { VERSION, GITHUB, STARS, starsLabel, pagePath } from "../site";
 import { Icon } from "astro-icon/components";
 
 const stars = starsLabel(STARS);
-const path = Astro.url.pathname;
+const path = pagePath(Astro.url);
 const isDocs = path.startsWith("/docs/") && !path.startsWith("/docs/native-modules");
 const TABS = [
   { href: "/", label: "Home", icon: "lucide:house", active: path === "/" },
@@ -21,7 +20,7 @@ const LINKS = [
 
 <header
   id="site-nav"
-  class="sticky top-0 z-50 border-b border-transparent backdrop-blur transition-colors"
+  class="sticky top-0 z-50 border-b border-transparent transition-colors"
 >
   <div class="wrap flex h-16 items-center justify-between">
     <div class="flex items-center gap-2">
@@ -68,9 +67,17 @@ const LINKS = [
           ><Icon name="lucide:star" class="h-3.5 w-3.5" />Star{stars && <span class="font-mono text-xs text-text-faint">{stars}</span>}</span
         >
       </a>
-      <span class="ml-1">
-        <ThemeToggle client:load />
-      </span>
+      <button
+        id="theme-toggle"
+        type="button"
+        class="ml-1 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border)] text-text-muted"
+        aria-label="Dark theme"
+        aria-pressed="true"
+        title="Toggle theme"
+      >
+        <Icon name="lucide:sun" class="theme-sun h-4.5 w-4.5" />
+        <Icon name="lucide:moon" class="theme-moon h-4.5 w-4.5" />
+      </button>
     </nav>
   </div>
 
@@ -84,7 +91,7 @@ const LINKS = [
     class="fixed inset-x-0 top-16 z-40 overflow-y-auto border-t border-border md:hidden"
     style="bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px)); background: var(--bg);"
   >
-    <nav class="wrap flex flex-col gap-1 py-4" aria-label="Mobile">
+    <nav class="wrap flex flex-col gap-1 py-4" aria-label="Menu">
       {
         LINKS.map((l) => (
           <a
@@ -114,14 +121,12 @@ const LINKS = [
     </nav>
   </div>
 
-  <!-- Mobile app chrome: a bottom tab bar, Instagram-style. Fixed, above the
-       iPhone home indicator via safe-area, hidden from md up where the top
-       nav carries the links. The Menu tab drives the same panel as before. -->
+  <!-- Phone tab bar, fixed above the home indicator; md and up use the top nav. -->
   <nav
     id="bottom-nav"
     class="fixed inset-x-0 bottom-0 z-50 border-t border-border md:hidden"
     style="background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding-bottom: env(safe-area-inset-bottom, 0px);"
-    aria-label="Mobile"
+    aria-label="Tabs"
   >
     <ul class="grid h-[3.75rem] grid-cols-5">
       {
@@ -159,6 +164,11 @@ const LINKS = [
   </nav>
 
 <style>
+  :global([data-theme="light"] .theme-sun),
+  :global(:root:not([data-theme="light"]) .theme-moon) {
+    display: none;
+  }
+
   /* Transparent over the hero; a blurred, bordered bar appears only on scroll. */
   #site-nav {
     background: transparent;
@@ -189,6 +199,25 @@ const LINKS = [
 </style>
 
 <script>
+  const root = document.documentElement;
+  const themeToggle = document.getElementById("theme-toggle");
+  const syncPressed = () =>
+    themeToggle?.setAttribute("aria-pressed", String(root.dataset["theme"] !== "light"));
+  syncPressed();
+  themeToggle?.addEventListener("click", () => {
+    const next = root.dataset["theme"] === "light" ? "dark" : "light";
+    root.dataset["theme"] = next;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", next === "dark" ? "#0c0c0b" : "#fcfcfb");
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      // Private mode: the choice lasts until the next page load.
+    }
+    syncPressed();
+  });
+
   const nav = document.getElementById("site-nav");
   const onScroll = () => {
     if (!nav) return;

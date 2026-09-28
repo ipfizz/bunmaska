@@ -3,10 +3,10 @@ name: validate
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'tests/**', 'tools/**', 'examples/**', 'biome.json', 'bunfig.toml', 'tsconfig.json', 'tsconfig.base.json', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
+    paths: ['src/**', 'tests/**', 'tools/**', 'examples/**', 'scripts/**', '.githooks/**', '.gitattributes', 'biome.json', 'bunfig.toml', 'tsconfig.json', 'tsconfig.base.json', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
   pull_request:
     branches: [main]
-    paths: ['src/**', 'tests/**', 'tools/**', 'examples/**', 'biome.json', 'bunfig.toml', 'tsconfig.json', 'tsconfig.base.json', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
+    paths: ['src/**', 'tests/**', 'tools/**', 'examples/**', 'scripts/**', '.githooks/**', '.gitattributes', 'biome.json', 'bunfig.toml', 'tsconfig.json', 'tsconfig.base.json', 'package.json', 'bun.lock', '.bun-version', '.github/workflows/validate.yml']
 
 concurrency:
   group: validate-${{ github.ref }}
@@ -26,11 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux native deps (GTK 4 + WebKitGTK 6.0 + libnotify + libsecret + Xvfb)
+      - name: Install Linux native deps (GTK 4 + WebKitGTK 6.0 + libnotify + libsecret + XTest + Xvfb)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-1 libwebkitgtk-6.0-4 libnotify4 libsecret-1-0 xvfb
+          sudo apt-get install -y libgtk-4-1 libwebkitgtk-6.0-4 libnotify4 libsecret-1-0 libxtst6 xvfb
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -41,7 +41,7 @@ jobs:
 
       # WebKitGTK's bubblewrap sandbox and GPU acceleration are unavailable on
       # the headless runner; disable them so the GTK/WebKitGTK tests can run.
-      - name: Validate (Linux — under Xvfb for GTK tests)
+      - name: Validate (Linux - under Xvfb for GTK tests)
         if: runner.os == 'Linux'
         env:
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
@@ -54,12 +54,8 @@ jobs:
         if: runner.os == 'macOS'
         run: bun run validate
 
-      # Windows runs a SCOPED validation: format + lint + type-check (all
-      # platform-agnostic) plus the Windows backend tests, which pass on a real
-      # windows-latest runner (engine-gated WebKit tests skip without
-      # BUNMASKA_WEBKIT_PATH). The full cross-platform suite is not yet
-      # POSIX/Windows path-portable; running it on Windows is a separate
-      # test-hardening follow-up (see .admin/WINDOWS.md).
-      - name: Validate (Windows — backend tests + lint + type-check)
+      # Scoped to the Windows tests under their own budget leg: the full suite is
+      # not path-portable to Windows. No engine is provisioned, so engine-gated tests skip.
+      - name: Validate (Windows - backend tests + lint + type-check)
         if: runner.os == 'Windows'
         run: bun run validate:windows

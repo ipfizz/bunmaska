@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { cocoaPowerSaveBlockerBackend } from '../../../src/main/platform/macos/cocoa-power-save-blocker';
-import type { PowerSaveBlockerType } from '../../../src/main/api/power-save-blocker';
+import type { PowerSaveBlockerType } from '../../../src/main/platform/services';
 
 // Exercises the REAL IOKit power assertion (IOPMAssertionCreateWithName / Release) headless
 // — no window, no run loop. A successful create returns kIOReturnSuccess (0) and a non-zero

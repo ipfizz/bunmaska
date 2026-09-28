@@ -136,4 +136,26 @@ describe('parseUpdateManifest / serializeUpdateManifest', () => {
   test('rejects a non-numeric size', () => {
     expect(() => parseUpdateManifest(JSON.stringify({ ...sample, size: 'big' }))).toThrow(/"size"/);
   });
+
+  test('rejects a name that could inject into the install helper or traverse out of staging', () => {
+    for (const name of [
+      'Demo" echo\r\ncalc.exe\r\nrem ',
+      'Demo\ncalc',
+      '100%CMDCMDLINE%',
+      '../../home/victim/.ssh',
+      'a/b',
+      'a\\b',
+      '..',
+      '.',
+      'nul\u0000byte',
+    ]) {
+      expect(() => parseUpdateManifest(JSON.stringify({ ...sample, name }))).toThrow(/"name"/);
+    }
+  });
+
+  test('accepts ordinary app names, including spaces and punctuation', () => {
+    for (const name of ['My App', "Tom & Jerry's (Beta)", 'Café 2.0', 'a..b']) {
+      expect(parseUpdateManifest(JSON.stringify({ ...sample, name })).name).toBe(name);
+    }
+  });
 });

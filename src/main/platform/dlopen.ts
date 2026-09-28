@@ -1,11 +1,9 @@
 import { dlopen as bunDlopen, type FFIFunction, type Library, type Pointer } from 'bun:ffi';
 
 /**
- * `dlopen` with pointer returns typed as `Pointer | null`. bun-types 1.4 widens a
- * `FFIType.ptr` return to `Pointer | bigint | null`, but the runtime hands back a
- * number (probed on Bun 1.4.2: `malloc` returns `typeof "number"`), and every
- * backend already treats a pointer as one. Narrowing here keeps the `bigint`
- * branch out of all the call sites. `u64` returns stay `bigint`.
+ * bun-types 1.4 widens a `FFIType.ptr` return to `Pointer | bigint | null`, but the runtime
+ * returns a number (probed on Bun 1.4.2), so pointer returns narrow to `Pointer | null` here
+ * instead of at every call site. `u64` returns stay `bigint`.
  */
 type NarrowReturn<R> = [R] extends [bigint]
   ? R

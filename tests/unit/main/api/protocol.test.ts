@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { InvalidArgumentError } from '../../../../src/common/errors';
 import {
   buildProtocolResponse,
   normalizeScheme,
@@ -45,8 +46,10 @@ describe('schemeOfUrl', () => {
 });
 
 describe('buildProtocolResponse', () => {
+  const request = { url: 'app://host/' };
+
   test('utf8-encodes a string body and defaults the mimeType to text/html', () => {
-    const built = buildProtocolResponse(() => ({ data: 'hi' }));
+    const built = buildProtocolResponse(() => ({ data: 'hi' }), request);
     expect(built).not.toBeUndefined();
     if (built === undefined) {
       throw new Error('expected a built response');
@@ -57,10 +60,10 @@ describe('buildProtocolResponse', () => {
 
   test('passes Uint8Array bytes through unchanged and honours an explicit mimeType', () => {
     const raw = new Uint8Array([1, 2, 3]);
-    const built = buildProtocolResponse(() => ({
-      data: raw,
-      mimeType: 'application/octet-stream',
-    }));
+    const built = buildProtocolResponse(
+      () => ({ data: raw, mimeType: 'application/octet-stream' }),
+      request,
+    );
     if (built === undefined) {
       throw new Error('expected a built response');
     }
@@ -69,11 +72,11 @@ describe('buildProtocolResponse', () => {
   });
 
   test('returns undefined when the handler returns undefined', () => {
-    expect(buildProtocolResponse(() => undefined)).toBeUndefined();
+    expect(buildProtocolResponse(() => undefined, request)).toBeUndefined();
   });
 
   test('utf8-encodes multibyte characters by length, not character count', () => {
-    const built = buildProtocolResponse(() => ({ data: '€' }));
+    const built = buildProtocolResponse(() => ({ data: '€' }), request);
     if (built === undefined) {
       throw new Error('expected a built response');
     }
@@ -93,6 +96,24 @@ describe('protocol registry', () => {
     protocol.handle('APP://', () => ({ data: 'x' }));
     expect(protocol.isProtocolHandled('app')).toBe(true);
     expect(protocol.getRegisteredSchemes()).toContain('app');
+  });
+
+  test('handle rejects schemes WebKit serves natively, before registering', () => {
+    for (const scheme of ['https', 'HTTP://', 'file', 'about', 'data', 'blob', 'wss', 'ftp']) {
+      expect(() => protocol.handle(scheme, () => undefined)).toThrow(InvalidArgumentError);
+    }
+    expect(protocol.getRegisteredSchemes()).toEqual([]);
+  });
+
+  test('handle rejects names that are not valid URL schemes', () => {
+    for (const scheme of ['my_app', '1app', '', 'a b', 'app/x']) {
+      expect(() => protocol.handle(scheme, () => undefined)).toThrow(InvalidArgumentError);
+    }
+  });
+
+  test('handle accepts a custom scheme using + - and .', () => {
+    protocol.handle('my-app+v1.x', () => undefined);
+    expect(protocol.isProtocolHandled('my-app+v1.x')).toBe(true);
   });
 
   test('unhandle removes the scheme', () => {

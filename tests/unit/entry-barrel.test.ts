@@ -8,7 +8,7 @@ import * as bunmaska from '../../src';
  * tsc cannot: that importing them actually works (src/main/index.ts opens with
  * `import './bootstrap'`, so a cycle or a throwing side effect fails at import time,
  * before any assertion runs), and that what `IMPLEMENTED_MODULES` claims is really
- * there — src/electron.ts throws for a KNOWN module that is not implemented, so a
+ * there - src/electron.ts throws for a KNOWN module that is not implemented, so a
  * module claimed-but-not-exported silently degrades to `electron.foo === undefined`.
  */
 

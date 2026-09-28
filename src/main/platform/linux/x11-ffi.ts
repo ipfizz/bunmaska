@@ -1,25 +1,10 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-
-/**
- * Xlib FFI for the Linux `globalShortcut` backend (`XGrabKey`).
- *
- * Loaded only on Linux. On X11 we open a DEDICATED display connection, grab each
- * accelerator's keycode+modifier combo on the root window with `XGrabKey`, and
- * poll that connection for `KeyPress` events from the cooperative pump. Wayland
- * is NOT supported in v1 — global shortcuts there require the
- * `org.freedesktop.portal.GlobalShortcuts` desktop portal, which is deferred.
- *
- * `XEvent` is a ~192-byte union; we never marshal it as a struct — we allocate a
- * byte buffer, let `XNextEvent` fill it, and read the `type` (int at offset 0)
- * and, for `XKeyEvent`, the `keycode` field by offset.
- */
+import { dlopenLinux } from './glib-ffi';
 
 const LIBX11_PATH = 'libX11.so.6';
 
-/** The Xlib symbol descriptor table. */
 export const X11_FFI_SYMBOLS = {
   // (const char *display_name) -> Display*   (NULL = $DISPLAY)
   XOpenDisplay: { args: [FFIType.cstring], returns: FFIType.pointer },
@@ -50,23 +35,25 @@ export const X11_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.i32, FFIType.u32, FFIType.u64],
     returns: FFIType.i32,
   },
-  // (Display*, Window, long event_mask) -> int
-  XSelectInput: { args: [FFIType.pointer, FFIType.u64, FFIType.i64], returns: FFIType.i32 },
   // (Display*) -> int
   XPending: { args: [FFIType.pointer], returns: FFIType.i32 },
-  // (Display*, XEvent *event_return) -> int
+  // (Display*, XEvent* out) -> int. XEvent is a 192-byte union: pass a byte buffer and read
+  //  fields by offset, never marshal it as a struct.
   XNextEvent: { args: [FFIType.pointer, FFIType.pointer], returns: FFIType.i32 },
   // (Display*) -> int
   XFlush: { args: [FFIType.pointer], returns: FFIType.i32 },
-  // (int (*handler)(Display*, XErrorEvent*)) -> previous handler  (we pass a no-op)
+  // (Display*, Bool discard) -> int. A round trip: every error for earlier requests has
+  //  reached the error handler when it returns, so a refused XGrabKey is known synchronously.
+  XSync: { args: [FFIType.pointer, FFIType.i32], returns: FFIType.i32 },
+  // (int (*handler)(Display*, XErrorEvent*)) -> previous handler. Without one, a BadAccess
+  //  from XGrabKey reaches Xlib's default handler, which exit(1)s the app.
   XSetErrorHandler: { args: [FFIType.pointer], returns: FFIType.pointer },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof X11_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof X11_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
-/** Open `libX11.so.6` and return the Xlib symbol table. Memoised. */
 export const loadX11FFI = () => {
   const platform = currentPlatform();
   if (platform !== 'linux') {
@@ -77,7 +64,7 @@ export const loadX11FFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBX11_PATH, X11_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBX11_PATH, X11_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

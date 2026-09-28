@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import {
   buildCompileArgs,
-  numericVersion,
   type WindowsMetadata,
   windowsLayout,
   zipFileName,
@@ -35,30 +34,6 @@ describe('zipFileName', () => {
   });
 });
 
-describe('numericVersion', () => {
-  test('strips a prerelease tag to the numeric core (the VERSIONINFO need)', () => {
-    expect(numericVersion('0.1.0-alpha.2')).toBe('0.1.0');
-  });
-
-  test('passes a clean x.y.z through', () => {
-    expect(numericVersion('1.2.3')).toBe('1.2.3');
-  });
-
-  test('zero-pads short versions to three segments', () => {
-    expect(numericVersion('1.2')).toBe('1.2.0');
-    expect(numericVersion('2')).toBe('2.0.0');
-  });
-
-  test('drops +build metadata and any 4th segment', () => {
-    expect(numericVersion('1.0.0+build.5')).toBe('1.0.0');
-    expect(numericVersion('3.4.5.6')).toBe('3.4.5');
-  });
-
-  test('substitutes zero for a non-numeric segment', () => {
-    expect(numericVersion('x.y.z')).toBe('0.0.0');
-  });
-});
-
 describe('buildCompileArgs', () => {
   const meta: WindowsMetadata = {
     title: 'My App',
@@ -67,7 +42,7 @@ describe('buildCompileArgs', () => {
     description: 'My App built with Bunmaska',
     hideConsole: true,
   };
-  const args = buildCompileArgs('entry.ts', join('out', 'My App.exe'), meta);
+  const args = buildCompileArgs('entry.ts', join('out', 'My App.exe'), meta, 'windows');
 
   test('cross/native compiles to the Windows x64 target', () => {
     expect(args.slice(0, 4)).toEqual([
@@ -101,13 +76,28 @@ describe('buildCompileArgs', () => {
 
   test('hides the console when asked, and not otherwise', () => {
     expect(args).toContain('--windows-hide-console');
-    const noHide = buildCompileArgs('entry.ts', 'out.exe', { ...meta, hideConsole: false });
+    const noHide = buildCompileArgs(
+      'entry.ts',
+      'out.exe',
+      { ...meta, hideConsole: false },
+      'windows',
+    );
     expect(noHide).not.toContain('--windows-hide-console');
   });
 
   test('passes --windows-icon only when an icon is given', () => {
     expect(args).not.toContain('--windows-icon');
-    const withIcon = buildCompileArgs('entry.ts', 'out.exe', { ...meta, icon: 'app.ico' });
+    const withIcon = buildCompileArgs(
+      'entry.ts',
+      'out.exe',
+      { ...meta, icon: 'app.ico' },
+      'windows',
+    );
     expect(withIcon[withIcon.indexOf('--windows-icon') + 1]).toBe('app.ico');
+  });
+
+  test('off a Windows host keeps only --windows-hide-console, the one flag Bun accepts there', () => {
+    const cross = buildCompileArgs('entry.ts', 'out.exe', { ...meta, icon: 'app.ico' }, 'macos');
+    expect(cross.filter((arg) => arg.startsWith('--windows-'))).toEqual(['--windows-hide-console']);
   });
 });

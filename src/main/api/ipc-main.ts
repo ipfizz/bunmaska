@@ -1,18 +1,24 @@
+import { createLogger } from '../../common/logger';
 import type { InvokeEnvelope, ReplyEnvelope, SendEnvelope } from '../ipc/ipc-protocol';
-
-/**
- * Main-process IPC — the drop-in equivalent of Electron's `ipcMain`. At most one
- * `handle` handler per channel; the transport calls
- * {@link IpcMainImpl.dispatch}.
- */
-
-/** `sender` is the originating `WebContents`. */
-export type IpcMainEvent = {
-  readonly sender: unknown;
-};
+import type { WebContents } from './web-contents';
 
 export type IpcMainInvokeEvent = {
-  readonly sender: unknown;
+  readonly sender: WebContents;
+};
+
+export type IpcMainEvent = IpcMainInvokeEvent & {
+  /** Sends to the renderer the message came from. */
+  reply(channel: string, ...args: readonly unknown[]): void;
+};
+
+const log = createLogger('ipc-main');
+
+const describeError = (error: unknown): string => {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return 'non-printable error';
+  }
 };
 
 type Listener = (event: IpcMainEvent, ...args: readonly unknown[]) => void;
@@ -67,18 +73,18 @@ export class IpcMainImpl {
     this.#handlers.delete(channel);
   }
 
-  /**
-   * Returns a reply envelope for `invoke` (success or error), `undefined` for
-   * `send`.
-   * @internal Called by the IPC transport.
-   */
+  /** @internal The transport's entry: a reply envelope for `invoke`, `undefined` for `send`. */
   async dispatch(
     envelope: SendEnvelope | InvokeEnvelope,
     event: IpcMainEvent,
   ): Promise<ReplyEnvelope | undefined> {
     if (envelope.kind === 'send') {
       for (const listener of [...(this.#listeners.get(envelope.channel) ?? [])]) {
-        listener(event, ...envelope.args);
+        try {
+          listener(event, ...envelope.args);
+        } catch (error) {
+          log.error(`ipcMain listener for '${envelope.channel}' threw`, error);
+        }
       }
       return undefined;
     }
@@ -102,11 +108,10 @@ export class IpcMainImpl {
       const result = await handler(event, ...envelope.args);
       return { kind: 'reply', id: envelope.id, ok: true, result };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { kind: 'reply', id: envelope.id, ok: false, error: message };
+      return { kind: 'reply', id: envelope.id, ok: false, error: describeError(error) };
     }
   }
 }
 
-/** The main-process IPC singleton — Electron's `ipcMain`. */
+/** Electron's `ipcMain`. */
 export const ipcMain = new IpcMainImpl();

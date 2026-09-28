@@ -9,7 +9,6 @@ const macEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => ({
   temp: '/var/folders/tmp',
   appName: 'MyApp',
   execPath: '/Applications/MyApp.app/Contents/MacOS/MyApp',
-  appPath: '/Applications/MyApp.app/Contents/Resources/app',
   env: {},
   ...overrides,
 });
@@ -20,7 +19,6 @@ const linuxEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => 
   temp: '/tmp',
   appName: 'MyApp',
   execPath: '/opt/myapp/myapp',
-  appPath: '/opt/myapp/resources/app',
   env: {},
   ...overrides,
 });
@@ -31,12 +29,11 @@ const winEnv = (overrides: Partial<PathEnvironment> = {}): PathEnvironment => ({
   temp: 'C:\\Users\\ada\\AppData\\Local\\Temp',
   appName: 'MyApp',
   execPath: 'C:\\Program Files\\MyApp\\MyApp.exe',
-  appPath: 'C:\\Program Files\\MyApp\\resources\\app',
   env: { APPDATA: 'C:\\Users\\ada\\AppData\\Roaming' },
   ...overrides,
 });
 
-describe('resolveAppPath — cross-platform names', () => {
+describe('resolveAppPath - cross-platform names', () => {
   test('home is the home dir on both platforms', () => {
     expect(resolveAppPath('home', macEnv())).toBe('/Users/ada');
     expect(resolveAppPath('home', linuxEnv())).toBe('/home/ada');
@@ -51,12 +48,12 @@ describe('resolveAppPath — cross-platform names', () => {
     expect(resolveAppPath('exe', macEnv())).toBe('/Applications/MyApp.app/Contents/MacOS/MyApp');
   });
 
-  test('module is the app path', () => {
-    expect(resolveAppPath('module', linuxEnv())).toBe('/opt/myapp/resources/app');
+  test('module is the executable path, as in Electron', () => {
+    expect(resolveAppPath('module', linuxEnv())).toBe('/opt/myapp/myapp');
   });
 });
 
-describe('resolveAppPath — macOS conventions', () => {
+describe('resolveAppPath - macOS conventions', () => {
   test('appData is ~/Library/Application Support', () => {
     expect(resolveAppPath('appData', macEnv())).toBe('/Users/ada/Library/Application Support');
   });
@@ -97,7 +94,7 @@ describe('resolveAppPath — macOS conventions', () => {
   });
 });
 
-describe('resolveAppPath — Linux XDG conventions', () => {
+describe('resolveAppPath - Linux XDG conventions', () => {
   test('appData defaults to ~/.config', () => {
     expect(resolveAppPath('appData', linuxEnv())).toBe('/home/ada/.config');
   });
@@ -128,7 +125,7 @@ describe('resolveAppPath — Linux XDG conventions', () => {
   });
 });
 
-describe('resolveAppPath — Windows conventions', () => {
+describe('resolveAppPath - Windows conventions', () => {
   test('home and temp pass through', () => {
     expect(resolveAppPath('home', winEnv())).toBe('C:\\Users\\ada');
     expect(resolveAppPath('temp', winEnv())).toBe('C:\\Users\\ada\\AppData\\Local\\Temp');
@@ -168,13 +165,13 @@ describe('resolveAppPath — Windows conventions', () => {
 
   test('exe and module pass through', () => {
     expect(resolveAppPath('exe', winEnv())).toBe('C:\\Program Files\\MyApp\\MyApp.exe');
-    expect(resolveAppPath('module', winEnv())).toBe('C:\\Program Files\\MyApp\\resources\\app');
+    expect(resolveAppPath('module', winEnv())).toBe('C:\\Program Files\\MyApp\\MyApp.exe');
   });
 });
 
-describe('resolveAppPath — errors', () => {
+describe('resolveAppPath - errors', () => {
   test('throws InvalidArgumentError on an unknown name', () => {
-    // @ts-expect-error — exercising the runtime guard with an invalid name
+    // @ts-expect-error - exercising the runtime guard with an invalid name
     expect(() => resolveAppPath('nope', macEnv())).toThrow(InvalidArgumentError);
   });
 });

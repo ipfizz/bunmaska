@@ -1,4 +1,5 @@
 import { CString, JSCallback, type Pointer } from 'bun:ffi';
+import { reportCallbackError } from '../../../common/report-error';
 import { cstr } from '../cstr';
 import {
   DBUS_CALL_TIMEOUT_MS,
@@ -11,42 +12,14 @@ import {
 } from './gdbus-ffi';
 
 /**
- * Deadlock-safe GDBus signal-subscription primitive for the Linux backend.
- *
- * THE RULE (hard-won — a synchronous GIO read once hung CI for hours, see
- * gtk-clipboard.ts): never block Bunmaska's single pumped thread on a D-Bus reply that
- * only the GMainContext dispatch can deliver. Signal SUBSCRIPTION never blocks (the
- * `GDBusSignalCallback` fires on the default GMainContext during ordinary cooperative-pump
- * iterations, gtk-run-loop.ts). The one method-call helper, {@link callMethodSync}, uses a
- * BOUNDED `g_dbus_connection_call_sync` whose reply is read by the connection's PRIVATE
- * GDBusWorker thread and awaited on `call_sync`'s OWN private GMainContext — it stalls the
- * caller for at most {@link DBUS_CALL_TIMEOUT_MS} and NEVER needs our pump to turn, so it
- * is categorically unlike the clipboard's local-pipe read (whose reply could only come
- * from our pump). It is still gated off in CI.
- *
- * `getSystemBus()` is gated behind `BUNMASKA_ENABLE_LINUX_POWER` (mirroring the libsecret
- * keyring gate): CI never sets it, so the bus is NEVER touched on the headless runner and
- * the backend is a guaranteed no-op there. When the flag IS set, it calls
- * `g_bus_get_sync(SYSTEM)`. That IS blocking socket I/O on the calling thread, but the
- * handshake is PUMP-INDEPENDENT (it does not need our GMainContext to turn), so unlike a
- * `*_call_sync` reply it cannot deadlock against the pump, and it returns NULL fast when no
- * bus is reachable. It is still blocking, hence gated and called AT MOST ONCE (the result
- * — including NULL — is cached; the connection is a process-wide singleton anyway).
- *
- * THREAD INVARIANT: a subscribed signal is dispatched on the thread-default GMainContext
- * of the thread that called `subscribeSignal`. The pump (gtk-run-loop.ts) iterates the
- * GLOBAL-default context, so subscriptions MUST be made on the pumped main thread with no
- * `g_main_context_push_thread_default` in effect (true at `onReady`) — otherwise signals
- * dispatch to a context the pump never iterates and silently never fire.
- *
- * JSCallback lifetime: a subscription here is PERMANENT (never unsubscribed in the live
- * backend), so its callback is retained forever in {@link retainedSubscriptionCallbacks}
- * — the gtk-native-theme.ts long-lived-connection pattern, NOT the gtk-clipboard one-shot
- * deferred-close dance. Because the callback never closes, the close-in-own-invocation
- * SIGSEGV class cannot occur here.
+ * GDBus primitives (D037, D038). Never block the pumped thread on a reply only our GMainContext
+ * can deliver (the D033 hang): signals dispatch during pump iterations, and callMethodSync's
+ * bounded call_sync is answered on GDBus's worker thread. THREAD INVARIANT: subscribe on the
+ * pumped main thread with no thread-default context pushed, or signals dispatch to a context
+ * the pump never iterates and silently never fire.
  */
 
-/** A D-Bus signal match (each field omitted = match any). */
+/** An omitted field matches anything. */
 export type SignalMatch = {
   readonly sender?: string;
   readonly interface?: string;
@@ -55,31 +28,26 @@ export type SignalMatch = {
   readonly arg0?: string;
 };
 
-/** What a decoded signal hands back to JS. */
 export type SignalEvent = {
   readonly signalName: string;
-  /** The BORROWED `parameters` GVariant tuple — read synchronously; do NOT unref it. */
+  /** BORROWED tuple: read it synchronously, never unref it. */
   readonly parameters: Pointer;
 };
 
-/** Whether the live system-bus path is enabled. CI leaves this unset → no bus is touched. */
+/** Unset in CI, so no system bus is touched there. */
 const liveSystemBusEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_POWER'] === '1';
 
-/** Cached system-bus result: `undefined` = not probed, `null` = absent/disabled, else the connection. */
+/** `undefined` until probed; `null` when absent or disabled. */
 const cache: { systemBus: Pointer | null | undefined } = { systemBus: undefined };
 
-/** Retain every subscription callback for the process lifetime (Bun must not GC the thunk). */
+/** Subscriptions are permanent, so their callbacks are retained forever and never closed. */
 const retainedSubscriptionCallbacks: JSCallback[] = [];
 
-/**
- * Call `g_bus_get_sync(SYSTEM)` directly, bypassing the env gate. Returns the connection
- * or null; never throws. Exposed so an integration test can verify the call resolves FAST
- * (it must not hang) on a runner regardless of whether a system bus is present.
- */
+/** Bypasses the env gate so a test can prove the probe returns fast; null without a bus. */
 export const probeSystemBusUnchecked = (): Pointer | null => {
   const gdbus = loadGDBusFFI();
   try {
-    // NULL GError**: a NULL return already means "no/failed bus".
+    // NULL GError**: a NULL return already means no bus.
     return gdbus.symbols.g_bus_get_sync(G_BUS_TYPE_SYSTEM, null, null);
   } catch {
     return null;
@@ -87,10 +55,8 @@ export const probeSystemBusUnchecked = (): Pointer | null => {
 };
 
 /**
- * The system `GDBusConnection*`, or `null` when the env gate is off OR there is no bus.
- * NEVER throws and never deadlocks (the bus handshake is pump-independent blocking I/O —
- * see the module note). Cached (and caches `null` so a missing/disabled bus is probed at
- * most once).
+ * Null when BUNMASKA_ENABLE_LINUX_POWER is off or there is no bus. g_bus_get_sync blocks on
+ * socket I/O but never needs the pump; the result, null included, is cached so it runs once.
  */
 export const getSystemBus = (): Pointer | null => {
   if (cache.systemBus !== undefined) {
@@ -101,14 +67,7 @@ export const getSystemBus = (): Pointer | null => {
   return conn;
 };
 
-/**
- * Subscribe `cb` to a D-Bus signal on `conn`. The callback fires on the GMainContext
- * during normal pump iterations. The JSCallback is retained for the process lifetime
- * (subscriptions here are permanent). Returns the `guint` subscription id.
- *
- * `cb` receives the BORROWED `parameters` GVariant (owned by GIO — read synchronously,
- * never unref). A faulty `cb` is swallowed so it cannot take down the pump dispatch.
- */
+/** Permanent; returns the subscription id. A throwing `cb` is swallowed. */
 export const subscribeSignal = (
   conn: Pointer,
   match: SignalMatch,
@@ -130,8 +89,9 @@ export const subscribeSignal = (
           signalName: signalName === null ? '' : new CString(signalName).toString(),
           parameters,
         });
-      } catch {
-        // A faulty handler must not crash the GMainContext dispatch.
+      } catch (error) {
+        // A throw must not unwind into the GMainContext dispatch.
+        reportCallbackError(error);
       }
     },
     DBUS_SIGNAL_CB_DEF,
@@ -155,25 +115,18 @@ export const subscribeSignal = (
   );
 };
 
-/** Reset the system-bus probe cache. Test-only. */
+/** Test-only. */
 export const resetSystemBusCacheForTesting = (): void => {
   cache.systemBus = undefined;
 };
 
-// --- Session bus + bounded method call (powerSaveBlocker) -------------------------------
-
-/**
- * Whether the live SESSION-bus method-call path is enabled. A SEPARATE flag from the
- * system-bus power flag, so a developer can enable read-only power-monitor signals without
- * enabling outbound blocker method calls (different bus, different risk surface). CI never
- * sets it → the session bus is never touched and blocker `acquire` is a no-op.
- */
+/** Separate from the system-bus flag: outbound calls on another bus. Unset in CI. */
 const liveBlockerEnabled = (): boolean =>
   process.env['BUNMASKA_ENABLE_LINUX_POWER_BLOCKER'] === '1';
 
 const sessionCache: { sessionBus: Pointer | null | undefined } = { sessionBus: undefined };
 
-/** Call `g_bus_get_sync(SESSION)` directly, bypassing the gate. Never throws (see the system probe). */
+/** Bypasses the env gate; null without a bus. */
 export const probeSessionBusUnchecked = (): Pointer | null => {
   const gdbus = loadGDBusFFI();
   try {
@@ -183,7 +136,7 @@ export const probeSessionBusUnchecked = (): Pointer | null => {
   }
 };
 
-/** The session `GDBusConnection*`, or null when the gate is off OR there is no bus. Cached. */
+/** Null when BUNMASKA_ENABLE_LINUX_POWER_BLOCKER is off or there is no bus. Cached. */
 export const getSessionBus = (): Pointer | null => {
   if (sessionCache.sessionBus !== undefined) {
     return sessionCache.sessionBus;
@@ -194,12 +147,8 @@ export const getSessionBus = (): Pointer | null => {
 };
 
 /**
- * A BOUNDED, deadlock-safe synchronous D-Bus method call. The reply is read by the
- * connection's private GDBusWorker thread and awaited on `call_sync`'s own private
- * GMainContext, so this blocks only the calling thread for the round-trip (finite
- * {@link DBUS_CALL_TIMEOUT_MS}), never the pump. Returns the transfer-FULL reply GVariant
- * tuple (caller `g_variant_unref`) or null on any failure (NULL GError**). `parameters`
- * (a floating GVariant, or null for no args) is CONSUMED by the call.
+ * Blocks for at most DBUS_CALL_TIMEOUT_MS. `parameters` (floating, or null) is CONSUMED; the
+ * reply is transfer-full (the caller unrefs it), or null on any failure.
  */
 export const callMethodSync = (
   conn: Pointer,
@@ -222,33 +171,29 @@ export const callMethodSync = (
       G_DBUS_CALL_FLAGS_NONE,
       DBUS_CALL_TIMEOUT_MS,
       null, // cancellable
-      null, // error (NULL return already means "failed")
+      null, // error: a NULL return already means failure
     );
   } catch {
     return null;
   }
 };
 
-/** Reset the session-bus probe cache. Test-only. */
+/** Test-only. */
 export const resetSessionBusCacheForTesting = (): void => {
   sessionCache.sessionBus = undefined;
 };
 
-// --- Object export (StatusNotifierItem service) ----------------------------------------
-
-/** Parse D-Bus introspection XML into a `GDBusNodeInfo*` (transfer-full — keep alive forever). */
+/** Transfer-full; keep it alive for as long as an object is registered with it. */
 export const nodeInfoNewForXml = (xml: string): Pointer | null =>
   loadGDBusFFI().symbols.g_dbus_node_info_new_for_xml(cstr(xml), null);
 
-/** Look up a borrowed `GDBusInterfaceInfo*` (owned by `node`) by interface name. */
+/** BORROWED from `node`. */
 export const nodeInfoLookupInterface = (node: Pointer, name: string): Pointer | null =>
   loadGDBusFFI().symbols.g_dbus_node_info_lookup_interface(node, cstr(name));
 
 /**
- * Export an object on `conn` at `objectPath` for `interfaceInfo`, dispatched through the
- * `GDBusInterfaceVTable` at `vtablePtr`. Returns the registration id (0 = failure). GDBus
- * COPIES the vtable and refs the interface info — but the copied vtable holds the RAW
- * function pointers of the JSCallbacks, so the CALLER must retain those callbacks forever.
+ * Returns the registration id (0 on failure). GDBus copies the vtable, but the copy holds the
+ * JSCallbacks' raw function pointers: the caller must retain those callbacks forever.
  */
 export const registerObject = (
   conn: Pointer,
@@ -266,21 +211,11 @@ export const registerObject = (
     null,
   );
 
-/** Remove a previously-registered object. */
 export const unregisterObject = (conn: Pointer, registrationId: number): void => {
   loadGDBusFFI().symbols.g_dbus_connection_unregister_object(conn, registrationId);
 };
 
-/** The connection's unique bus name (e.g. `":1.42"`), or null. */
-export const getUniqueName = (conn: Pointer): string | null => {
-  const name = loadGDBusFFI().symbols.g_dbus_connection_get_unique_name(conn);
-  return name === null ? null : name.toString();
-};
-
-/**
- * Broadcast a signal from `objectPath`/`iface`. `parameters` (a floating GVariant, or null
- * for an argument-less signal) is CONSUMED.
- */
+/** Broadcast. `parameters` (floating, or null for no arguments) is CONSUMED. */
 export const emitSignal = (
   conn: Pointer,
   objectPath: string,
@@ -290,7 +225,7 @@ export const emitSignal = (
 ): void => {
   loadGDBusFFI().symbols.g_dbus_connection_emit_signal(
     conn,
-    null, // broadcast (no destination)
+    null, // no destination
     cstr(objectPath),
     cstr(iface),
     cstr(signalName),

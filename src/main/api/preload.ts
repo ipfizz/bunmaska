@@ -1,9 +1,4 @@
-/**
- * A preload runs as a CLASSIC script, so a top-level `import` would throw and
- * silently kill it (and any `window.api` it exposes) — module-syntax preloads
- * are bundled into an IIFE instead.
- */
-
+// Classic-script injection: ESM preloads are bundled to an IIFE (D046).
 import { resolve } from 'node:path';
 import { InvalidArgumentError } from '../../common/errors';
 import {
@@ -13,10 +8,7 @@ import {
   usesModuleSyntax,
 } from '../../common/preload-bundle';
 
-/**
- * Resolve and load a `webPreferences.preload` into the classic-script string
- * injected at document-start. Returns `undefined` when no preload is set.
- */
+/** The classic-script source for `webPreferences.preload`, or `undefined` when unset. */
 export const loadPreloadScript = (
   preload: string | undefined,
   bundler: PreloadBundler = defaultPreloadBundler,
@@ -26,12 +18,12 @@ export const loadPreloadScript = (
   }
   const absolutePath = resolve(preload);
   const source = readPreloadSource(absolutePath);
-  if (!usesModuleSyntax(source)) {
+  if (!usesModuleSyntax(source) && !/\.[cm]?tsx?$/i.test(absolutePath)) {
     return source;
   }
   if (!bundler.available) {
     throw new InvalidArgumentError(
-      `webPreferences.preload at ${absolutePath} uses 'import'/'export', which a preload ` +
+      `webPreferences.preload at ${absolutePath} uses TypeScript or 'import'/'export', which a preload ` +
         `cannot run un-bundled (it is injected as a classic script). Run it via 'bunmaska dev' ` +
         `or ship it with 'bunmaska build' (both bundle the preload), or keep the preload plain JavaScript.`,
     );

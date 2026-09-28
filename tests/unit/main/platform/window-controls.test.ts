@@ -4,14 +4,7 @@ import {
   windowControlsScript,
 } from '../../../../src/main/platform/window-controls';
 
-/**
- * Regression guard for the page-world title-bar script. On platforms with a real
- * isolated world (macOS/Linux) the page world must NEVER carry a `__bunmaska`
- * handle — that defeats context isolation (and trips the isolation e2e tests). The
- * control global is opt-in via `nativeOpChannel`, which only the page-world-bridge
- * platform (Windows) sets. This unit test runs on every OS, so the leak is caught
- * on Windows CI too, not only on the macOS/Linux e2e runners.
- */
+// Runs on every OS, so a page-world `__bunmaska` leak is caught on Windows CI too.
 describe('windowControlsScript', () => {
   test('the default (isolated-world platforms) never leaks a __bunmaska handle', () => {
     const script = windowControlsScript();
@@ -38,5 +31,68 @@ describe('windowControlsScript', () => {
 
   test('explicit nativeOpChannel:false is identical to the default', () => {
     expect(windowControlsScript({ nativeOpChannel: false })).toBe(windowControlsScript());
+  });
+});
+
+type FakeElement = { appRegion: string; style: Map<string, string> };
+
+/** Run the mirror against fake elements; `mutate()` fires the MutationObserver. */
+const runMirror = (elements: FakeElement[]) => {
+  let onMutation: () => void = () => undefined;
+  let observed: unknown;
+  const style = (el: FakeElement) => ({
+    setProperty: (name: string, value: string) => el.style.set(name, value),
+    removeProperty: (name: string) => el.style.delete(name),
+  });
+  const nodes = elements.map((el) => ({ el, style: style(el) }));
+  const document = {
+    readyState: 'complete',
+    documentElement: {},
+    addEventListener: () => undefined,
+    querySelectorAll: () => nodes,
+  };
+  const getComputedStyle = ({ el }: { el: FakeElement }) => ({
+    getPropertyValue: () => el.appRegion,
+  });
+  class MutationObserver {
+    constructor(callback: () => void) {
+      onMutation = callback;
+    }
+    observe(_target: unknown, options: unknown): void {
+      observed = options;
+    }
+  }
+  const raf = (callback: () => void) => callback();
+  new Function(
+    'document',
+    'getComputedStyle',
+    'requestAnimationFrame',
+    'MutationObserver',
+    windowControlsScript(),
+  )(document, getComputedStyle, raf, MutationObserver);
+  return { mutate: () => onMutation(), observed: () => observed };
+};
+
+describe('the --app-region mirror', () => {
+  test('clears the region it mirrored once --app-region no longer applies', () => {
+    const bar: FakeElement = { appRegion: 'drag', style: new Map() };
+    const page = runMirror([bar]);
+    expect(bar.style.get('-webkit-app-region')).toBe('drag');
+    bar.appRegion = '';
+    page.mutate();
+    expect(bar.style.has('-webkit-app-region')).toBe(false);
+  });
+
+  test('leaves an author-set -webkit-app-region alone', () => {
+    const bar: FakeElement = { appRegion: '', style: new Map([['-webkit-app-region', 'drag']]) };
+    runMirror([bar]).mutate();
+    expect(bar.style.get('-webkit-app-region')).toBe('drag');
+  });
+
+  test('re-runs on class changes but never on the style attribute it writes', () => {
+    expect(runMirror([]).observed()).toMatchObject({
+      attributes: true,
+      attributeFilter: ['class'],
+    });
   });
 });

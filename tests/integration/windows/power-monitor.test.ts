@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import { powerMonitor } from '../../../src/main/api/power-monitor';
+import { startPowerMonitorObserving } from '../../../src/main/api/power-monitor';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import { createMessageWindow } from '../../../src/main/platform/windows/windows-message-window';
 import {
@@ -14,16 +14,17 @@ import { createWindowsDrain } from '../../../src/main/platform/windows/windows-r
  * Windows powerMonitor against a real hidden notification window. Real suspend /
  * lock events can't be triggered from a test, so delivery is driven by POSTING
  * synthetic WM_POWERBROADCAST / WM_WTSSESSION_CHANGE messages to the window and
- * draining the cooperative pump — proving the JSCallback WndProc receives them and
- * the mapping fires the right handler end-to-end. Runs only on Windows.
+ * draining the cooperative pump, proving the JSCallback WndProc receives them and
+ * the mapping fires the right handler end-to-end.
  */
 const PBT_APMSUSPEND = 0x0004n;
 const PBT_APMRESUMEAUTOMATIC = 0x0012n;
 const WTS_SESSION_LOCK = 0x7n;
 const WTS_SESSION_UNLOCK = 0x8n;
 
-if (currentPlatform() === 'windows') {
-  describe('Windows powerMonitor (hidden notification window)', () => {
+describe.skipIf(currentPlatform() !== 'windows')(
+  'Windows powerMonitor (hidden notification window)',
+  () => {
     test('synthetic power/session messages reach the handlers through a real window', () => {
       const events: string[] = [];
       const handlers = {
@@ -49,10 +50,9 @@ if (currentPlatform() === 'windows') {
       }
     });
 
-    test('powerMonitor.startObserving wires the native observer without throwing', () => {
-      expect(() => powerMonitor.startObserving()).not.toThrow();
-      // Idempotent — a second call is a no-op (the observer is a process singleton).
-      expect(() => powerMonitor.startObserving()).not.toThrow();
+    test('startPowerMonitorObserving wires the native observer without throwing', () => {
+      expect(() => startPowerMonitorObserving()).not.toThrow();
+      expect(() => startPowerMonitorObserving()).not.toThrow();
     });
-  });
-}
+  },
+);

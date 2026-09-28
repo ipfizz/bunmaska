@@ -1,11 +1,6 @@
 import { InvalidArgumentError } from '../../common/errors';
 
-/**
- * Wire protocol for Bunmaska IPC (D021) — JSON envelopes crossing renderer ⇄ main.
- * - `send`   — fire-and-forget event on a channel (either direction).
- * - `invoke` — request expecting a `reply`, correlated by `id` (renderer→main).
- * - `reply`  — response to an `invoke` (main→renderer).
- */
+// JSON wire format for IPC (D021): send (either way) | invoke (id-correlated) | reply.
 
 export type SendEnvelope = {
   readonly kind: 'send';
@@ -32,6 +27,16 @@ export const encodeEnvelope = (envelope: IpcEnvelope): string => {
     const json = JSON.stringify(envelope, (_key, value) => {
       if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
         throw new InvalidArgumentError(`IPC payload contains a non-serializable ${typeof value}`);
+      }
+      // JSON turns these into {} or index maps, so the renderer rejects them too (preload-bootstrap).
+      if (
+        value instanceof Map ||
+        value instanceof Set ||
+        value instanceof ArrayBuffer ||
+        ArrayBuffer.isView(value)
+      ) {
+        const type = Object.prototype.toString.call(value).slice(8, -1);
+        throw new InvalidArgumentError(`IPC payload contains a ${type}, which JSON cannot carry`);
       }
       return value;
     });

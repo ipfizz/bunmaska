@@ -4,21 +4,15 @@ import {
   createContextBridge,
 } from '../../../src/renderer/api/context-bridge';
 import {
-  announceChannel,
+  CHANNEL_GLOBAL_KEY,
   type CustomEventCtor,
   type EventScope,
-  generateIsolatedHostSource,
   generatePageWorldStub,
+  installCrossWorldHost,
   replyChannel,
 } from '../../../src/renderer/api/cross-world-bridge';
 
-/**
- * Cross-world contextBridge proven WITHOUT a renderer: a single mock `document`
- * (a shared EventTarget) plays the channel both worlds dispatch on. The page
- * scope runs the generated page-world stub; the isolated scope runs
- * `exposeInMainWorld`. The page scope NEVER holds a reference to the real
- * handler — only the cloned values cross the DOM.
- */
+/** One mock `document` is the channel both worlds share; the page world only sees cloned values. */
 
 /** A minimal shared event bus standing in for `document`. */
 class MockDocument implements EventScope {
@@ -56,15 +50,13 @@ type PageWorld = {
   read<T>(key: string): T;
 };
 
-/**
- * Build a "page world": a fresh `window`-like global running the generated stub
- * source, wired to the shared mock document + CustomEvent. The returned `read`
- * accessor exposes whatever `window[key]` materialises.
- */
-const makePageWorld = (doc: MockDocument, channel: string = CHANNEL): PageWorld => {
+/** A fresh `window`-like global running the page stub over the shared mock document. */
+const makePageWorld = (
+  doc: MockDocument,
+  channel: string = CHANNEL,
+  setTimeoutImpl: (fn: () => void) => unknown = setTimeout,
+): PageWorld => {
   const win: Record<string, unknown> = {};
-  // The stub references `document`, `window`, `Map`, `Promise`, `CustomEvent`,
-  // `Object`, `Array`, `setTimeout`, `clearTimeout`. Provide them via scope.
   const factory = new Function(
     'window',
     'document',
@@ -74,39 +66,14 @@ const makePageWorld = (doc: MockDocument, channel: string = CHANNEL): PageWorld 
     'Object',
     'Array',
     'setTimeout',
-    'clearTimeout',
     generatePageWorldStub(channel),
   );
-  factory(win, doc, MockCustomEvent, Map, Promise, Object, Array, setTimeout, clearTimeout);
+  factory(win, doc, MockCustomEvent, Map, Promise, Object, Array, setTimeoutImpl);
   return { read: <T>(key: string): T => win[key] as T };
 };
 
-/**
- * Run the canonical isolated-host source against the shared mock document and
- * return its `exposeInMainWorld`. This is the SAME baked source injected into
- * the isolated world, so it exercises the real protocol (no hand-rolling).
- */
-const makeIsolatedHost = (
-  doc: MockDocument,
-  channel: string = CHANNEL,
-): ((key: string, api: Record<string, unknown>) => void) => {
-  const g: Record<string, unknown> = {
-    CustomEvent: MockCustomEvent,
-    structuredClone: globalThis.structuredClone,
-    Map,
-    Object,
-    Promise,
-    Array,
-    JSON,
-    String,
-  };
-  const factory = new Function(
-    'globalThis',
-    'document',
-    `${generateIsolatedHostSource(channel)}\nreturn globalThis.__bunmaska.exposeInMainWorld;`,
-  );
-  return factory(g, doc) as (key: string, api: Record<string, unknown>) => void;
-};
+const makeIsolatedHost = (doc: MockDocument) =>
+  installCrossWorldHost(CHANNEL, doc, MockCustomEvent);
 
 const transport = (doc: MockDocument): ContextBridgeTransport => ({
   channelId: CHANNEL,
@@ -124,6 +91,28 @@ describe('contextBridge.exposeInMainWorld (cross-world)', () => {
     const bridge = createContextBridge(transport(doc));
     bridge.exposeInMainWorld('api', { a: () => 1 });
     expect(() => bridge.exposeInMainWorld('api', { b: () => 2 })).toThrow(/already/i);
+  });
+
+  test('shares the injected host, so a key exposed through both paths collides', () => {
+    const doc = new MockDocument();
+    const globals = {
+      __bunmaska: { exposeInMainWorld: makeIsolatedHost(doc) },
+      [CHANNEL_GLOBAL_KEY]: CHANNEL,
+      document: doc,
+      CustomEvent: MockCustomEvent,
+    };
+    const saved = Object.keys(globals).map((name) => [name, Reflect.get(globalThis, name)]);
+    Object.assign(globalThis, globals);
+    try {
+      globals.__bunmaska.exposeInMainWorld('api', { a: () => 1 });
+      expect(() => createContextBridge().exposeInMainWorld('api', { b: () => 2 })).toThrow(
+        /already/i,
+      );
+    } finally {
+      for (const [name, value] of saved) {
+        Reflect.set(globalThis, name as string, value);
+      }
+    }
   });
 
   test('page method resolves to the isolated handler return value', async () => {
@@ -190,18 +179,36 @@ describe('contextBridge.exposeInMainWorld (cross-world)', () => {
   });
 });
 
-describe('cross-world channel naming', () => {
-  test('reply and announce channels are derived from the base id', () => {
-    expect(replyChannel('c')).toBe('c:reply');
-    expect(announceChannel('c')).toBe('c:announce');
+describe('cross-world calls', () => {
+  test('a handler slower than any page-side timer still resolves the page promise', async () => {
+    const doc = new MockDocument();
+    const timers: Array<() => void> = [];
+    const page = makePageWorld(doc, CHANNEL, (fn) => timers.push(fn));
+    let finish: (value: string) => void = () => undefined;
+    createContextBridge(transport(doc)).exposeInMainWorld('api', {
+      save: () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    const call = page.read<{ save: () => Promise<string> }>('api').save();
+    await Bun.sleep(0);
+    for (const fire of timers.splice(0)) {
+      fire();
+    }
+    finish('saved');
+    await expect(call).resolves.toBe('saved');
+  });
+
+  test('a non-cloneable argument rejects at once, naming the call', async () => {
+    const doc = new MockDocument();
+    const page = makePageWorld(doc);
+    createContextBridge(transport(doc)).exposeInMainWorld('api', { on: () => 'registered' });
+    const api = page.read<{ on: (callback: () => void) => Promise<string> }>('api');
+    await expect(api.on(() => undefined)).rejects.toThrow(/api\.on.*cloneable/);
   });
 });
 
-/**
- * FIX 4: the host<->page handshake must be resilient to BOTH script orderings.
- * Both flavours use the canonical baked host source + page stub over a shared
- * mock document — no hand-rolled protocol.
- */
 describe('resilient host<->page handshake (both orderings)', () => {
   const flush = (): Promise<void> =>
     new Promise((resolve) => {
@@ -239,31 +246,6 @@ describe('resilient host<->page handshake (both orderings)', () => {
   });
 });
 
-/** FIX 3: a page-side call whose reply never arrives rejects with a timeout. */
-describe('cross-world call timeout', () => {
-  test('a call with no responding host rejects with a timeout error', async () => {
-    const doc = new MockDocument();
-    // Page stub with NO host: the request is dispatched but never answered.
-    const page = makePageWorld(doc, '__timeout_channel');
-    // Manually announce a surface so the page materialises a method, but install
-    // no request listener — the call will hang and must time out.
-    doc.dispatchEvent({
-      type: announceChannel('__timeout_channel'),
-      detail: { key: 'lonely', methods: ['ping'], values: {} },
-    });
-    const api = page.read<{ ping: () => Promise<unknown> }>('lonely');
-    expect(api).toBeDefined();
-    // Drive the fake timer-less timeout by patching setTimeout would be heavy;
-    // instead assert the proxy returns a Promise and the timeout const is wired
-    // by checking the generated source embeds a clearTimeout + timeout reject.
-    const src = generatePageWorldStub('__timeout_channel');
-    expect(src).toContain('timed out');
-    expect(src).toContain('clearTimeout');
-    void api.ping().catch(() => undefined);
-  });
-});
-
-/** FIX 6: page object hardening — deep freeze + prototype-trap-safe target. */
 describe('page object hardening', () => {
   test('nested cloned objects are deep-frozen', () => {
     const doc = new MockDocument();
@@ -276,11 +258,60 @@ describe('page object hardening', () => {
     expect(Object.isFrozen(api.data.nested)).toBe(true);
   });
 
+  test('a typed-array value materialises intact', () => {
+    const doc = new MockDocument();
+    const page = makePageWorld(doc);
+    createContextBridge(transport(doc)).exposeInMainWorld('myApi', {
+      bytes: new Uint8Array([1, 2]),
+    });
+    expect(page.read<{ bytes: Uint8Array }>('myApi').bytes).toEqual(new Uint8Array([1, 2]));
+  });
+
+  test('a cyclic value materialises with its cycle', () => {
+    const doc = new MockDocument();
+    const page = makePageWorld(doc);
+    const tree: { name: string; self?: unknown } = { name: 'root' };
+    tree.self = tree;
+    createContextBridge(transport(doc)).exposeInMainWorld('myApi', { tree });
+    const copy = page.read<{ tree: { self: unknown } }>('myApi').tree;
+    expect(copy.self).toBe(copy);
+    expect(Object.isFrozen(copy)).toBe(true);
+  });
+
   test('the materialised target has a null prototype (no __proto__ trap)', () => {
     const doc = new MockDocument();
     const page = makePageWorld(doc);
     createContextBridge(transport(doc)).exposeInMainWorld('myApi', { ping: () => 'pong' });
     expect(Object.getPrototypeOf(page.read('myApi'))).toBe(null);
+  });
+
+  test('a forged call to an inherited, unannounced method is refused', async () => {
+    const doc = new MockDocument();
+    const api = Object.assign(Object.create({ secret: () => 'SECRET' }), { ping: () => 'pong' });
+    makeIsolatedHost(doc)('api', api);
+    const replies: unknown[] = [];
+    doc.addEventListener(replyChannel(CHANNEL), (e) => replies.push(e.detail));
+    doc.dispatchEvent({ type: CHANNEL, detail: { callId: 99, key: 'api', method: 'secret' } });
+    await Bun.sleep(0);
+    expect(replies).toEqual([
+      { callId: 99, ok: false, error: 'contextBridge: no method "secret"' },
+    ]);
+  });
+
+  test('a non-object api is rejected at expose time', () => {
+    const expose = makeIsolatedHost(new MockDocument());
+    for (const api of [false, '1.2', () => 5, [1, 2], null]) {
+      expect(() => expose('api', api as unknown as Record<string, unknown>)).toThrow(
+        /must be an object/,
+      );
+    }
+  });
+
+  test('a nested function is rejected at expose time, naming the member', () => {
+    const expose = makeIsolatedHost(new MockDocument());
+    expect(() => expose('api', { ipc: { send: () => undefined } })).toThrow(
+      /"ipc".*nested functions are not supported/,
+    );
   });
 
   test('a prototype-pollution member name is rejected at expose time', () => {

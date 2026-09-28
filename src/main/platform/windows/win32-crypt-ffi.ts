@@ -3,12 +3,9 @@ import { dlopen } from '../dlopen';
 import { winLibraryAccessor } from './win32';
 
 /**
- * `CryptProtectData`/`CryptUnprotectData` are flat-C exports (no COM). Each takes
- * and returns a `DATA_BLOB { DWORD cbData; BYTE* pbData; }` (16 bytes on x64:
- * `cbData` at offset 0, `pbData` at offset 8). The output blob's `pbData` is
- * allocated by the system and must be released with `LocalFree` (see
- * `win32-ffi.ts`). The unused `LPCWSTR`/`DATA_BLOB*`/`PVOID`/prompt parameters are
- * declared `ptr` so they can be passed as `null`.
+ * Both calls take and return a `DATA_BLOB { DWORD cbData; BYTE* pbData; }` (x64: 16 bytes,
+ * `pbData` at 8). The output `pbData` is system-allocated: free it with `LocalFree`. The
+ * unused description/entropy/reserved/prompt parameters are `ptr` so they can be `null`.
  */
 const CRYPT32_SYMBOLS = {
   // (DATA_BLOB* in, LPCWSTR desc, DATA_BLOB* entropy, PVOID reserved,
@@ -40,7 +37,7 @@ const CRYPT32_SYMBOLS = {
   },
 } as const;
 
-/** `CRYPTPROTECT_UI_FORBIDDEN` — never raise UI; fail instead (for a service/GUI app). */
+/** `CRYPTPROTECT_UI_FORBIDDEN`: fail instead of raising UI. */
 export const CRYPTPROTECT_UI_FORBIDDEN = 0x1;
 
 /** Open crypt32.dll and return its DPAPI symbol table. Memoised; Windows-only. */

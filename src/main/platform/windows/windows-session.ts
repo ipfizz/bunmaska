@@ -1,21 +1,13 @@
 import { FFIType, JSCallback, type Pointer } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
-import type { SessionBackend } from '../../api/session';
+import type { SessionBackend } from '../services';
 import { loadWebKit2 } from './webkit2-ffi';
 
 /**
- * `clearStorageData` clears the process-wide default data store: cookies and fetch caches.
- * The raw WK2 C API on this build exposes no general "remove all website data" entry
- * point - only these typed removers - so local/IndexedDB clearing is a follow-up.
- */
-
-/**
- * Run one async `WKWebsiteDataStore`/`WKHTTPCookieStore` removal that signals via
- * a completion callback, resolving when it fires. The JSCallback is pushed into
- * the CALLER's `owned` array so it is not GC'd before completion; the caller
- * closes its own array AFTER all its Promises settle (never from inside the
- * native callback, and never anyone else's still-in-flight trampolines - a
- * module-global drain once closed a concurrent call's live callback).
+ * Resolve when one async WK removal fires its completion. The JSCallback goes into the
+ * caller's `owned`, which the caller closes after ALL its promises settle: never inside the
+ * callback (use-after-free), never another call's (a module-global drain once closed a
+ * concurrent call's live trampoline).
  */
 const runWithCompletion = (
   start: (callback: Pointer) => void,
@@ -37,11 +29,6 @@ const runWithCompletion = (
     start(pointer);
   });
 
-/**
- * The WinCairo WebKit C API gap: `WKHTTPCookieStore` exposes delete-all but no
- * FFI-usable cookie read/write (getters/setters traffic in WK object graphs
- * with no stable C accessors), so the cookie surface is honestly unsupported.
- */
 const cookiesUnsupported = (method: string): Promise<never> =>
   Promise.reject(
     new UnsupportedPlatformError(
@@ -50,18 +37,17 @@ const cookiesUnsupported = (method: string): Promise<never> =>
   );
 
 export const windowsSessionBackend: SessionBackend = {
+  // ponytail: cookies and fetch caches only; local storage and IndexedDB need WK removers
+  // this WebKit2.dll may not export (check WKWebsiteDataStoreRemoveLocalStorage).
   async clearStorageData(): Promise<void> {
     const wk = loadWebKit2().symbols;
     const store = wk.WKWebsiteDataStoreGetDefaultDataStore();
     const cookieStore = wk.WKWebsiteDataStoreGetHTTPCookieStore(store);
-    // Scoped per call: a concurrent clearStorageData must not have its
-    // still-pending trampolines closed by this call's drain.
     const owned: JSCallback[] = [];
     await Promise.all([
       runWithCompletion((cb) => wk.WKHTTPCookieStoreDeleteAllCookies(cookieStore, null, cb), owned),
       runWithCompletion((cb) => wk.WKWebsiteDataStoreRemoveAllFetchCaches(store, null, cb), owned),
     ]);
-    // Both completions fired - release this call's trampolines (outside the callback).
     for (const callback of owned) {
       callback.close();
     }

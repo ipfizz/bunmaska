@@ -3,12 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
-import { generateSigningKeyPair, signArtifact } from '../../../src/cli/engine-signature';
-import { engineDir, isInstalled } from '../../../src/cli/engine-store';
+import { generateSigningKeyPair, signArtifact } from '../../../src/common/signature';
+import { engineDir, isInstalled } from '../../../src/common/engine-store';
 import {
   DEFAULT_ENGINE_FEED_URL,
   engineFeedArtifactUrl,
   installFromUrl,
+  MAX_ENGINE_ARTIFACT_BYTES,
+  MAX_ENGINE_TEXT_BYTES,
   parseRemoteManifest,
   type RemoteFetch,
 } from '../../../src/cli/engine-remote';
@@ -127,7 +129,46 @@ describe('installFromUrl', () => {
     expect(existsSync(engineDir(root, ID))).toBe(false);
   });
 
-  // The .sig covers the artifact bytes, NOT the .json — so a hostile feed can pair
+  test('fetches the small signed files before the artifact, each with a byte cap', async () => {
+    const root = makeTmpDir();
+    const artifact = await buildArtifact(makeTmpDir());
+    const { publicKey, privateKey } = generateSigningKeyPair();
+    const manifest = JSON.stringify({ id: ID, hash: contentHash(artifact) });
+    const feed = fixtureFeed(artifact, manifest, signArtifact(privateKey, artifact));
+    const calls: [string, number][] = [];
+    const fetch: RemoteFetch = (url, maxBytes) => {
+      calls.push([url, maxBytes]);
+      return feed(url, maxBytes);
+    };
+    await installFromUrl(root, base, publicKey, { fetch });
+    expect(calls).toEqual([
+      [`${base}.json`, MAX_ENGINE_TEXT_BYTES],
+      [`${base}.sig`, MAX_ENGINE_TEXT_BYTES],
+      [base, MAX_ENGINE_ARTIFACT_BYTES],
+    ]);
+  });
+
+  test('refuses a feed serving another id than the one asked for, before the download', async () => {
+    const root = makeTmpDir();
+    const artifact = await buildArtifact(makeTmpDir());
+    const { publicKey, privateKey } = generateSigningKeyPair();
+    const manifest = JSON.stringify({ id: ID, hash: contentHash(artifact) });
+    const feed = fixtureFeed(artifact, manifest, signArtifact(privateKey, artifact));
+    const fetched: string[] = [];
+    const fetch: RemoteFetch = (url, maxBytes) => {
+      fetched.push(url);
+      return feed(url, maxBytes);
+    };
+    const asked = 'webkitgtk-6.0-2.52.5-bunmaska1-linux-x64';
+
+    await expect(
+      installFromUrl(root, base, publicKey, { fetch, expectedId: asked }),
+    ).rejects.toThrow(asked);
+    expect(fetched).toEqual([`${base}.json`]);
+    expect(isInstalled(root, ID)).toBe(false);
+  });
+
+  // The .sig covers the artifact bytes, NOT the .json, so a hostile feed can pair
   // a validly-signed artifact with a traversal id. The store guard must still refuse.
   test('rejects a path-traversal id even when the signature is valid', async () => {
     const root = makeTmpDir();

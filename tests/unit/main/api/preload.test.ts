@@ -45,6 +45,11 @@ describe('loadPreloadScript', () => {
     expect(loadPreloadScript(path, fakeBundler(true, '(() => {})();'))).toBe('(() => {})();');
   });
 
+  test('bundles a TypeScript preload even without module syntax', () => {
+    const path = tmpPreload("const name: string = 'api';\nconsole.info(name);\n", 'preload.ts');
+    expect(loadPreloadScript(path, fakeBundler(true, 'BUNDLED'))).toBe('BUNDLED');
+  });
+
   test('throws a clear, non-silent error for an import-using preload with no bundler', () => {
     const path = tmpPreload("import './x.js';\n");
     expect(() => loadPreloadScript(path, fakeBundler(false, ''))).toThrow(/import/i);

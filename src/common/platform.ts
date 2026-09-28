@@ -33,7 +33,7 @@ export const mapPlatform = (raw: string): Platform => {
   return mapped;
 };
 
-/** Whether Bunmaska currently ships a working backend for this platform. */
+/** Whether Bunmaska ships a backend for `platform`: true for every {@link Platform} today. */
 export const isSupported = (platform: Platform): boolean => SUPPORTED.has(platform);
 
 /** The host's platform tag. Throws if the OS is not one Bunmaska recognises. */

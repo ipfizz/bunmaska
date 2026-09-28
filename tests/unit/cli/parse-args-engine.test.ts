@@ -3,7 +3,7 @@ import { parseArgs } from '../../../src/cli/parse-args';
 
 const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
 
-describe('parseArgs — engine subcommands', () => {
+describe('parseArgs engine subcommands', () => {
   test('engine list', () => {
     expect(parseArgs(['engine', 'list'])).toEqual({ kind: 'engine', sub: { action: 'list' } });
   });
@@ -79,7 +79,7 @@ describe('parseArgs — engine subcommands', () => {
   });
 });
 
-describe('parseArgs — doctor', () => {
+describe('parseArgs doctor', () => {
   test('doctor (no target)', () => {
     expect(parseArgs(['doctor'])).toEqual({ kind: 'doctor' });
   });

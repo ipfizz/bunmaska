@@ -1,11 +1,4 @@
-/**
- * Bunmaska "window controls" — exercising BrowserWindow's runtime setters.
- *
- * Run from the repo root with:  bun examples/window-controls/main.ts
- *
- * Opens a window, then drives resizable / opacity / minimum-size / center and
- * reads them back. Demonstrates the API a settings or tool window needs.
- */
+/** BrowserWindow's runtime setters. Run from the repo root: bun examples/window-controls/main.ts */
 import { app, BrowserWindow } from '../../src/main';
 
 app.whenReady().then(() => {

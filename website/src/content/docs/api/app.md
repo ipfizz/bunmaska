@@ -22,7 +22,7 @@ app.whenReady().then(() => {
 
 ### `app.whenReady()`
 
-Returns `Promise<void>` - resolves once the app is ready to create windows. The first call triggers the native bootstrap; if the app is already ready it resolves immediately.
+Returns `Promise<void>` - resolves once the app is ready to create windows. The first call triggers the native bootstrap; if the app is already ready it resolves immediately. If the native start fails, the promise rejects and the next call tries again.
 
 ```ts
 import { app, BrowserWindow } from 'bunmaska'
@@ -47,9 +47,16 @@ if (!app.isReady()) {
 
 * `exitCode` Integer (optional) - defaults to `0`.
 
-Begins shutting the app down. Emits the cancelable `before-quit` event, then `will-quit`; if a listener calls `preventDefault()` on either, the quit is aborted. If neither vetoes, emits `quit` with the exit code and exits the process. Idempotent - a second call while already quitting is ignored.
+Tries to close every window, then quits - Electron's sequence:
 
-Note: unlike Electron, Bunmaska's `quit()` does not run web-page `beforeunload`/`unload` handlers as a veto path; the veto comes from your main-process `before-quit` / `will-quit` listeners.
+1. `before-quit` is emitted. `preventDefault()` cancels the quit.
+2. Every open window is closed as if its close button were clicked, so each window's `close` listeners run. Any one of them calling `preventDefault()` cancels the quit (windows that already closed stay closed, as in Electron). `window-all-closed` is not emitted along the way.
+3. `will-quit` is emitted. `preventDefault()` cancels the quit and the app keeps running, run loop included.
+4. `quit` is emitted with the exit code, the native run loop stops, and the process exits.
+
+A cancelled quit leaves the app free to quit again later, and a second call while a quit is already running is ignored. The same sequence runs for the `quit` menu role on every platform, and on macOS for Cmd+Q, the Dock's Quit and logout.
+
+Note: unlike Electron, Bunmaska's `quit()` does not run web-page `beforeunload`/`unload` handlers as a veto path; the veto comes from your main-process `before-quit` / `will-quit` listeners and the windows' `close` listeners.
 
 ```ts
 import { app } from 'bunmaska'
@@ -67,7 +74,7 @@ app.quit()
 
 * `exitCode` Integer (optional) - defaults to `0`.
 
-Exits immediately with `exitCode`, skipping the `before-quit` / `will-quit` / `quit` events entirely.
+Exits immediately with `exitCode`, skipping the `before-quit` / `will-quit` / `quit` events and every window's `close` / `closed` events entirely.
 
 ```ts
 import { app } from 'bunmaska'
@@ -78,7 +85,7 @@ app.exit(1)
 ### `app.relaunch([options])`
 
 * `options` Object (optional)
-  * `args` string[] (optional) - defaults to the current process's argv (minus the executable).
+  * `args` string[] (optional) - defaults to this launch's arguments (`process.argv` minus the executable, and minus the embedded entry in a packaged app).
   * `execPath` string (optional) - defaults to the current executable.
 
 Relaunches the app when the current instance exits. As in Electron, this does not quit on its own - call `app.quit()` or `app.exit()` afterwards to actually restart.
@@ -92,7 +99,7 @@ app.exit(0)
 
 ### `app.getAppPath()`
 
-Returns `string` - the application root directory (the nearest `package.json`, or the current working directory).
+Returns `string` - the application directory: in a packaged app, the directory holding the executable; otherwise the directory of the nearest `package.json` above the entry script, or the current working directory if there is none.
 
 ```ts
 import { app } from 'bunmaska'
@@ -104,7 +111,7 @@ console.log(app.getAppPath())
 
 * `name` string - one of: `home`, `appData`, `userData`, `sessionData`, `temp`, `exe`, `module`, `desktop`, `documents`, `downloads`, `music`, `pictures`, `videos`, `logs`, `crashDumps`.
 
-Returns `string` - a path to the special directory associated with `name`, honoring any override set via `setPath`. An unknown name throws `InvalidArgumentError`.
+Returns `string` - a path to the special directory associated with `name`, honoring any override set via `setPath`. An unknown name throws `InvalidArgumentError`. `exe` and `module` are both the executable, as in Electron. On Linux the user folders (`desktop`, `documents`, `downloads`, `music`, `pictures`, `videos`) come from the `XDG_*_DIR` variables or `~/.config/user-dirs.dirs`, so localized folder names resolve correctly.
 
 Bunmaska supports the common subset of Electron's names. It does **not** support `recent` (Windows-only in Electron anyway) or `assets`.
 
@@ -120,7 +127,7 @@ const dbFile = join(app.getPath('userData'), 'app.db')
 * `name` string - one of the names accepted by `getPath`.
 * `path` string
 
-Overrides the path returned by `getPath` for a given name. Unlike Electron, Bunmaska does not validate that the directory exists - create it yourself if needed.
+Overrides the path returned by `getPath` for a given name. Throws `InvalidArgumentError` for an unknown name or a relative path. Unlike Electron, Bunmaska does not check that the directory exists (Electron throws) - create it yourself if needed.
 
 ```ts
 import { app } from 'bunmaska'
@@ -132,7 +139,7 @@ app.setPath('userData', '/tmp/my-app-data')
 
 * `path` string (optional) - a custom absolute path for your logs.
 
-Sets the directory used for `getPath('logs')`. Called without an argument, it pins `logs` to its current default.
+Sets the directory used for `getPath('logs')`. Called without an argument, it sets `logs` back to the platform default (`~/Library/Logs/<name>` on macOS, a `logs` folder inside `userData` elsewhere). A relative path throws `InvalidArgumentError`.
 
 ```ts
 import { app } from 'bunmaska'
@@ -142,7 +149,9 @@ app.setAppLogsPath('/var/log/my-app')
 
 ### `app.getName()`
 
-Returns `string` - the application name: the `setName` override if set, otherwise `productName` (falling back to `name`) from the app's `package.json`.
+Returns `string` - the application name: the `setName` override if set, otherwise `productName` (falling back to `name`) from the app's `package.json`, otherwise `bunmaska-app`.
+
+Which `package.json`: under the dev runner, the nearest one above the entry script; in a packaged app, the one beside the executable. `bunmaska build` writes that one with your project's `name`, `productName` and `version` (the build name stands in if your project names nothing), so a packaged app answers with the same name as in dev, and its `userData` folder stays where dev put it.
 
 ```ts
 import { app } from 'bunmaska'
@@ -164,7 +173,7 @@ app.setName('My Great App')
 
 ### `app.getVersion()`
 
-Returns `string` - the application version from the app's `package.json`.
+Returns `string` - the application version from the app's `package.json` (the same one `getName` reads), or `0.0.0` without one. `autoUpdater.checkForUpdates()` refuses to run while the version is `0.0.0`.
 
 ```ts
 import { app } from 'bunmaska'
@@ -204,7 +213,7 @@ console.log(app.getLocaleCountryCode()) // e.g. 'US'
 
 ### `app.getPreferredSystemLanguages()`
 
-Returns `string[]` - the user's preferred languages, most-preferred first.
+Returns `string[]` - the user's preferred languages, most-preferred first. On Linux they come from `$LANGUAGE` / `$LANG`; on macOS and Windows this is `[app.getLocale()]` for now (the OS preference list is not read yet).
 
 ```ts
 import { app } from 'bunmaska'
@@ -302,7 +311,7 @@ console.log(app.getBadgeCount())
 
 * `additionalData` unknown (optional) - JSON-serializable data forwarded to the primary instance.
 
-Returns `boolean` - `true` if this is the primary instance and your app should continue loading; `false` if another instance already holds the lock (in which case this process's `argv`/`cwd`/`additionalData` have been handed to the primary via its `second-instance` event, and you should quit); the lock is unverified on Windows.
+Returns `boolean` - `true` if this is the primary instance and your app should continue loading; `false` if another instance already holds the lock, in which case this process's `argv`/`cwd`/`additionalData` are sent to the primary asynchronously (it receives them as a `second-instance` event) and you should quit. The lock is released when the process exits. It is unverified on Windows.
 
 ```ts
 import { app, BrowserWindow } from 'bunmaska'
@@ -350,13 +359,9 @@ The `app` object emits the following events.
 
 ### Event: 'ready'
 
-Returns:
+Emitted once, when Bunmaska has finished initializing and is ready to create windows. As in Electron it fires after the current tick, so a listener added later in the same tick still hears it, and a bare `app.on('ready', ...)` is enough to start the app. You can also call `isReady()` or use `whenReady()`.
 
-* `event` Event
-
-Emitted once, when Bunmaska has finished initializing and is ready to create windows. Fires at most once. You can also call `isReady()` or use `whenReady()`.
-
-Note: unlike Electron, Bunmaska's `ready` does not carry a `launchInfo` argument.
+Note: unlike Electron, the listener receives no arguments - no `event` and no `launchInfo`.
 
 ```ts
 import { app } from 'bunmaska'
@@ -372,7 +377,7 @@ Returns:
 
 * `event` Event
 
-Emitted first when a quit begins (via `app.quit()`). Calling `event.preventDefault()` aborts the quit.
+Emitted first when a quit begins, before any window closes: from `app.quit()`, the `quit` menu role, closing the last window without a `window-all-closed` listener, and on macOS Cmd+Q, the Dock's Quit and logout. Calling `event.preventDefault()` aborts the quit.
 
 ```ts
 import { app } from 'bunmaska'
@@ -388,7 +393,7 @@ Returns:
 
 * `event` Event
 
-Emitted after `before-quit` is not vetoed, immediately before the app quits. Calling `event.preventDefault()` aborts the quit and the app keeps running, run loop included.
+Emitted once every window has closed and the app is about to quit. Calling `event.preventDefault()` aborts the quit and the app keeps running, run loop included.
 
 ```ts
 import { app } from 'bunmaska'
@@ -402,14 +407,15 @@ app.on('will-quit', (event) => {
 
 Returns:
 
-* `event` Event - the exit code (Integer).
+* `event` Event
+* `exitCode` Integer
 
-Emitted when the application is quitting, just before the process exits. Unlike most events, the listener receives the numeric exit code as its argument. The native bootstrap listens for this event to stop the run loop before the process exits; a vetoed quit never reaches it.
+Emitted when the application is quitting, just before the native run loop stops and the process exits. A vetoed quit never reaches it.
 
 ```ts
 import { app } from 'bunmaska'
 
-app.on('quit', (exitCode) => {
+app.on('quit', (_event, exitCode) => {
   console.log(`quitting with code ${exitCode}`)
 })
 ```
@@ -423,11 +429,11 @@ Returns:
 * `workingDirectory` string - the second instance's working directory.
 * `additionalData` unknown - the JSON data the second instance passed to `requestSingleInstanceLock`.
 
-Emitted inside the primary instance when a second instance starts and calls `app.requestSingleInstanceLock()`. Typically used to focus the existing window. See the `requestSingleInstanceLock` example above.
+Emitted inside the primary instance when a second instance starts and calls `app.requestSingleInstanceLock()`. As in Electron it never fires before `ready`: a launch that arrives earlier is held until then. Typically used to focus the existing window. See the `requestSingleInstanceLock` example above.
 
 ### Event: 'window-all-closed'
 
-Emitted when all windows have been closed. As in Electron, if you subscribe to this event you take responsibility for deciding whether the app quits.
+Emitted when all windows have been closed. As in Electron, closing the last window quits the app when nobody listens; once you subscribe, you decide whether it quits. It is not emitted while `app.quit()` is closing the windows.
 
 ```ts
 import { app } from 'bunmaska'
@@ -441,7 +447,7 @@ app.on('window-all-closed', () => {
 
 ### `app.isPackaged` _Readonly_
 
-A `boolean` - `true` if the app is running from a packaged build, `false` under the dev runner. Useful for distinguishing development from production.
+A `boolean` - `true` only inside a compiled `bunmaska build` binary, `false` under `bunmaska dev`, `bunmaska run` or plain `bun`. Useful for distinguishing development from production.
 
 ```ts
 import { app } from 'bunmaska'

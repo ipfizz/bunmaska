@@ -24,7 +24,7 @@ app.whenReady().then(() => {
 
 ### `new BrowserWindow([options])`
 
-Creates a new window. All options are optional; unspecified options fall back to Bunmaska's defaults (`800x600`, title `"Bunmaska"`, shown immediately, resizable).
+Creates a new window. All options are optional; unspecified options fall back to Bunmaska's defaults (`800x600`, title `"Bunmaska"`, shown immediately, resizable). On macOS a new window opens centered, as in Electron.
 
 The supported `options` are a deliberately small subset of Electron's `BrowserWindowConstructorOptions`:
 
@@ -35,11 +35,17 @@ The supported `options` are a deliberately small subset of Electron's `BrowserWi
 - `resizable` boolean - whether the user can resize the window. Default `true`.
 - `frame` boolean - draw the OS frame/title bar. `false` opens a frameless window.
 - `fullscreen` boolean - open in fullscreen. Default `false`.
-- `webPreferences` object - per-window renderer preferences. The only supported key is `preload`: an absolute-resolved path to a script run before the page's own scripts - in an isolated world on macOS and Linux (Electron's `contextIsolation: true`), in the page world on Windows (see [contextBridge](/docs/api/context-bridge)). It is read synchronously at construction; an unreadable path throws. A preload that uses `import`/`export` must go through `bunmaska dev`/`build` (they bundle it) - handed to the constructor raw, construction throws `InvalidArgumentError`.
+- `webPreferences` object - per-window renderer preferences. The only supported key is `preload`: a path (resolved against the working directory) to a script run before the page's own scripts, in the top frame only - in an isolated world on macOS and Linux (Electron's `contextIsolation: true`), in the page world on Windows (see [contextBridge](/docs/api/context-bridge)). It is read synchronously at construction; an unreadable path throws `InvalidArgumentError`. A preload that uses `import`/`export` is bundled for you when the app runs under Bun (`bunmaska dev`, `bunmaska run`, plain `bun`). A compiled app cannot bundle at runtime, so `bunmaska build` pre-bundles a `preload.js` / `.mjs` / `.cjs` that sits beside your entry file; any other module-syntax preload makes the constructor throw `InvalidArgumentError` in a compiled app. A `.ts` preload never ships in a build, so name it `preload.js`.
 
 ```ts
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { BrowserWindow } from 'bunmaska';
-import { join } from 'node:path';
+
+// The scaffold's pattern: assets sit next to this file in dev and next to the executable when built.
+const assetDir = existsSync(join(import.meta.dir, 'index.html'))
+  ? import.meta.dir
+  : dirname(process.execPath);
 
 const win = new BrowserWindow({
   width: 1024,
@@ -47,7 +53,7 @@ const win = new BrowserWindow({
   title: 'My App',
   frame: false,
   webPreferences: {
-    preload: join(import.meta.dir, 'preload.ts'),
+    preload: join(assetDir, 'preload.js'),
   },
 });
 ```
@@ -133,7 +139,7 @@ const [w, h] = win.getSize();
 
 `getBounds(): { x: number; y: number; width: number; height: number }`
 
-Returns the window's bounds as a rectangle - Electron's contract: the real on-screen **frame**, with `x`/`y` in global **top-left** screen coordinates. On macOS this is read from the window server (via the CGWindowList), so it reflects where the user actually dragged the window, not just where you last placed it. _Linux_ reports `x`/`y` as `0` (GTK4/Wayland forbid introspecting global window coordinates), so treat position as size-only there.
+Returns the window's bounds as a rectangle - Electron's contract: the real on-screen **frame**, with `x`/`y` in global **top-left** screen coordinates. On macOS this is read from AppKit's window frame, so it reflects where the user actually dragged the window, not just where you last placed it. On Windows a minimized window reports the bounds it will restore to. _Linux_ reports `x`/`y` as `0` (GTK4/Wayland forbid introspecting global window coordinates), so treat position as size-only there.
 
 ```ts
 const { x, y, width, height } = win.getBounds();
@@ -193,7 +199,7 @@ if (!win.isResizable()) { /* ... */ }
 
 `setMinimumSize(width: number, height: number): void`
 
-Constrains the window's minimum content size. _No-op on Windows_: enforcing a minimum size needs `WM_GETMINMAXINFO`, which the pump-routed native window proc can't intercept, so the value is tracked (and returned by `getMinimumSize`) but not enforced there.
+Constrains the window's minimum content size, on all three platforms (Windows enforces it through `WM_GETMINMAXINFO`).
 
 ```ts
 win.setMinimumSize(400, 300);
@@ -264,7 +270,7 @@ win.hide();
 
 `isVisible(): boolean`
 
-Returns whether the window is currently visible.
+Returns whether the window is currently visible. On Windows a minimized window reports `false`.
 
 ```ts
 if (win.isVisible()) win.hide();
@@ -274,7 +280,7 @@ if (win.isVisible()) win.hide();
 
 `focus(): void`
 
-Gives the window keyboard focus and brings it forward.
+Gives the window keyboard focus and brings it forward. As in Electron, a hidden window stays hidden; on macOS the call also activates the app.
 
 ```ts
 win.focus();
@@ -384,7 +390,7 @@ win.setAlwaysOnTop(true); // honored on macOS and Windows, no-op on Linux
 
 `close(): void`
 
-Tries to close the window, routing through the same path as the user clicking the title-bar close button. A `close` listener may veto it via `event.preventDefault()`. If not vetoed, the `closed` event fires.
+Tries to close the window, routing through the same path as the user clicking the title-bar close button. A `close` listener may veto it via `event.preventDefault()`. If not vetoed, the `closed` event fires and the window is destroyed.
 
 ```ts
 win.on('close', (e) => {
@@ -407,7 +413,7 @@ win.destroy();
 
 `isDestroyed(): boolean`
 
-Returns whether the window has been closed/destroyed. After `closed`, drop your reference and stop using the instance.
+Returns whether the window has been closed/destroyed. Once it is `true`, every other method on the window and on its `webContents` throws `TypeError: Object has been destroyed`, as in Electron - so drop your reference on `closed`.
 
 ```ts
 if (!win.isDestroyed()) win.focus();
@@ -440,6 +446,30 @@ const win = BrowserWindow.fromId(1);
 win?.focus();
 ```
 
+### `BrowserWindow.fromWebContents(webContents)`
+
+`static fromWebContents(webContents: WebContents): BrowserWindow | null`
+
+Returns the open window that owns `webContents`, or `null`. Handy in an IPC handler, where you hold `event.sender`.
+
+```ts
+import { BrowserWindow, ipcMain } from 'bunmaska';
+
+ipcMain.on('window:minimize', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize();
+});
+```
+
+### `BrowserWindow.getFocusedWindow()`
+
+`static getFocusedWindow(): BrowserWindow | null`
+
+Returns the focused window, or `null` when none of this app's windows is focused.
+
+```ts
+BrowserWindow.getFocusedWindow()?.webContents.reload();
+```
+
 ## Events
 
 `BrowserWindow` is an `EventEmitter`. The following events are emitted.
@@ -458,7 +488,7 @@ win.on('closed', () => {
 
 Returns: `event` - an object with `preventDefault()` and a `defaultPrevented` getter.
 
-Emitted when the window is about to close. Calling `event.preventDefault()` vetoes the close and keeps the window open. This is the hook for "unsaved changes?" prompts.
+Emitted when the window is about to close - from `close()`, the close button, or `app.quit()` closing every window. Calling `event.preventDefault()` vetoes the close and keeps the window open (and, during `app.quit()`, cancels the whole quit). This is the hook for "unsaved changes?" prompts.
 
 ```ts
 win.on('close', (event) => {
@@ -494,11 +524,11 @@ Emitted when the window is hidden.
 
 ### Event: 'resize'
 
-Emitted after the window has been resized.
+Emitted after the window has been resized, including by maximizing or entering fullscreen.
 
 ### Event: 'move'
 
-Emitted after the window has been moved - a user drag or a programmatic `setPosition`/`setBounds`. _macOS only_ today: Linux never emits it (window position is compositor-owned under GTK4/Wayland), and Windows does not wire it yet.
+Emitted after the window has been moved - a user drag or a programmatic `setPosition`/`setBounds`. _macOS and Windows_: Linux never emits it (window position is compositor-owned under GTK4/Wayland).
 
 ### Event: 'maximize'
 
@@ -510,7 +540,7 @@ Emitted when the window leaves a maximized state. Fires on all three platforms.
 
 ### Event: 'minimize'
 
-Emitted when the window is minimized. Never fires on Linux - GTK4 exposes no minimized state (`isMinimized()` still tracks what you called).
+Emitted when the window is minimized. Never fires on Linux: Bunmaska does not observe the minimized state there yet (X11 reports it through `GdkToplevel`'s state, Wayland does not report it at all), so `isMinimized()` only tracks what you called.
 
 ### Event: 'restore'
 
@@ -518,7 +548,7 @@ Emitted when the window is restored from a minimized state. Never fires on Linux
 
 ### Event: 'ready-to-show'
 
-Emitted when the page has been rendered (while not yet shown) and the window can be displayed without a visual flash. Fires at `dom-ready` on Windows and at the first `did-finish-load` on macOS and Linux. The standard pattern is to construct with `show: false` and show on this event.
+Emitted when the page has been rendered (while not yet shown) and the window can be displayed without a visual flash. Fires once, at the first `did-finish-load`, on all three platforms. The standard pattern is to construct with `show: false` and show on this event.
 
 ```ts
 const win = new BrowserWindow({ show: false });
@@ -560,8 +590,8 @@ Bunmaska implements the window-management core but omits large swaths of Electro
 - **`capturePage`, `getNativeWindowHandle`, `getMediaSourceId`, `moveTop` / `moveAbove`, `setAspectRatio`** - missing.
 - **Parent/child & modal windows** - no `parent`/`modal` constructor options, and no `setParentWindow` / `getParentWindow` / `getChildWindows`. Child and modal windows don't exist yet.
 - **macOS tabbing, Touch Bar, simple-fullscreen, represented file, traffic-light positioning, content protection** - none of the macOS-only flair (`setSimpleFullScreen`, `addTabbedWindow`, `setTouchBar`, `setRepresentedFilename`, `setWindowButtonVisibility`, `setContentProtection`, …) is wired.
-- **`BrowserWindow.getFocusedWindow` / `fromWebContents`** - only `getAllWindows` and `fromId` are exposed as statics.
-- **Events** - `page-title-updated`, `enter-full-screen` / `leave-full-screen`, `moved` (the throttled variant; plain `move` is emitted, macOS only), `will-resize` / `resized`, `always-on-top-changed`, and the various platform-specific gesture events (`swipe`, `rotate-gesture`, `app-command`, …) are not emitted. The implemented set is the lifecycle list above.
+- **`BrowserWindow.fromBrowserView`** and the other `BrowserView` statics - there is no `BrowserView`.
+- **Events** - `page-title-updated`, `enter-full-screen` / `leave-full-screen`, `moved` (the throttled variant; plain `move` is emitted on macOS and Windows), `will-resize` / `resized`, `always-on-top-changed`, and the various platform-specific gesture events (`swipe`, `rotate-gesture`, `app-command`, …) are not emitted. The implemented set is the lifecycle list above.
 - **Constructor options** - beyond the seven documented keys (plus `webPreferences.preload`), the rest of `BrowserWindowConstructorOptions` (e.g. `backgroundColor`, `transparent`, `alwaysOnTop`, `parent`, `modal`, `minWidth`/`minHeight`, `titleBarStyle`, the full `webPreferences` bag) is ignored.
 
 If you need one of these, it's genuinely not there - not hidden behind a flag.

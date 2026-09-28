@@ -1,25 +1,10 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-
-/**
- * Loads GdkPixbuf's load/query/encode symbols — the Linux primitives behind
- * Bunmaska's `nativeImage`.
- *
- * GdkPixbuf is a small, stable library that decodes the common raster formats
- * (PNG/JPEG/…) and is a transitive dependency of GTK 4, but it ships as its own
- * shared object (`libgdk_pixbuf-2.0.so.0`) rather than living inside
- * `libgtk-4.so.1`, so it gets its own loader.
- *
- * Convention (matches the existing Linux loaders): `gboolean` is {@link FFIType.i32}
- * (compare `=== 1`); `GError**`, `GCancellable*`, and the out-pointer args are
- * real pointers; `cstring` args are NUL-terminated UTF-8.
- */
+import { dlopenLinux } from './glib-ffi';
 
 const LIBGDK_PIXBUF_PATH = 'libgdk_pixbuf-2.0.so.0';
 
-/** The GdkPixbuf FFI symbol descriptor table. */
 export const GDK_PIXBUF_FFI_SYMBOLS = {
   // (filename, GError** error) -> GdkPixbuf* (transfer-full; NULL on failure)
   gdk_pixbuf_new_from_file: {
@@ -31,33 +16,26 @@ export const GDK_PIXBUF_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (GdkPixbuf*) -> int width (scalar)
   gdk_pixbuf_get_width: {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
-  // (GdkPixbuf*) -> int height (scalar)
   gdk_pixbuf_get_height: {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
-  // (GdkPixbuf*) -> guchar* to the packed pixel rows (BORROWED — owned by the pixbuf).
+  // (GdkPixbuf*) -> guchar* to the packed pixel rows (BORROWED - owned by the pixbuf).
   gdk_pixbuf_get_pixels: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (GdkPixbuf*) -> int rowstride (bytes per row; ≥ width*n_channels, often padded).
+  // (GdkPixbuf*) -> int rowstride (bytes per row; >= width*n_channels, often padded).
   gdk_pixbuf_get_rowstride: {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
   // (GdkPixbuf*) -> int channels (3 = RGB, 4 = RGBA).
   gdk_pixbuf_get_n_channels: {
-    args: [FFIType.pointer],
-    returns: FFIType.i32,
-  },
-  // (GdkPixbuf*) -> gboolean whether the pixbuf has an alpha channel.
-  gdk_pixbuf_get_has_alpha: {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
@@ -71,7 +49,7 @@ export const GDK_PIXBUF_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.i32, FFIType.i32, FFIType.i32, FFIType.i32],
     returns: FFIType.pointer,
   },
-  // (src) -> GdkPixbuf* (transfer-full; an INDEPENDENT pixel copy — used to detach a subpixbuf).
+  // (src) -> GdkPixbuf* (transfer-full; an INDEPENDENT pixel copy that detaches a subpixbuf).
   gdk_pixbuf_copy: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
@@ -91,7 +69,7 @@ export const GDK_PIXBUF_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GDK_PIXBUF_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GDK_PIXBUF_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -105,7 +83,7 @@ export const loadGdkPixbufFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGDK_PIXBUF_PATH, GDK_PIXBUF_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGDK_PIXBUF_PATH, GDK_PIXBUF_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

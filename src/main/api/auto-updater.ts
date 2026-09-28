@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -9,57 +9,27 @@ import {
   parseUpdateManifest,
   type UpdateManifest,
 } from '../../common/manifest';
+import { assertSizeWithin, fetchCapped, isSecureFeedUrl } from '../../common/feed-fetch';
 import { type Arch, currentArch as hostArch, currentPlatform } from '../../common/platform';
-import { verifyArtifact } from '../../common/signature';
+import { isEd25519PublicKey, verifyArtifact } from '../../common/signature';
 import { app } from './app';
+import { DEFAULT_APP_VERSION } from './app-metadata';
 import { defaultInstall } from './update-installer';
-
-/**
- * Application self-update — a drop-in subset of Electron's `autoUpdater`, built
- * on the same `version.json` contract `bunmaska build` emits.
- *
- * An {@link EventEmitter} (D023) emitting Electron's event names:
- * `checking-for-update`, `update-available`, `update-not-available`,
- * `update-downloaded` and `error`. The feed must be https. The default installer
- * swaps the bundle via a detached helper script (see `update-installer.ts`);
- * its script generators are unit-tested, but the live swap is the one step the
- * suite does not exercise end to end.
- */
 
 export type FeedURLOptions = {
   readonly url: string;
   /**
-   * PEM Ed25519 public key that every downloaded artifact's detached `.sig` must
-   * verify against. Required to download — unsigned updates are refused. This is
-   * the app publisher's own release key (baked into the app), not a Bunmaska key.
+   * PEM Ed25519 key that `update.json.sig` and `<artifact>.sig` must verify against;
+   * required to download. The publisher's own release key, not a Bunmaska key.
    */
   readonly publicKey?: string;
   /** If set, a manifest whose `channel` differs is rejected (channel confusion). */
   readonly channel?: string;
 };
 
-/**
- * Caps guarding the decompression step against a zip bomb: a tiny signed-looking
- * artifact that expands to gigabytes and OOMs the process. The compressed cap is
- * checked against the declared size before any fetch; the decompressed cap after.
- */
+/** Sanity bounds on publisher-signed input; the download itself is capped at the signed size. */
 export const MAX_COMPRESSED_ARTIFACT_BYTES = 512 * 1024 * 1024;
 export const MAX_DECOMPRESSED_TAR_BYTES = 2 * 1024 * 1024 * 1024;
-
-/** The zip-bomb guard: throws if a byte length exceeds `max`. */
-export const assertSizeWithin = (length: number, max: number, what: string): void => {
-  if (length > max) {
-    throw new Error(`autoUpdater: ${what} exceeds the ${max}-byte limit (got ${length})`);
-  }
-};
-
-/** http is refused for any host but these — dev feeds served from localhost. */
-const LOCAL_FEED_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-/** Transport-secure: https anywhere, http only on localhost. */
-const isSecureFeedUrl = (parsed: URL): boolean =>
-  parsed.protocol === 'https:' ||
-  (parsed.protocol === 'http:' && LOCAL_FEED_HOSTS.has(parsed.hostname));
 
 /** Carried by the `update-*` events. */
 export type UpdateInfo = {
@@ -69,7 +39,7 @@ export type UpdateInfo = {
 
 export type StagedUpdate = {
   readonly manifest: UpdateManifest;
-  /** Path to the decompressed `.tar` on disk. */
+  /** The decompressed `.tar`, alone in a private dir the default installer also writes into. */
   readonly tarPath: string;
 };
 
@@ -80,11 +50,12 @@ export type UpdateCheckResult = {
 
 export type AutoUpdaterDeps = {
   readonly fetchText: (url: string) => Promise<string>;
-  readonly fetchBytes: (url: string) => Promise<Uint8Array>;
+  /** Rejects once the body passes `maxBytes`, without buffering the rest. */
+  readonly fetchBytes: (url: string, maxBytes: number) => Promise<Uint8Array>;
   readonly currentVersion: () => string;
   readonly currentOs: () => ArtifactOs;
   readonly currentArch: () => Arch;
-  readonly decompress: (bytes: Uint8Array) => Uint8Array;
+  readonly decompress: (bytes: Uint8Array) => Promise<Uint8Array>;
   readonly stage: (tarBytes: Uint8Array, manifest: UpdateManifest) => Promise<string>;
   readonly install: (staged: StagedUpdate) => void;
 };
@@ -97,45 +68,43 @@ const toUpdateInfo = (manifest: UpdateManifest): UpdateInfo => ({
   releaseName: manifest.name,
 });
 
-const httpFetchText = async (url: string): Promise<string> => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`autoUpdater: GET ${url} failed (${response.status})`);
-  }
-  return response.text();
+/** update.json and a `.sig` are a few hundred bytes; a body past this is hostile. */
+const MAX_FEED_TEXT_BYTES = 64 * 1024;
+
+const httpFetchText = async (url: string): Promise<string> =>
+  new TextDecoder().decode(await fetchCapped(url, MAX_FEED_TEXT_BYTES));
+
+/** Fire-and-forget callers (Electron's pattern) get failures via `error`; awaiters still reject. */
+const markHandled = <T>(promise: Promise<T>): Promise<T> => {
+  promise.catch(() => undefined);
+  return promise;
 };
 
-const httpFetchBytes = async (url: string): Promise<Uint8Array> => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`autoUpdater: GET ${url} failed (${response.status})`);
-  }
-  return new Uint8Array(await response.arrayBuffer());
-};
-
-const stageToTmp = async (tarBytes: Uint8Array, manifest: UpdateManifest): Promise<string> => {
-  const tarPath = join(tmpdir(), `bunmaska-update-${manifest.hash}.tar`);
-  writeFileSync(tarPath, tarBytes);
+/** A fresh 0700 dir: a guessable name in a shared /tmp lets another user swap the verified tar. */
+export const stageToTmp = async (tarBytes: Uint8Array): Promise<string> => {
+  const tarPath = join(mkdtempSync(join(tmpdir(), 'bunmaska-update-')), 'update.tar');
+  await Bun.write(tarPath, tarBytes);
   return tarPath;
 };
 
 const productionDeps = (): AutoUpdaterDeps => ({
   fetchText: httpFetchText,
-  fetchBytes: httpFetchBytes,
+  fetchBytes: fetchCapped,
   currentVersion: () => app.getVersion(),
   currentOs: currentPlatform,
   currentArch: hostArch,
-  decompress: (bytes) => new Uint8Array(Bun.zstdDecompressSync(bytes)),
+  // Async zstd runs on Bun's threadpool; a sync decompress would freeze the pumped main thread.
+  decompress: async (bytes) => new Uint8Array(await Bun.zstdDecompress(bytes)),
   stage: stageToTmp,
   install: defaultInstall,
 });
 
 export class AutoUpdaterImpl extends EventEmitter {
-  #deps: AutoUpdaterDeps;
+  readonly #deps: AutoUpdaterDeps;
   #feedURL: string | undefined;
   #publicKey: string | undefined;
   #channel: string | undefined;
-  #available: UpdateManifest | undefined;
+  #available: { readonly manifest: UpdateManifest; readonly text: string } | undefined;
   #staged: StagedUpdate | undefined;
 
   constructor(deps?: Partial<AutoUpdaterDeps>) {
@@ -143,16 +112,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     this.#deps = { ...productionDeps(), ...deps };
   }
 
-  /** @internal */
-  setDepsForTesting(deps: Partial<AutoUpdaterDeps>): void {
-    this.#deps = { ...this.#deps, ...deps };
-  }
-
-  /**
-   * Base URL of the channel feed, where `update.json` + artifacts live. Must be
-   * https (http only for localhost) so a plaintext MITM cannot serve a malicious
-   * feed.
-   */
+  /** Base URL of the channel feed; https only, except http on localhost for dev. */
   setFeedURL(options: FeedURLOptions | string): void {
     const opts = typeof options === 'string' ? { url: options } : options;
     if (typeof opts.url !== 'string' || opts.url.length === 0) {
@@ -167,6 +127,11 @@ export class AutoUpdaterImpl extends EventEmitter {
     if (!isSecureFeedUrl(parsed)) {
       throw new Error(
         `autoUpdater.setFeedURL: refusing a non-HTTPS feed url ${JSON.stringify(opts.url)} (https is required; http is allowed only for localhost)`,
+      );
+    }
+    if (opts.publicKey !== undefined && !isEd25519PublicKey(opts.publicKey)) {
+      throw new Error(
+        'autoUpdater.setFeedURL: publicKey is not a PEM Ed25519 public key (use the update-public-key.pem from bunmaska keygen)',
       );
     }
     this.#feedURL = opts.url;
@@ -185,7 +150,7 @@ export class AutoUpdaterImpl extends EventEmitter {
 
   #requireFeedURL(): string {
     if (this.#feedURL === undefined) {
-      throw new Error('autoUpdater: feed URL is not set; call setFeedURL first');
+      throw this.#emitError(new Error('autoUpdater: feed URL is not set; call setFeedURL first'));
     }
     return this.#feedURL;
   }
@@ -193,7 +158,7 @@ export class AutoUpdaterImpl extends EventEmitter {
   #requirePublicKey(): string {
     if (this.#publicKey === undefined || this.#publicKey.length === 0) {
       throw new Error(
-        'autoUpdater: no update public key configured; pass { publicKey } to setFeedURL — unsigned updates are refused',
+        'autoUpdater: no update public key configured; pass { publicKey } to setFeedURL (unsigned updates are refused)',
       );
     }
     return this.#publicKey;
@@ -208,13 +173,39 @@ export class AutoUpdaterImpl extends EventEmitter {
     return error;
   }
 
+  /** Throws unless `<url>.sig` is a valid publisher signature over `message`. */
+  async #verifySignature(
+    publicKey: string,
+    url: string,
+    message: Uint8Array,
+    what: string,
+  ): Promise<void> {
+    const signature = (await this.#deps.fetchText(`${url}.sig`)).trim();
+    if (!verifyArtifact(publicKey, message, signature)) {
+      throw new Error(`autoUpdater: ${what} signature verification failed`);
+    }
+  }
+
   /** Returns `null` when no newer version is offered. Rejects on network/manifest failure. */
-  async checkForUpdates(): Promise<UpdateCheckResult | null> {
+  checkForUpdates(): Promise<UpdateCheckResult | null> {
+    return markHandled(this.#check());
+  }
+
+  async #check(): Promise<UpdateCheckResult | null> {
     const feedURL = this.#requireFeedURL();
     this.emit('checking-for-update');
+    const currentVersion = this.#deps.currentVersion();
+    if (currentVersion === DEFAULT_APP_VERSION) {
+      throw this.#emitError(
+        new Error(
+          `autoUpdater: the running app's version is unknown (${DEFAULT_APP_VERSION}), so every update would reinstall forever; set "version" in package.json`,
+        ),
+      );
+    }
+    let text: string;
     let manifest: UpdateManifest;
     try {
-      const text = await this.#deps.fetchText(joinUrl(feedURL, 'update.json'));
+      text = await this.#deps.fetchText(joinUrl(feedURL, 'update.json'));
       manifest = parseUpdateManifest(text);
     } catch (cause) {
       throw this.#emitError(cause);
@@ -235,36 +226,44 @@ export class AutoUpdaterImpl extends EventEmitter {
         ),
       );
     }
-    if (!isNewerVersion(manifest.version, this.#deps.currentVersion())) {
+    if (!isNewerVersion(manifest.version, currentVersion)) {
       this.#available = undefined;
       this.emit('update-not-available', toUpdateInfo(manifest));
       return null;
     }
-    this.#available = manifest;
+    this.#available = { manifest, text };
     this.emit('update-available', toUpdateInfo(manifest));
     return { updateInfo: toUpdateInfo(manifest), manifest };
   }
 
   /**
-   * Download, verify and stage the update found by the most recent
-   * {@link checkForUpdates}.
-   *
-   * The signature — not the wyhash — is what makes an update trustworthy: a
-   * feed/MITM controls the manifest, so its size + hash are self-referential;
-   * only the publisher's key can produce a valid `.sig`.
+   * Download, verify and stage the update from the last {@link checkForUpdates}.
+   * Trust comes only from the two signatures, never the wyhash (see `common/signature.ts`).
    */
-  async downloadUpdate(): Promise<StagedUpdate> {
+  downloadUpdate(): Promise<StagedUpdate> {
+    return markHandled(this.#download());
+  }
+
+  async #download(): Promise<StagedUpdate> {
     const feedURL = this.#requireFeedURL();
-    const manifest = this.#available;
-    if (manifest === undefined) {
+    const available = this.#available;
+    if (available === undefined) {
       throw this.#emitError(
         new Error('autoUpdater.downloadUpdate: no update available; call checkForUpdates first'),
       );
     }
+    const { manifest } = available;
     try {
       const publicKey = this.#requirePublicKey();
+      // Authenticates every field checkForUpdates acted on (version, os/arch, channel, name).
+      await this.#verifySignature(
+        publicKey,
+        joinUrl(feedURL, 'update.json'),
+        new TextEncoder().encode(available.text),
+        'update.json',
+      );
       assertSizeWithin(manifest.size, MAX_COMPRESSED_ARTIFACT_BYTES, 'compressed artifact');
-      const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact));
+      const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact), manifest.size);
       if (bytes.length !== manifest.size) {
         throw new Error(
           `autoUpdater: artifact size mismatch (expected ${manifest.size}, got ${bytes.length})`,
@@ -276,13 +275,13 @@ export class AutoUpdaterImpl extends EventEmitter {
           `autoUpdater: artifact hash mismatch (expected ${manifest.hash}, got ${actualHash})`,
         );
       }
-      const signature = (
-        await this.#deps.fetchText(joinUrl(feedURL, `${manifest.artifact}.sig`))
-      ).trim();
-      if (!verifyArtifact(publicKey, bytes, signature)) {
-        throw new Error('autoUpdater: artifact signature verification failed');
-      }
-      const tarBytes = this.#deps.decompress(bytes);
+      await this.#verifySignature(
+        publicKey,
+        joinUrl(feedURL, manifest.artifact),
+        bytes,
+        'artifact',
+      );
+      const tarBytes = await this.#deps.decompress(bytes);
       assertSizeWithin(tarBytes.length, MAX_DECOMPRESSED_TAR_BYTES, 'decompressed update');
       const tarPath = await this.#deps.stage(tarBytes, manifest);
       const staged: StagedUpdate = { manifest, tarPath };
@@ -294,7 +293,7 @@ export class AutoUpdaterImpl extends EventEmitter {
     }
   }
 
-  /** Throws if no update has been downloaded. See `update-installer.ts` for the default installer. */
+  /** Throws if nothing is downloaded, or if the installer refuses this app's layout. */
   quitAndInstall(): void {
     if (this.#staged === undefined) {
       throw new Error(
@@ -305,6 +304,6 @@ export class AutoUpdaterImpl extends EventEmitter {
   }
 }
 
-/** The application updater singleton — Electron's `autoUpdater`. */
+/** Electron's `autoUpdater` singleton. */
 export const autoUpdater = new AutoUpdaterImpl();
 export type AutoUpdater = AutoUpdaterImpl;

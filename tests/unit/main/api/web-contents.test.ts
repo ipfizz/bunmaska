@@ -194,6 +194,18 @@ describe('WebContents.setZoomFactor / getZoomFactor', () => {
     expect(wc.getZoomFactor()).toBe(1.5);
   });
 
+  test('setZoomFactor rejects a factor that is not a finite number above 0', () => {
+    const { native, zooms } = makeFakeNative();
+    const wc = new WebContents(native);
+    for (const factor of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => wc.setZoomFactor(factor)).toThrow(
+        "'zoomFactor' must be a double greater than 0.0",
+      );
+    }
+    expect(zooms).toEqual([]);
+    expect(wc.getZoomFactor()).toBe(1);
+  });
+
   test('setZoomLevel applies factor 1.2**level; getZoomLevel inverts it', () => {
     const { native, zooms } = makeFakeNative();
     const wc = new WebContents(native);
@@ -266,6 +278,63 @@ describe('WebContents.devtools + isDestroyed', () => {
   });
 });
 
+describe('WebContents after destroy', () => {
+  test('methods throw Electron TypeError without reaching the native view', () => {
+    const { native, sent } = makeFakeNative();
+    const loaded: string[] = [];
+    const wc = new WebContents({ ...native, loadURL: (url: string) => loaded.push(url) });
+    wc.markDestroyed();
+    expect(() => wc.send('tick')).toThrow(new TypeError('Object has been destroyed'));
+    expect(() => wc.loadURL('https://x.test/')).toThrow(TypeError);
+    expect(sent).toEqual([]);
+    expect(loaded).toEqual([]);
+  });
+
+  test('executeJavaScript rejects instead of throwing synchronously', async () => {
+    const wc = new WebContents(makeFakeNative().native);
+    wc.markDestroyed();
+    await expect(wc.executeJavaScript('1')).rejects.toThrow('Object has been destroyed');
+  });
+
+  test('an invoke reply that settles after destroy is dropped', async () => {
+    const { native, sent, fireRenderer } = makeFakeNative();
+    const wc = new WebContents(native);
+    let finish: (value: number) => void = () => undefined;
+    ipcMain.handle('add', () => new Promise<number>((resolve) => (finish = resolve)));
+    fireRenderer(encodeEnvelope({ kind: 'invoke', id: 7, channel: 'add', args: [] }));
+    await flush();
+    wc.markDestroyed();
+    finish(1);
+    await flush();
+    expect(sent).toEqual([]);
+  });
+
+  test('a renderer envelope arriving after destroy is not dispatched', async () => {
+    const { native, fireRenderer } = makeFakeNative();
+    const wc = new WebContents(native);
+    let calls = 0;
+    ipcMain.on('late', () => {
+      calls += 1;
+    });
+    wc.markDestroyed();
+    fireRenderer(encodeEnvelope({ kind: 'send', channel: 'late', args: [] }));
+    await flush();
+    expect(calls).toBe(0);
+  });
+
+  test('navigation events after destroy are not re-emitted', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents(native);
+    let fired = 0;
+    wc.on('did-navigate', () => {
+      fired += 1;
+    });
+    wc.markDestroyed();
+    fireNavigation({ type: 'did-navigate' });
+    expect(fired).toBe(0);
+  });
+});
+
 describe('WebContents.setUserAgent / getUserAgent', () => {
   test('defaults to an empty override', () => {
     expect(new WebContents(makeFakeNative().native).getUserAgent()).toBe('');
@@ -307,6 +376,17 @@ describe('WebContents <-> ipcMain auto-wiring', () => {
     expect(calls[0]?.sender).toBe(wc);
   });
 
+  test('event.reply sends to the renderer the message came from', async () => {
+    const { native, sent, fireRenderer } = makeFakeNative();
+    new WebContents(native);
+    ipcMain.on('ping', (event) => event.reply('pong', 1));
+
+    fireRenderer(encodeEnvelope({ kind: 'send', channel: 'ping', args: [] }));
+    await flush();
+
+    expect(decodeEnvelope(sent[0] ?? '')).toEqual({ kind: 'send', channel: 'pong', args: [1] });
+  });
+
   test('a renderer invoke is handled and a reply is sent back', async () => {
     const { native, sent, fireRenderer } = makeFakeNative();
     new WebContents(native);
@@ -335,6 +415,32 @@ describe('WebContents <-> ipcMain auto-wiring', () => {
       ok: false,
       error: 'nope',
     });
+  });
+
+  test('a handler result that cannot be serialized sends an error reply', async () => {
+    const { native, sent, fireRenderer } = makeFakeNative();
+    new WebContents(native);
+    ipcMain.handle('add', () => ({ id: 1n }));
+
+    fireRenderer(encodeEnvelope({ kind: 'invoke', id: 3, channel: 'add', args: [] }));
+    await flush();
+
+    const reply = decodeEnvelope(sent[0] ?? '');
+    expect(reply).toMatchObject({ kind: 'reply', id: 3, ok: false });
+    expect(reply.kind === 'reply' && !reply.ok ? reply.error : '').toContain('bigint');
+  });
+
+  test('a native failure while replying is contained', async () => {
+    const { native, fireRenderer } = makeFakeNative();
+    new WebContents({
+      ...native,
+      sendEnvelopeToRenderer: () => {
+        throw new Error('view gone');
+      },
+    });
+    ipcMain.handle('add', () => 1);
+    fireRenderer(encodeEnvelope({ kind: 'invoke', id: 4, channel: 'add', args: [] }));
+    await flush();
   });
 
   test('a malformed renderer envelope is dropped without throwing', async () => {

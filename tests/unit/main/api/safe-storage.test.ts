@@ -2,12 +2,12 @@ import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { InvalidArgumentError, BunmaskaError } from '../../../../src/common/errors';
 import {
-  type KeyringBackend,
   safeStorage,
   setSafeStorageBackendForTesting,
 } from '../../../../src/main/api/safe-storage';
+import type { KeyringBackend } from '../../../../src/main/platform/services';
 
-/** A fake keyring holding a fixed in-memory key — no FFI, no real keyring. */
+/** A fake keyring holding a fixed in-memory key: no FFI, no real keyring. */
 const makeFakeBackend = (
   key: Buffer = randomBytes(32),
 ): KeyringBackend & { keyCalls: () => number } => {
@@ -36,7 +36,7 @@ afterEach(() => {
 describe('safeStorage crypto round-trip', () => {
   test('round-trips ASCII, Unicode, empty, and a long string', () => {
     setSafeStorageBackendForTesting(makeFakeBackend());
-    for (const s of ['hello', 'café — 日本語 — 🎉', '', 'x'.repeat(100_000)]) {
+    for (const s of ['hello', 'café - 日本語 - 🎉', '', 'x'.repeat(100_000)]) {
       expect(safeStorage.decryptString(safeStorage.encryptString(s))).toBe(s);
     }
   });

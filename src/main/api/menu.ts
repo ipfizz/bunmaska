@@ -1,26 +1,12 @@
-import { BunmaskaError, InvalidArgumentError, UnsupportedPlatformError } from '../../common/errors';
-import { currentPlatform } from '../../common/platform';
-import { linuxMenuRealizer } from '../platform/linux/gtk-menu';
-import { parseAccelerator } from './accelerator';
-import type { NativeMenuItemSpec } from '../platform/macos/cocoa-menu';
-import * as cocoaMenu from '../platform/macos/cocoa-menu';
-import { windowsMenuRealizer } from '../platform/windows/windows-menu';
+import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
+import { service } from '../platform/index';
+import { parseAccelerator } from '../../common/accelerator';
+import type { MenuWindowAction, NativeMenuItemSpec } from '../platform/services';
 import type { BrowserWindow } from './browser-window';
-
-/**
- * Application and context menus — the drop-in equivalent of Electron's `Menu` /
- * `MenuItem`. Realized as `NSMenu` on macOS, `GMenu` on Linux, `HMENU` on
- * Windows.
- */
 
 export type MenuItemType = 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
 
-/**
- * A predefined item role (Electron's `MenuItem.role`): default label +
- * accelerator + native behavior with no explicit `click`. On macOS a role maps
- * to a first-responder selector routed up the responder chain; on Linux to a
- * per-window dispatcher in `gtk-menu.ts` `realizeForWindow`.
- */
+/** Electron's `MenuItem.role`: a default label, accelerator and native action (D035, D039). */
 export type MenuRole =
   | 'undo'
   | 'redo'
@@ -40,12 +26,8 @@ export type MenuRole =
   | 'hideOthers'
   | 'unhide';
 
-/**
- * A role that expands to a whole standard submenu. `appMenu`/`viewMenu` are
- * deferred — `appMenu` needs the app name (a menu→app import cycle) and
- * `viewMenu` needs role items Bunmaska doesn't expose yet.
- */
-export type MenuMacroRole = 'editMenu' | 'windowMenu';
+/** A role that expands into a standard submenu. */
+export type MenuMacroRole = 'editMenu' | 'windowMenu'; // ponytail: no appMenu/fileMenu/viewMenu; unknown roles degrade to plain items
 
 export type MenuItemOptions = {
   readonly label?: string;
@@ -55,20 +37,23 @@ export type MenuItemOptions = {
   readonly enabled?: boolean;
   /** Only meaningful for `checkbox`/`radio`. */
   readonly checked?: boolean;
-  /** The key must be a SINGLE character, e.g. `'CmdOrCtrl+Q'`. */
-  readonly accelerator?: string;
+  /** e.g. `'CmdOrCtrl+Q'`. macOS only: Linux and Windows neither bind nor show it. */
+  readonly accelerator?: string; // ponytail: Linux GtkShortcutController, Windows accelerator table
   readonly role?: MenuRole | MenuMacroRole;
-  readonly click?: () => void;
+  readonly click?: MenuItemClick;
   readonly submenu?: Menu | ReadonlyArray<MenuItemOptions>;
 };
 
-/** Operated on the ACTIVATING window, not a fixed one. */
-export type MenuWindowAction = 'minimize' | 'close' | 'zoom' | 'togglefullscreen';
+/** Electron's signature; `event` fields are omitted when unknown. */
+export type MenuItemClick = (
+  menuItem: MenuItem,
+  window: BrowserWindow | undefined,
+  event: { readonly triggeredByAccelerator?: boolean },
+) => void;
 
 /**
- * Linux dispatch is `editingCommand` (a WebKitGTK editing command on the focused
- * web view) or `windowAction` (a GTK window op). Roles with neither
- * (quit/about/hide/…) have no Linux menu-click wiring yet; macOS wires them all.
+ * `macSelector` drives macOS (D035); `editingCommand` or `windowAction` drive Linux
+ * (D039); Windows runs only `windowAction`, its editing roles are inert.
  */
 const ROLE_DEFAULTS: Record<
   MenuRole,
@@ -178,26 +163,63 @@ const MACRO_ROLE_SUBMENUS: Record<
   },
 };
 
-const isMacroRole = (role: MenuRole | MenuMacroRole): role is MenuMacroRole =>
-  role === 'editMenu' || role === 'windowMenu';
+const isMacroRole = (role: string): role is MenuMacroRole =>
+  Object.hasOwn(MACRO_ROLE_SUBMENUS, role);
 
-/** `'CmdOrCtrl+Q'` → `'q'`; `''` when the key is not a single character. */
+const isRole = (role: string): role is MenuRole => Object.hasOwn(ROLE_DEFAULTS, role);
+
+/** Electron matches roles case-insensitively. */
+const ROLE_NAMES = new Map(
+  [...Object.keys(ROLE_DEFAULTS), ...Object.keys(MACRO_ROLE_SUBMENUS)].map((r) => [
+    r.toLowerCase(),
+    r,
+  ]),
+);
+
+/** AppKit key equivalents for named keys; `\uf7xx` are NSEvent.h's function-key unicodes. */
+const MAC_NAMED_KEYS = new Map([
+  ['Plus', '+'],
+  ['Space', ' '],
+  ['Tab', '\t'],
+  ['Return', '\r'],
+  ['Escape', '\u001b'],
+  ['Backspace', '\b'],
+  ['Insert', '\uf727'],
+  ['Delete', '\uf728'],
+  ['Up', '\uf700'],
+  ['Down', '\uf701'],
+  ['Left', '\uf702'],
+  ['Right', '\uf703'],
+  ['Home', '\uf729'],
+  ['End', '\uf72b'],
+  ['PageUp', '\uf72c'],
+  ['PageDown', '\uf72d'],
+]);
+
+/** `'CmdOrCtrl+Q'` is `'q'`; `''` when AppKit has no key equivalent for the key. */
 const acceleratorKey = (accelerator: string | undefined): string => {
-  const parsed = accelerator ? parseAccelerator(accelerator, 'macos') : undefined;
-  return parsed !== undefined && parsed.key.length === 1 ? parsed.key.toLowerCase() : '';
+  const key = accelerator ? parseAccelerator(accelerator, 'macos')?.key : undefined;
+  if (key === undefined) {
+    return '';
+  }
+  if (key.length === 1) {
+    return key.toLowerCase();
+  }
+  if (/^F\d+$/.test(key)) {
+    return String.fromCharCode(0xf704 + Number(key.slice(1)) - 1); // NSF1FunctionKey + n - 1
+  }
+  return MAC_NAMED_KEYS.get(key) ?? '';
 };
 
-// NSEventModifierFlags bits (macOS): only the modifier portion matters here.
+// NSEventModifierFlags modifier bits.
 const NS_SHIFT = 1n << 17n;
 const NS_CONTROL = 1n << 18n;
 const NS_OPTION = 1n << 19n;
 const NS_COMMAND = 1n << 20n;
 
 /**
- * The accelerator's modifiers as an `NSEventModifierFlags` mask. Shares the one
- * parser in accelerator.ts, which resolves CmdOrCtrl to Command on macOS; Super
- * also lands on Command there. Without this, AppKit assumes Command-only and
- * multi-modifier accelerators (redo's `Shift+Cmd+Z`) collapse and collide.
+ * The accelerator's modifiers as `NSEventModifierFlags`. Without it AppKit assumes
+ * Command only, so redo's `Shift+Cmd+Z` collapses onto undo (D035).
  */
 const acceleratorModifierMask = (accelerator: string | undefined): bigint => {
   const parsed = accelerator ? parseAccelerator(accelerator, 'macos') : undefined;
@@ -217,93 +239,80 @@ export class MenuItem {
   readonly type: MenuItemType;
   readonly id: string | undefined;
   readonly enabled: boolean;
-  readonly checked: boolean;
+  checked: boolean;
   readonly accelerator: string | undefined;
   readonly role: MenuRole | undefined;
-  readonly click: (() => void) | undefined;
+  readonly click: MenuItemClick | undefined;
   readonly submenu: Menu | undefined;
 
   constructor(options: MenuItemOptions) {
     this.id = options.id;
-    const role = options.role;
-    if (role !== undefined && isMacroRole(role)) {
-      const macro = MACRO_ROLE_SUBMENUS[role];
-      this.role = undefined;
-      this.label = options.label ?? macro.label;
-      this.enabled = options.enabled ?? true;
-      this.checked = false;
-      this.accelerator = undefined;
-      this.click = undefined;
-      this.submenu = Menu.buildFromTemplate(macro.submenu);
-      this.type = 'submenu';
-      return;
-    }
-    this.role = role;
-    const roleDefault = role !== undefined ? ROLE_DEFAULTS[role] : undefined;
-    // App-supplied label/accelerator win over the role's defaults.
-    this.label = options.label ?? roleDefault?.label ?? '';
+    const role =
+      options.role === undefined ? undefined : ROLE_NAMES.get(options.role.toLowerCase());
+    const macro = role !== undefined && isMacroRole(role) ? MACRO_ROLE_SUBMENUS[role] : undefined;
+    // An unsupported role degrades to a plain item labelled with the role name.
+    this.role = role !== undefined && isRole(role) ? role : undefined;
+    const roleDefault = this.role !== undefined ? ROLE_DEFAULTS[this.role] : undefined;
+    this.label = options.label ?? macro?.label ?? roleDefault?.label ?? options.role ?? '';
     this.enabled = options.enabled ?? true;
     this.checked = options.checked ?? false;
     this.accelerator = options.accelerator ?? roleDefault?.accelerator;
     this.click = options.click;
+    const submenu = options.submenu ?? macro?.submenu;
     this.submenu =
-      options.submenu === undefined
-        ? undefined
-        : options.submenu instanceof Menu
-          ? options.submenu
-          : Menu.buildFromTemplate(options.submenu);
+      submenu === undefined || submenu instanceof Menu ? submenu : Menu.buildFromTemplate(submenu);
     this.type = options.type ?? (this.submenu !== undefined ? 'submenu' : 'normal');
   }
 }
 
-/** `realize` returns an opaque native menu handle. */
-export type MenuRealizer = {
-  realize(items: ReadonlyArray<NativeMenuItemSpec>): bigint;
-  setApplicationMenu(menu: bigint | null): void;
-};
-
-const macosRealizer: MenuRealizer = {
-  realize: (items) => cocoaMenu.realizeMenu(items),
-  setApplicationMenu: (menu) => cocoaMenu.setApplicationMenu(menu ?? 0n),
-};
-
-let realizer: MenuRealizer | undefined;
-
-const getRealizer = (): MenuRealizer => {
-  if (realizer !== undefined) {
-    return realizer;
-  }
-  if (currentPlatform() === 'macos') {
-    return macosRealizer;
-  }
-  if (currentPlatform() === 'linux') {
-    return linuxMenuRealizer;
-  }
-  if (currentPlatform() === 'windows') {
-    return windowsMenuRealizer;
-  }
-  throw new UnsupportedPlatformError(`Menu is not supported on ${currentPlatform()} yet`);
-};
+const { get: getRealizer, setForTesting } = service('menu');
 
 /** @internal */
-export const setMenuRealizerForTesting = (fake: MenuRealizer | undefined): void => {
-  realizer = fake;
+export const setMenuRealizerForTesting = setForTesting;
+
+/** Electron groups radio items by the separators around them. */
+const radioGroup = (item: MenuItem, siblings: readonly MenuItem[]): MenuItem[] => {
+  let start = siblings.indexOf(item);
+  while (start > 0 && siblings[start - 1]?.type !== 'separator') {
+    start -= 1;
+  }
+  let end = start;
+  while (end < siblings.length - 1 && siblings[end + 1]?.type !== 'separator') {
+    end += 1;
+  }
+  return siblings.slice(start, end + 1).filter((other) => other.type === 'radio');
 };
 
-const toSpec = (item: MenuItem): NativeMenuItemSpec => {
-  const mask = acceleratorModifierMask(item.accelerator);
+/** Electron's click: a checkbox flips, a radio checks itself in its group, then `click` runs. */
+const activate = (item: MenuItem, siblings: readonly MenuItem[]): void => {
+  if (item.type === 'checkbox') {
+    item.checked = !item.checked;
+  } else if (item.type === 'radio') {
+    for (const other of radioGroup(item, siblings)) {
+      other.checked = other === item;
+    }
+  }
+  // ponytail: Linux/Windows menu bars show the old check mark until the next setApplicationMenu; re-realize them here
+  item.click?.(item, windowResolver?.focusedWindow(), {});
+};
+
+const toSpecs = (items: readonly MenuItem[]): NativeMenuItemSpec[] =>
+  items.map((item) => toSpec(item, items));
+
+const toSpec = (item: MenuItem, siblings: readonly MenuItem[]): NativeMenuItemSpec => {
+  const keyEquivalent = acceleratorKey(item.accelerator);
   const base = {
     label: item.label,
     type: item.type,
     enabled: item.enabled,
     checked: item.checked,
-    keyEquivalent: acceleratorKey(item.accelerator),
-    ...(mask !== 0n ? { modifierMask: mask } : {}),
+    keyEquivalent,
+    // Always explicit: an absent mask makes AppKit assume Command, so `F11` would need Cmd.
+    ...(keyEquivalent !== '' ? { modifierMask: acceleratorModifierMask(item.accelerator) } : {}),
     ...(item.role !== undefined
       ? {
           role: item.role,
           roleSelector: ROLE_DEFAULTS[item.role].macSelector,
-          // Linux dispatch (one or neither): a WebKitGTK editing command or a GTK window op.
           ...(ROLE_DEFAULTS[item.role].editingCommand !== undefined
             ? { editingCommand: ROLE_DEFAULTS[item.role].editingCommand }
             : {}),
@@ -314,13 +323,19 @@ const toSpec = (item: MenuItem): NativeMenuItemSpec => {
       : {}),
   };
   if (item.type === 'submenu' && item.submenu !== undefined) {
-    return { ...base, submenu: item.submenu.items.map(toSpec) };
+    return { ...base, submenu: toSpecs(item.submenu.items) };
   }
-  // A role provides native behavior via its selector (macOS) — no JS click is
-  // synthesized; if both a role and a click are given, the role takes precedence.
-  const clickable = item.type === 'normal' || item.type === 'checkbox' || item.type === 'radio';
-  if (item.role === undefined && clickable && item.click !== undefined) {
-    return { ...base, onClick: item.click };
+  // macOS routes terminate: through the app delegate; elsewhere the quit role has no native command.
+  if (item.role === 'quit') {
+    return { ...base, onClick: () => quitHandler?.() };
+  }
+  // A role wins over a click: one native item cannot run both (D035).
+  const checkable = item.type === 'checkbox' || item.type === 'radio';
+  if (
+    item.role === undefined &&
+    (checkable || (item.type === 'normal' && item.click !== undefined))
+  ) {
+    return { ...base, onClick: () => activate(item, siblings) };
   }
   return base;
 };
@@ -328,9 +343,9 @@ const toSpec = (item: MenuItem): NativeMenuItemSpec => {
 export type MenuPopupOptions = {
   /** Defaults to the focused, else most-recent, window. */
   readonly window?: BrowserWindow;
-  /** Content-relative. Defaults to 0 in v1 — NOT the mouse position. */
+  /** Content-relative; defaults to 0, not the mouse position (D040). */
   readonly x?: number;
-  /** Content-relative. Defaults to 0 in v1 — NOT the mouse position. */
+  /** Content-relative; defaults to 0, not the mouse position (D040). */
   readonly y?: number;
 };
 
@@ -339,28 +354,36 @@ export type PopupTarget = {
   closePopupMenu(): void;
 };
 
-/**
- * Injected by the BrowserWindow module at load, which alone can see the window
- * registry, so `menu.ts` needs no runtime import of `browser-window` — that
- * would be an import cycle.
- */
+/** Installed by browser-window at load: a runtime import of it here would be a cycle. */
 export type WindowResolver = {
   focused(): PopupTarget | undefined;
   mostRecent(): PopupTarget | undefined;
   /** `undefined` when `window` is not a known open window. */
   resolve(window: unknown): PopupTarget | undefined;
+  /** The window handed to `MenuItem.click`. */
+  focusedWindow(): BrowserWindow | undefined;
 };
 
 let windowResolver: WindowResolver | undefined;
 
+let quitHandler: (() => void) | undefined;
+
+/** Called by `app` at load so the quit role can run `app.quit()` without an import cycle. @internal */
+export const installQuitHandler = (handler: () => void): void => {
+  quitHandler = handler;
+};
+
+let installedResolver: WindowResolver | undefined;
+
 /** Called once at load by the BrowserWindow module. */
 export const installWindowResolver = (resolver: WindowResolver): void => {
+  installedResolver = resolver;
   windowResolver = resolver;
 };
 
-/** @internal */
+/** `undefined` restores the BrowserWindow module's resolver. @internal */
 export const setWindowResolverForTesting = (fake: WindowResolver | undefined): void => {
-  windowResolver = fake;
+  windowResolver = fake ?? installedResolver;
 };
 
 /** Explicit → focused → most-recent → throw. @internal */
@@ -421,14 +444,13 @@ export class Menu {
 
   /** @internal */
   realize(): bigint {
-    return getRealizer().realize(this.items.map(toSpec));
+    return getRealizer().realize(toSpecs(this.items));
   }
 
-  /** `null` removes the application menu everywhere, including bars already installed. */
+  /** `null` removes every menu bar, including installed ones; on macOS it empties the main menu. */
   static setApplicationMenu(menu: Menu | null): void {
+    applicationMenuSet = true;
     applicationMenu = menu;
-    // null must reach the native side too: it clears the menu bar (Electron
-    // semantics on Windows/Linux; on macOS it empties the main menu).
     getRealizer().setApplicationMenu(menu === null ? null : menu.realize());
   }
 
@@ -436,11 +458,7 @@ export class Menu {
     return applicationMenu;
   }
 
-  /**
-   * macOS BLOCKS — AppKit runs a nested tracking loop until dismissed, the same
-   * nested-loop class as a modal dialog's `runModal` (D020-safe). Linux is
-   * non-blocking.
-   */
+  /** Blocks on macOS and Windows (a native tracking loop, D040, D020-safe); returns at once on Linux. */
   popup(options?: MenuPopupOptions): void {
     if (windowResolver === undefined) {
       throw new BunmaskaError('Menu.popup is unavailable: no window backend installed');
@@ -450,10 +468,7 @@ export class Menu {
     target.popupMenu(this.realize(), options?.x ?? 0, options?.y ?? 0);
   }
 
-  /**
-   * On macOS this is meaningful only RE-ENTRANTLY, e.g. from an item's own
-   * click, since `popup` blocks until dismissal.
-   */
+  /** Where `popup` blocks, only useful re-entrantly, e.g. from an item's own click. */
   closePopup(window?: BrowserWindow): void {
     const target =
       window !== undefined
@@ -464,8 +479,36 @@ export class Menu {
 }
 
 let applicationMenu: Menu | null = null;
+let applicationMenuSet = false;
+
+/** Electron's default menu minus unsupported roles; skipped once the app set one, even `null`. */
+export const installDefaultApplicationMenu = (appName: string): void => {
+  if (applicationMenuSet) {
+    return;
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: appName,
+        submenu: [
+          { role: 'about', label: `About ${appName}` },
+          { type: 'separator' },
+          { role: 'hide', label: `Hide ${appName}` },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit', label: `Quit ${appName}` },
+        ],
+      },
+      { label: 'File', submenu: [{ role: 'close' }] },
+      { role: 'editMenu' },
+      { role: 'windowMenu' },
+    ]),
+  );
+};
 
 /** @internal */
 export const resetApplicationMenuForTesting = (): void => {
   applicationMenu = null;
+  applicationMenuSet = false;
 };

@@ -1,21 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { selectBackend } from '../platform/index';
 import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
-import { currentPlatform } from '../../common/platform';
-import { linuxLibsecretBackend } from '../platform/linux/libsecret-keyring';
-import { macosKeychainBackend } from '../platform/macos/cocoa-safe-storage';
-import { windowsDpapiBackend } from '../platform/windows/windows-safe-storage';
+import { service } from '../platform/index';
+import type { KeyringBackend } from '../platform/services';
 
 /**
- * Encryption of strings tied to an OS-protected key — the drop-in equivalent of
- * Electron's `safeStorage`. The key is a random 32 bytes kept in the OS keyring
- * and never written to disk by Bunmaska; strings are sealed with AES-256-GCM.
- *
- * DIVERGENCE FROM ELECTRON, deliberate: Electron falls back to a `basic_text`
- * scheme (an obfuscated, effectively-plaintext key) when no OS keyring exists.
- * Bunmaska does NOT — a key sitting next to the ciphertext is not protection.
- * With no keyring, `isEncryptionAvailable()` is `false` and encrypt/decrypt
- * throw. Blobs are NOT Electron-compatible: the format is native and versioned.
+ * AES-256-GCM under a keyring-held key (a DPAPI-sealed file on Windows), with no plaintext
+ * fallback when there is no keyring (D036). Blobs are Bunmaska's own format, not Electron's.
  */
 
 export type SafeStorage = {
@@ -23,15 +13,8 @@ export type SafeStorage = {
   isEncryptionAvailable(): boolean;
   /** `plainText` is UTF-8. Throws when encryption is unavailable. */
   encryptString(plainText: string): Buffer;
-  /** Throws on tamper, bad format, or unavailability — never returns garbage. */
+  /** Throws on tamper, bad format or unavailability; never returns garbage. */
   decryptString(encrypted: Buffer): string;
-};
-
-export type KeyringBackend = {
-  /** MUST be cheap, non-blocking, and never throw. */
-  isAvailable(): boolean;
-  /** Exactly 32 bytes. May throw; the throw is surfaced by encrypt/decrypt. */
-  getOrCreateKey(): Buffer;
 };
 
 const KEY_LENGTH = 32;
@@ -40,13 +23,9 @@ const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 /** Bumped when the layout changes, so a future format can co-exist. */
 const VERSION = 0x01;
-/** Version + IV + zero-length ciphertext + tag. */
 const MIN_BLOB_LENGTH = 1 + IV_LENGTH + TAG_LENGTH;
 
-/**
- * Blob layout: `[version:1][iv:12][ciphertext:N][tag:16]`. A random IV per
- * encryption (never reused) + the GCM tag make the blob tamper-evident.
- */
+/** Blob layout `[version:1][iv:12][ciphertext:N][tag:16]`; a fresh random IV every time. */
 const encryptWithKey = (key: Buffer, plainText: string): Buffer => {
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
@@ -69,26 +48,13 @@ const decryptWithKey = (key: Buffer, blob: Buffer): string => {
   const ciphertext = blob.subarray(1 + IV_LENGTH, blob.length - TAG_LENGTH);
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
-  // GCM auth failure (tamper / wrong key) makes final() THROW — surface it loudly,
-  // never return garbage plaintext.
+  // GCM final() throws on tamper or a wrong key: never return unauthenticated plaintext.
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
-};
-
-const unavailableBackend: KeyringBackend = {
-  isAvailable: () => false,
-  getOrCreateKey: () => {
-    throw new BunmaskaError(`safeStorage has no keyring backend on ${currentPlatform()}`);
-  },
 };
 
 let cachedKey: Buffer | undefined;
 let cachedAvailable: boolean | undefined;
-const { get: getBackend, setForTesting } = selectBackend<KeyringBackend>('safeStorage', {
-  macos: () => macosKeychainBackend,
-  linux: () => linuxLibsecretBackend,
-  windows: () => windowsDpapiBackend,
-  fallback: () => unavailableBackend,
-});
+const { get: getBackend, setForTesting } = service('safeStorage');
 
 /** Probed once then memoised, as Electron caches at startup. */
 const isAvailable = (): boolean => {
@@ -98,10 +64,7 @@ const isAvailable = (): boolean => {
   return cachedAvailable;
 };
 
-/**
- * Read the keyring ONCE per process: only the first op pays the round-trip — on
- * Linux, the one blocking D-Bus call.
- */
+/** Read the keyring once per process: on Linux it is the one blocking D-Bus call. */
 const getKey = (): Buffer => {
   if (cachedKey === undefined) {
     const key = getBackend().getOrCreateKey();

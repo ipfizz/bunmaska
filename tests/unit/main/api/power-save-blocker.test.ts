@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  type NativeBlocker,
-  PowerSaveBlockerImpl,
-  type PowerSaveBlockerBackend,
-  type PowerSaveBlockerType,
-} from '../../../../src/main/api/power-save-blocker';
+import { app } from '../../../../src/main/api/app';
+import { PowerSaveBlockerImpl } from '../../../../src/main/api/power-save-blocker';
+import type {
+  NativeBlocker,
+  PowerSaveBlockerBackend,
+  PowerSaveBlockerType,
+} from '../../../../src/main/platform/services';
 
 /** A fake backend recording acquire/release calls and handing out tagged handles. */
 const makeFakeBackend = (
@@ -86,5 +87,25 @@ describe('PowerSaveBlocker registry', () => {
     }).not.toThrow();
     expect(psb.isStarted(id)).toBe(true);
     expect(psb.stop(id)).toBe(true);
+  });
+});
+
+describe('powerSaveBlocker app identity', () => {
+  test("start tells the backend the app's name", () => {
+    const names: (string | undefined)[] = [];
+    const blocker = new PowerSaveBlockerImpl({
+      acquire: (_type, appName) => {
+        names.push(appName);
+        return null;
+      },
+      release: () => undefined,
+    });
+    app.setName('Notes Test');
+    try {
+      blocker.start('prevent-display-sleep');
+    } finally {
+      app.resetForTesting();
+    }
+    expect(names).toEqual(['Notes Test']);
   });
 });

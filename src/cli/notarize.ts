@@ -1,7 +1,4 @@
-/**
- * The default `--notarize` implementation: zip the bundle (notarytool refuses a
- * bare `.app`), submit with `xcrun notarytool --wait`, then staple the ticket.
- */
+// notarytool refuses a bare `.app`, so the bundle is submitted as a ditto zip, then stapled.
 
 import { rmSync } from 'node:fs';
 import { buildNotarizeArgs, buildStapleArgs } from './build-macos';

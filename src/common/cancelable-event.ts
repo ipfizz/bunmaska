@@ -1,7 +1,6 @@
 /**
- * The `Event` Electron passes to preventable listeners (`before-quit`,
- * `will-quit`, a window's `close`, …): a listener vetoes the default action, the
- * emitter checks `defaultPrevented` (D023).
+ * The `Event` Electron passes to preventable listeners (`before-quit`, a window's
+ * `close`): a listener vetoes the default action, the emitter checks `defaultPrevented` (D023).
  */
 export type CancelableEvent = {
   preventDefault(): void;

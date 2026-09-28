@@ -4,9 +4,9 @@ description: "Renderer-process API for zooming, injecting CSS, and evaluating sc
 order: 24
 ---
 
-Customize the rendering of the current web page from the renderer process. Bunmaska's `webFrame` is a renderer-side object that runs inside the page's isolated world (which shares the DOM with the page), so its zoom and CSS mutations affect what you see. It covers the day-to-day subset of Electron's `WebFrame`: zoom, CSS injection, and script evaluation - but it does not yet model the frame-hierarchy tree (`top`/`parent`/`firstChild`), spellcheck, or resource accounting.
+Customize the rendering of the current web page from the renderer process. Bunmaska's `webFrame` is a renderer-side object you use from the preload, which runs in an isolated world on macOS and Linux (the page world on Windows). That world shares the DOM with the page, so its zoom and CSS mutations affect what you see. It covers the day-to-day subset of Electron's `WebFrame`: zoom, CSS injection, and script evaluation - but it does not yet model the frame-hierarchy tree (`top`/`parent`/`firstChild`), spellcheck, or resource accounting.
 
-Process: Renderer
+Process: Renderer (preload)
 
 ```ts
 import { webFrame } from 'bunmaska/renderer';
@@ -105,7 +105,7 @@ webFrame.removeInsertedCSS(key); // calling again does nothing
 
 `executeJavaScript(code: string): Promise<unknown>`
 
-Evaluates `code` in the current renderer world (the caller's world, matching Electron) via indirect global `eval`, and returns a `Promise` that resolves with the result or rejects if evaluation throws.
+Evaluates `code` in the caller's world via indirect global `eval`, and returns a `Promise` that resolves with the result or rejects if evaluation throws. Called from a preload on macOS or Linux, that is the isolated preload world: the code sees the shared DOM but none of the page's own globals. To run code among the page's globals, use `webContents.executeJavaScript` from the main process.
 
 ```ts
 import { webFrame } from 'bunmaska/renderer';

@@ -1,4 +1,4 @@
-/** Run a build tool to completion; a non-zero exit throws with its stderr. */
+/** Run a build tool to completion; a non-zero exit throws with its stdout and stderr. */
 export const runTool = async (
   label: string,
   argv: readonly string[],
@@ -9,9 +9,12 @@ export const runTool = async (
     stdout: 'pipe',
     stderr: 'pipe',
   });
-  const exitCode = await proc.exited;
+  const [exitCode, stdout, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    throw new Error(`${label} failed (exit ${exitCode}):\n${stderr}`);
+    throw new Error(`${label} failed (exit ${exitCode}):\n${stdout}${stderr}`);
   }
 };
