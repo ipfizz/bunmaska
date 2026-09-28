@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { validateConfig } from '../../../src/common/config-schema';
 import { InvalidArgumentError } from '../../../src/common/errors';
 
-describe('validateConfig — engine field', () => {
+describe('validateConfig engine field', () => {
   test('omits engine when absent (default = system behaviour, no key)', () => {
     expect(validateConfig({ name: 'A' })).toEqual({ name: 'A' });
   });

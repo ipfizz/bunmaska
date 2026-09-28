@@ -1,7 +1,6 @@
 /**
- * The pure `bunmaska.config` schema — types, validation, `defineConfig` — with no
- * filesystem dependency, so a project's config file never drags the CLI loader's
- * `node:fs` code into the app's runtime bundle.
+ * The `bunmaska.config` schema. Keep it free of `node:fs` so a project's config
+ * never drags the CLI loader into the app's runtime bundle.
  */
 
 import { isSystemEngine, parseEngineId } from './engine-id';
@@ -15,11 +14,7 @@ export type BunmaskaUpdatesConfig = {
   readonly channel?: Channel;
 };
 
-/**
- * A self-hosted/enterprise engine feed. The default feed and its signing public key
- * are built in (a baked trust anchor — never a secret, never an env var); set this
- * only to run your own engine mirror.
- */
+/** A self-hosted engine feed; the default feed and its key are baked in (D041, D042). */
 export type BunmaskaEngineFeedConfig = {
   /** Base URL of the feed serving signed `.tar.zst` engines. */
   readonly url?: string;
@@ -27,16 +22,12 @@ export type BunmaskaEngineFeedConfig = {
   readonly publicKey?: string;
 };
 
-/**
- * Pinned-WebKit engine configuration — the "tested == shipped" knob, and the ONLY
- * engine-related thing a user configures (everything else is internal; D041).
- */
+/** The pinned-WebKit engine: the ONLY engine knob a user configures (D041). */
 export type BunmaskaEngineConfig = {
   /**
-   * The WebKit engine to pin: a full engine-id
-   * (`webkitgtk-6.0-2.52.4-bunmaska1-linux-x64`), a bare upstream version
-   * (`2.52.4`, resolved to the host's id at build time), or `system` (the
-   * default — use the OS WebView, no pinning).
+   * A full engine-id (`webkitgtk-6.0-2.52.4-bunmaska1-linux-x64`), `system` (the
+   * default: the OS WebView), or a bare upstream version (`2.52.4`), which builds
+   * do not resolve yet and bake as `system` with a warning.
    */
   readonly webkit?: string;
   /** Copy the pinned engine into the bundle for offline/airgapped installs. */
@@ -46,21 +37,16 @@ export type BunmaskaEngineConfig = {
 };
 
 /**
- * The renderer build Bunmaska owns. When set, `bunmaska dev` rebuilds on a
- * renderer change and live-reloads (no restart), and `bunmaska build` ships the
- * output beside the executable. The defaults bake the only recipe that works
- * under `loadFile`: a classic IIFE bundle (`file://` blocks ES modules) built
- * with development JSX (Bun emits `jsxDEV` regardless of tsconfig).
+ * The renderer build Bunmaska owns: `bunmaska dev` rebuilds and live-reloads it,
+ * `bunmaska build` ships it beside the executable. Always a classic IIFE, because
+ * `file://` blocks ES modules (RENDERER-BUILD.md).
  */
 export type BunmaskaRendererConfig = {
   /** The renderer entry (e.g. `src/renderer/main.tsx`), relative to the project root. */
   readonly entry: string;
   /** Output directory, relative to the project root. Defaults to `dist/renderer`. */
   readonly outDir?: string;
-  /**
-   * Static files copied into `outDir` verbatim (e.g. `src/renderer/index.html`),
-   * relative to the project root.
-   */
+  /** Static files copied into `outDir` verbatim, relative to the project root. */
   readonly copy?: readonly string[];
 };
 
@@ -71,7 +57,7 @@ export type BunmaskaConfig = {
   readonly id?: string;
   /** The main-process entry file, relative to the project root. */
   readonly entry?: string;
-  /** App icon path — a `.icns`/`.png` on macOS, a `.png` on Linux. */
+  /** App icon path: a `.icns`/`.png` on macOS, a `.png` on Linux. */
   readonly icon?: string;
   readonly updates?: BunmaskaUpdatesConfig;
   /** Pinned-WebKit engine configuration (defaults to the system WebView). */
@@ -153,11 +139,7 @@ const isEnginePin = (pin: string): boolean => {
   }
 };
 
-/**
- * Validate an untrusted, freshly-imported config value. Throws
- * {@link InvalidArgumentError} naming the bad field; `source` labels the file in
- * that message.
- */
+/** Validate an imported config; the {@link InvalidArgumentError} names `source` and the field. */
 export const validateConfig = (raw: unknown, source = 'bunmaska.config'): BunmaskaConfig => {
   const record = assertObject(
     raw,
