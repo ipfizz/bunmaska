@@ -355,17 +355,17 @@ export interface NativeWin32WindowOptions {
   readonly show: boolean;
   readonly resizable?: boolean;
   readonly frame?: boolean;
-  /** Hide instead of destroy on close (for WebKit-hosting windows). Default true. */
+  /** `false` hides on close instead of DestroyWindow (required for a WebKit host, D043). Default true. */
   readonly destroyOnClose?: boolean;
 }
 
 /** A live top-level native-WndProc window that can host a WebKit view. */
 export class NativeWin32Window {
   readonly #hwnd: bigint;
-  readonly #handlers: NativeWindowHandlers = newHandlers(true);
+  readonly #handlers: NativeWindowHandlers;
 
   constructor(options: NativeWin32WindowOptions) {
-    this.#handlers.destroyOnClose = options.destroyOnClose ?? true;
+    this.#handlers = newHandlers(options.destroyOnClose ?? true);
     ensureOleInitialized();
     // The TOP-LEVEL frame uses the JSCallback frame class (so a menu bar's
     // WM_COMMAND is dispatchable); the WebKit view lives in a native child.
