@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { EngineResolution } from '../../../../../src/main/engine/resolve';
-import { exportEngineEnv, linuxLibPath } from '../../../../../src/main/platform/linux/glib-ffi';
+import { linuxLibPath } from '../../../../../src/main/platform/linux/glib-ffi';
 
 const SONAME = 'libglib-2.0.so.0';
 const LIB_DIR = join('/store', 'engine', 'lib');
@@ -26,30 +26,5 @@ describe('linuxLibPath', () => {
   test('a bare soname is refused when a file of that name sits in the working directory', () => {
     const planted = (path: string) => path === join(CWD, SONAME);
     expect(() => linuxLibPath(system, SONAME, planted, CWD)).toThrow(/working directory/);
-  });
-});
-
-describe('exportEngineEnv', () => {
-  const env = {
-    LD_LIBRARY_PATH: '/e/lib',
-    GIO_EXTRA_MODULES: '/e/gio',
-    WEBKIT_EXEC_PATH: '/e/libexec',
-    HOME: '/h',
-  };
-
-  test('a pinned engine pushes its env exports into the C environment', () => {
-    const exported: string[] = [];
-    exportEngineEnv(pinned, env, (name, value) => exported.push(`${name}=${value}`));
-    expect(exported.sort()).toEqual([
-      'GIO_EXTRA_MODULES=/e/gio',
-      'LD_LIBRARY_PATH=/e/lib',
-      'WEBKIT_EXEC_PATH=/e/libexec',
-    ]);
-  });
-
-  test('system mode leaves the C environment alone', () => {
-    const exported: string[] = [];
-    exportEngineEnv(system, env, (name) => exported.push(name));
-    expect(exported).toEqual([]);
   });
 });

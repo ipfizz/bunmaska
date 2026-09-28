@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
+  appIdentity,
   bakedIdCandidates,
   type EngineResolution,
-  engineEnv,
   engineLibPath,
   prepareEngineForLoad,
   type ResolveDeps,
@@ -17,10 +17,16 @@ const ROOT = '/store/webkit';
 const slash = (s: string): string => s.replaceAll('\\', '/');
 
 const resolve = (deps: ResolveDeps) =>
-  resolveEngineWith({ enginesRoot: ROOT, exists: () => true, readBakedId: () => null, ...deps });
+  resolveEngineWith({
+    enginesRoot: ROOT,
+    exists: () => true,
+    readBakedId: () => null,
+    host: { os: 'linux', arch: 'x64' },
+    ...deps,
+  });
 
 describe('resolveEngineWith', () => {
-  test('BUNMASKA_WEBKIT_PATH wins — explicit pinned dir, highest precedence', () => {
+  test('BUNMASKA_WEBKIT_PATH wins: explicit pinned dir, highest precedence', () => {
     const r = resolve({ env: { BUNMASKA_WEBKIT_PATH: '/opt/webkit/lib' } });
     expect(r.mode).toBe('pinned');
     expect(r.libDir).toBe('/opt/webkit/lib');
@@ -59,16 +65,45 @@ describe('resolveEngineWith', () => {
     expect(slash(r.libDir ?? '')).toBe(`${ROOT}/${other}/lib`);
   });
 
+  test('an empty BUNMASKA_WEBKIT_ID leaves the baked id in charge', () => {
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: ' ' }, readBakedId: () => ID });
+    expect(r.id).toBe(ID);
+  });
+
   test('a malformed id -> system fallback with a warning', () => {
     const r = resolve({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } });
     expect(r.mode).toBe('system');
     expect(r.warnings.length).toBe(1);
   });
 
+  test('fallback warnings never promise a system WebKit (Windows has none)', () => {
+    const warnings = [
+      ...resolve({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } }).warnings,
+      ...resolve({ env: {}, readBakedId: () => ID, exists: () => false }).warnings,
+    ];
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join(' ')).not.toMatch(/system WebKit/);
+  });
+
   test('store-resolved pinned carries the engine id + root (for refcount linking)', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     expect(r.id).toBe(ID);
     expect(r.root).toBe(ROOT);
+  });
+
+  test('an installed engine built for another os -> system, with no install advice', () => {
+    const windows = 'webkit-2-2.52.4-bunmaska1-windows-x64';
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: windows } });
+    expect(r.mode).toBe('system');
+    expect(r.warnings.join(' ')).toContain('windows-x64');
+    expect(r.warnings.join(' ')).not.toContain('engine install');
+  });
+
+  test('an installed engine built for another arch -> system', () => {
+    const arm = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-arm64';
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: arm } });
+    expect(r.mode).toBe('system');
+    expect(r.warnings.join(' ')).toContain('linux-arm64');
   });
 
   test('explicit BUNMASKA_WEBKIT_PATH pin carries no id/root (nothing to refcount)', () => {
@@ -85,10 +120,30 @@ describe('bakedIdCandidates', () => {
     expect(slash(c[1] ?? '')).toBe('/opt/app/usr/bin/engine.id');
   });
 
+  test('outside a usr/bin layout, reads only the sibling engine.id', () => {
+    const c = bakedIdCandidates('/home/u/Downloads/MyApp/MyApp', {});
+    expect(c.map(slash)).toEqual(['/home/u/Downloads/MyApp/engine.id']);
+  });
+
   test('an explicit BUNMASKA_ENGINE_ID_FILE wins outright', () => {
     expect(
       bakedIdCandidates('/opt/app/usr/bin/my-app', { BUNMASKA_ENGINE_ID_FILE: '/x/id' }),
     ).toEqual(['/x/id']);
+  });
+});
+
+describe('appIdentity', () => {
+  test('under the Bun CLI, each project links by its own entry script', () => {
+    expect(appIdentity('/home/u/.bun/bin/bun', '/work/a/src/main.ts')).toBe('/work/a/src/main.ts');
+    expect(appIdentity('C:\\Users\\u\\.bun\\bin\\bun.exe', 'C:\\b\\main.ts')).toBe(
+      'C:\\b\\main.ts',
+    );
+  });
+
+  test('a compiled app links by its executable', () => {
+    expect(appIdentity('/opt/MyApp/usr/bin/my-app', '/$bunfs/root/my-app')).toBe(
+      '/opt/MyApp/usr/bin/my-app',
+    );
   });
 });
 
@@ -107,57 +162,40 @@ describe('engineLibPath', () => {
   });
 });
 
-describe('engineEnv', () => {
-  test('pinned -> sets LD_LIBRARY_PATH, GIO_EXTRA_MODULES, and WEBKIT_EXEC_PATH', () => {
-    const r = resolve({ env: {}, readBakedId: () => ID });
-    const env = engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' });
-    expect(slash(env.LD_LIBRARY_PATH ?? '')).toBe(`${ROOT}/${ID}/lib:/usr/lib`);
-    expect(slash(env.GIO_EXTRA_MODULES ?? '')).toBe(`${ROOT}/${ID}/lib/gio/modules`);
-    expect(slash(env.WEBKIT_EXEC_PATH ?? '')).toBe(`${ROOT}/${ID}/libexec`);
-  });
-
-  test('pinned with no prior LD_LIBRARY_PATH -> just the lib dir', () => {
-    const r = resolve({ env: {}, readBakedId: () => ID });
-    const env = engineEnv(r, {});
-    expect(slash(env.LD_LIBRARY_PATH ?? '')).toBe(`${ROOT}/${ID}/lib`);
-  });
-
-  test('system -> no env changes', () => {
-    const r = resolve({ env: {} });
-    expect(engineEnv(r, { LD_LIBRARY_PATH: '/usr/lib' })).toEqual({});
-  });
-});
-
 describe('prepareEngineForLoad', () => {
   // Reset BEFORE each test too: on Linux the real GTK/WebKitGTK loaders run in
   // the same process and set this one-shot guard, which would otherwise leak in.
   beforeEach(() => resetEnginePreparation());
   afterEach(() => resetEnginePreparation());
 
-  test('pinned: exports the engine env and prints warnings, exactly once', () => {
+  test('pinned: prints warnings exactly once', () => {
     const pinned: EngineResolution = {
       mode: 'pinned',
       libDir: '/store/x/lib',
       warnings: ['heads up'],
     };
-    const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
     const writes: string[] = [];
-    prepareEngineForLoad(pinned, target, (s) => writes.push(s));
-    expect(slash(target['LD_LIBRARY_PATH'] ?? '')).toBe('/store/x/lib:/usr/lib');
-    expect(slash(target['GIO_EXTRA_MODULES'] ?? '')).toBe('/store/x/lib/gio/modules');
+    prepareEngineForLoad(pinned, {}, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
 
-    // A second call (e.g. the other loader) is a no-op — single shared engine.
+    // A second call (e.g. the other loader) is a no-op: single shared engine.
     prepareEngineForLoad(pinned, { LD_LIBRARY_PATH: '/other' }, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
   });
 
-  test('system: applies no env and prints nothing', () => {
+  test('pinned: leaves the env alone, so child_process children never inherit the engine libs', () => {
     const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
+    prepareEngineForLoad(
+      { mode: 'pinned', libDir: '/store/x/lib', warnings: [] },
+      target,
+      () => undefined,
+    );
+    expect(target).toEqual({ LD_LIBRARY_PATH: '/usr/lib' });
+  });
+
+  test('system: prints nothing', () => {
     const writes: string[] = [];
-    prepareEngineForLoad({ mode: 'system', warnings: [] }, target, (s) => writes.push(s));
-    expect(target['LD_LIBRARY_PATH']).toBe('/usr/lib');
-    expect(target['GIO_EXTRA_MODULES']).toBeUndefined();
+    prepareEngineForLoad({ mode: 'system', warnings: [] }, {}, (s) => writes.push(s));
     expect(writes).toEqual([]);
   });
 
@@ -181,7 +219,7 @@ describe('prepareEngineForLoad', () => {
     expect(links).toEqual([[ROOT, '/opt/MyApp', ID]]);
   });
 
-  test('explicit-dir pin (no id/root) does not link — nothing to refcount', () => {
+  test('explicit-dir pin (no id/root) does not link: nothing to refcount', () => {
     const links: unknown[] = [];
     prepareEngineForLoad(
       { mode: 'pinned', libDir: '/opt/lib', warnings: [] },

@@ -1,16 +1,10 @@
-/**
- * Build-engine probe: load WebKitGTK through the real loader from a relocated
- * engine in the store, then count how many shared objects resolved FROM the
- * engine dir. A high count proves the `$ORIGIN` rpaths make the whole dependency
- * closure self-contained (not just `libwebkitgtk` itself). Run with
- * `BUNMASKA_ENGINES_PATH` + `BUNMASKA_WEBKIT_ID` set, and deliberately WITHOUT
- * `LD_LIBRARY_PATH`, so the deps must resolve via the engine's own rpaths.
- */
+// Counts the shared objects a pinned store engine loads from its own dir. Run it WITHOUT
+// LD_LIBRARY_PATH, so the closure must resolve through the engine's `$ORIGIN` rpaths.
 
 import { readFileSync } from 'node:fs';
 import { loadWebKitGtkFFI } from '../../src/main/platform/linux/webkitgtk-ffi';
 
-loadWebKitGtkFFI(); // dlopen the relocated engine; its NEEDED libs resolve via $ORIGIN
+loadWebKitGtkFFI();
 
 const maps = readFileSync('/proc/self/maps', 'utf8');
 const store = process.env['BUNMASKA_ENGINES_PATH'] ?? '/nonexistent-store';

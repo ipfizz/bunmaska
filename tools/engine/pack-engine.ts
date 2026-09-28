@@ -1,15 +1,4 @@
-/**
- * Pack a built engine directory into the 3-file signed feed layout that
- * `bunmaska engine install <url>` consumes: `<id>.tar.zst` + `<id>.tar.zst.json`
- * (the remote manifest: id/hash/size/soname) + `<id>.tar.zst.sig` (detached
- * base64 Ed25519 over the artifact bytes). The output dir mirrors the feed root
- * one-to-one, so publishing is a plain object upload (R2/S3/any static host).
- *
- *   bun tools/engine/pack-engine.ts <engineDir> <outDir> <privateKeyPemFile>
- *
- * `<engineDir>` is a store-shaped engine (lib/ + engine.json), e.g. the output
- * of build-wincairo-windows.ps1 / build-webkitgtk-linux.sh.
- */
+// bun tools/engine/pack-engine.ts <engineDir> <outDir> <privateKeyPemFile>
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { packEngineDir } from '../../src/cli/engine-pack';

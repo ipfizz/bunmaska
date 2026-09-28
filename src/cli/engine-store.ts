@@ -1,31 +1,23 @@
-/**
- * Content-addressed engine store: many WebKit versions live side by side under
- * `~/.bunmaska/webkit/<engine-id>/` and each app resolves the exact id it was
- * built against — there is no global "current" engine. A store dir is kept iff
- * some installed app (a `.links/*` refcount entry) still needs it. A fully
- * installed engine is the one with an `INSTALLATION_COMPLETE` marker, written
- * LAST after the content hash verifies — a half-download has no marker and is
- * re-fetched.
- */
+// The engine store: `<root>/<engine-id>/`, side by side, refcounted by `.links/`. An engine
+// is installed iff its INSTALLATION_COMPLETE marker exists, so the marker is written last
+// and removed first; a half-written or half-deleted engine never looks installed.
 
 import {
-  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
-  writeSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve, sep } from 'node:path';
+import { parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
 import { contentHash } from '../common/manifest';
 
@@ -35,26 +27,30 @@ const LOCK_FILE = '__dirlock';
 const STALE_LOCK_MS = 30_000;
 const LOCK_RETRY_MS = 5;
 const LOCK_TIMEOUT_MS = 10_000;
+/** Younger staging dirs may belong to an install still extracting. */
+const STALE_STAGING_MS = 60 * 60_000;
 
 export type StoreEnv = Record<string, string | undefined>;
 
 const defaultHome = (env: StoreEnv): string =>
   env['BUNMASKA_HOME'] ?? join(env['HOME'] ?? env['USERPROFILE'] ?? homedir(), '.bunmaska');
 
-/**
- * `$BUNMASKA_ENGINES_PATH`, else `<home>/webkit`. The single env-reading
- * function; every other op takes an explicit `root`.
- */
 export const enginesPath = (env: StoreEnv = process.env): string =>
   env['BUNMASKA_ENGINES_PATH'] ?? join(defaultHome(env), 'webkit');
 
+const isEngineId = (name: string): boolean => {
+  try {
+    parseEngineId(name);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
- * Reject an engine id that is not a single, contained directory segment under
- * `root`. An id reaches the store from an untrusted source — a remote feed
- * manifest (`engine-remote.ts`) or an `engine.json` — and is used verbatim to
- * build a directory that install then `rm`s and `rename`s over. Without this an
- * id like `../../x` or an absolute path is a traversal + arbitrary-delete. Bars
- * separators, absolute paths, `.`/`..`, and anything resolving outside `root`.
+ * Reject an id that is not one contained dir segment under `root`, or that no app could pin.
+ * Ids arrive untrusted (feed manifest, engine.json) and name dirs install `rm`s and renames
+ * over: `../../x` or an absolute path would be traversal plus arbitrary delete.
  */
 export const assertSafeEngineId = (root: string, id: string): void => {
   const base = resolve(root);
@@ -64,7 +60,7 @@ export const assertSafeEngineId = (root: string, id: string): void => {
     id.includes('/') ||
     id.includes('\\') ||
     id.includes('\0') ||
-    id.startsWith('.') || // .links, .tmp-*, dotfiles — reserved store internals
+    id.startsWith('.') || // .links, .tmp-*: store internals
     id === LOCK_FILE ||
     id === INSTALLATION_COMPLETE ||
     isAbsolute(id) ||
@@ -73,6 +69,12 @@ export const assertSafeEngineId = (root: string, id: string): void => {
     throw new BunmaskaError(`engine store: refusing unsafe engine id ${JSON.stringify(id)}`, {
       code: 'ERR_ENGINE_ID',
     });
+  }
+  if (!isEngineId(id)) {
+    throw new BunmaskaError(
+      `engine store: ${JSON.stringify(id)} is not a valid engine-id, so no app could pin it`,
+      { code: 'ERR_ENGINE_ID' },
+    );
   }
 };
 
@@ -103,35 +105,46 @@ export const listInstalled = (root: string): string[] => {
 /** A refcount entry: which engine id an installed app needs. */
 export type EngineLink = { readonly app: string; readonly engine: string };
 
-/** Register an installed app as needing `engineId` (a refcount entry). */
+/** Register an app as needing `engineId`; renamed into place, so a crash never tears it. */
 export const linkApp = (root: string, appPath: string, engineId: string): void => {
   mkdirSync(join(root, LINKS_DIR), { recursive: true });
-  writeFileSync(linkPath(root, appPath), JSON.stringify({ app: appPath, engine: engineId }));
+  const path = linkPath(root, appPath);
+  const staging = `${path}.${process.pid}.tmp`;
+  writeFileSync(staging, JSON.stringify({ app: appPath, engine: engineId }));
+  renameSync(staging, path);
 };
 
 export const unlinkApp = (root: string, appPath: string): void => {
   rmSync(linkPath(root, appPath), { force: true });
 };
 
-/** Read every refcount entry. Malformed entries are skipped. */
-export const readLinks = (root: string): EngineLink[] => {
+/** Link files are named by the sha1 of the app path; anything else is a write in progress. */
+const LINK_NAME = /^[0-9a-f]{40}$/;
+
+const scanLinks = (root: string): { links: EngineLink[]; unreadable: string[] } => {
   const dir = join(root, LINKS_DIR);
-  if (!existsSync(dir)) {
-    return [];
-  }
   const links: EngineLink[] = [];
-  for (const name of readdirSync(dir)) {
+  const unreadable: string[] = [];
+  for (const name of existsSync(dir) ? readdirSync(dir) : []) {
+    if (!LINK_NAME.test(name)) {
+      continue;
+    }
     try {
       const raw = JSON.parse(readFileSync(join(dir, name), 'utf8')) as Partial<EngineLink>;
       if (typeof raw.app === 'string' && typeof raw.engine === 'string') {
         links.push({ app: raw.app, engine: raw.engine });
+        continue;
       }
     } catch {
-      // Skip an unreadable/corrupt link entry rather than failing GC.
+      // Counted below.
     }
+    unreadable.push(join(dir, name));
   }
-  return links;
+  return { links, unreadable };
 };
+
+/** Read every refcount entry. Malformed entries are skipped. */
+export const readLinks = (root: string): EngineLink[] => scanLinks(root).links;
 
 export type InstallSource = {
   readonly id: string;
@@ -148,11 +161,34 @@ export type InstallDeps = {
 
 export type InstallResult = { readonly id: string; readonly installed: boolean };
 
-/**
- * Idempotent: a fully-installed id is left untouched. The marker is written
- * LAST, after the hash verifies and the staging dir is swapped in. A hash
- * mismatch throws and leaves no engine dir behind.
- */
+/** Swap populated staging into place under the store lock; the slow extract/copy ran outside it. */
+const swapIn = async (
+  root: string,
+  id: string,
+  staging: string,
+  soname: string,
+  onMarker?: () => void,
+): Promise<InstallResult> => {
+  if (!existsSync(join(staging, 'lib', soname))) {
+    throw new BunmaskaError(`engine ${id}: no lib/${soname} (its engine.json soname)`, {
+      code: 'ERR_ENGINE_MANIFEST',
+    });
+  }
+  return withLock(root, async () => {
+    if (isInstalled(root, id)) {
+      rmSync(staging, { recursive: true, force: true });
+      return { id, installed: false };
+    }
+    const dest = engineDir(root, id);
+    rmSync(dest, { recursive: true, force: true }); // clear a partial prior install
+    renameSync(staging, dest);
+    writeFileSync(markerPath(root, id), `${new Date().toISOString()}\n`);
+    onMarker?.();
+    return { id, installed: true };
+  });
+};
+
+/** Idempotent; a hash mismatch throws and leaves no engine dir behind. */
 export const installFromSource = async (
   root: string,
   source: InstallSource,
@@ -165,7 +201,7 @@ export const installFromSource = async (
   const actual = contentHash(source.bytes);
   if (actual !== source.expectedHash) {
     throw new BunmaskaError(
-      `engine ${source.id}: integrity check failed — hash ${actual} != expected ${source.expectedHash}`,
+      `engine ${source.id}: integrity check failed: hash ${actual} != expected ${source.expectedHash}`,
       { code: 'ERR_ENGINE_INTEGRITY' },
     );
   }
@@ -183,21 +219,7 @@ export const installFromSource = async (
         { code: 'ERR_ENGINE_INTEGRITY' },
       );
     }
-    // Swap-into-place + marker under the store lock so a concurrent install or gc
-    // in another process can't race the rename (extract already ran on a private
-    // staging dir, so the slow part is NOT inside the lock).
-    return await withLock(root, async () => {
-      if (isInstalled(root, source.id)) {
-        rmSync(staging, { recursive: true, force: true });
-        return { id: source.id, installed: false };
-      }
-      const dest = engineDir(root, source.id);
-      rmSync(dest, { recursive: true, force: true }); // clear any partial prior install
-      renameSync(staging, dest);
-      writeFileSync(markerPath(root, source.id), `${new Date().toISOString()}\n`);
-      deps.onMarker?.();
-      return { id: source.id, installed: true };
-    });
+    return await swapIn(root, source.id, staging, extracted.soname, deps.onMarker);
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     throw error;
@@ -216,7 +238,7 @@ export type EngineManifest = {
 export const readEngineManifest = (dir: string): EngineManifest => {
   let raw: unknown;
   try {
-    // strip a UTF-8 BOM — Windows tooling (PowerShell 5.1) writes one
+    // PowerShell 5.1 writes a UTF-8 BOM.
     raw = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8').replace(/^\uFEFF/, ''));
   } catch {
     throw new BunmaskaError(`engine: no readable engine.json in ${dir}`, {
@@ -237,11 +259,7 @@ export const readEngineManifest = (dir: string): EngineManifest => {
   };
 };
 
-/**
- * Install from a local, already-extracted engine tree (`lib/` + `engine.json`).
- * Idempotent, marker written last. Signed remote installs go through
- * {@link ../cli/engine-remote installFromUrl} instead.
- */
+/** Install a local, already-extracted engine tree; unsigned, unlike feed installs. Idempotent. */
 export const installFromDir = async (
   root: string,
   sourceDir: string,
@@ -257,17 +275,7 @@ export const installFromDir = async (
   const staging = mkdtempSync(join(root, '.tmp-'));
   try {
     copyTree(sourceDir, staging);
-    return await withLock(root, async () => {
-      if (isInstalled(root, manifest.id)) {
-        rmSync(staging, { recursive: true, force: true });
-        return { id: manifest.id, installed: false };
-      }
-      const dest = engineDir(root, manifest.id);
-      rmSync(dest, { recursive: true, force: true });
-      renameSync(staging, dest);
-      writeFileSync(markerPath(root, manifest.id), `${new Date().toISOString()}\n`);
-      return { id: manifest.id, installed: true };
-    });
+    return await swapIn(root, manifest.id, staging, manifest.soname);
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     throw error;
@@ -280,10 +288,7 @@ export type VerifyResult = {
   readonly problems: string[];
 };
 
-/**
- * Structural check only: marker present, `engine.json` id matches the dir, and
- * the declared `soname` exists in `lib/`.
- */
+/** Structural check only: the marker, the engine.json id, and its soname in `lib/`. */
 export const verifyEngine = (root: string, id: string): VerifyResult => {
   const problems: string[] = [];
   const dir = engineDir(root, id);
@@ -312,6 +317,8 @@ export type GcDeps = {
   readonly exists?: (appPath: string) => boolean;
   /** Report only; delete nothing. */
   readonly dryRun?: boolean;
+  /** Recursive delete (default: `rmSync`). */
+  readonly remove?: (path: string) => void;
 };
 
 export type GcResult = {
@@ -321,17 +328,25 @@ export type GcResult = {
 };
 
 /**
- * An engine is kept iff some live app still links it. Links whose app no longer
- * exists are dropped first, freeing their engines. `dryRun` mutates nothing and
- * reports what WOULD be removed.
+ * Keep the engines a live app links; drop dead links, then remove every other engine
+ * and interrupted-install leftovers. `dryRun` only reports.
  */
 export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => {
   const exists = deps.exists ?? existsSync;
   const dryRun = deps.dryRun === true;
+  const remove = deps.remove ?? ((path: string) => rmSync(path, { recursive: true, force: true }));
   const scan = (): GcResult => {
+    const { links, unreadable } = scanLinks(root);
+    if (unreadable.length > 0) {
+      // Its engine may be in use: fail closed rather than free it.
+      throw new BunmaskaError(
+        `engine store: unreadable app link ${unreadable[0]}; delete it or relaunch that app, then prune again`,
+        { code: 'ERR_ENGINE_LINK' },
+      );
+    }
     let droppedLinks = 0;
     const used = new Set<string>();
-    for (const link of readLinks(root)) {
+    for (const link of links) {
       if (exists(link.app)) {
         used.add(link.engine);
       } else {
@@ -342,11 +357,26 @@ export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => 
       }
     }
     const installed = listInstalled(root);
-    const removed = installed.filter((id) => !used.has(id)).sort();
+    const dirs = existsSync(root)
+      ? readdirSync(root, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+      : [];
+    const broken = dirs.filter((name) => isEngineId(name) && !isInstalled(root, name));
+    const staleStaging = dirs.filter(
+      (name) =>
+        name.startsWith('.tmp-') &&
+        Date.now() - statSync(join(root, name)).mtimeMs > STALE_STAGING_MS,
+    );
+    const removed = [...installed.filter((id) => !used.has(id)), ...broken].sort();
     const kept = installed.filter((id) => used.has(id)).sort();
     if (!dryRun) {
       for (const id of removed) {
-        rmSync(engineDir(root, id), { recursive: true, force: true });
+        remove(markerPath(root, id)); // first, so a half-deleted engine never looks installed
+        remove(engineDir(root, id));
+      }
+      for (const name of staleStaging) {
+        remove(join(root, name));
       }
     }
     return { kept, removed, droppedLinks };
@@ -358,40 +388,81 @@ export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => 
 
 const sleep = (ms: number): Promise<void> => Bun.sleep(ms);
 
+const errorCode = (error: unknown): string | undefined => (error as NodeJS.ErrnoException).code;
+
+const isAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return errorCode(error) === 'EPERM';
+  }
+};
+
+/** Whether a held lock may be stolen: its holder died, or it is older than STALE_LOCK_MS. */
+const isStaleLock = (lock: string): boolean => {
+  const pid = Number.parseInt(readFileSync(lock, 'utf8'), 10);
+  return (
+    (Number.isInteger(pid) && !isAlive(pid)) || Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS
+  );
+};
+
+/** Remove the lock only while it still holds `pid`: a stealer may have replaced it. */
+const releaseLock = (lock: string, pid: string): void => {
+  let holder: string;
+  try {
+    holder = readFileSync(lock, 'utf8');
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  if (holder === pid) {
+    rmSync(lock, { force: true });
+  }
+};
+
 /**
- * Run `fn` under the store's cross-process lock. A lock older than
- * STALE_LOCK_MS is stolen; the lock is always released, even if `fn` throws.
+ * Run `fn` under the store's cross-process pidfile lock, stealing a stale one. Released
+ * even if `fn` throws, but only while it still holds our pid.
+ * ponytail: two contenders stealing one stale lock can both enter; add a steal lock if it bites
  */
 export const withLock = async <T>(root: string, fn: () => Promise<T>): Promise<T> => {
   mkdirSync(root, { recursive: true });
   const lock = lockPath(root);
+  const pid = String(process.pid);
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   for (;;) {
     try {
-      const fd = openSync(lock, 'wx');
-      writeSync(fd, String(process.pid));
-      closeSync(fd);
+      writeFileSync(lock, pid, { flag: 'wx' });
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      if (errorCode(error) !== 'EEXIST') {
         throw error;
       }
-      const age = Date.now() - statSync(lock).mtimeMs;
-      if (age > STALE_LOCK_MS) {
+    }
+    try {
+      if (isStaleLock(lock)) {
         rmSync(lock, { force: true });
         continue;
       }
-      if (Date.now() > deadline) {
-        throw new BunmaskaError(`engine store: timed out acquiring lock at ${lock}`, {
-          code: 'ERR_ENGINE_LOCK',
-        });
+    } catch (error) {
+      if (errorCode(error) === 'ENOENT') {
+        continue; // released between our attempt and the check
       }
-      await sleep(LOCK_RETRY_MS);
+      throw error;
     }
+    if (Date.now() > deadline) {
+      throw new BunmaskaError(`engine store: timed out acquiring lock at ${lock}`, {
+        code: 'ERR_ENGINE_LOCK',
+      });
+    }
+    await sleep(LOCK_RETRY_MS);
   }
   try {
     return await fn();
   } finally {
-    rmSync(lock, { force: true });
+    releaseLock(lock, pid);
   }
 };

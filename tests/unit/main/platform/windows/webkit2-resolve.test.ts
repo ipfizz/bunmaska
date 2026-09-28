@@ -18,6 +18,7 @@ const dir = (deps: ResolveDeps & { readonly execPath?: string }): string | undef
     execPath: join(APP_DIR, 'My App.exe'),
     exists: (path) => !path.endsWith('WebKit2.dll'),
     readBakedId: () => null,
+    host: { os: 'windows', arch: 'x64' },
     ...deps,
   });
 

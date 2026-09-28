@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
@@ -112,7 +120,7 @@ describe('installFromSource', () => {
     expect(existsSync(engineDir(root, ID))).toBe(false);
   });
 
-  test('is idempotent — a second install does not re-extract', async () => {
+  test('is idempotent: a second install does not re-extract', async () => {
     const root = makeTmpDir();
     let extracts = 0;
     const deps = {
@@ -162,7 +170,17 @@ describe('installFromSource', () => {
     expect(extracted).toBe(false);
   });
 
-  test('rejects a substituted engine — extracted engine.json id must match the claimed id', async () => {
+  test('refuses an artifact missing its declared soname, leaving nothing installed', async () => {
+    const root = makeTmpDir();
+    const extract = async (bytes: Uint8Array, dest: string): Promise<void> => {
+      await fakeExtract(bytes, dest);
+      rmSync(join(dest, 'lib'), { recursive: true });
+    };
+    await expect(installFromSource(root, fakeSource(ID), { extract })).rejects.toThrow(/soname/);
+    expect(isInstalled(root, ID)).toBe(false);
+  });
+
+  test('rejects a substituted engine: extracted engine.json id must match the claimed id', async () => {
     const root = makeTmpDir();
     // A genuinely-signed OLDER artifact (its engine.json says ID2) served under ID's URL.
     const substituted: InstallSource = {
@@ -199,6 +217,10 @@ describe('assertSafeEngineId', () => {
 
   test('accepts a well-formed engine id', () => {
     expect(() => assertSafeEngineId(root, ID)).not.toThrow();
+  });
+
+  test('rejects a name no app could pin', () => {
+    expect(() => assertSafeEngineId(root, 'webkit-local')).toThrow(/not a valid engine-id/);
   });
 
   test('rejects separators, absolute paths, dot segments, and empties', () => {
@@ -252,6 +274,50 @@ describe('gc', () => {
     expect(isInstalled(root, ID2)).toBe(false);
   });
 
+  test('an interrupted removal never leaves an engine looking installed', async () => {
+    const root = makeTmpDir();
+    await installFromSource(root, fakeSource(ID), { extract: fakeExtract });
+    const remove = (path: string): void => {
+      if (path === engineDir(root, ID)) {
+        throw new Error('interrupted');
+      }
+      rmSync(path, { recursive: true, force: true });
+    };
+    await expect(gc(root, { exists: () => true, remove })).rejects.toThrow('interrupted');
+    expect(isInstalled(root, ID)).toBe(false);
+  });
+
+  test('reclaims interrupted installs: old staging dirs and marker-less engine dirs', async () => {
+    const root = makeTmpDir();
+    for (const name of ['.tmp-old', '.tmp-new', ID2]) {
+      mkdirSync(join(root, name, 'lib'), { recursive: true });
+    }
+    const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    utimesSync(join(root, '.tmp-old'), hourAgo, hourAgo);
+    const result = await gc(root, { exists: () => true });
+    expect(existsSync(join(root, '.tmp-old'))).toBe(false);
+    expect(existsSync(join(root, '.tmp-new'))).toBe(true); // may be an install in progress
+    expect(existsSync(engineDir(root, ID2))).toBe(false);
+    expect(result.removed).toEqual([ID2]);
+  });
+
+  test('refuses to run when a link is unreadable, rather than freeing its engine', async () => {
+    const root = makeTmpDir();
+    await installFromSource(root, fakeSource(ID), { extract: fakeExtract });
+    linkApp(root, '/opt/MyApp', ID);
+    writeFileSync(linkPath(root, '/opt/MyApp'), '{"app":"/opt/My'); // torn write
+    await expect(gc(root, { exists: () => true })).rejects.toThrow(/unreadable/);
+    expect(isInstalled(root, ID)).toBe(true);
+  });
+
+  test('ignores a link write still in progress', async () => {
+    const root = makeTmpDir();
+    linkApp(root, '/opt/MyApp', ID);
+    writeFileSync(`${linkPath(root, '/opt/MyApp')}.123.tmp`, '{"app":');
+    expect(readLinks(root)).toEqual([{ app: '/opt/MyApp', engine: ID }]);
+    await expect(gc(root, { exists: () => true })).resolves.toBeDefined();
+  });
+
   test('drops links whose app no longer exists, freeing its engine', async () => {
     const root = makeTmpDir();
     await installFromSource(root, fakeSource(ID), { extract: fakeExtract });
@@ -284,6 +350,14 @@ describe('installFromDir', () => {
 
     const second = await installFromDir(root, src);
     expect(second).toEqual({ id: ID, installed: false });
+  });
+
+  test('refuses an engine whose declared soname is missing, leaving nothing installed', async () => {
+    const root = makeTmpDir();
+    const src = makeEngineDir(root, ID);
+    rmSync(join(src, 'lib', 'libwebkitgtk-6.0.so.4'));
+    await expect(installFromDir(root, src)).rejects.toThrow(/libwebkitgtk-6\.0\.so\.4/);
+    expect(isInstalled(root, ID)).toBe(false);
   });
 
   test('rejects a source dir with no readable engine.json', async () => {
@@ -345,6 +419,50 @@ describe('withLock', () => {
     ).rejects.toThrow('boom');
     expect(existsSync(join(root, '__dirlock'))).toBe(false);
   });
+
+  test('steals a lock left behind by a dead process instead of timing out', async () => {
+    const root = makeTmpDir();
+    const dead = Bun.spawnSync([process.execPath, '-e', '']).pid;
+    writeFileSync(join(root, '__dirlock'), String(dead));
+    expect(await withLock(root, async () => 'ran')).toBe('ran');
+  }, 3000);
+
+  test('releases only a lock it still owns', async () => {
+    const root = makeTmpDir();
+    const lock = join(root, '__dirlock');
+    await withLock(root, async () => {
+      writeFileSync(lock, '424242'); // another process took the lock over
+    });
+    expect(readFileSync(lock, 'utf8')).toBe('424242');
+  });
+
+  test('concurrent processes never error or overlap in the critical section', async () => {
+    const root = makeTmpDir();
+    const store = join(import.meta.dir, '../../../src/cli/engine-store.ts');
+    const inside = join(root, 'inside');
+    const worker = `
+      import { rmSync, writeFileSync } from 'node:fs';
+      import { withLock } from ${JSON.stringify(store)};
+      let errors = 0;
+      const end = Date.now() + 1500;
+      while (Date.now() < end) {
+        try {
+          await withLock(${JSON.stringify(root)}, async () => {
+            writeFileSync(${JSON.stringify(inside)}, '', { flag: 'wx' });
+            rmSync(${JSON.stringify(inside)});
+          });
+        } catch (error) {
+          errors += 1;
+          console.error(String(error));
+        }
+      }
+      console.log(errors);`;
+    const procs = Array.from({ length: 4 }, () =>
+      Bun.spawn([process.execPath, '-e', worker], { stdout: 'pipe', stderr: 'pipe' }),
+    );
+    const outs = await Promise.all(procs.map((p) => new Response(p.stdout).text()));
+    expect(outs.map((o) => o.trim())).toEqual(['0', '0', '0', '0']);
+  }, 15000);
 
   test('serializes concurrent critical sections', async () => {
     const root = makeTmpDir();

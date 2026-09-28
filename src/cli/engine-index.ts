@@ -1,8 +1,5 @@
-/**
- * os/arch/upstream/family are DERIVED from each entry's id at parse time, so the
- * stored index cannot disagree with the id. Layout at a feed:
- * `<base>/index.json`, beside each `<id>.tar.zst`.
- */
+// The feed's `<base>/index.json`. os/arch/upstream/family are derived from each id at
+// parse time, so the index can never disagree with its ids.
 
 import { type EngineRef, parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
@@ -15,7 +12,7 @@ export type EngineIndexEntry = EngineRef & {
   readonly soname?: string;
 };
 
-/** The raw, stored shape of one index entry (before id-derivation). */
+/** One entry as stored, before id-derivation. */
 type StoredEntry = {
   readonly id: string;
   readonly size?: number;
@@ -31,7 +28,8 @@ const err = (message: string): never => {
   throw new BunmaskaError(message, { code: 'ERR_ENGINE_INDEX' });
 };
 
-export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
+/** The index's stored entries, structurally checked; ids are kept verbatim. */
+const readStoredEntries = (text: string): StoredEntry[] => {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -50,9 +48,7 @@ export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
     if (typeof record['id'] !== 'string') {
       return err('engine index: every entry needs a string "id"');
     }
-    const ref = parseEngineId(record['id']); // throws on a malformed id
     return {
-      ...ref,
       id: record['id'],
       ...(typeof record['size'] === 'number' ? { size: record['size'] } : {}),
       ...(typeof record['hash'] === 'string' ? { hash: record['hash'] } : {}),
@@ -60,6 +56,16 @@ export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
     };
   });
 };
+
+/** The entries this client understands; an id it cannot parse (newer family/os/arch) is skipped. */
+export const parseEngineIndex = (text: string): EngineIndexEntry[] =>
+  readStoredEntries(text).flatMap((entry) => {
+    try {
+      return [{ ...parseEngineId(entry.id), ...entry }];
+    } catch {
+      return [];
+    }
+  });
 
 /** Serialize entries to the pretty, newline-terminated `index.json` a feed serves. */
 export const buildEngineIndex = (entries: readonly StoredEntry[]): string => {
@@ -79,17 +85,21 @@ export const fetchEngineIndex = async (
   parseEngineIndex(new TextDecoder().decode(await fetch(engineFeedIndexUrl(feedBase))));
 
 /**
- * Same-id entry replaced, everything else kept, output sorted by id.
- * `indexText` undefined means "no index published yet" and starts one.
+ * Add one engine, keep every other entry, sort by id. `indexText` undefined means
+ * no index is published yet. Throws on a malformed id or an id already published:
+ * clients cache and pin by id, so an id's bytes never change (bump the rev instead).
  */
 export const mergeEngineIndex = (
   indexText: string | undefined,
   manifest: RemoteManifest,
 ): string => {
-  const existing = indexText === undefined ? [] : parseEngineIndex(indexText);
-  parseEngineId(manifest.id); // reject a malformed id before it enters the index
+  const existing = indexText === undefined ? [] : readStoredEntries(indexText);
+  parseEngineId(manifest.id);
+  if (existing.some((e) => e.id === manifest.id)) {
+    return err(`engine index: ${manifest.id} is already published; bump the rev to republish`);
+  }
   const entries = [
-    ...existing.filter((e) => e.id !== manifest.id),
+    ...existing,
     {
       id: manifest.id,
       ...(manifest.size !== undefined ? { size: manifest.size } : {}),
