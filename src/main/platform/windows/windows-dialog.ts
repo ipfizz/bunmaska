@@ -250,7 +250,7 @@ export const windowsDialogBackend: DialogBackend = {
   showOpenDialog(spec: OpenDialogSpec): string[] {
     // Electron: an open dialog cannot pick both on Windows, so openDirectory wins.
     if (spec.canChooseDirectories) {
-      return runFolderDialog(); // ponytail: ignores defaultPath (needs a BFFM_SETSELECTION callback)
+      return runFolderDialog(); // ponytail: ignores defaultPath; BFFM_SETSELECTION adds it
     }
     const flags =
       OFN_EXPLORER |

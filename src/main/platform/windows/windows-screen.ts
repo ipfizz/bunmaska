@@ -3,23 +3,15 @@ import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
 import { loadUser32 } from './win32-ffi';
 import { loadShcore, MDT_EFFECTIVE_DPI } from './win32-shcore-ffi';
 
-/**
- * `EnumDisplayMonitors` walks the monitors with a short-lived, synchronous JSCallback —
- * safe, unlike a long-lived WndProc. `rotation` (0) and `internal` (false) are not yet
- * derived — a documented v1 gap.
- */
-
 /** `sizeof(MONITORINFO)`: cbSize(4) + rcMonitor(16) + rcWork(16) + dwFlags(4). */
 const MONITORINFO_SIZE = 40;
 const RC_MONITOR_OFFSET = 4;
 const RC_WORK_OFFSET = 20;
 const DW_FLAGS_OFFSET = 36;
-/** `MONITORINFOF_PRIMARY` — this monitor is the primary display. */
 const MONITORINFOF_PRIMARY = 0x1;
-/** `POINT` is two LONGs: x@0, y@4. */
 const DEFAULT_DPI = 96;
 
-/** Read a `RECT` (4 LONGs) at `offset` in a native MONITORINFO buffer as a {@link RawDisplay} rect. */
+/** The `RECT` (4 LONGs) at `offset` in a native MONITORINFO buffer. */
 const readRect = (
   miPtr: ReturnType<typeof ptr>,
   offset: number,
@@ -44,12 +36,12 @@ const monitorScaleFactor = (hMonitor: bigint): number => {
       return dpi > 0 ? dpi / DEFAULT_DPI : 1;
     }
   } catch {
-    // shcore.dll absent (pre-Windows 8.1) — fall back to a 1.0 scale.
+    // shcore.dll absent (pre-Windows 8.1): fall back to a 1.0 scale.
   }
   return 1;
 };
 
-/** Enumerate every monitor handle via a short-lived synchronous JSCallback. */
+/** Every monitor handle; the JSCallback only runs inside the synchronous enumeration. */
 const enumerateMonitors = (): bigint[] => {
   const handles: bigint[] = [];
   const callback = new JSCallback(
@@ -79,8 +71,8 @@ const describeMonitor = (hMonitor: bigint): RawDisplay => {
     bounds: readRect(miPtr, RC_MONITOR_OFFSET),
     workArea: readRect(miPtr, RC_WORK_OFFSET),
     scaleFactor: monitorScaleFactor(hMonitor),
-    rotation: 0,
-    internal: false,
+    rotation: 0, // ponytail: not derived; EnumDisplaySettingsW dmDisplayOrientation has it
+    internal: false, // ponytail: not derived; needs the monitor's output technology
     primary: (flags & MONITORINFOF_PRIMARY) !== 0,
   };
 };

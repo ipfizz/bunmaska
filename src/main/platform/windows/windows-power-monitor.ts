@@ -3,33 +3,22 @@ import type { PowerEventHandlers } from '../macos/cocoa-power';
 import { loadWtsapi32, NOTIFY_FOR_THIS_SESSION } from './win32-wts-ffi';
 import { createMessageWindow, type MessageWindow } from './windows-message-window';
 
-/**
- * Suspend/resume arrive as `WM_POWERBROADCAST` (broadcast to top-level windows);
- * lock/unlock as `WM_WTSSESSION_CHANGE` after `WTSRegisterSessionNotification`. Both are
- * delivered to a hidden, non-WebKit window (see `windows-message-window.ts`).
- */
+// WM_POWERBROADCAST is broadcast to top-level windows only, hence the hidden message window.
 
 const log = createLogger('windows-power-monitor');
 
-/** `WM_POWERBROADCAST` — system power-state change. */
 export const WM_POWERBROADCAST = 0x0218;
-/** `WM_WTSSESSION_CHANGE` — a session lock/unlock/connect/disconnect. */
 export const WM_WTSSESSION_CHANGE = 0x02b1;
 
-/** `WM_POWERBROADCAST` events: the system is suspending / has resumed. */
 const PBT_APMSUSPEND = 0x0004;
 // Sent on every resume; a user-initiated wake also sends PBT_APMRESUMESUSPEND after
 // it, which is ignored so 'resume' fires once (as Chromium does).
 const PBT_APMRESUMEAUTOMATIC = 0x0012;
 
-/** `WM_WTSSESSION_CHANGE` events: the session was locked / unlocked. */
 const WTS_SESSION_LOCK = 0x7;
 const WTS_SESSION_UNLOCK = 0x8;
 
-/**
- * Translate a power/session window message to the matching `powerMonitor` handler.
- * Pure: `wParam` carries the specific event code. Unrelated messages are ignored.
- */
+/** Route a power/session message (`wParam` is the event code) to its handler. Pure. */
 export const dispatchPowerMessage = (
   handlers: PowerEventHandlers,
   message: number,
@@ -52,14 +41,10 @@ export const dispatchPowerMessage = (
   }
 };
 
-/** The hidden window the power observer owns (process life; never torn down). */
+/** Lives for the process; never torn down. */
 let observerWindow: MessageWindow | undefined;
 
-/**
- * Begin delivering power + lock/unlock events to `handlers`. Creates the hidden
- * notification window (once), registers for session notifications (best-effort —
- * a failure only loses lock/unlock, never suspend/resume), and routes messages.
- */
+/** Deliver power and lock/unlock events to `handlers`; a WTS failure loses only lock/unlock. */
 export const observePowerEvents = (handlers: PowerEventHandlers): void => {
   if (observerWindow !== undefined) {
     return;

@@ -5,12 +5,7 @@ import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 import { loadShell32, SHELL_EXECUTE_SUCCESS_THRESHOLD, SW_SHOWNORMAL } from './win32-shell-ffi';
 
-/**
- * Windows `shell` backend. Each wide-string buffer is held in a local so it stays alive
- * across the `ShellExecuteW` call.
- */
-
-/** Run `ShellExecuteW(NULL, "open", target, params)` and report success (HINSTANCE > 32). */
+/** `ShellExecuteW(NULL, "open", target, params)`; true on success. */
 const shellOpen = (target: string, params?: string): boolean => {
   const verbBuf = wstr('open');
   const targetBuf = wstr(target);
