@@ -58,7 +58,11 @@ export const ensureOleInitialized = (): void => {
   if (oleInitialized) {
     return;
   }
-  loadOle32().symbols.OleInitialize(null);
+  // S_FALSE (already initialised) is fine; RPC_E_CHANGED_MODE (an MTA thread) is not.
+  const hr = loadOle32().symbols.OleInitialize(null);
+  if (hr < 0) {
+    throw new FFIError(`OleInitialize failed: 0x${(hr >>> 0).toString(16)}`);
+  }
   oleInitialized = true;
 };
 
