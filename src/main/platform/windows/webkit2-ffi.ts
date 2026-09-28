@@ -23,8 +23,6 @@ const WEBKIT2_SYMBOLS = {
     args: [FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
   },
-  WKPageConfigurationGetPreferences: { args: [FFIType.ptr], returns: FFIType.ptr },
-  WKPreferencesSetJavaScriptEnabled: { args: [FFIType.ptr, FFIType.u8], returns: FFIType.void },
 
   // ── View (hosted in an HWND) ─────────────────────────────────────────────
   // WKViewCreate(RECT rect, WKPageConfigurationRef, HWND parent): RECT is 16
@@ -33,7 +31,6 @@ const WEBKIT2_SYMBOLS = {
   WKViewGetPage: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKViewGetWindow: { args: [FFIType.ptr], returns: FFIType.u64 },
   WKViewSetIsInWindow: { args: [FFIType.ptr, FFIType.u8], returns: FFIType.void },
-  WKViewSetParentWindow: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
 
   // ── Navigation + history ─────────────────────────────────────────────────
   WKPageLoadURL: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
@@ -121,14 +118,11 @@ const WEBKIT2_SYMBOLS = {
   },
 
   // ── Reference counting ───────────────────────────────────────────────────
-  WKRetain: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKRelease: { args: [FFIType.ptr], returns: FFIType.void },
 } as const;
 
 /** `_WKUserScriptInjectionTime`: inject before the page's own scripts run. */
 export const WK_INJECT_AT_DOCUMENT_START = 0;
-/** `_WKUserScriptInjectionTime`: inject after the document has parsed. */
-export const WK_INJECT_AT_DOCUMENT_END = 1;
 
 /** The subdir an embedded engine is bundled into (must match `build-windows.ts`). */
 const BUNDLED_ENGINE_DIRNAME = 'webkit';

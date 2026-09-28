@@ -287,10 +287,6 @@ export class WindowsWebView {
     }
     s.WKPageConfigurationSetContext(pageConfig, context);
     s.WKPageConfigurationSetUserContentController(pageConfig, controller);
-    const preferences = s.WKPageConfigurationGetPreferences(pageConfig);
-    if (preferences !== null) {
-      s.WKPreferencesSetJavaScriptEnabled(preferences, 1);
-    }
 
     const hostWindow = createNativeChildHost(options.hwnd, options.width, options.height);
 
@@ -313,16 +309,6 @@ export class WindowsWebView {
     }
 
     return new WindowsWebView(view, page, hostWindow, controller, callbacks);
-  }
-
-  /** The underlying `WKPageRef`. */
-  page(): Pointer {
-    return this.#page;
-  }
-
-  /** The underlying `WKViewRef`. */
-  view(): Pointer {
-    return this.#view;
   }
 
   /** Navigate to a URL (http/https/file/about). */
