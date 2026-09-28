@@ -2,11 +2,8 @@
 exact = true
 
 [test]
-# Coverage is off for the default `bun test` (dev speed); `bun test --coverage`
-# (the `test:coverage` script) turns it on and honors these excludes. The FFI
-# signature tables are dense declarations, not logic, so they only dilute the
-# number; test files are excluded so coverage measures src, not the tests.
+# Coverage (`test:coverage`) measures src logic: tests and FFI declaration tables excluded.
 coverageSkipTestFiles = true
-# `**/` is required — bun's glob `*` does not cross `/`, so a bare `*-ffi.ts`
+# `**/` is required: bun's glob `*` does not cross `/`, so a bare `*-ffi.ts`
 # would match nothing (every FFI file lives under src/main/platform/*/).
 coveragePathIgnorePatterns = ["**/*-ffi.ts"]
