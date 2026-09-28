@@ -3,6 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { type EngineRef, isSystemEngine, parseEngineId } from '../../common/engine-id';
+import { isBunCli } from '../../common/preload-bundle';
 import { type Arch, currentArch, currentPlatform, type Platform } from '../../common/platform';
 import {
   engineDir,
@@ -142,8 +143,7 @@ export const engineLibPath = (resolution: EngineResolution, soname: string): str
 
 /** The path prune checks for this app: the entry script under the Bun CLI, else the executable. */
 export const appIdentity = (execPath: string, main: string): string =>
-  // ponytail: same test as preload-bundle's bunCliPath; share it once that is exported
-  /(?:^|[\\/])bun(?:-[^\\/]*)?(?:\.exe)?$/i.test(execPath) ? main : execPath;
+  isBunCli(execPath) ? main : execPath;
 
 const prep: { done: boolean } = { done: false };
 

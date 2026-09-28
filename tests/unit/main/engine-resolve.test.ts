@@ -142,6 +142,8 @@ describe('appIdentity', () => {
     expect(appIdentity('/opt/MyApp/usr/bin/my-app', '/$bunfs/root/my-app')).toBe(
       '/opt/MyApp/usr/bin/my-app',
     );
+    const bunNamed = '/Applications/bun-notes.app/Contents/MacOS/bun-notes';
+    expect(appIdentity(bunNamed, '/$bunfs/root/bun-notes')).toBe(bunNamed);
   });
 });
 
