@@ -3,21 +3,9 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import { dlopenLinux } from './glib-ffi';
 
-/**
- * Loads GDK 4's display, system-beep, and clipboard symbols.
- *
- * In GTK 4 there is no standalone `libgdk-4.so`: GDK is compiled INTO the GTK 4
- * shared object, so its symbols are resolved from `libgtk-4.so.1` (the same
- * library {@link loadGtkFFI} opens).
- *
- * All GDK handles are real pointers ({@link FFIType.pointer}); the display
- * pointer is nullable (NULL when GTK was never initialised) and MUST be guarded
- * before use.
- */
-
+/** GTK 4 ships no libgdk-4: GDK's symbols live inside libgtk-4.so.1. */
 const LIBGTK_PATH = 'libgtk-4.so.1';
 
-/** The GDK 4 FFI symbol descriptor table (resolved from `libgtk-4.so.1`). */
 export const GDK_FFI_SYMBOLS = {
   gdk_display_get_default: {
     args: [],

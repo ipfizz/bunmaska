@@ -14,28 +14,13 @@ import {
 import { cstr } from '../cstr';
 import { dlopen, type NarrowLibrary } from '../dlopen';
 
-/**
- * Loads GLib's main-context iteration symbols plus `g_free`.
- *
- * GLib (not GTK directly) owns the main-loop primitives Bunmaska uses to pump the
- * Linux UI cooperatively, mirroring the macOS CoreFoundation pump (D020).
- * `libglib-2.0` is a hard dependency of GTK 4, so it is always present wherever
- * `libgtk-4` is.
- *
- * `g_main_context_iteration(context, may_block)` dispatches at most one set of
- * ready sources; a `NULL` context means the default one. `g_main_context_pending`
- * reports whether any sources are ready, letting us drain to quiescence without
- * ever blocking Bun's thread. `g_free` releases the transfer-full `char*`
- * returned by `jsc_value_to_string` (NULL-safe no-op).
- */
-
 const LIBGLIB_PATH = 'libglib-2.0.so.0';
 const LIBC_PATH = 'libc.so.6';
 const LIBC_FFI_SYMBOLS = {
   setenv: { args: [FFIType.cstring, FFIType.cstring, FFIType.i32], returns: FFIType.i32 },
 } as const;
 
-/** The path to dlopen for `soname`: the pinned engine's bundled copy when it has one, else the bare soname. */
+/** The dlopen path for `soname`: the pinned engine's bundled copy if present, else the soname. */
 export const linuxLibPath = (
   engine: EngineResolution,
   soname: string,
@@ -55,7 +40,7 @@ export const linuxLibPath = (
   return soname;
 };
 
-/** Copy the pinned engine's env exports into the C environment: Bun's `process.env` writes never reach `getenv`. */
+/** Copy the pinned engine's env into libc's environ: Bun's `process.env` never reaches `getenv`. */
 export const exportEngineEnv = (
   engine: EngineResolution,
   env: StoreEnv,
@@ -91,7 +76,6 @@ export const dlopenLinux = <Fns extends Record<string, FFIFunction>>(
   return dlopen(linuxLibPath(engine, soname), symbols);
 };
 
-/** The GLib FFI symbol descriptor table. */
 export const GLIB_FFI_SYMBOLS = {
   g_main_context_iteration: {
     args: [FFIType.pointer, FFIType.i32],
@@ -124,8 +108,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (string) -> GQuark (a guint32 id). Used to build an error domain for the
-  // GError handed to webkit_uri_scheme_request_finish_error.
+  // (string) -> GQuark (guint32).
   g_quark_from_string: {
     args: [FFIType.cstring],
     returns: FFIType.u32,
@@ -162,7 +145,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.u64],
     returns: FFIType.pointer,
   },
-  // (value) -> void. Drops a ref on a transfer-full GVariant.
+  // (value) -> void.
   g_variant_unref: {
     args: [FFIType.pointer],
     returns: FFIType.void,
@@ -172,7 +155,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.u32,
   },
-  // (string) -> GVariant* 's' (FLOATING). Builds a D-Bus method arg.
+  // (string) -> GVariant* 's' (FLOATING).
   g_variant_new_string: {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
@@ -193,17 +176,17 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.i32],
     returns: FFIType.pointer,
   },
-  // (value) -> GVariant* 'i' (FLOATING). Width/height for the SNI a(iiay) icon.
+  // (value) -> GVariant* 'i' (FLOATING).
   g_variant_new_int32: {
     args: [FFIType.i32],
     returns: FFIType.pointer,
   },
-  // (object_path) -> GVariant* 'o' (FLOATING). The SNI Menu property.
+  // (object_path) -> GVariant* 'o' (FLOATING).
   g_variant_new_object_path: {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
   },
-  // (type_string) -> GVariantType* (transfer-full; g_variant_type_free). Builders BORROW it.
+  // (type_string) -> GVariantType* (transfer-full). Builders BORROW it.
   g_variant_type_new: {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
@@ -213,7 +196,7 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (builder, type:GVariantType*) -> void. Opens a nested container.
+  // (builder, type:GVariantType*) -> void.
   g_variant_builder_open: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,

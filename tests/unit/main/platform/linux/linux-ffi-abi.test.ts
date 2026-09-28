@@ -91,11 +91,7 @@ describe('gboolean is i32, never bool', () => {
   });
 });
 
-/**
- * A `cstring` return is decoded eagerly by bun and cannot be NULL-checked or freed.
- * These getters must stay raw pointers so the caller can guard 0 and, where the
- * transfer is full, hand the buffer back to g_free.
- */
+/** These getters stay raw pointers so a transfer-full string keeps the address g_free needs. */
 const POINTER_GETTERS: ReadonlyArray<readonly [string, Sym]> = [
   ['webkit_web_view_get_uri', WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_uri],
   ['jsc_value_to_string', JSC_FFI_SYMBOLS.jsc_value_to_string],

@@ -3,26 +3,8 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import { dlopenLinux } from './glib-ffi';
 
-/**
- * Loads the libnotify symbols behind Bunmaska's `Notification` API on Linux.
- *
- * libnotify is the freedesktop desktop-notification client library; it forwards
- * to the session's notification daemon over D-Bus. CI runs headless (xvfb) with
- * NO notification daemon, so `notify_notification_show` may return FALSE / no-op
- * there — that is EXPECTED. The integration test therefore asserts only that the
- * symbols resolve, `notify_init` runs, and construct/show/close do not throw; it
- * does NOT assert a banner appeared.
- *
- * Convention (matches the existing Linux loaders): `gboolean` is modelled as
- * {@link FFIType.i32} (compare `!== 0`); the `NotifyNotification*` handle and the
- * `GError**` out-param are real pointers ({@link FFIType.pointer}); `cstring`
- * args are NUL-terminated UTF-8 strings. The `GError**` arg is always passed as
- * `null` (failures are reported via the gboolean return, not unwrapped).
- */
-
 const LIBNOTIFY_PATH = 'libnotify.so.4';
 
-/** The libnotify FFI symbol descriptor table (from `libnotify.so.4`). */
 export const LIBNOTIFY_FFI_SYMBOLS = {
   // (app_name) -> gboolean; call once per process before creating notifications.
   notify_init: {

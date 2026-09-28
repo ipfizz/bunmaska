@@ -3,35 +3,16 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import { dlopenLinux } from './glib-ffi';
 
-/**
- * Loads the GIO `GMenu`/`GAction` model symbols and the GTK 4
- * `GtkPopoverMenuBar`/`GtkBox` widget symbols behind Bunmaska's Linux `Menu`
- * backend.
- *
- * A GTK 4 application menu bar is built from a backend-neutral *model* (`GMenu`,
- * a `GMenuModel`) wired to an *action group* (`GSimpleActionGroup`): each
- * clickable item names a `GAction` (e.g. `"bunmaska.menu-0"`), and activating
- * that action — via a click, an accelerator, or `g_action_group_activate_action`
- * — fires the action's `activate` signal. A `GtkPopoverMenuBar` renders the
- * model; the action group is inserted into the window under the `"bunmaska"`
- * prefix with `gtk_widget_insert_action_group`.
- *
- * Convention (matches the existing Linux loaders): `gboolean` is modelled as
- * {@link FFIType.i32}; all GObject/GTK handles are real pointers
- * ({@link FFIType.pointer}); `cstring` args are NUL-terminated UTF-8 strings;
- * nullable pointer args (`param_type`, `param`) are passed as `null`.
- */
-
 const LIBGIO_PATH = 'libgio-2.0.so.0';
 const LIBGTK_PATH = 'libgtk-4.so.1';
 
-/** The GIO `GMenu`/`GAction` FFI symbol descriptor table (from `libgio-2.0.so.0`). */
 export const GMENU_FFI_SYMBOLS = {
   g_menu_new: {
     args: [],
     returns: FFIType.pointer,
   },
-  // (menu, label, detailed_action /*e.g. "bunmaska.menu-0"*/) -> void
+  // (menu, label, detailed_action) -> void. Actions are added to the group bare ("menu-0")
+  //  but named here with the insert_action_group prefix ("bunmaska.menu-0").
   g_menu_append: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.cstring],
     returns: FFIType.void,
@@ -60,7 +41,7 @@ export const GMENU_FFI_SYMBOLS = {
     args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (value /*gboolean*/) -> GVariant* (floating ref)
+  // ponytail: duplicate of GLIB_FFI_SYMBOLS.g_variant_new_boolean; delete once gtk-menu.ts uses it.
   g_variant_new_boolean: {
     args: [FFIType.i32],
     returns: FFIType.pointer,
@@ -81,7 +62,6 @@ export const GMENU_FFI_SYMBOLS = {
   },
 } as const;
 
-/** The GTK 4 menu-bar/box FFI symbol descriptor table (from `libgtk-4.so.1`). */
 export const GTK_MENU_FFI_SYMBOLS = {
   // (orientation /*GtkOrientation; vertical=1*/, spacing) -> GtkBox*
   gtk_box_new: {
@@ -107,7 +87,6 @@ export const GTK_MENU_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer],
     returns: FFIType.void,
   },
-  // --- Context-menu popover (Menu.popup) ---
   // (model /*GMenuModel*/) -> GtkPopoverMenu* (a GtkPopover/GtkWidget)
   gtk_popover_menu_new_from_model: {
     args: [FFIType.pointer],
@@ -120,7 +99,6 @@ export const GTK_MENU_FFI_SYMBOLS = {
   },
   gtk_popover_popup: { args: [FFIType.pointer], returns: FFIType.void },
   gtk_popover_popdown: { args: [FFIType.pointer], returns: FFIType.void },
-  // (widget, parent) -> void / (widget) -> void
   gtk_widget_set_parent: { args: [FFIType.pointer, FFIType.pointer], returns: FFIType.void },
   gtk_widget_unparent: { args: [FFIType.pointer], returns: FFIType.void },
 } as const;
@@ -139,7 +117,6 @@ const requireLinux = (fn: string): void => {
   }
 };
 
-/** Open `libgio-2.0.so.0` and expose the `GMenu`/`GAction` model symbols. */
 export const loadGMenuFFI = () => {
   requireLinux('loadGMenuFFI');
   if (cache.gio) {
@@ -150,7 +127,6 @@ export const loadGMenuFFI = () => {
   return ffi;
 };
 
-/** Open `libgtk-4.so.1` and expose the menu-bar/box widget symbols. */
 export const loadGtkMenuFFI = () => {
   requireLinux('loadGtkMenuFFI');
   if (cache.gtk) {

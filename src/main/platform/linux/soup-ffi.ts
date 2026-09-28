@@ -3,17 +3,6 @@ import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import { dlopenLinux } from './glib-ffi';
 
-/**
- * Loads libsoup 3 - the HTTP library WebKitGTK's cookie API traffics in.
- * Soup symbols are NOT reachable through the libwebkitgtk dlopen handle, so
- * this is its own library, engine-resolved like webkitgtk-ffi (a pinned
- * engine bundles its own libsoup).
- *
- * Convention: `gboolean` is {@link FFIType.i32} (compare `!== 0`); the
- * `soup_cookie_get_*` string getters return BORROWED `const char*` declared as
- * {@link FFIType.pointer} so NULL is guardable and nothing is freed.
- */
-
 const LIBSOUP_PATH = 'libsoup-3.0.so.0';
 
 export const SOUP_FFI_SYMBOLS = {
@@ -27,6 +16,7 @@ export const SOUP_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
+  // The string getters return BORROWED `const char*`: never free them.
   soup_cookie_get_name: {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
