@@ -7,6 +7,7 @@ import {
   type AutoUpdaterDeps,
   MAX_COMPRESSED_ARTIFACT_BYTES,
   MAX_DECOMPRESSED_TAR_BYTES,
+  readFeedResponse,
   type StagedUpdate,
   stageToTmp,
 } from '../../../../src/main/api/auto-updater';
@@ -348,5 +349,40 @@ describe('stageToTmp', () => {
       rmSync(dirname(a), { recursive: true, force: true });
       rmSync(dirname(b), { recursive: true, force: true });
     }
+  });
+});
+
+describe('readFeedResponse', () => {
+  const KIB = new Uint8Array(1024);
+
+  test('rejects a body past the cap without draining the rest of the stream', async () => {
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 1000) {
+          controller.close();
+        } else {
+          controller.enqueue(KIB);
+        }
+      },
+    });
+    await expect(readFeedResponse(new Response(body), 'https://feed/a', 4 * 1024)).rejects.toThrow(
+      /exceeds/,
+    );
+    expect(pulls).toBeLessThan(10);
+  });
+
+  test('returns a body within the cap', async () => {
+    const bytes = await readFeedResponse(new Response(KIB), 'https://feed/a', 1024);
+    expect(bytes.length).toBe(1024);
+  });
+
+  test('refuses a response that was redirected off https', async () => {
+    const response = new Response('{}');
+    Object.defineProperty(response, 'url', { value: 'http://evil.example/update.json' });
+    await expect(readFeedResponse(response, 'https://feed/update.json', 1024)).rejects.toThrow(
+      /http:\/\/evil\.example/,
+    );
   });
 });

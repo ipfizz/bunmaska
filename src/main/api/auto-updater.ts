@@ -81,7 +81,8 @@ export type UpdateCheckResult = {
 
 export type AutoUpdaterDeps = {
   readonly fetchText: (url: string) => Promise<string>;
-  readonly fetchBytes: (url: string) => Promise<Uint8Array>;
+  /** Rejects once the body passes `maxBytes`, without buffering the rest. */
+  readonly fetchBytes: (url: string, maxBytes: number) => Promise<Uint8Array>;
   readonly currentVersion: () => string;
   readonly currentOs: () => ArtifactOs;
   readonly currentArch: () => Arch;
@@ -98,21 +99,36 @@ const toUpdateInfo = (manifest: UpdateManifest): UpdateInfo => ({
   releaseName: manifest.name,
 });
 
-const httpFetchText = async (url: string): Promise<string> => {
-  const response = await fetch(url);
+/** update.json and a `.sig` are a few hundred bytes; a body past this is hostile. */
+const MAX_FEED_TEXT_BYTES = 64 * 1024;
+
+/** The body of a feed GET, read with a running byte cap; a redirect off https is refused. */
+export const readFeedResponse = async (
+  response: Response,
+  url: string,
+  maxBytes: number,
+): Promise<Uint8Array> => {
   if (!response.ok) {
     throw new Error(`autoUpdater: GET ${url} failed (${response.status})`);
   }
-  return response.text();
+  if (response.url !== '' && !isSecureFeedUrl(new URL(response.url))) {
+    throw new Error(`autoUpdater: GET ${url} was redirected to insecure ${response.url}`);
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const chunk of response.body ?? []) {
+    total += chunk.length;
+    assertSizeWithin(total, maxBytes, `GET ${url}`);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 };
 
-const httpFetchBytes = async (url: string): Promise<Uint8Array> => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`autoUpdater: GET ${url} failed (${response.status})`);
-  }
-  return new Uint8Array(await response.arrayBuffer());
-};
+const httpFetchText = async (url: string): Promise<string> =>
+  new TextDecoder().decode(await readFeedResponse(await fetch(url), url, MAX_FEED_TEXT_BYTES));
+
+const httpFetchBytes = async (url: string, maxBytes: number): Promise<Uint8Array> =>
+  readFeedResponse(await fetch(url), url, maxBytes);
 
 /** Electron callers fire and forget, relying on the `error` event; awaiting callers still see the rejection. */
 const markHandled = <T>(promise: Promise<T>): Promise<T> => {
@@ -310,7 +326,7 @@ export class AutoUpdaterImpl extends EventEmitter {
         'update.json',
       );
       assertSizeWithin(manifest.size, MAX_COMPRESSED_ARTIFACT_BYTES, 'compressed artifact');
-      const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact));
+      const bytes = await this.#deps.fetchBytes(joinUrl(feedURL, manifest.artifact), manifest.size);
       if (bytes.length !== manifest.size) {
         throw new Error(
           `autoUpdater: artifact size mismatch (expected ${manifest.size}, got ${bytes.length})`,
