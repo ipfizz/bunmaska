@@ -140,6 +140,15 @@ describe('runInit with an explicit name', () => {
   });
 });
 
+describe('index.html', () => {
+  test('escapes the app name as HTML text', () => {
+    const files = initTemplateFiles({ name: 'R&D <Tools>', id: 'com.example.rd' });
+    const html = files.find((f) => f.path === 'src/index.html')?.contents ?? '';
+    expect(html).toContain('<title>R&amp;D &lt;Tools&gt;</title>');
+    expect(html).toContain('<h1>R&amp;D &lt;Tools&gt;</h1>');
+  });
+});
+
 describe('deriveProjectName', () => {
   test('uses the directory base name', () => {
     expect(deriveProjectName('/tmp/cool-app')).toBe('cool-app');

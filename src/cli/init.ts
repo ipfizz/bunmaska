@@ -125,7 +125,7 @@ const indexHtml = (vars: TemplateVars): string =>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${vars.name}</title>
+    <title>${Bun.escapeHTML(vars.name)}</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -153,7 +153,7 @@ const indexHtml = (vars: TemplateVars): string =>
   </head>
   <body>
     <main>
-      <h1>${vars.name}</h1>
+      <h1>${Bun.escapeHTML(vars.name)}</h1>
       <button id="ping">Ping the main process</button>
       <p id="out"></p>
     </main>
