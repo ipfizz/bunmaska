@@ -419,9 +419,6 @@ export class WindowsApplication implements NativeApplication {
     if (!this.#started) {
       return;
     }
-    for (const window of [...this.#windows]) {
-      window.close();
-    }
     this.#windows.clear();
     this.#pump?.stop();
     this.#pump = undefined;

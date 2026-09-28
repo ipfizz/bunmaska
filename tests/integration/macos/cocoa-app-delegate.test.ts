@@ -31,6 +31,23 @@ const NOOP_HANDLERS: AppDelegateHandlers = {
   activate: () => undefined,
   openUrl: () => undefined,
   openFile: () => undefined,
+  quitRequested: () => undefined,
+};
+
+/** `objc_msgSend(id, SEL, id) -> NSUInteger` for `applicationShouldTerminate:`. */
+const sendShouldTerminate = (delegate: bigint): bigint => {
+  const lib = dlopen('libobjc.A.dylib', {
+    objc_msgSend: { args: [FFIType.u64, FFIType.u64, FFIType.u64], returns: FFIType.u64 },
+  });
+  try {
+    return lib.symbols.objc_msgSend(
+      delegate,
+      cocoa().selectors.get('applicationShouldTerminate:'),
+      0n,
+    );
+  } finally {
+    lib.close();
+  }
 };
 
 if (currentPlatform() === 'macos') {
@@ -44,6 +61,18 @@ if (currentPlatform() === 'macos') {
       const delegate = createAppDelegate(NOOP_HANDLERS);
       msgSendPtr(nsApp, rt.selectors.get('setDelegate:'), delegate.handle);
       expect(rt.msgSend(nsApp, rt.selectors.get('delegate'))).toBe(delegate.handle);
+    });
+
+    test('terminate: (Cmd+Q, Dock Quit, logout) is cancelled and handed to the JS quit', () => {
+      let requested = 0;
+      const delegate = createAppDelegate({
+        ...NOOP_HANDLERS,
+        quitRequested: () => {
+          requested += 1;
+        },
+      });
+      expect(sendShouldTerminate(delegate.handle)).toBe(0n);
+      expect(requested).toBe(1);
     });
 
     test('Dock reopen reports the BOOL flag and returns it, as Electron does', () => {

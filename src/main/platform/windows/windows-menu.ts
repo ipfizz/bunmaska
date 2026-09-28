@@ -101,8 +101,8 @@ export const createWindowsMenuRealizer = (
         api.AppendMenuW(hmenu, flags, build(item.submenu, false, ids), ptr(labelBuffer));
         continue;
       }
-      // ponytail: role items are inert (no dispatch or accelerator table); see gtk-menu roles
-      const id = allocateId(item.role === undefined ? item.onClick : undefined);
+      // ponytail: role items other than quit are inert (no dispatch or accelerator table)
+      const id = allocateId(item.onClick);
       ids.push(id);
       api.AppendMenuW(
         hmenu,

@@ -203,14 +203,16 @@ export interface NativeApplication {
   start(): void;
   onReady(callback: () => void): void;
   createWindow(options: NativeWindowOptions): NativeWindow;
-  /** Stops the pump; Linux and Windows first close every window (vetoable). */
-  quit(): void;
+  /** Stops the pump once `app.quit` closed the windows; a Promise defers the exit until it settles. */
+  quit(): void | Promise<void>;
   /** Electron's `activate` (a Dock-icon click). macOS only; register before {@link start}. */
   onActivate?(callback: (hasVisibleWindows: boolean) => void): void;
   /** Electron's `open-url` (a deep link). macOS only; register before {@link start}. */
   onOpenUrl?(callback: (url: string) => void): void;
   /** Electron's `open-file` (a file association). macOS only; register before {@link start}. */
   onOpenFile?(callback: (path: string) => void): void;
+  /** The OS asked the app to quit (macOS Cmd+Q, Dock Quit, logout); register before {@link start}. */
+  onQuitRequest?(callback: () => void): void;
   readonly appKit?: NativeAppKit;
   /** macOS and Linux. */
   showAboutPanel?(): void;

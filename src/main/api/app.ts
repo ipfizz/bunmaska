@@ -7,7 +7,7 @@ import { localeCountryCode } from './app-locale';
 import { resolveAppName, resolveAppVersion } from './app-metadata';
 import { type AppPathName, isAppPathName, resolveAppPath } from './app-paths';
 import { type Dock, displayBadgeCount, getDock } from './app-desktop';
-import { Menu } from './menu';
+import { installQuitHandler, Menu } from './menu';
 import { nativeApp } from '../native-app';
 import { createLockBackend } from './single-instance-backend';
 import { SingleInstanceManager } from './single-instance';
@@ -16,6 +16,8 @@ import { SingleInstanceManager } from './single-instance';
 export class App extends EventEmitter {
   #ready = false;
   #quitting = false;
+  #windowCloser: (() => boolean) | undefined;
+  #shutdownHook: (() => void | Promise<void>) | undefined;
   #badgeCount = 0;
   #startHook: (() => void) | undefined;
   #env: AppEnvironment | undefined;
@@ -303,36 +305,65 @@ export class App extends EventEmitter {
     this.#singleInstanceManager().release();
   }
 
+  /** Register what `quit` runs to close the windows; it returns whether all of them closed. @internal */
+  setWindowCloser(closer: () => boolean): void {
+    this.#windowCloser = closer;
+  }
+
+  /** Register the native teardown run after `quit`; a Promise defers the exit until it settles. @internal */
+  setShutdownHook(hook: () => void | Promise<void>): void {
+    this.#shutdownHook = hook;
+  }
+
+  /** Whether a quit is running; `window-all-closed` stays quiet meanwhile. @internal */
+  get quitting(): boolean {
+    return this.#quitting;
+  }
+
   /**
-   * Begin shutting the app down. Emits the cancelable `before-quit` then
-   * `will-quit` events (a listener may call `preventDefault()` on the passed
-   * event to abort the quit); if neither vetoes, emits `quit` with the exit code
-   * and exits the process. The native bootstrap listens for `quit` to stop the
-   * run loop before the process exits.
+   * Electron's quit: `before-quit`, then every window closes (any `close` veto
+   * cancels), then `will-quit`, `quit(event, exitCode)`, the native shutdown and
+   * the exit. A cancelled or throwing step leaves the app able to quit again.
    */
   quit(exitCode = 0): void {
     if (this.#quitting) {
       return;
     }
     this.#quitting = true;
-
-    const beforeQuit = makeCancelableEvent();
-    this.emit('before-quit', beforeQuit);
-    if (beforeQuit.defaultPrevented) {
-      this.#quitting = false;
+    let proceed = false;
+    try {
+      proceed = this.#runQuitEvents(exitCode);
+    } finally {
+      this.#quitting = proceed;
+    }
+    if (!proceed) {
       return;
     }
+    const exit = (): void => this.#environment().exit(exitCode);
+    const shutdown = this.#shutdownHook?.();
+    if (shutdown instanceof Promise) {
+      void shutdown.catch(() => undefined).then(exit);
+    } else {
+      exit();
+    }
+  }
 
+  #runQuitEvents(exitCode: number): boolean {
+    const beforeQuit = makeCancelableEvent();
+    this.emit('before-quit', beforeQuit);
+    if (beforeQuit.defaultPrevented || !(this.#windowCloser?.() ?? true)) {
+      return false;
+    }
     const willQuit = makeCancelableEvent();
     this.emit('will-quit', willQuit);
     if (willQuit.defaultPrevented) {
-      this.#quitting = false;
-      return;
+      return false;
     }
-
-    this.emit('quit', exitCode);
-    this.#environment().exit(exitCode);
+    this.emit('quit', makeCancelableEvent(), exitCode);
+    return true;
   }
 }
 
 export const app = new App();
+
+installQuitHandler(() => app.quit());

@@ -9,6 +9,7 @@ import {
   type PopupTarget,
   resetApplicationMenuForTesting,
   resolvePopupTarget,
+  installQuitHandler,
   setMenuRealizerForTesting,
   setWindowResolverForTesting,
 } from '../../../../src/main/api/menu';
@@ -38,6 +39,22 @@ beforeEach(() => {
 afterEach(() => {
   setMenuRealizerForTesting(undefined);
   resetApplicationMenuForTesting();
+});
+
+describe('the quit role', () => {
+  test('clicking it runs the app quit where the OS has no native quit command', () => {
+    let quits = 0;
+    installQuitHandler(() => {
+      quits += 1;
+    });
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([{ label: 'File', submenu: [{ role: 'quit' }] }]),
+    );
+    const quitItem = realized?.[0]?.submenu?.[0];
+    expect(quitItem?.roleSelector).toBe('terminate:');
+    quitItem?.onClick?.();
+    expect(quits).toBe(1);
+  });
 });
 
 describe('MenuItem', () => {

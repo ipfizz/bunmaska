@@ -164,6 +164,82 @@ describe('App.quit', () => {
     return { app: a, exits };
   };
 
+  test('closes the windows after before-quit and before will-quit', () => {
+    const { app: a, exits } = quittableApp();
+    const order: string[] = [];
+    a.on('before-quit', () => order.push('before-quit'));
+    a.setWindowCloser(() => {
+      order.push('close windows');
+      return true;
+    });
+    a.on('will-quit', () => order.push('will-quit'));
+    a.quit();
+    expect(order).toEqual(['before-quit', 'close windows', 'will-quit']);
+    expect(exits).toEqual([0]);
+  });
+
+  test('a window that refuses to close cancels the quit, and a later quit still runs', () => {
+    const { app: a, exits } = quittableApp();
+    let windowsLeft = true;
+    a.setWindowCloser(() => !windowsLeft);
+    let willQuit = 0;
+    a.on('will-quit', () => {
+      willQuit += 1;
+    });
+    a.quit();
+    expect(willQuit).toBe(0);
+    expect(exits).toEqual([]);
+    windowsLeft = false;
+    a.quit();
+    expect(exits).toEqual([0]);
+  });
+
+  test('a throwing before-quit listener does not wedge later quits', () => {
+    const { app: a, exits } = quittableApp();
+    const bug = (): void => {
+      throw new Error('save failed');
+    };
+    a.on('before-quit', bug);
+    expect(() => a.quit()).toThrow('save failed');
+    a.off('before-quit', bug);
+    a.quit();
+    expect(exits).toEqual([0]);
+  });
+
+  test('quit listeners receive an event and the exit code', () => {
+    const { app: a } = quittableApp();
+    const seen: unknown[] = [];
+    a.on('quit', (event: unknown, code: unknown) => {
+      seen.push(typeof (event as { preventDefault?: unknown }).preventDefault, code);
+    });
+    a.quit(4);
+    expect(seen).toEqual(['function', 4]);
+  });
+
+  test('exits only after an asynchronous shutdown hook settles', async () => {
+    const { app: a, exits } = quittableApp();
+    let finish: () => void = () => undefined;
+    a.setShutdownHook(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    a.quit(3);
+    expect(exits).toEqual([]);
+    finish();
+    await Bun.sleep(0);
+    expect(exits).toEqual([3]);
+  });
+
+  test('exits even when the shutdown hook rejects', async () => {
+    const { app: a, exits } = quittableApp();
+    a.setShutdownHook(() => Promise.reject(new Error('engine wedged')));
+    a.quit();
+    await Bun.sleep(0);
+    expect(exits).toEqual([0]);
+  });
+
   test('emits before-quit, will-quit, then quit in order, then exits', () => {
     const { app: a, exits } = quittableApp();
     const order: string[] = [];
@@ -202,7 +278,7 @@ describe('App.quit', () => {
   test('emits quit with the exit code and exits with it', () => {
     const { app: a, exits } = quittableApp();
     let quitCode = -1;
-    a.on('quit', (code: number) => {
+    a.on('quit', (_event: unknown, code: number) => {
       quitCode = code;
     });
     a.quit(5);

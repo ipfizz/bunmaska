@@ -852,6 +852,7 @@ class MacOSApplication implements NativeApplication {
   #onActivate: ((hasVisibleWindows: boolean) => void) | undefined;
   #onOpenUrl: ((url: string) => void) | undefined;
   #onOpenFile: ((path: string) => void) | undefined;
+  #onQuitRequest: (() => void) | undefined;
   // Cached arguments for the per-tick AppKit event pump.
   #nextEventSel: Handle = 0n;
   #sendEventSel: Handle = 0n;
@@ -871,6 +872,7 @@ class MacOSApplication implements NativeApplication {
       activate: (hasVisibleWindows) => this.#onActivate?.(hasVisibleWindows),
       openUrl: (url) => this.#onOpenUrl?.(url),
       openFile: (path) => this.#onOpenFile?.(path),
+      quitRequested: () => this.#onQuitRequest?.(),
     });
     this.#appDelegate = delegate.handle;
     msgSendPtr(this.#app, rt.selectors.get('setDelegate:'), this.#appDelegate);
@@ -937,6 +939,10 @@ class MacOSApplication implements NativeApplication {
 
   onOpenFile(callback: (path: string) => void): void {
     this.#onOpenFile = callback;
+  }
+
+  onQuitRequest(callback: () => void): void {
+    this.#onQuitRequest = callback;
   }
 
   readonly appKit: NativeAppKit = {

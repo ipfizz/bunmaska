@@ -12,7 +12,11 @@ export type AppDelegateHandlers = {
   readonly openUrl: (url: string) => void;
   /** The OS asked the app to open a file path (file association). */
   readonly openFile: (path: string) => void;
+  /** AppKit is terminating (Cmd+Q, Dock Quit, logout); the native terminate was cancelled. */
+  readonly quitRequested: () => void;
 };
+
+const NS_TERMINATE_CANCEL = 0n;
 
 let delegateClass: Handle | undefined;
 let current: AppDelegateHandlers | undefined;
@@ -33,6 +37,18 @@ const ensureDelegateClass = (): Handle => {
         const hasVisibleWindows = (flag & 0xffn) !== 0n;
         current?.activate(hasVisibleWindows);
         return hasVisibleWindows ? 1 : 0;
+      },
+    },
+    {
+      // NSApplicationTerminateReply applicationShouldTerminate:(NSApplication*)sender
+      selector: 'applicationShouldTerminate:',
+      typeEncoding: 'Q@:@',
+      args: ['object'],
+      returns: 'object',
+      // -terminate: would exit without before-quit/will-quit or window vetoes; the JS quit runs them.
+      impl: () => {
+        current?.quitRequested();
+        return NS_TERMINATE_CANCEL as unknown as undefined;
       },
     },
     {

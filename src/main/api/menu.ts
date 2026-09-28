@@ -359,6 +359,10 @@ const toSpec = (item: MenuItem, siblings: readonly MenuItem[]): NativeMenuItemSp
   if (item.type === 'submenu' && item.submenu !== undefined) {
     return { ...base, submenu: toSpecs(item.submenu.items) };
   }
+  // macOS routes terminate: through the app delegate; elsewhere the quit role has no native command.
+  if (item.role === 'quit') {
+    return { ...base, onClick: () => quitHandler?.() };
+  }
   // A role wins over a click: one native item cannot run both (D035).
   const checkable = item.type === 'checkbox' || item.type === 'radio';
   if (
@@ -397,6 +401,13 @@ export type WindowResolver = {
 let windowResolver: WindowResolver | undefined;
 
 /** Called once at load by the BrowserWindow module. */
+let quitHandler: (() => void) | undefined;
+
+/** Called by `app` at load so the quit role can run `app.quit()` without an import cycle. @internal */
+export const installQuitHandler = (handler: () => void): void => {
+  quitHandler = handler;
+};
+
 export const installWindowResolver = (resolver: WindowResolver): void => {
   windowResolver = resolver;
 };

@@ -12,6 +12,7 @@ type NativeTriggers = {
   activate: (v: boolean) => void;
   openUrl: (url: string) => void;
   openFile: (path: string) => void;
+  quitRequest: () => void;
 };
 
 /** A fake native app exposing triggers for its registered lifecycle callbacks. */
@@ -19,6 +20,7 @@ const makeNative = (): NativeTriggers => {
   let activateCb: ((v: boolean) => void) | undefined;
   let openUrlCb: ((url: string) => void) | undefined;
   let openFileCb: ((path: string) => void) | undefined;
+  let quitRequestCb: (() => void) | undefined;
   const native: NativeApplication = {
     start: () => undefined,
     onReady: (ready) => ready(),
@@ -35,12 +37,16 @@ const makeNative = (): NativeTriggers => {
     onOpenFile: (c) => {
       openFileCb = c;
     },
+    onQuitRequest: (c) => {
+      quitRequestCb = c;
+    },
   };
   return {
     native,
     activate: (v) => activateCb?.(v),
     openUrl: (url) => openUrlCb?.(url),
     openFile: (path) => openFileCb?.(path),
+    quitRequest: () => quitRequestCb?.(),
   };
 };
 
@@ -58,6 +64,26 @@ describe('bootstrap native wiring', () => {
     resetBootstrapForTesting();
     nativeTheme.resetObservingForTesting();
     powerMonitor.resetObservingForTesting();
+  });
+
+  test('an OS quit request runs app.quit on a later tick, never inside the native callback', async () => {
+    const triggers = makeNative();
+    setNativeAppForTesting(triggers.native);
+    ensureNativeStarted();
+    let beforeQuit = 0;
+    const veto = (event: { preventDefault(): void }): void => {
+      beforeQuit += 1;
+      event.preventDefault();
+    };
+    app.on('before-quit', veto);
+    try {
+      triggers.quitRequest();
+      expect(beforeQuit).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(beforeQuit).toBe(1);
+    } finally {
+      app.removeListener('before-quit', veto);
+    }
   });
 
   test('forwards native activate to the app activate event with hasVisibleWindows', () => {

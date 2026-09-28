@@ -175,7 +175,7 @@ export class BrowserWindow extends EventEmitter {
 
   /** Electron's default: the last close quits unless `window-all-closed` has a listener. */
   #emitWindowAllClosedIfLast(): void {
-    if (registry.size > 0) {
+    if (registry.size > 0 || app.quitting) {
       return;
     }
     if (!app.emit('window-all-closed')) {
@@ -351,6 +351,13 @@ export class BrowserWindow extends EventEmitter {
 }
 
 // Menu.popup resolves its window through this, so menu.ts never imports this module (a cycle).
+app.setWindowCloser(() => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.close();
+  }
+  return registry.size === 0;
+});
+
 installWindowResolver({
   focused: () => {
     const window = BrowserWindow.getFocusedWindow();

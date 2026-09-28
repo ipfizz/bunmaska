@@ -690,6 +690,36 @@ describe('App-level window events', () => {
     expect(appExitCodes()).toEqual([0]);
   });
 
+  test('app.quit closes every window, then exits', () => {
+    const a = new BrowserWindow();
+    const b = new BrowserWindow();
+    const closed: string[] = [];
+    a.on('closed', () => closed.push('a'));
+    b.on('closed', () => closed.push('b'));
+    app.quit();
+    expect(closed).toEqual(['a', 'b']);
+    expect(appExitCodes()).toEqual([0]);
+  });
+
+  test('a close veto during app.quit keeps the window and cancels the quit', () => {
+    const dirty = new BrowserWindow();
+    dirty.on('close', (event: { preventDefault(): void }) => event.preventDefault());
+    app.quit();
+    expect(dirty.isDestroyed()).toBe(false);
+    expect(appExitCodes()).toEqual([]);
+  });
+
+  test('app.quit emits no window-all-closed while it closes the windows', () => {
+    new BrowserWindow();
+    let fired = 0;
+    app.on('window-all-closed', () => {
+      fired += 1;
+    });
+    app.quit();
+    expect(fired).toBe(0);
+    expect(appExitCodes()).toEqual([0]);
+  });
+
   test('a window-all-closed listener suppresses the default quit', () => {
     const win = new BrowserWindow();
     app.on('window-all-closed', () => undefined);

@@ -29,6 +29,10 @@ export const ensureNativeStarted = (): void => {
   native.onOpenFile?.((path) => {
     app.emit('open-file', makeCancelableEvent(), path);
   });
+  // Deferred: the JS quit must not run inside AppKit's -terminate: call.
+  native.onQuitRequest?.(() => {
+    setTimeout(() => app.quit(), 0);
+  });
   try {
     native.start();
   } catch (error) {
@@ -50,5 +54,5 @@ app.on('newListener', (event: string | symbol) => {
     setTimeout(ensureNativeStarted, 0);
   }
 });
-// Stop the pump on `quit`, never `will-quit`: a vetoed quit would kill every later native callback.
-app.on('quit', () => nativeApp().quit());
+// Runs only once every quit veto passed, so a cancelled quit keeps the run loop pumping.
+app.setShutdownHook(() => nativeApp().quit());
