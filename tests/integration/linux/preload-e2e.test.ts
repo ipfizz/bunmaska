@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { requireGtkDisplay } from '../../helpers/require-gtk-display';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
 import { createLinuxApplication } from '../../../src/main/platform/linux/linux-backend';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
@@ -33,9 +33,7 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
 
 describe.skipIf(!isLinux)('Linux webPreferences.preload end-to-end', () => {
   test('user preload runs at document-start with the bridge already installed', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
 
     const dir = mkdtempSync(join(tmpdir(), 'bunmaska-preload-e2e-'));
     // The preload (isolated world) records whether the bridge exists at the
