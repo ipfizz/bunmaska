@@ -42,21 +42,28 @@ export const ensureGdiplus = (): void => {
   gdiplusStarted = true;
 };
 
-/**
- * Release one COM object (an `IStream`) by walking its vtable to `IUnknown::Release`
- * and calling it. The single COM vtable call in the codebase — every other Windows
- * surface is flat-C. `read.u64` reads the object's vtable pointer and the function
- * pointer at the Release slot; `CFunction` makes that address callable.
- */
-const releaseStream = (object: bigint): void => {
+const comMethods = new Map<bigint, ReturnType<typeof CFunction>>();
+
+/** Vtable `slot` of COM `object` as a callable, compiled once per method address. */
+const comMethod = (
+  object: bigint,
+  slot: number,
+  args: readonly FFIType[],
+  returns: FFIType,
+): ReturnType<typeof CFunction> => {
   const vtable = read.u64(Number(object) as Pointer, 0);
-  const releaseFn = read.u64(Number(vtable) as Pointer, IUNKNOWN_RELEASE_SLOT * POINTER_SIZE);
-  const release = CFunction({
-    ptr: Number(releaseFn) as Pointer,
-    args: [FFIType.u64],
-    returns: FFIType.u32,
-  });
-  release(object);
+  const address = read.u64(Number(vtable) as Pointer, slot * POINTER_SIZE);
+  let method = comMethods.get(address);
+  if (method === undefined) {
+    method = CFunction({ ptr: Number(address) as Pointer, args, returns });
+    comMethods.set(address, method);
+  }
+  return method;
+};
+
+/** Drop our reference to an `IStream`. */
+const releaseStream = (stream: bigint): void => {
+  comMethod(stream, IUNKNOWN_RELEASE_SLOT, [FFIType.u64], FFIType.u32)(stream);
 };
 
 /** Read a GDI+ image's pixel dimensions via the scalar `GdipGetImage{Width,Height}` getters. */
