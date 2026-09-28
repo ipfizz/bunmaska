@@ -1,7 +1,7 @@
 import { CString, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
-import { type BuiltProtocolResponse, protocol } from '../../api/protocol';
 import { cstr } from '../cstr';
+import type { BuiltProtocolResponse, NativeProtocol } from '../native';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
@@ -77,10 +77,13 @@ const finishWithBytes = (request: Pointer, built: BuiltProtocolResponse): void =
 };
 
 /** @internal Completes the request with an error rather than throwing into the native callback. */
-export const handleUriSchemeRequest = (request: Pointer): void => {
+export const handleUriSchemeRequest = (
+  request: Pointer,
+  dispatch: NativeProtocol['dispatch'],
+): void => {
   try {
     const url = requestUri(request);
-    const built = protocol.dispatch(url);
+    const built = dispatch(url);
     if (built === undefined) {
       finishError(request);
       return;
@@ -95,9 +98,9 @@ export const handleUriSchemeRequest = (request: Pointer): void => {
 /** `WebKitURISchemeRequestCallback`: `(request, user_data) -> void`. */
 export const URI_SCHEME_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
 
-const makeUriSchemeCallback = (): JSCallback =>
+const makeUriSchemeCallback = (dispatch: NativeProtocol['dispatch']): JSCallback =>
   new JSCallback((request: Pointer, _userData: Pointer): void => {
-    handleUriSchemeRequest(request);
+    handleUriSchemeRequest(request, dispatch);
   }, URI_SCHEME_CB_DEF);
 
 const contextFor = (view: Pointer | null): Pointer | null => {
@@ -109,7 +112,11 @@ const contextFor = (view: Pointer | null): Pointer | null => {
 };
 
 /** Register `scheme` on `view`'s context (the default one when null); idempotent per scheme. */
-export const registerUriScheme = (scheme: string, view: Pointer | null): void => {
+export const registerUriScheme = (
+  scheme: string,
+  view: Pointer | null,
+  dispatch: NativeProtocol['dispatch'],
+): void => {
   if (registeredSchemes.has(scheme)) {
     return;
   }
@@ -119,7 +126,7 @@ export const registerUriScheme = (scheme: string, view: Pointer | null): void =>
     return;
   }
   const webkit = loadWebKitGtkFFI();
-  const callback = makeUriSchemeCallback();
+  const callback = makeUriSchemeCallback(dispatch);
   if (callback.ptr === null) {
     callback.close();
     throw new Error(`failed to allocate a URI-scheme callback thunk for '${scheme}'`);
@@ -136,8 +143,11 @@ export const registerUriScheme = (scheme: string, view: Pointer | null): void =>
 };
 
 /** Wire every `protocol.handle` scheme; call before the view's first load. */
-export const registerAllSchemes = (view: Pointer | null): void => {
-  for (const scheme of protocol.getRegisteredSchemes()) {
-    registerUriScheme(scheme, view);
+export const registerAllSchemes = (view: Pointer | null, protocol?: NativeProtocol): void => {
+  if (protocol === undefined) {
+    return;
+  }
+  for (const scheme of protocol.schemes) {
+    registerUriScheme(scheme, view, protocol.dispatch);
   }
 };

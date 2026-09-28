@@ -78,6 +78,7 @@ class WindowsWindow implements NativeWindow {
       client.height,
       options.preloadScript,
       options.frame,
+      options.protocol,
     );
     this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
     this.#appMenuTarget = {

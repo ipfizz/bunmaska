@@ -659,12 +659,20 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
           nsString('bmshared'),
         );
       };
-      const first = app.createWindow({ width: 200, height: 100, title: 'scheme-a', show: false });
+      const served = { schemes: ['bmshared'], dispatch: protocol.dispatch };
+      const first = app.createWindow({
+        width: 200,
+        height: 100,
+        title: 'scheme-a',
+        show: false,
+        protocol: served,
+      });
       const second = app.createWindow({
         width: 200,
         height: 100,
         title: 'scheme-b',
         show: false,
+        protocol: served,
       });
       expect(handlerOf('scheme-a')).not.toBe(0n);
       expect(handlerOf('scheme-a')).toBe(handlerOf('scheme-b'));

@@ -5,6 +5,6 @@ import { registerUriScheme } from '../../../../../src/main/platform/linux/webkit
 
 describe.skipIf(currentPlatform() === 'linux')('registerUriScheme off Linux', () => {
   test('throws UnsupportedPlatformError instead of touching a missing WebKitGTK', () => {
-    expect(() => registerUriScheme('app', null)).toThrow(UnsupportedPlatformError);
+    expect(() => registerUriScheme('app', null, () => undefined)).toThrow(UnsupportedPlatformError);
   });
 });

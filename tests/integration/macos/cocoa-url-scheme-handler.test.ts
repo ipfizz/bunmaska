@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import type { BuiltProtocolResponse } from '../../../src/main/api/protocol';
 import { nsString, nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
 import {
   msgSendPtr,
@@ -11,9 +10,9 @@ import { defineObjcClass } from '../../../src/main/platform/macos/cocoa-runtime-
 import {
   createUrlSchemeHandler,
   handleStartTask,
-  setUrlSchemeDispatcherForTesting,
 } from '../../../src/main/platform/macos/cocoa-url-scheme-handler';
 import type { Handle } from '../../../src/main/platform/macos/objc';
+import type { BuiltProtocolResponse } from '../../../src/main/platform/native';
 
 type TaskLog = {
   request: Handle;
@@ -89,20 +88,15 @@ const fakeTask = (url: string): Handle => {
 
 const serve = (built: BuiltProtocolResponse | undefined): string[] => {
   const seen: string[] = [];
-  setUrlSchemeDispatcherForTesting((url) => {
+  handleStartTask(fakeTask('app://host/index.html'), (url) => {
     seen.push(url);
     return built;
   });
-  handleStartTask(fakeTask('app://host/index.html'));
   return seen;
 };
 
 const responseString = (selector: string): string =>
   nsStringToString(cocoa().msgSend(log.response, cocoa().selectors.get(selector)));
-
-afterEach(() => {
-  setUrlSchemeDispatcherForTesting(undefined);
-});
 
 if (currentPlatform() === 'macos') {
   describe('BunmaskaURLSchemeHandler task serving', () => {
@@ -142,7 +136,8 @@ if (currentPlatform() === 'macos') {
 
   describe('createUrlSchemeHandler', () => {
     test('every window shares one handler instance instead of leaking one each', () => {
-      expect(createUrlSchemeHandler().handle).toBe(createUrlSchemeHandler().handle);
+      const decline = () => undefined;
+      expect(createUrlSchemeHandler(decline).handle).toBe(createUrlSchemeHandler(decline).handle);
     });
   });
 }

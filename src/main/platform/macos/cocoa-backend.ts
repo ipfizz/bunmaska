@@ -8,7 +8,6 @@ import {
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { protocol } from '../../api/protocol';
 import { isDevRestart } from '../../dev-reload';
 import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
 import { AdaptiveBlockingPump } from '../../run-loop';
@@ -17,6 +16,7 @@ import type {
   NativeAppKit,
   NativeApplication,
   NativeNavigationEvent,
+  NativeProtocol,
   NativeWebContents,
   NativeWindow,
   NativeWindowOptions,
@@ -150,23 +150,22 @@ const enableDeveloperExtras = (preferences: Handle): void => {
   }
 };
 
-/** One stateless handler serves every scheme of every window. */
-let schemeHandler: Handle | undefined;
-
 /**
  * Put every `protocol.handle` scheme on `configuration`; WebKit only accepts
  * scheme handlers before the web view exists. `setURLSchemeHandler:` raises an
  * uncatchable NSInvalidArgumentException for a scheme WebKit serves itself:
  * protocol.handle rejects the known ones, and `handlesURLScheme:` catches any it misses.
  */
-const registerCustomSchemes = (configuration: Handle): void => {
-  const schemes = protocol.getRegisteredSchemes();
-  if (schemes.length === 0) {
+const registerCustomSchemes = (
+  configuration: Handle,
+  protocol: NativeProtocol | undefined,
+): void => {
+  if (protocol === undefined || protocol.schemes.length === 0) {
     return;
   }
   const rt = cocoa();
-  schemeHandler ??= createUrlSchemeHandler().handle;
-  for (const scheme of schemes) {
+  const schemeHandler = createUrlSchemeHandler(protocol.dispatch).handle;
+  for (const scheme of protocol.schemes) {
     const unsupported =
       msgSendPtrReturnsU8(
         rt.classes.get('WKWebView'),
@@ -983,8 +982,7 @@ class MacOSApplication implements NativeApplication {
 
     enableDeveloperExtras(rt.msgSend(configuration, rt.selectors.get('preferences')));
 
-    // A scheme handled after this window exists is not served by it (Electron's rule too).
-    registerCustomSchemes(configuration);
+    registerCustomSchemes(configuration, options.protocol);
 
     // The handlers exist before the web view, so they reach its contents late-bound.
     let contents: MacOSWebContents | undefined;

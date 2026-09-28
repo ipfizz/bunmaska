@@ -15,6 +15,7 @@ import type { NativeMenuItemSpec } from '../services';
 import type {
   NativeApplication,
   NativeNavigationEvent,
+  NativeProtocol,
   NativeWebContents,
   NativeWindow,
   NativeWindowOptions,
@@ -68,7 +69,7 @@ class LinuxWebContents implements NativeWebContents {
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
   #windowOpenCallback: ((url: string) => void) | undefined;
 
-  constructor(userPreloadSource?: string, frame?: boolean) {
+  constructor(userPreloadSource?: string, frame?: boolean, protocol?: NativeProtocol) {
     const channelId = generateChannelId();
     const stub = generatePageWorldStub(channelId);
     const wired = createWebViewWithIpc({
@@ -96,7 +97,7 @@ class LinuxWebContents implements NativeWebContents {
     this.#view = wired.view;
     this.#ucm = wired.ucm;
     this.#registry = wired.registry;
-    registerAllSchemes(this.#view);
+    registerAllSchemes(this.#view, protocol);
     const webkit = loadWebKitGtkFFI();
     webkit.symbols.webkit_settings_set_enable_developer_extras(
       webkit.symbols.webkit_web_view_get_settings(this.#view),
@@ -326,7 +327,11 @@ class LinuxWindow implements NativeWindow {
       gtk.symbols.gtk_window_fullscreen(this.#window);
     }
 
-    this.#webContents = new LinuxWebContents(options.preloadScript, options.frame);
+    this.#webContents = new LinuxWebContents(
+      options.preloadScript,
+      options.frame,
+      options.protocol,
+    );
     // Always a box, so a later setApplicationMenu can prepend a bar without reparenting the view.
     const menu = loadGtkMenuFFI().symbols;
     const box = menu.gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);

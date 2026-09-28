@@ -50,6 +50,7 @@ describe.skipIf(!isLinux)('custom app:// scheme over real WebKitGTK', () => {
       height: 300,
       title: 'linux-protocol',
       show: true,
+      protocol: { schemes: ['app'], dispatch: protocol.dispatch },
     });
     const contents: NativeWebContents = window.webContents;
 

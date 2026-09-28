@@ -1,6 +1,6 @@
 import { ptr } from 'bun:ffi';
 import { createLogger } from '../../../common/logger';
-import { type BuiltProtocolResponse, protocol } from '../../api/protocol';
+import type { BuiltProtocolResponse, NativeProtocol } from '../native';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import {
   msgSendPtr,
@@ -17,14 +17,7 @@ const log = createLogger('macos-url-scheme-handler');
 const ERROR_DOMAIN = 'BunmaskaProtocol';
 const ERROR_CODE_NO_HANDLER = -1100n; // NSURLErrorFileDoesNotExist
 
-let dispatcher: (url: string) => BuiltProtocolResponse | undefined = protocol.dispatch;
-
-/** Override the URL dispatcher. Test-only. */
-export const setUrlSchemeDispatcherForTesting = (
-  fake: ((url: string) => BuiltProtocolResponse | undefined) | undefined,
-): void => {
-  dispatcher = fake ?? protocol.dispatch;
-};
+let dispatcher: NativeProtocol['dispatch'] = () => undefined;
 
 /** Fail `task` as declined. The catch covers JS/FFI errors only; an NSException aborts. */
 const failTask = (task: Handle): void => {
@@ -77,11 +70,11 @@ const serveTask = (task: Handle, url: Handle, built: BuiltProtocolResponse): voi
 };
 
 /** @internal `webView:startURLSchemeTask:`; never throws into the IMP, any error fails the task. */
-export const handleStartTask = (task: Handle): void => {
+export const handleStartTask = (task: Handle, dispatch: NativeProtocol['dispatch']): void => {
   try {
     const rt = cocoa();
     const url = rt.msgSend(rt.msgSend(task, rt.selectors.get('request')), rt.selectors.get('URL'));
-    const built = dispatcher(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+    const built = dispatch(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
     if (built === undefined) {
       failTask(task);
       return;
@@ -105,7 +98,7 @@ const ensureHandlerClass = (): Handle => {
       typeEncoding: 'v@:@@',
       args: ['object', 'object'],
       impl: (_self, _cmd, _webView, task) => {
-        handleStartTask(task);
+        handleStartTask(task, dispatcher);
       },
     },
     {
@@ -127,8 +120,9 @@ export type UrlSchemeHandler = {
 
 let shared: UrlSchemeHandler | undefined;
 
-/** The process-wide handler: it has no per-window state, so every configuration shares it. */
-export const createUrlSchemeHandler = (): UrlSchemeHandler => {
+/** The process-wide handler every configuration shares; `dispatch` replaces the previous one. */
+export const createUrlSchemeHandler = (dispatch: NativeProtocol['dispatch']): UrlSchemeHandler => {
+  dispatcher = dispatch;
   if (shared === undefined) {
     const rt = cocoa();
     const alloc = rt.msgSend(ensureHandlerClass(), rt.selectors.get('alloc'));

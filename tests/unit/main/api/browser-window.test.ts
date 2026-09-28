@@ -13,6 +13,7 @@ import {
   BrowserWindow,
   resetWindowRegistryForTesting,
 } from '../../../../src/main/api/browser-window';
+import { protocol } from '../../../../src/main/api/protocol';
 import { session } from '../../../../src/main/api/session';
 import { resetWebContentsIdsForTesting } from '../../../../src/main/api/web-contents';
 import { resetBootstrapForTesting } from '../../../../src/main/bootstrap';
@@ -353,6 +354,18 @@ describe('BrowserWindow construction', () => {
   test('forwards resizable, frame, and fullscreen when provided', () => {
     new BrowserWindow({ resizable: false, frame: false, fullscreen: true });
     expect(created[0]).toMatchObject({ resizable: false, frame: false, fullscreen: true });
+  });
+
+  test('hands the registered protocol schemes and their dispatcher to the backend', () => {
+    protocol.handle('bmtest', () => ({ data: 'hi', mimeType: 'text/plain' }));
+    try {
+      new BrowserWindow();
+      const served = created[0]?.protocol;
+      expect(served?.schemes).toEqual(['bmtest']);
+      expect(served?.dispatch('bmtest://x')?.mimeType).toBe('text/plain');
+    } finally {
+      protocol.unhandle('bmtest');
+    }
   });
 
   test('omits resizable/frame/fullscreen when not provided', () => {

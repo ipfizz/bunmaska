@@ -9,6 +9,18 @@ export type Rect = {
   readonly height: number;
 };
 
+export type BuiltProtocolResponse = {
+  readonly bytes: Uint8Array;
+  readonly mimeType: string;
+};
+
+/** The `protocol.handle` schemes at window creation, served through `dispatch`. */
+export type NativeProtocol = {
+  readonly schemes: readonly string[];
+  /** `undefined` fails the request with a network error. */
+  readonly dispatch: (url: string) => BuiltProtocolResponse | undefined;
+};
+
 export type NativeWindowOptions = {
   readonly width: number;
   readonly height: number;
@@ -25,6 +37,8 @@ export type NativeWindowOptions = {
    * bootstrap. Main frame only on every backend, as Electron's `nodeIntegrationInSubFrames: false`.
    */
   readonly preloadScript?: string;
+  /** Read once: a scheme handled after the window exists is not served by it (Electron's rule too). */
+  readonly protocol?: NativeProtocol;
 };
 
 /** Maps 1:1 to the Electron `webContents` event; only `did-fail-load` carries detail. */

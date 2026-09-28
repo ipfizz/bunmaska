@@ -9,6 +9,7 @@ import type { Rect } from '../platform/native';
 import { app } from './app';
 import { installWindowResolver, type PopupTarget } from './menu';
 import { loadPreloadScript } from './preload';
+import { protocol } from './protocol';
 import { screen } from './screen';
 import { session } from './session';
 import { type LoadFileOptions, objectDestroyedError, WebContents } from './web-contents';
@@ -109,12 +110,14 @@ export class BrowserWindow extends EventEmitter {
       options = { ...options, width: devBounds.width, height: devBounds.height };
     }
     const preloadScript = loadPreloadScript(options.webPreferences?.preload);
+    const schemes = protocol.getRegisteredSchemes();
     this.#window = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,
       title: options.title ?? DEFAULT_TITLE,
       show: false,
       ...(preloadScript !== undefined ? { preloadScript } : {}),
+      ...(schemes.length > 0 ? { protocol: { schemes, dispatch: protocol.dispatch } } : {}),
       ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
       ...(options.frame !== undefined ? { frame: options.frame } : {}),
       ...(options.fullscreen !== undefined ? { fullscreen: options.fullscreen } : {}),

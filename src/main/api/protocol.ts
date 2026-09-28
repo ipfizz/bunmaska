@@ -1,4 +1,5 @@
 import { InvalidArgumentError } from '../../common/errors';
+import type { BuiltProtocolResponse } from '../platform/native';
 
 /** String `data` is UTF-8 encoded, bytes go out verbatim; `mimeType` defaults to `text/html`. */
 export type ProtocolResponse = {
@@ -12,11 +13,6 @@ export type ProtocolRequest = {
 
 /** Returns `undefined` to decline: the backend fails the request with a network error. */
 export type ProtocolHandler = (request: ProtocolRequest) => ProtocolResponse | undefined;
-
-export type BuiltProtocolResponse = {
-  readonly bytes: Uint8Array;
-  readonly mimeType: string;
-};
 
 export const DEFAULT_MIME_TYPE = 'text/html';
 
@@ -69,10 +65,7 @@ const ENGINE_SCHEMES: ReadonlySet<string> = new Set([
   'webkit-fake-url',
 ]);
 
-/**
- * Re-registering replaces the handler. Register BEFORE creating the window that serves the
- * scheme: the backends read {@link getRegisteredSchemes} only at web-view creation.
- */
+/** Re-registering replaces the handler. Register BEFORE creating the window that serves the scheme. */
 const handle = (scheme: string, handler: ProtocolHandler): void => {
   const normalized = normalizeScheme(scheme);
   if (!/^[a-z][a-z0-9+.-]*$/.test(normalized)) {

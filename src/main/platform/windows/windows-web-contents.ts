@@ -1,6 +1,5 @@
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
-import { protocol } from '../../api/protocol';
 import {
   generateChannelId,
   generateIsolatedChannelSetup,
@@ -10,7 +9,12 @@ import {
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { EXEC_HANDLER_NAME, ExecResultChannel } from '../linux/eval-js';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
-import type { NativeInputEvent, NativeNavigationEvent, NativeWebContents } from '../native';
+import type {
+  NativeInputEvent,
+  NativeNavigationEvent,
+  NativeProtocol,
+  NativeWebContents,
+} from '../native';
 import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
 
@@ -34,8 +38,9 @@ export class WindowsWebContents implements NativeWebContents {
     height: number,
     preloadScript?: string,
     frame?: boolean,
+    protocol?: NativeProtocol,
   ) {
-    const schemes = protocol.getRegisteredSchemes();
+    const schemes = protocol?.schemes ?? [];
     if (schemes.length > 0) {
       // ponytail: the WinCairo C API has no URL-scheme handler hook at wpewebkit-2.52.5.
       log.warn(`protocol.handle schemes are not served on Windows yet: ${schemes.join(', ')}`);
