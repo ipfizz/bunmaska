@@ -41,6 +41,10 @@ export const domainMatches = (cookieDomain: string, host: string): boolean => {
   return host === domain || host.endsWith(`.${domain}`);
 };
 
+/** A cookie domain without a leading dot is host-only: it matches its host exactly. */
+const sentToHost = (cookieDomain: string, host: string): boolean =>
+  cookieDomain.startsWith('.') ? domainMatches(cookieDomain, host) : host === cookieDomain;
+
 /** RFC 6265 path-match: equal, or prefix on a `/` label boundary. */
 const pathMatches = (cookiePath: string, urlPath: string): boolean =>
   urlPath === cookiePath ||
@@ -56,7 +60,7 @@ const parseUrl = (url: string, context: string): URL => {
 };
 
 const sentToUrl = (cookie: Cookie, url: URL): boolean =>
-  domainMatches(cookie.domain, url.hostname) &&
+  sentToHost(cookie.domain, url.hostname) &&
   pathMatches(cookie.path, url.pathname) &&
   (!cookie.secure || url.protocol === 'https:' || url.protocol === 'wss:');
 
@@ -86,7 +90,7 @@ export const cookiesToRemove = (
   return cookies.filter(
     (cookie) =>
       cookie.name === name &&
-      domainMatches(cookie.domain, parsed.hostname) &&
+      sentToHost(cookie.domain, parsed.hostname) &&
       pathMatches(cookie.path, parsed.pathname),
   );
 };
@@ -97,7 +101,7 @@ export const cookieFromSetDetails = (details: CookieSetDetails): Cookie => {
   return {
     name: details.name ?? '',
     value: details.value ?? '',
-    domain: details.domain ?? url.hostname,
+    domain: details.domain ? `.${stripDot(details.domain)}` : url.hostname,
     path: details.path ?? '/',
     secure: details.secure ?? false,
     httpOnly: details.httpOnly ?? false,
