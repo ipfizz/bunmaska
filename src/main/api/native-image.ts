@@ -20,7 +20,7 @@ export type DecodedImage = {
 
 export type NativeImageBackend = {
   /** A filesystem path or in-memory PNG/JPEG bytes. */
-  decode(source: string | Uint8Array): DecodedImage; // ponytail: no release(handle); images leak for the process life
+  decode(source: string | Uint8Array): DecodedImage;
   encodePng(handle: NativeImageHandle): Uint8Array;
   /** `quality` is 0-100. */
   encodeJpeg(handle: NativeImageHandle, quality: number): Uint8Array;
@@ -34,6 +34,8 @@ export type NativeImageBackend = {
     width: number,
     height: number,
   ): DecodedImage;
+  /** Drops the reference `decode`, `resize` or `crop` returned, once its image is collected. */
+  release?(handle: NativeImageHandle): void;
 };
 
 /** Preserves aspect ratio when one dimension is omitted. */
@@ -75,6 +77,12 @@ export const clampCropRect = (
 
 const DATA_URL_PREFIX = 'data:image/png;base64,';
 
+// The held value must never reference the image, or the image is never collected.
+const releaser = new FinalizationRegistry<{
+  readonly backend: NativeImageBackend;
+  readonly handle: NativeImageHandle;
+}>(({ backend, handle }) => backend.release?.(handle));
+
 /** Created through the {@link nativeImage} factory, never directly. */
 export class NativeImage {
   readonly #backend: NativeImageBackend;
@@ -91,6 +99,9 @@ export class NativeImage {
     this.#width = decoded.empty ? 0 : decoded.width;
     this.#height = decoded.empty ? 0 : decoded.height;
     this.#empty = decoded.empty;
+    if (decoded.handle !== 0n) {
+      releaser.register(this, { backend, handle: decoded.handle });
+    }
   }
 
   /** Pixel dimensions; `{ width: 0, height: 0 }` when empty. */
