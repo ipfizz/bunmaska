@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { app } from '../../../../src/main/api/app';
 import {
   type NativeBlocker,
   PowerSaveBlockerImpl,
@@ -86,5 +87,25 @@ describe('PowerSaveBlocker registry', () => {
     }).not.toThrow();
     expect(psb.isStarted(id)).toBe(true);
     expect(psb.stop(id)).toBe(true);
+  });
+});
+
+describe('powerSaveBlocker app identity', () => {
+  test("start tells the backend the app's name", () => {
+    const names: (string | undefined)[] = [];
+    const blocker = new PowerSaveBlockerImpl({
+      acquire: (_type, appName) => {
+        names.push(appName);
+        return null;
+      },
+      release: () => undefined,
+    });
+    app.setName('Notes Test');
+    try {
+      blocker.start('prevent-display-sleep');
+    } finally {
+      app.resetForTesting();
+    }
+    expect(names).toEqual(['Notes Test']);
   });
 });

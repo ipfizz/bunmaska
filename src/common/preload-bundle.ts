@@ -30,15 +30,13 @@ export type PreloadBundler = {
   readonly bundle: (absolutePath: string) => string;
 };
 
-/**
- * The Bun executable when running under the Bun CLI, where the bundler is
- * reachable; `undefined` inside a compiled app, whose `process.execPath` is the
- * app binary and must never be re-spawned as a bundler.
- */
-const bunCliPath = (): string | undefined => {
-  const exe = process.execPath;
-  return /(?:^|[\\/])bunx?(?:-debug|-profile)?(?:\.exe)?$/i.test(exe) ? exe : undefined;
-};
+/** Whether `execPath` is the Bun CLI; a compiled app's binary (even one named `bun-*`) is not. */
+export const isBunCli = (execPath: string): boolean =>
+  /(?:^|[\\/])bunx?(?:-debug|-profile)?(?:\.exe)?$/i.test(execPath);
+
+/** The Bun CLI, where the bundler is reachable; a compiled app must never re-spawn itself as one. */
+const bunCliPath = (): string | undefined =>
+  isBunCli(process.execPath) ? process.execPath : undefined;
 
 /** Production bundler: shells out to Bun's bundler. Available only under the Bun CLI. */
 export const defaultPreloadBundler: PreloadBundler = {

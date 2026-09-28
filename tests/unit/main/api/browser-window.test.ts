@@ -5,6 +5,12 @@ import { join } from 'node:path';
 import { InvalidArgumentError } from '../../../../src/common/errors';
 import { app } from '../../../../src/main/api/app';
 import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../../src/main/api/menu';
+import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
+import {
   BrowserWindow,
   resetWindowRegistryForTesting,
 } from '../../../../src/main/api/browser-window';
@@ -20,6 +26,7 @@ import type {
   Rect,
   WindowEventType,
 } from '../../../../src/main/platform/native';
+import { armInertObservers, inertMenuRealizer } from '../../../helpers/inert-observers';
 import { appExitCodes, installSafeAppExit } from '../../../helpers/safe-app-exit';
 
 type FakeWindow = NativeWindow & {
@@ -226,6 +233,8 @@ let created: NativeWindowOptions[];
 let windows: FakeWindow[];
 
 beforeEach(() => {
+  armInertObservers();
+  setMenuRealizerForTesting(inertMenuRealizer);
   resetWindowRegistryForTesting();
   resetWebContentsIdsForTesting();
   resetBootstrapForTesting();
@@ -238,6 +247,8 @@ beforeEach(() => {
 
 afterEach(() => {
   setNativeAppForTesting(undefined);
+  setMenuRealizerForTesting(undefined);
+  resetApplicationMenuForTesting();
   app.resetForTesting();
   session.defaultSession.resetForTesting();
 });
@@ -448,6 +459,30 @@ describe('BrowserWindow registry', () => {
     expect(BrowserWindow.getFocusedWindow()).toBeNull();
     b.focus();
     expect(BrowserWindow.getFocusedWindow()).toBe(b);
+  });
+
+  test('a menu item click receives the focused window', () => {
+    let specs: readonly NativeMenuItemSpec[] = [];
+    setMenuRealizerForTesting({
+      realize: (items) => {
+        specs = items;
+        return 1n;
+      },
+      setApplicationMenu: () => undefined,
+    });
+    try {
+      new BrowserWindow();
+      const b = new BrowserWindow();
+      b.focus();
+      let received: unknown;
+      Menu.buildFromTemplate([
+        { label: 'Go', click: (_item, window) => (received = window) },
+      ]).realize();
+      specs[0]?.onClick?.();
+      expect(received).toBe(b);
+    } finally {
+      setMenuRealizerForTesting(undefined);
+    }
   });
 });
 
@@ -687,6 +722,15 @@ describe('App-level window events', () => {
   test('closing the last window with no listener quits the app', () => {
     const win = new BrowserWindow();
     win.close();
+    expect(appExitCodes()).toEqual([0]);
+  });
+
+  test('a throwing closed listener still lets the last close quit the app', () => {
+    const win = new BrowserWindow();
+    win.on('closed', () => {
+      throw new Error('listener bug');
+    });
+    expect(() => win.close()).toThrow('listener bug');
     expect(appExitCodes()).toEqual([0]);
   });
 

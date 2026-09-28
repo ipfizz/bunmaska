@@ -16,7 +16,7 @@ exec docker run --rm -t \
   ubuntu:24.04 bash -c '
     set -e
     apt-get update -q
-    apt-get install -y -q curl unzip libgtk-4-1 libwebkitgtk-6.0-4 libnotify4 libsecret-1-0 xvfb ca-certificates > /dev/null
+    apt-get install -y -q curl unzip libgtk-4-1 libwebkitgtk-6.0-4 libnotify4 libsecret-1-0 libxtst6 xvfb ca-certificates > /dev/null
     curl -fsSL https://bun.sh/install | bash -s "bun-v$(cat /repo/.bun-version)" > /dev/null
     export PATH="/tmp/.bun/bin:$PATH"
     mkdir /work

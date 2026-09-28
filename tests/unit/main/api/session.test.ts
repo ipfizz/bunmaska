@@ -71,6 +71,23 @@ describe('session.defaultSession', () => {
     await session.defaultSession.clearStorageData();
     expect(called).toBe(1);
   });
+
+  test('clearStorageData rejects a storages or origin filter instead of clearing everything', async () => {
+    let called = 0;
+    fakeBackend({
+      clearStorageData: () => {
+        called += 1;
+        return Promise.resolve();
+      },
+    });
+    await expect(
+      session.defaultSession.clearStorageData({ storages: ['cookies'] }),
+    ).rejects.toBeInstanceOf(UnsupportedPlatformError);
+    await expect(
+      session.defaultSession.clearStorageData({ origin: 'https://example.com' }),
+    ).rejects.toBeInstanceOf(UnsupportedPlatformError);
+    expect(called).toBe(0);
+  });
 });
 
 describe('session.defaultSession.cookies', () => {

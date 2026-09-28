@@ -3,12 +3,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  buildArArchive,
-  buildControlFile,
   buildLinuxApp,
   buildDesktopEntry,
-  debFileName,
-  DEFAULT_LINUX_DEPENDS,
   linuxLayout,
   resolveBuildEngineId,
   tarballName,
@@ -27,8 +23,12 @@ describe('linuxLayout', () => {
     expect(layout.slug).toBe('my-app');
   });
 
-  test('places the binary at usr/bin/<slug>', () => {
-    expect(layout.binPath).toBe('/tmp/out/My App/usr/bin/my-app');
+  test('places the binary in its own usr/lib/<slug> directory', () => {
+    expect(layout.binPath).toBe('/tmp/out/My App/usr/lib/my-app/my-app');
+  });
+
+  test('puts only the launcher link in the shared usr/bin', () => {
+    expect(layout.launcherPath).toBe('/tmp/out/My App/usr/bin/my-app');
   });
 
   test('places the desktop entry under usr/share/applications', () => {
@@ -39,24 +39,15 @@ describe('linuxLayout', () => {
     expect(layout.iconPath).toBe('/tmp/out/My App/usr/share/icons/hicolor/512x512/apps/my-app.png');
   });
 
-  test('bakes engine.id under usr/share/<slug>', () => {
-    expect(layout.engineIdPath).toBe('/tmp/out/My App/usr/share/my-app/engine.id');
+  test('bakes engine.id beside the binary', () => {
+    expect(layout.engineIdPath).toBe('/tmp/out/My App/usr/lib/my-app/engine.id');
   });
 });
 
-describe('tarballName / debFileName', () => {
+describe('tarballName', () => {
   test('tarball is <Name>-linux-x64.tar.gz', () => {
     expect(tarballName('My App', 'x64')).toBe('My App-linux-x64.tar.gz');
     expect(tarballName('My App', 'arm64')).toBe('My App-linux-arm64.tar.gz');
-  });
-
-  test('deb is <slug>_<version>_amd64.deb', () => {
-    expect(debFileName('My App', '1.2.3', 'x64')).toBe('my-app_1.2.3_amd64.deb');
-    expect(debFileName('My App', '1.2.3', 'arm64')).toBe('my-app_1.2.3_arm64.deb');
-  });
-
-  test('deb names a prerelease with the Debian tilde', () => {
-    expect(debFileName('My App', '1.0.0-beta.1', 'x64')).toBe('my-app_1.0.0~beta.1_amd64.deb');
   });
 });
 
@@ -97,78 +88,6 @@ describe('buildDesktopEntry', () => {
   });
 });
 
-describe('buildControlFile', () => {
-  const text = buildControlFile({
-    arch: 'amd64',
-    slug: 'my-app',
-    version: '1.0.0',
-    maintainer: 'Bunmaska <noreply@bunmaska.dev>',
-    description: 'My App built with Bunmaska',
-  });
-
-  test('emits the debian control fields', () => {
-    expect(text).toContain('Package: my-app');
-    expect(text).toContain('Version: 1.0.0');
-    expect(text).toContain('Architecture: amd64');
-    expect(text).toContain('Maintainer: Bunmaska <noreply@bunmaska.dev>');
-    expect(text).toContain('Description: My App built with Bunmaska');
-    expect(text).toContain('Recommends: libnotify4');
-  });
-
-  test('maps a semver prerelease to a tilde so the final release sorts above it', () => {
-    const pre = buildControlFile({
-      slug: 'my-app',
-      version: '1.0.0-beta.1',
-      maintainer: 'x <x@example.com>',
-      description: 'x',
-    });
-    expect(pre).toContain('Version: 1.0.0~beta.1\n');
-  });
-
-  test('ends with a trailing newline', () => {
-    expect(text.endsWith('\n')).toBe(true);
-  });
-
-  test('emits a Depends line on the system WebKitGTK when given deps (the bug fix)', () => {
-    const withDeps = buildControlFile({
-      slug: 'my-app',
-      version: '1.0.0',
-      maintainer: 'Bunmaska <noreply@bunmaska.dev>',
-      description: 'My App built with Bunmaska',
-      depends: DEFAULT_LINUX_DEPENDS,
-    });
-    expect(withDeps).toContain('Depends: libwebkitgtk-6.0-4, libgtk-4-1');
-    // Depends precedes Description (Debian field ordering).
-    expect(withDeps.indexOf('Depends:')).toBeLessThan(withDeps.indexOf('Description:'));
-  });
-
-  test('omits the Depends field entirely when deps are empty', () => {
-    const noDeps = buildControlFile({
-      slug: 'my-app',
-      version: '1.0.0',
-      maintainer: 'Bunmaska <noreply@bunmaska.dev>',
-      description: 'x',
-      depends: [],
-    });
-    expect(noDeps).not.toContain('Depends:');
-  });
-});
-
-describe('buildArArchive', () => {
-  test('pads an odd-length member so the next header starts on an even offset', () => {
-    const ar = buildArArchive([
-      { name: 'a', content: new Uint8Array([1, 2, 3]) },
-      { name: 'b', content: new Uint8Array([4]) },
-    ]);
-    const text = new TextDecoder('latin1').decode(ar);
-    expect(text.startsWith('!<arch>\n')).toBe(true);
-    expect(text.slice(8 + 48, 8 + 58).trim()).toBe('3');
-    expect(ar[8 + 60 + 3]).toBe(0x0a);
-    expect(text.slice(8 + 60 + 4, 8 + 60 + 5)).toBe('b');
-    expect(ar.length).toBe(8 + 60 + 4 + 60 + 2);
-  });
-});
-
 describe('buildLinuxApp', () => {
   test('refuses a one-character package name before compiling', async () => {
     const out = mkdtempSync(join(tmpdir(), 'bunmaska-deb-name-'));
@@ -179,16 +98,23 @@ describe('buildLinuxApp', () => {
 });
 
 describe('resolveBuildEngineId', () => {
-  test('passes a full engine-id through', () => {
-    expect(resolveBuildEngineId(ENGINE_ID)).toBe(ENGINE_ID);
+  const linuxX64 = { os: 'linux', arch: 'x64' } as const;
+
+  test('passes a full engine-id for the build target through', () => {
+    expect(resolveBuildEngineId(ENGINE_ID, linuxX64)).toBe(ENGINE_ID);
   });
 
   test('maps absent / system to the system sentinel', () => {
-    expect(resolveBuildEngineId(undefined)).toBe('system');
-    expect(resolveBuildEngineId('system')).toBe('system');
+    expect(resolveBuildEngineId(undefined, linuxX64)).toBe('system');
+    expect(resolveBuildEngineId('system', linuxX64)).toBe('system');
   });
 
   test('downgrades a bare upstream version to system (catalog is a follow-up)', () => {
-    expect(resolveBuildEngineId('2.52.4')).toBe('system');
+    expect(resolveBuildEngineId('2.52.4', linuxX64)).toBe('system');
+  });
+
+  test('downgrades an engine built for another OS or architecture to system', () => {
+    expect(resolveBuildEngineId(ENGINE_ID, { os: 'windows', arch: 'x64' })).toBe('system');
+    expect(resolveBuildEngineId(ENGINE_ID, { os: 'linux', arch: 'arm64' })).toBe('system');
   });
 });

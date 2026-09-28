@@ -22,16 +22,24 @@ export const handleDevChunk = (chunk: string, reloadAll: () => void): void => {
   }
 };
 
-/** The slice of `process.stdin` this module needs. */
+/** The slice of `process.stdin` this module needs; `end` passes no chunk. */
 export type DevStdin = {
-  on: (event: 'data', listener: (chunk: Buffer | string) => void) => void;
+  on: (event: 'data' | 'end', listener: (chunk?: Buffer | string) => void) => void;
   unref?: () => void;
 };
 
-/** Subscribe to reload commands on `stdin`; the unref'd handle never keeps the app alive. */
-export const startDevReload = (reloadAll: () => void, stdin: DevStdin = process.stdin): void => {
+/**
+ * Subscribe to reload commands on `stdin`; the unref'd handle never keeps the app alive.
+ * `onSupervisorGone` runs when the pipe closes, i.e. `bunmaska dev` died.
+ */
+export const startDevReload = (
+  reloadAll: () => void,
+  onSupervisorGone: () => void,
+  stdin: DevStdin = process.stdin,
+): void => {
   stdin.on('data', (chunk) => {
-    handleDevChunk(chunk.toString(), reloadAll);
+    handleDevChunk(chunk?.toString() ?? '', reloadAll);
   });
+  stdin.on('end', () => onSupervisorGone());
   stdin.unref?.();
 };

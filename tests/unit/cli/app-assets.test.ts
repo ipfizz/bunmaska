@@ -10,7 +10,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import type { PreloadBundler } from '../../../src/common/preload-bundle';
-import { bundlePreloadAssets, copyAppAssets, isRuntimeAsset } from '../../../src/cli/app-assets';
+import {
+  bundlePreloadAssets,
+  copyAppAssets,
+  isRuntimeAsset,
+  writeAppManifest,
+} from '../../../src/cli/app-assets';
+import {
+  readManifest,
+  resolveAppName,
+  resolveAppVersion,
+} from '../../../src/main/api/app-metadata';
 
 describe('isRuntimeAsset', () => {
   test('keeps page, preload, styles, images and data', () => {
@@ -34,6 +44,19 @@ describe('isRuntimeAsset', () => {
     ]) {
       expect(isRuntimeAsset(name)).toBe(false);
     }
+  });
+});
+
+describe('writeAppManifest', () => {
+  test("writes the name and version a compiled app's runtime reads back", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-manifest-'));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'project', version: '9.9.9' }));
+    writeAppManifest(dir, 'Notes App', '2.0.1');
+    const read = (path: string): string | undefined =>
+      existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+    const manifest = readManifest(dir, read);
+    expect(resolveAppName(manifest)).toBe('Notes App');
+    expect(resolveAppVersion(manifest)).toBe('2.0.1');
   });
 });
 

@@ -1,24 +1,49 @@
 import { makeCancelableEvent } from '../common/cancelable-event';
+import { createLogger } from '../common/logger';
+import { currentPlatform } from '../common/platform';
 import { app } from './api/app';
-import { nativeTheme } from './api/native-theme';
-import { powerMonitor } from './api/power-monitor';
+import { dialog } from './api/dialog';
+import { installDefaultApplicationMenu } from './api/menu';
+import { startNativeThemeObserving } from './api/native-theme';
+import { startPowerMonitorObserving } from './api/power-monitor';
 import { nativeApp } from './native-app';
 
 // Wires `app` to the native backend; separate from `app` and `BrowserWindow` to avoid an import cycle.
 
 let started = false;
 
+const log = createLogger('main');
+
+/** Electron's default: an uncaught exception is reported, never fatal, unless the app handles it. @internal */
+export const reportUncaughtException = (error: unknown): void => {
+  if (process.listeners('uncaughtException').some((l) => l !== reportUncaughtException)) {
+    return;
+  }
+  log.error('uncaught exception', error);
+  dialog.showErrorBox(
+    'A JavaScript error occurred in the main process',
+    `Uncaught Exception:\n${error instanceof Error ? (error.stack ?? String(error)) : String(error)}`,
+  );
+};
+
 export const ensureNativeStarted = (): void => {
   if (started) {
     return;
   }
   started = true;
+  if (!process.listeners('uncaughtException').includes(reportUncaughtException)) {
+    process.on('uncaughtException', reportUncaughtException);
+  }
   const native = nativeApp();
   native.onReady(() => {
+    // Cmd+C/V/X/A/Z reach the web view only through the app menu's Edit items.
+    if (currentPlatform() === 'macos') {
+      installDefaultApplicationMenu(app.name);
+    }
     app.markReady();
     // Observers attach native hooks, which need NSApp / GTK initialised first.
-    nativeTheme.startObserving();
-    powerMonitor.startObserving();
+    startNativeThemeObserving();
+    startPowerMonitorObserving();
   });
   native.onActivate?.((hasVisibleWindows) => {
     app.emit('activate', makeCancelableEvent(), hasVisibleWindows);

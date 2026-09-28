@@ -43,6 +43,14 @@ afterEach(() => {
 });
 
 describe('globalShortcut.register', () => {
+  test('returns false without touching the backend where grabs are unsupported', () => {
+    const fake = makeFakeBackend();
+    setGlobalShortcutBackendForTesting({ ...fake.backend, isSupported: () => false });
+    expect(globalShortcut.register('CmdOrCtrl+K', () => undefined)).toBe(false);
+    expect(fake.calls).toEqual([]);
+    expect(globalShortcut.isRegistered('CmdOrCtrl+K')).toBe(false);
+  });
+
   test('parses, registers via the backend, and returns true', () => {
     const fake = makeFakeBackend();
     setGlobalShortcutBackendForTesting(fake.backend);

@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { BUNMASKA_VERSION } from '../common/version';
-import { bundlePreloadAssets, copyAppAssets } from './app-assets';
+import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
 
 // The minos `bun build --compile` stamps into the Mach-O (Bun 1.4.2).
@@ -360,6 +360,7 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   chmodSync(layout.executablePath, 0o755);
 
   bundlePreloadAssets(opts.entry, layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
+  writeAppManifest(layout.macosDir, opts.name, version);
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.macosDir, 'renderer'), { recursive: true });
   }

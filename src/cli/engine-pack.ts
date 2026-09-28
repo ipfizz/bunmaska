@@ -3,7 +3,7 @@
 import { parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
 import { contentHash } from '../common/manifest';
-import { signArtifact } from './engine-signature';
+import { signArtifact } from '../common/signature';
 import { type RemoteManifest, zstdTarExtract } from './engine-remote';
 import { readEngineManifest } from './engine-store';
 

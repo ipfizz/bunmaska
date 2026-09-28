@@ -3,6 +3,7 @@ import { selectBackend } from '../platform/index';
 import { linuxNotificationBackend } from '../platform/linux/gtk-notification';
 import { macosNotificationBackend } from '../platform/macos/cocoa-notification';
 import { windowsNotificationBackend } from '../platform/windows/windows-notification';
+import { app } from './app';
 
 export type NotificationOptions = {
   readonly title?: string;
@@ -16,6 +17,8 @@ export type NotificationSpec = {
   readonly body: string;
   readonly subtitle: string;
   readonly silent: boolean;
+  /** `app.getName()`, for backends that register the sender by name. */
+  readonly appName?: string;
 };
 
 export type NotificationHandle = {
@@ -73,6 +76,7 @@ export class Notification extends EventEmitter {
       body: this.body,
       subtitle: this.subtitle,
       silent: this.silent,
+      appName: app.getName(),
     });
     this.#handle = handle;
     handle.onClosed(() => {

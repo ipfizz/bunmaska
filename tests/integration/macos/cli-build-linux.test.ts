@@ -2,9 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  lstatSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -74,8 +76,11 @@ if (currentPlatform() === 'macos') {
       rmSync(workDir, { recursive: true, force: true });
     });
 
-    test('compiles the binary into usr/bin/<slug>', () => {
-      const binPath = join(result.appDir, 'usr', 'bin', 'test-app');
+    test('compiles the binary into usr/lib/<slug> and links usr/bin/<slug> to it', () => {
+      const binPath = join(result.appDir, 'usr', 'lib', 'test-app', 'test-app');
+      const launcher = join(result.appDir, 'usr', 'bin', 'test-app');
+      expect(lstatSync(launcher).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(launcher)).toBe('../lib/test-app/test-app');
       const info = statSync(binPath);
       expect(info.isFile()).toBe(true);
       expect(info.size).toBeGreaterThan(0);
@@ -84,7 +89,7 @@ if (currentPlatform() === 'macos') {
     });
 
     test('the compiled binary is a Linux ELF (magic 7f 45 4c 46)', () => {
-      const binPath = join(result.appDir, 'usr', 'bin', 'test-app');
+      const binPath = join(result.appDir, 'usr', 'lib', 'test-app', 'test-app');
       const buf = readFileSync(binPath);
       expect(buf[0]).toBe(0x7f);
       expect(buf[1]).toBe(0x45); // 'E'
@@ -110,8 +115,12 @@ if (currentPlatform() === 'macos') {
         encoding: 'utf8',
       });
       expect(listing.status).toBe(0);
-      expect(listing.stdout).toContain('usr/bin/test-app');
+      expect(listing.stdout).toContain('usr/lib/test-app/test-app');
+      expect(listing.stdout).toContain('usr/lib/test-app/package.json');
       expect(listing.stdout).toContain('usr/share/applications/test-app.desktop');
+      // A second app's package must not collide: usr/bin holds only this app's launcher.
+      const inBin = listing.stdout.split('\n').filter((entry) => /\/usr\/bin\/./.test(entry));
+      expect(inBin).toEqual(['Test App/usr/bin/test-app']);
     });
 
     test('produces a non-empty .deb whose ar members are debian-binary/control/data', () => {
@@ -130,7 +139,7 @@ if (currentPlatform() === 'macos') {
     });
 
     test('a rebuild drops files the previous build shipped', async () => {
-      const stale = join(result.appDir, 'usr', 'bin', 'stale.html');
+      const stale = join(result.appDir, 'usr', 'lib', 'test-app', 'stale.html');
       writeFileSync(stale, 'old');
       await buildLinuxApp({ arch: 'x64', entry: join(workDir, 'entry.ts'), name, out: outDir });
       expect(existsSync(stale)).toBe(false);

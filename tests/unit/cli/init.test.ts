@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { DEV_STATE_FILE } from '../../../src/cli/dev-watch';
 import {
   deriveProjectName,
   initTemplateFiles,
@@ -58,7 +59,7 @@ describe('initTemplateFiles', () => {
   });
 
   test('gitignore covers the dev window-state scratch file', () => {
-    expect(byPath.get('.gitignore') ?? '').toContain('.bunmaska-dev-state.json');
+    expect((byPath.get('.gitignore') ?? '').split('\n')).toContain(DEV_STATE_FILE);
   });
 });
 

@@ -43,28 +43,50 @@ describe('handleDevChunk', () => {
 });
 
 describe('startDevReload', () => {
-  test('reloads when a reload chunk arrives on stdin, and unrefs the handle', () => {
-    let listener: ((chunk: Buffer | string) => void) | undefined;
+  const fakeStdin = () => {
+    const listeners = new Map<string, (chunk?: Buffer | string) => void>();
     let unrefed = false;
-    let reloads = 0;
     const stdin: DevStdin = {
-      on: (_event, cb) => {
-        listener = cb;
+      on: (event, cb) => {
+        listeners.set(event, cb);
       },
       unref: () => {
         unrefed = true;
       },
     };
+    return { stdin, listeners, unrefed: () => unrefed };
+  };
 
-    startDevReload(() => {
-      reloads += 1;
-    }, stdin);
+  test('reloads when a reload chunk arrives on stdin, and unrefs the handle', () => {
+    const fake = fakeStdin();
+    let reloads = 0;
+    startDevReload(
+      () => {
+        reloads += 1;
+      },
+      () => undefined,
+      fake.stdin,
+    );
 
-    expect(unrefed).toBe(true);
-    listener?.('reload\n');
+    expect(fake.unrefed()).toBe(true);
+    fake.listeners.get('data')?.('reload\n');
     expect(reloads).toBe(1);
     // Buffers arrive too; they must be handled the same as strings.
-    listener?.(Buffer.from('reload\n'));
+    fake.listeners.get('data')?.(Buffer.from('reload\n'));
     expect(reloads).toBe(2);
+  });
+
+  test('reports a closed stdin, so the app does not outlive a dead supervisor', () => {
+    const fake = fakeStdin();
+    let gone = 0;
+    startDevReload(
+      () => undefined,
+      () => {
+        gone += 1;
+      },
+      fake.stdin,
+    );
+    fake.listeners.get('end')?.();
+    expect(gone).toBe(1);
   });
 });

@@ -54,22 +54,21 @@ const { get: getBackend, setForTesting } = selectBackend<ClipboardBackend>('clip
 export const setClipboardBackendForTesting = setForTesting;
 
 export const clipboard: Clipboard = {
-  readText() {
-    return Promise.resolve(getBackend().readText());
+  async readText() {
+    return getBackend().readText();
   },
   writeText(text) {
     getBackend().writeText(text);
   },
-  readHTML() {
-    return Promise.resolve(getBackend().readHTML());
+  async readHTML() {
+    return getBackend().readHTML();
   },
   writeHTML(markup) {
     getBackend().writeHTML(markup);
   },
-  readImage() {
-    return Promise.resolve(getBackend().readImage()).then((png) =>
-      png.length === 0 ? nativeImage.createEmpty() : nativeImage.createFromBuffer(png),
-    );
+  async readImage() {
+    const png = await getBackend().readImage();
+    return png.length === 0 ? nativeImage.createEmpty() : nativeImage.createFromBuffer(png);
   },
   writeImage(image) {
     getBackend().writeImage(image.toPNG());

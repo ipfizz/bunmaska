@@ -308,3 +308,22 @@ describe('nativeImage.createFromDataURL', () => {
     expect(createFromDataURL('nope').isEmpty()).toBe(true);
   });
 });
+
+describe('native handle lifetime', () => {
+  test('releases a decoded handle once its image is garbage-collected', async () => {
+    const released: NativeImageHandle[] = [];
+    setNativeImageBackendForTesting({
+      ...makeFakeBackend({ handle: 77n, width: 1, height: 1, empty: false }, new Uint8Array([1])),
+      release: (handle) => released.push(handle),
+    });
+    (() => {
+      nativeImage.createFromPath('/tmp/x.png');
+      nativeImage.createEmpty();
+    })();
+    for (let i = 0; i < 50 && released.length === 0; i += 1) {
+      Bun.gc(true);
+      await Bun.sleep(5);
+    }
+    expect(released).toEqual([77n]);
+  });
+});

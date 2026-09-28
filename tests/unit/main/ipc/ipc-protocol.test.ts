@@ -34,6 +34,17 @@ describe('encodeEnvelope', () => {
       encodeEnvelope({ kind: 'send', channel: 'x', args: [() => undefined] as never }),
     ).toThrow(InvalidArgumentError);
   });
+
+  test.each([
+    ['Map', new Map([['a', 1]])],
+    ['Set', new Set([1])],
+    ['ArrayBuffer', new ArrayBuffer(2)],
+    ['typed array', new Float64Array(2)],
+  ])('rejects a %s, which JSON would silently garble', (_label, value) => {
+    expect(() => encodeEnvelope({ kind: 'send', channel: 'x', args: [{ value }] })).toThrow(
+      InvalidArgumentError,
+    );
+  });
 });
 
 describe('decodeEnvelope validation', () => {

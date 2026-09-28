@@ -24,6 +24,26 @@ describe('clipboard API with an injected backend (async readText contract)', () 
     setClipboardBackendForTesting(undefined);
   });
 
+  test('a synchronous backend throw on read becomes a rejection', async () => {
+    const boom = (): never => {
+      throw new Error('GdiplusStartup failed');
+    };
+    setClipboardBackendForTesting(
+      makeFakeBackend({ readText: boom, readHTML: boom, readImage: boom }),
+    );
+    const reads = [clipboard.readText, clipboard.readHTML, clipboard.readImage].map((read) => {
+      try {
+        return read();
+      } catch (error) {
+        return error;
+      }
+    });
+    for (const read of reads) {
+      expect(read).toBeInstanceOf(Promise);
+      await expect(read).rejects.toThrow('GdiplusStartup failed');
+    }
+  });
+
   test('readText awaits the backend and resolves its value (Promise contract)', async () => {
     setClipboardBackendForTesting(
       makeFakeBackend({ readText: () => Promise.resolve('from-backend') }),

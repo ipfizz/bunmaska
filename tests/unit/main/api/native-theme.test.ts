@@ -1,6 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, test } from 'bun:test';
-import { nativeTheme, NativeThemeImpl } from '../../../../src/main/api/native-theme';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import {
+  NativeThemeImpl,
+  nativeTheme,
+  resetNativeThemeObservingForTesting,
+  startNativeThemeObserving,
+} from '../../../../src/main/api/native-theme';
 
 describe('nativeTheme', () => {
   test('is an EventEmitter for the updated event', () => {
@@ -36,15 +41,19 @@ describe('nativeTheme.themeSource', () => {
   });
 });
 
-describe('nativeTheme.startObserving', () => {
+describe('startNativeThemeObserving', () => {
+  beforeEach(resetNativeThemeObservingForTesting);
+  afterEach(() => {
+    nativeTheme.removeAllListeners('updated');
+  });
+
   test('registers the observer and emits updated when the OS appearance changes', () => {
-    const t = new NativeThemeImpl();
     let osChange: (() => void) | undefined;
     let fired = 0;
-    t.on('updated', () => {
+    nativeTheme.on('updated', () => {
       fired += 1;
     });
-    t.startObserving((onChange) => {
+    startNativeThemeObserving((onChange) => {
       osChange = onChange;
     });
     expect(osChange).toBeDefined();
@@ -52,13 +61,12 @@ describe('nativeTheme.startObserving', () => {
     expect(fired).toBe(1);
   });
 
-  test('is idempotent — only the first call registers an observer', () => {
-    const t = new NativeThemeImpl();
+  test('is idempotent: only the first call registers an observer', () => {
     let registrations = 0;
-    t.startObserving(() => {
+    startNativeThemeObserving(() => {
       registrations += 1;
     });
-    t.startObserving(() => {
+    startNativeThemeObserving(() => {
       registrations += 1;
     });
     expect(registrations).toBe(1);

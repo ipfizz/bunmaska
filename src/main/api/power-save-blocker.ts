@@ -1,4 +1,5 @@
 import { currentPlatform } from '../../common/platform';
+import { app } from './app';
 import { linuxPowerSaveBlockerBackend } from '../platform/linux/linux-power-save-blocker';
 import { cocoaPowerSaveBlockerBackend } from '../platform/macos/cocoa-power-save-blocker';
 import { windowsPowerSaveBlockerBackend } from '../platform/windows/windows-power-save-blocker';
@@ -10,7 +11,8 @@ export type NativeBlocker = unknown;
 
 /** `acquire` returns null without a mechanism (the block is then a no-op); `release` is best-effort. */
 export type PowerSaveBlockerBackend = {
-  acquire: (type: PowerSaveBlockerType) => NativeBlocker | null;
+  /** `appName` is `app.getName()`, for backends that name the inhibitor. */
+  acquire: (type: PowerSaveBlockerType, appName?: string) => NativeBlocker | null;
   release: (handle: NativeBlocker) => void;
 };
 
@@ -49,7 +51,7 @@ export class PowerSaveBlockerImpl {
     const id = this.#nextId++;
     let nativeHandle: NativeBlocker | null = null;
     try {
-      nativeHandle = this.#backend.acquire(type);
+      nativeHandle = this.#backend.acquire(type, app.getName());
     } catch {
       nativeHandle = null; // A failed acquire is a no-op block, never a throw.
     }
@@ -76,12 +78,6 @@ export class PowerSaveBlockerImpl {
 
   isStarted(id: number): boolean {
     return this.#blockers.has(id);
-  }
-
-  /** Clears every blocker WITHOUT releasing natively. @internal */
-  resetForTesting(): void {
-    this.#blockers.clear();
-    this.#nextId = 1;
   }
 }
 

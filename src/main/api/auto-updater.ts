@@ -9,6 +9,7 @@ import {
   parseUpdateManifest,
   type UpdateManifest,
 } from '../../common/manifest';
+import { assertSizeWithin, fetchCapped, isSecureFeedUrl } from '../../common/feed-fetch';
 import { type Arch, currentArch as hostArch, currentPlatform } from '../../common/platform';
 import { isEd25519PublicKey, verifyArtifact } from '../../common/signature';
 import { app } from './app';
@@ -29,18 +30,6 @@ export type FeedURLOptions = {
 /** Sanity bounds on publisher-signed input; the download itself is capped at the signed size. */
 export const MAX_COMPRESSED_ARTIFACT_BYTES = 512 * 1024 * 1024;
 export const MAX_DECOMPRESSED_TAR_BYTES = 2 * 1024 * 1024 * 1024;
-
-export const assertSizeWithin = (length: number, max: number, what: string): void => {
-  if (length > max) {
-    throw new Error(`autoUpdater: ${what} exceeds the ${max}-byte limit (got ${length})`);
-  }
-};
-
-const LOCAL_FEED_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-const isSecureFeedUrl = (parsed: URL): boolean =>
-  parsed.protocol === 'https:' ||
-  (parsed.protocol === 'http:' && LOCAL_FEED_HOSTS.has(parsed.hostname));
 
 /** Carried by the `update-*` events. */
 export type UpdateInfo = {
@@ -82,33 +71,8 @@ const toUpdateInfo = (manifest: UpdateManifest): UpdateInfo => ({
 /** update.json and a `.sig` are a few hundred bytes; a body past this is hostile. */
 const MAX_FEED_TEXT_BYTES = 64 * 1024;
 
-/** The body of a feed GET, read with a running byte cap; a redirect off https is refused. */
-export const readFeedResponse = async (
-  response: Response,
-  url: string,
-  maxBytes: number,
-): Promise<Uint8Array> => {
-  if (!response.ok) {
-    throw new Error(`autoUpdater: GET ${url} failed (${response.status})`);
-  }
-  if (response.url !== '' && !isSecureFeedUrl(new URL(response.url))) {
-    throw new Error(`autoUpdater: GET ${url} was redirected to insecure ${response.url}`);
-  }
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for await (const chunk of response.body ?? []) {
-    total += chunk.length;
-    assertSizeWithin(total, maxBytes, `GET ${url}`);
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-};
-
 const httpFetchText = async (url: string): Promise<string> =>
-  new TextDecoder().decode(await readFeedResponse(await fetch(url), url, MAX_FEED_TEXT_BYTES));
-
-const httpFetchBytes = async (url: string, maxBytes: number): Promise<Uint8Array> =>
-  readFeedResponse(await fetch(url), url, maxBytes);
+  new TextDecoder().decode(await fetchCapped(url, MAX_FEED_TEXT_BYTES));
 
 /** Fire-and-forget callers (Electron's pattern) get failures via `error`; awaiters still reject. */
 const markHandled = <T>(promise: Promise<T>): Promise<T> => {
@@ -125,7 +89,7 @@ export const stageToTmp = async (tarBytes: Uint8Array): Promise<string> => {
 
 const productionDeps = (): AutoUpdaterDeps => ({
   fetchText: httpFetchText,
-  fetchBytes: httpFetchBytes,
+  fetchBytes: fetchCapped,
   currentVersion: () => app.getVersion(),
   currentOs: currentPlatform,
   currentArch: hostArch,

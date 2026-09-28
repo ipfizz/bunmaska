@@ -49,7 +49,6 @@ const observeOsAppearance = (onChange: () => void): void => {
 
 export class NativeThemeImpl extends EventEmitter {
   #themeSource: ThemeSource = 'system';
-  #observing = false;
 
   /** Honors {@link themeSource}; falls back to the OS appearance for `'system'`. */
   get shouldUseDarkColors(): boolean {
@@ -77,21 +76,25 @@ export class NativeThemeImpl extends EventEmitter {
     applyThemeSource(source);
     this.emit('updated');
   }
-
-  /** Called once from bootstrap `onReady` (D034); later calls are no-ops. */
-  startObserving(observe: (onChange: () => void) => void = observeOsAppearance): void {
-    if (this.#observing) {
-      return;
-    }
-    this.#observing = true;
-    observe(() => this.emit('updated'));
-  }
-
-  /** @internal */
-  resetObservingForTesting(): void {
-    this.#observing = false;
-  }
 }
 
 export const nativeTheme = new NativeThemeImpl();
 export type NativeTheme = NativeThemeImpl;
+
+let observing = false;
+
+/** Called once from bootstrap `onReady` (D034); later calls are no-ops. @internal */
+export const startNativeThemeObserving = (
+  observe: (onChange: () => void) => void = observeOsAppearance,
+): void => {
+  if (observing) {
+    return;
+  }
+  observing = true;
+  observe(() => nativeTheme.emit('updated'));
+};
+
+/** @internal */
+export const resetNativeThemeObservingForTesting = (): void => {
+  observing = false;
+};

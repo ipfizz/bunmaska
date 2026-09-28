@@ -2,20 +2,20 @@
 
 import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import {
   type BunmaskaConfig,
   CONFIG_FILE_NAMES,
   configChannel,
   rendererOutDir,
 } from '../common/config-schema';
-import { currentArch, currentPlatform } from '../common/platform';
+import { type Arch, currentArch, currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
+import { debMaintainer } from './deb';
 import {
   type BuildDmg,
   type BuildMacAppOptions,
-  buildDmg,
   buildMacApp,
   type ConvertIcon,
   type SignApp,
@@ -118,6 +118,13 @@ const deriveName = (entry: string): string => {
   return stem.length > 0 ? stem : 'BunmaskaApp';
 };
 
+/** The icon types each target's builder can ship. */
+const ICON_EXTENSIONS: Readonly<Record<BuildTarget, readonly string[]>> = {
+  macos: ['.icns', '.png'],
+  linux: ['.png'],
+  windows: ['.ico'],
+};
+
 /** Notarizes a built .app (zip, submit --wait, staple). */
 type NotarizeHook = (appPath: string) => Promise<void>;
 
@@ -132,16 +139,20 @@ export type DispatchDeps = {
   readonly buildDmg?: BuildDmg;
 };
 
-/** Read the app version from the project's package.json, or `0.0.0` if absent. */
-const readAppVersion = (): string => {
+/** The project's package.json, or `{}` when it is absent or unreadable. */
+const readAppPackage = (): Record<string, unknown> => {
   try {
-    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
-      version?: unknown;
-    };
-    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+    const pkg: unknown = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    return typeof pkg === 'object' && pkg !== null ? (pkg as Record<string, unknown>) : {};
   } catch {
-    return '0.0.0';
+    return {};
   }
+};
+
+/** The app version from the project's package.json, or `0.0.0` if absent. */
+const readAppVersion = (): string => {
+  const version = readAppPackage()['version'];
+  return typeof version === 'string' ? version : '0.0.0';
 };
 
 /** The `--update` feed to emit beside the bundle. */
@@ -181,19 +192,26 @@ const maybeEmitUpdate = async (
   if (result.sigPath !== undefined) {
     out(result.sigPath);
   }
+  if (result.manifestSigPath !== undefined) {
+    out(result.manifestSigPath);
+  }
 };
 
-/** The project's engine pin; a bare version warns and falls back to the system WebKit. */
+/** The project's engine pin for `target`; any other pin warns and falls back to the system WebKit. */
 const resolveProjectEngine = (
   config: BunmaskaConfig,
   command: string,
+  target: { readonly os: Platform; readonly arch: Arch } = {
+    os: currentPlatform(),
+    arch: currentArch(),
+  },
 ): { engineId: string; embed: boolean } => {
   const webkitPin = config.engine?.webkit;
-  const engineId = resolveBuildEngineId(webkitPin);
+  const engineId = resolveBuildEngineId(webkitPin, target);
   if (webkitPin !== undefined && engineId === 'system' && webkitPin !== 'system') {
     err(
-      `bunmaska ${command}: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
-        'use a full engine id (see bunmaska engine available). Using the system WebKit.',
+      `bunmaska ${command}: engine pin ${JSON.stringify(webkitPin)} is not a full engine id ` +
+        `for ${target.os}-${target.arch} (see bunmaska engine available). Using the system WebKit.`,
     );
   }
   return { engineId, embed: config.engine?.embed === true };
@@ -235,8 +253,14 @@ const runBuild = async (
       return 1;
     }
   }
-  if (command.options.notarize === true && command.options.sign === undefined) {
-    err('bunmaska build: --notarize requires --sign (Apple rejects an unsigned app).');
+  if (
+    command.options.notarize === true &&
+    (command.options.sign === undefined || command.options.sign === '-')
+  ) {
+    err(
+      'bunmaska build: --notarize requires --sign with a Developer ID identity ' +
+        '(Apple rejects unsigned and ad-hoc signed apps).',
+    );
     return 1;
   }
 
@@ -247,7 +271,19 @@ const runBuild = async (
 
   const name = command.options.name ?? config.name ?? deriveName(entry);
   const id = command.options.id ?? config.id;
-  const icon = command.options.icon ?? config.icon;
+  let icon = command.options.icon ?? config.icon;
+  const iconTypes = ICON_EXTENSIONS[target];
+  if (icon !== undefined && !iconTypes.includes(extname(icon).toLowerCase())) {
+    // One config serves every target, so only an explicit --icon of the wrong type is an error.
+    if (command.options.icon !== undefined) {
+      err(`bunmaska build: --icon for ${target} must be ${iconTypes.join(' or ')} (got ${icon}).`);
+      return 1;
+    }
+    err(
+      `bunmaska build: skipping the config icon ${icon}; ${target} needs ${iconTypes.join(' or ')}.`,
+    );
+    icon = undefined;
+  }
 
   const { update, updateKey, channel } = command.options;
   if (update !== true && (updateKey !== undefined || channel !== undefined)) {
@@ -282,18 +318,23 @@ const runBuild = async (
   }
 
   if (target === 'linux') {
-    const { engineId, embed } = resolveProjectEngine(config, 'build');
+    const { engineId, embed } = resolveProjectEngine(config, 'build', {
+      os: 'linux',
+      arch: currentArch(),
+    });
     if (embed) {
       // Embedding drops the .deb's WebKitGTK Depends, so no engine crashes a clean box.
       // ponytail: Linux refuses engine.embed; copy the store engine in, as Windows does.
       err('bunmaska build: engine.embed is not supported on Linux yet; remove it or set it false.');
       return 1;
     }
+    const maintainer = debMaintainer(readAppPackage()['author']);
     const result = await (deps.buildLinux ?? buildLinuxApp)({
       entry,
       name,
       engineId,
       version: readAppVersion(),
+      ...(maintainer !== undefined ? { maintainer } : {}),
       ...(id !== undefined ? { id } : {}),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(icon !== undefined ? { icon } : {}),
@@ -307,7 +348,10 @@ const runBuild = async (
   }
 
   if (target === 'windows') {
-    const { engineId, embed } = resolveProjectEngine(config, 'build');
+    const { engineId, embed } = resolveProjectEngine(config, 'build', {
+      os: 'windows',
+      arch: 'x64',
+    });
     let embedEngine = command.options.embedEngine;
     if (embedEngine === undefined && embed) {
       const root = enginesPath();
@@ -324,6 +368,7 @@ const runBuild = async (
       entry,
       name,
       engineId,
+      version: readAppVersion(),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(icon !== undefined ? { icon } : {}),
       ...(embedEngine !== undefined ? { embedEngine } : {}),
@@ -336,24 +381,7 @@ const runBuild = async (
     return 0;
   }
 
-  // A .dmg must wrap the stapled .app, so with --notarize it is built afterwards.
-  const dmgAfterNotarize = command.options.dmg === true && command.options.notarize === true;
-  const buildMac = deps.buildMac ?? buildMacApp;
-  const appPath = await buildMac({
-    entry,
-    name,
-    ...(id !== undefined ? { id } : {}),
-    ...(command.options.out !== undefined ? { out: command.options.out } : {}),
-    ...(icon !== undefined ? { icon } : {}),
-    ...(command.options.sign !== undefined ? { sign: command.options.sign } : {}),
-    ...(command.options.dmg === true && !dmgAfterNotarize ? { dmg: true } : {}),
-    ...(deps.signApp !== undefined ? { signApp: deps.signApp } : {}),
-    ...(deps.convertIcon !== undefined ? { convertIcon: deps.convertIcon } : {}),
-    ...(deps.buildDmg !== undefined ? { buildDmg: deps.buildDmg } : {}),
-    ...(rendererDir !== undefined ? { rendererDir } : {}),
-  });
-  out(appPath);
-
+  let notarize: NotarizeHook | undefined;
   if (command.options.notarize === true) {
     const creds = notarizeCredentials();
     if (creds === undefined) {
@@ -362,14 +390,26 @@ const runBuild = async (
           '(env BUNMASKA_NOTARIZE_PASSWORD) - see docs. Skipping notarization.',
       );
     } else {
-      const notarize = deps.notarize ?? ((app: string): Promise<void> => notarizeApp(app, creds));
-      await notarize(appPath);
+      notarize = deps.notarize ?? ((app: string): Promise<void> => notarizeApp(app, creds));
     }
   }
-  if (dmgAfterNotarize) {
-    const outDmg = join(dirname(appPath), `${name}.dmg`);
-    await (deps.buildDmg ?? buildDmg)({ appDir: appPath, name, outDmg });
-  }
+  const buildMac = deps.buildMac ?? buildMacApp;
+  const appPath = await buildMac({
+    entry,
+    name,
+    version: readAppVersion(),
+    ...(id !== undefined ? { id } : {}),
+    ...(command.options.out !== undefined ? { out: command.options.out } : {}),
+    ...(icon !== undefined ? { icon } : {}),
+    ...(command.options.sign !== undefined ? { sign: command.options.sign } : {}),
+    ...(command.options.dmg === true ? { dmg: true } : {}),
+    ...(notarize !== undefined ? { notarize } : {}),
+    ...(deps.signApp !== undefined ? { signApp: deps.signApp } : {}),
+    ...(deps.convertIcon !== undefined ? { convertIcon: deps.convertIcon } : {}),
+    ...(deps.buildDmg !== undefined ? { buildDmg: deps.buildDmg } : {}),
+    ...(rendererDir !== undefined ? { rendererDir } : {}),
+  });
+  out(appPath);
   await maybeEmitUpdate(feed, appPath, name, 'macos');
   return 0;
 };
@@ -405,7 +445,6 @@ const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => 
 
 const engineCommandDeps = (): Parameters<typeof runEngine>[1] => ({
   root: enginesPath(),
-  env: process.env,
   out,
   err,
   readConfig: async (target) => (await loadConfig(target)).config,

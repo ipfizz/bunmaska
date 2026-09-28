@@ -45,10 +45,10 @@ export type GlobalShortcut = {
   unregisterAll(): void;
 };
 
-/** `false` when the OS refuses the grab, or, without touching the backend, when unparseable or taken. */
+/** `false` when the OS refuses the grab, or, without a grab, when unsupported, unparseable or taken. */
 const register = (accelerator: string, callback: () => void): boolean => {
   const key = canonical(accelerator);
-  if (key === undefined || registry.has(key)) {
+  if (key === undefined || registry.has(key) || !getBackend().isSupported()) {
     return false;
   }
   const ok = getBackend().register(accelerator, callback);

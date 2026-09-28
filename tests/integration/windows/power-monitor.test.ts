@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import { powerMonitor } from '../../../src/main/api/power-monitor';
+import { startPowerMonitorObserving } from '../../../src/main/api/power-monitor';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import { createMessageWindow } from '../../../src/main/platform/windows/windows-message-window';
 import {
@@ -50,10 +50,9 @@ describe.skipIf(currentPlatform() !== 'windows')(
       }
     });
 
-    test('powerMonitor.startObserving wires the native observer without throwing', () => {
-      expect(() => powerMonitor.startObserving()).not.toThrow();
-      // Idempotent: a second call is a no-op (the observer is a process singleton).
-      expect(() => powerMonitor.startObserving()).not.toThrow();
+    test('startPowerMonitorObserving wires the native observer without throwing', () => {
+      expect(() => startPowerMonitorObserving()).not.toThrow();
+      expect(() => startPowerMonitorObserving()).not.toThrow();
     });
   },
 );
