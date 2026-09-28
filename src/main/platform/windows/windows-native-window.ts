@@ -188,6 +188,8 @@ interface NativeWindowHandlers {
   /** Whether the committed close destroys the window (false = hide; see commitClose). */
   destroyOnClose: boolean;
   /** Last-observed state for the pump's change detection (see {@link pollWindows}). */
+  x: number;
+  y: number;
   width: number;
   height: number;
   focused: boolean;
@@ -198,6 +200,8 @@ interface NativeWindowHandlers {
 const newHandlers = (destroyOnClose: boolean): NativeWindowHandlers => ({
   closed: false,
   events: new Map(),
+  x: 0,
+  y: 0,
   width: 0,
   height: 0,
   focused: false,
@@ -276,7 +280,7 @@ const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
 
 /**
  * Poll every live window and fire the changed non-preventable lifecycle events
- * (resize / maximize / unmaximize / minimize / restore / focus / blur). Called
+ * (move / resize / maximize / unmaximize / minimize / restore / focus / blur). Called
  * each pump tick: WebKit's host uses a native WndProc, so these SENT-only state
  * changes never reach the message queue and must be observed by polling. `show`
  * and `hide` are fired directly from {@link NativeWin32Window.show}/`hide`.
@@ -308,6 +312,14 @@ export const pollWindows = (): void => {
         h.height = height;
         h.resizeHook?.(width, height);
         h.events.get('resize')?.();
+      }
+      user32.symbols.GetWindowRect(hwnd, rectPtr);
+      const x = read.i32(rectPtr, 0);
+      const y = read.i32(rectPtr, 4);
+      if (x !== h.x || y !== h.y) {
+        h.x = x;
+        h.y = y;
+        h.events.get('move')?.();
       }
     }
     const maximized = user32.symbols.IsZoomed(hwnd) !== 0;
@@ -395,6 +407,9 @@ export class NativeWin32Window {
     user32.symbols.GetClientRect(this.#hwnd, rectPtr);
     this.#handlers.width = read.i32(rectPtr, 8);
     this.#handlers.height = read.i32(rectPtr, 12);
+    user32.symbols.GetWindowRect(this.#hwnd, rectPtr);
+    this.#handlers.x = read.i32(rectPtr, 0);
+    this.#handlers.y = read.i32(rectPtr, 4);
     this.#handlers.maximized = user32.symbols.IsZoomed(this.#hwnd) !== 0;
     this.#handlers.minimized = user32.symbols.IsIconic(this.#hwnd) !== 0;
   }

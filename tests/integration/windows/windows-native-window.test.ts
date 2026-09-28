@@ -12,6 +12,7 @@ const SW_MINIMIZE = 6;
 const SW_RESTORE = 9;
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 const SWP_NOZORDER_NOACTIVATE = 0x0004 | 0x0010;
+const SWP_NOSIZE_NOZORDER_NOACTIVATE = 0x0001 | 0x0004 | 0x0010;
 
 /**
  * Windows-only. Drives REAL native-WndProc top-level windows (the kind that can
@@ -196,6 +197,39 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     }
   });
 
+  test('pollWindows fires move once for a position-only change', () => {
+    const win = new NativeWin32Window({ title: 'Move', width: 400, height: 300, show: false });
+    let moves = 0;
+    let resizes = 0;
+    win.onWindowEvent('move', () => {
+      moves += 1;
+    });
+    win.onWindowEvent('resize', () => {
+      resizes += 1;
+    });
+    try {
+      pollWindows();
+      expect(moves).toBe(0);
+      const { x, y } = win.getBounds();
+      loadUser32().symbols.SetWindowPos(
+        win.hwnd(),
+        0n,
+        x + 40,
+        y + 30,
+        0,
+        0,
+        SWP_NOSIZE_NOZORDER_NOACTIVATE,
+      );
+      pollWindows();
+      expect(moves).toBe(1);
+      expect(resizes).toBe(0);
+      pollWindows();
+      expect(moves).toBe(1);
+    } finally {
+      win.destroy();
+    }
+  });
+
   test('pollWindows fires maximize then unmaximize', () => {
     const win = new NativeWin32Window({ title: 'Max', width: 400, height: 300, show: false });
     let maximized = 0;
@@ -220,6 +254,10 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
 
   test('minimize and restore fire without resizing the view to 0x0', () => {
     const win = new NativeWin32Window({ title: 'Min', width: 400, height: 300, show: false });
+    let moves = 0;
+    win.onWindowEvent('move', () => {
+      moves += 1;
+    });
     let minimizes = 0;
     let restores = 0;
     let resizes = 0;
@@ -245,6 +283,7 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       expect(restores).toBe(1);
       expect(resizes).toBe(0);
       expect(hookCalls).toBe(0);
+      expect(moves).toBe(0);
     } finally {
       win.destroy();
     }

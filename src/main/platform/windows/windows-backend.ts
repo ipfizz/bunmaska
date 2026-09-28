@@ -338,7 +338,7 @@ class WindowsWindow implements NativeWindow {
   }
 
   onWindowEvent(type: WindowEventType, callback: () => void): void {
-    // focus/blur/resize/maximize/minimize/restore are surfaced by the pump poll
+    // focus/blur/move/resize/maximize/minimize/restore are surfaced by the pump poll
     // (pollWindows); show/hide fire from the window directly; ready-to-show fires
     // on the first dom-ready. The close/closed pair flows through onClose/onClosed.
     this.#native.onWindowEvent(type, callback);
