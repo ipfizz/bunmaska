@@ -56,4 +56,33 @@ describe.skipIf(!isLinux)('Linux injection is top-frame only', () => {
     window.close();
     app.quit();
   });
+
+  test('a dom-ready message an iframe posts itself is dropped', async () => {
+    requireGtkDisplay();
+    const app = createLinuxApplication();
+    app.start();
+    const window = app.createWindow({ width: 320, height: 240, title: 'Forged', show: true });
+    const contents = window.webContents;
+    let domReady = 0;
+    let didFinish = false;
+    contents.onNavigation((event) => {
+      if (event.type === 'dom-ready') {
+        domReady += 1;
+      } else if (event.type === 'did-finish-load') {
+        didFinish = true;
+      }
+    });
+
+    contents.loadHTML(
+      `<iframe srcdoc="<script>webkit.messageHandlers.bunmaskaDomReady.postMessage('')</script>"></iframe>`,
+    );
+    await pumpUntil(() => didFinish, 5000);
+    await pumpUntil(() => domReady > 1, 200);
+
+    expect(didFinish).toBe(true);
+    expect(domReady).toBe(1);
+
+    window.close();
+    app.quit();
+  });
 });

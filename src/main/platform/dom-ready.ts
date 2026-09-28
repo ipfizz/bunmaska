@@ -1,4 +1,4 @@
-// No native delegate reports DOMContentLoaded, so every backend injects this page-world
+// No native delegate reports DOMContentLoaded, so every backend injects this
 // script; it posts for the main frame only, as Electron's `dom-ready` does.
 export const DOM_READY_HANDLER_NAME = 'bunmaskaDomReady';
 

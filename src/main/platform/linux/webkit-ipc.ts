@@ -117,10 +117,11 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     `script-message-received::${DOM_READY_HANDLER_NAME}`,
     makeScriptMessageCallback(() => options.onDomReady()),
   );
+  // Isolated world: WebKitGTK names no posting frame, and any iframe reaches a page-world handler.
   webkit.symbols.webkit_user_content_manager_register_script_message_handler(
     ucm,
     cstr(DOM_READY_HANDLER_NAME),
-    null,
+    cstr(PRELOAD_WORLD_NAME),
   );
 
   // Order matters: channel setup, bridge, contextBridge host (installs
@@ -131,8 +132,8 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   if (options.userPreloadSource !== undefined) {
     addUserScript(ucm, options.userPreloadSource);
   }
+  addUserScript(ucm, generateDomReadyScript());
   addPageWorldScript(ucm, options.pageWorldSource);
-  addPageWorldScript(ucm, generateDomReadyScript());
 
   const view = requirePointer(
     gobject.symbols.g_object_new(
