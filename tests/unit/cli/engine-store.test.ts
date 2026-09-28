@@ -252,6 +252,19 @@ describe('gc', () => {
     expect(isInstalled(root, ID2)).toBe(false);
   });
 
+  test('an interrupted removal never leaves an engine looking installed', async () => {
+    const root = makeTmpDir();
+    await installFromSource(root, fakeSource(ID), { extract: fakeExtract });
+    const remove = (path: string): void => {
+      if (path === engineDir(root, ID)) {
+        throw new Error('interrupted');
+      }
+      rmSync(path, { recursive: true, force: true });
+    };
+    await expect(gc(root, { exists: () => true, remove })).rejects.toThrow('interrupted');
+    expect(isInstalled(root, ID)).toBe(false);
+  });
+
   test('drops links whose app no longer exists, freeing its engine', async () => {
     const root = makeTmpDir();
     await installFromSource(root, fakeSource(ID), { extract: fakeExtract });

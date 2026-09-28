@@ -309,6 +309,8 @@ export type GcDeps = {
   readonly exists?: (appPath: string) => boolean;
   /** Report only; delete nothing. */
   readonly dryRun?: boolean;
+  /** Recursive delete (default: `rmSync`). */
+  readonly remove?: (path: string) => void;
 };
 
 export type GcResult = {
@@ -325,6 +327,7 @@ export type GcResult = {
 export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => {
   const exists = deps.exists ?? existsSync;
   const dryRun = deps.dryRun === true;
+  const remove = deps.remove ?? ((path: string) => rmSync(path, { recursive: true, force: true }));
   const scan = (): GcResult => {
     let droppedLinks = 0;
     const used = new Set<string>();
@@ -343,7 +346,8 @@ export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => 
     const kept = installed.filter((id) => used.has(id)).sort();
     if (!dryRun) {
       for (const id of removed) {
-        rmSync(engineDir(root, id), { recursive: true, force: true });
+        remove(markerPath(root, id)); // first, so a half-deleted engine never looks installed
+        remove(engineDir(root, id));
       }
     }
     return { kept, removed, droppedLinks };
