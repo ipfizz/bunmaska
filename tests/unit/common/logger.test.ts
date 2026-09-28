@@ -13,6 +13,22 @@ const collect = (): { sink: LogSink; records: LogRecord[] } => {
   return { sink: (r) => records.push(r), records };
 };
 
+/** Run `fn` with process.stderr captured; returns what was written. */
+const captureStderr = (fn: () => void): string => {
+  const written: string[] = [];
+  const original = process.stderr.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    fn();
+  } finally {
+    process.stderr.write = original;
+  }
+  return written.join('');
+};
+
 afterEach(() => {
   resetLogger();
 });
@@ -81,13 +97,33 @@ describe('level filtering', () => {
   });
 });
 
+describe('default sink', () => {
+  test('writes warn and error to stderr with the namespace, and drops info', () => {
+    const out = captureStderr(() => {
+      const log = createLogger('run-loop');
+      log.info('quiet');
+      log.warn('careful');
+      log.error('drain tick threw', { code: 42 });
+    });
+    expect(out).toContain('[bunmaska:run-loop] warn: careful');
+    expect(out).toContain('[bunmaska:run-loop] error: drain tick threw');
+    expect(out).toContain('42');
+    expect(out).not.toContain('quiet');
+  });
+});
+
 describe('resetLogger', () => {
-  test('restores the default level and a non-collecting sink', () => {
+  test('restores the default level and the stderr sink', () => {
     const { sink, records } = collect();
     setLogSink(sink);
     setLogLevel('debug');
     resetLogger();
-    createLogger('x').error('should not reach the old sink');
+    const out = captureStderr(() => {
+      createLogger('x').debug('below the default level');
+      createLogger('x').error('back on stderr');
+    });
     expect(records).toHaveLength(0);
+    expect(out).toContain('back on stderr');
+    expect(out).not.toContain('below the default level');
   });
 });
