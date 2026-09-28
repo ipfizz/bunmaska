@@ -599,7 +599,6 @@ class MacOSWindow implements NativeWindow {
   #bounds: Rect;
   #frameKnown = false;
   #tornDown = false;
-  #released = false;
   #onClosed: (() => void) | undefined;
   #onClose: (() => boolean) | undefined;
   #activePopupMenu: Handle = 0n;
@@ -645,18 +644,13 @@ class MacOSWindow implements NativeWindow {
     this.#tornDown = true;
     // Messaging nil is a no-op, so every later call is safe once the window is released.
     this.#window = 0n;
-    this.#teardown();
-    this.#onClosed?.();
     // Balance our alloc of the NSWindow + WKWebView (both kept alive by
     // setReleasedWhenClosed:NO) on a LATER tick — AppKit's -close is still on the
     // stack here, so releasing now would risk the use-after-free that flag avoids.
-    setTimeout(() => {
-      if (this.#released) {
-        return;
-      }
-      this.#released = true;
-      this.#releaseNative();
-    }, 0);
+    // Scheduled before any listener runs, so a throwing one cannot skip it.
+    setTimeout(this.#releaseNative, 0);
+    this.#teardown();
+    this.#onClosed?.();
   }
 
   /** @internal Surface a non-preventable lifecycle event. Called by the delegate. */

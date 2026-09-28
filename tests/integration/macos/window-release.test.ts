@@ -29,4 +29,25 @@ describe.skipIf(currentPlatform() !== 'macos')('closed windows are freed', () =>
       app.quit();
     }
   }, 10_000);
+
+  test('a throwing closed listener still releases the window', async () => {
+    const app = createMacOSApplication();
+    app.start();
+    try {
+      await Bun.sleep(100);
+      const before = liveWindowCount();
+      const win = app.createWindow({ width: 320, height: 240, title: 'throws', show: true });
+      win.onClosed(() => {
+        throw new Error('closed listener bug');
+      });
+      expect(() => win.close()).toThrow('closed listener bug');
+      const deadline = performance.now() + 3_000;
+      while (liveWindowCount() > before && performance.now() < deadline) {
+        await Bun.sleep(50);
+      }
+      expect(liveWindowCount()).toBe(before);
+    } finally {
+      app.quit();
+    }
+  }, 10_000);
 });
