@@ -36,6 +36,7 @@ class CefApplication implements NativeApplication {
   #userDataPath = join(homedir(), '.bunmaska', 'blink-profile');
   #cefRunning = false;
   #started = false;
+  #startError: unknown;
   readonly appKit?: NativeAppKit;
 
   constructor(libDir: string) {
@@ -54,15 +55,24 @@ class CefApplication implements NativeApplication {
     this.#userDataPath = path;
   }
 
+  /** A failed start rethrows its error forever: cef_initialize cannot run twice in a process. */
   start(): void {
+    if (this.#startError !== undefined) {
+      throw this.#startError;
+    }
     if (this.#started) {
       return;
     }
     this.#started = true;
-    loadCef(cefLibraryPath(this.#libDir));
-    installCefApplicationClass();
-    this.#host.start();
-    initializeCef({ libDir: this.#libDir, userDataPath: this.#userDataPath });
+    try {
+      loadCef(cefLibraryPath(this.#libDir));
+      installCefApplicationClass();
+      this.#host.start();
+      initializeCef({ libDir: this.#libDir, userDataPath: this.#userDataPath });
+    } catch (error) {
+      this.#startError = error;
+      throw error;
+    }
     this.#cefRunning = true;
     const callbacks = this.#readyCallbacks;
     this.#readyCallbacks = [];
