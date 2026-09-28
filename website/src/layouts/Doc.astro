@@ -17,11 +17,12 @@ interface Props {
   title: string;
   description?: string | undefined;
   seoTitle?: string | undefined;
+  keywords?: string[] | undefined;
   slug: string;
   headings: Heading[];
 }
 
-const { title, description, seoTitle, slug, headings } = Astro.props;
+const { title, description, seoTitle, keywords, slug, headings } = Astro.props;
 const { prev, next } = prevNext(slug);
 const abs = (path: string) => new URL(path, Astro.site).href;
 
@@ -45,6 +46,7 @@ const techArticle = {
   "@type": "TechArticle",
   headline: title,
   ...(description ? { description } : {}),
+  ...(keywords ? { keywords } : {}),
   url: abs(`/docs/${slug}`),
   author: org,
   publisher: org,
