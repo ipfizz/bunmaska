@@ -77,6 +77,21 @@ describe('dispatch --notarize', () => {
     return { code, notarized };
   };
 
+  test.skipIf(!onlyMac)('refuses --notarize without --sign before building', async () => {
+    let built = false;
+    const code = await dispatch(
+      { kind: 'build', entry: 'app.ts', options: { target: 'macos', notarize: true } },
+      {
+        buildMac: async () => {
+          built = true;
+          return '/tmp/app.app';
+        },
+      },
+    );
+    expect(code).toBe(1);
+    expect(built).toBe(false);
+  });
+
   test.skipIf(!onlyMac)('skips notarytool without Apple credentials', async () => {
     const { code, notarized } = await notarizeBuild();
     expect(code).toBe(0);

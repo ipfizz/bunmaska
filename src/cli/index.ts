@@ -236,6 +236,10 @@ const runBuild = async (
     );
     return 1;
   }
+  if (command.options.notarize === true && command.options.sign === undefined) {
+    err('bunmaska build: --notarize requires --sign (Apple rejects an unsigned app).');
+    return 1;
+  }
   // hdiutil is a macOS tool and the .dmg only wraps the macOS .app.
   if (command.options.dmg === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
     err('bunmaska build: --dmg is macOS-only (hdiutil), with a macOS target on a macOS host.');
