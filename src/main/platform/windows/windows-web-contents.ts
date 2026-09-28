@@ -7,7 +7,7 @@ import {
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { EXEC_HANDLER_NAME, ExecResultChannel } from '../linux/eval-js';
+import { EXEC_HANDLER_NAME, ExecResultChannel } from '../exec-result-channel';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type {
   NativeInputEvent,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ExecResultChannel } from '../../../../../src/main/platform/linux/eval-js';
+import { ExecResultChannel } from '../../../../src/main/platform/exec-result-channel';
 
 /** A channel whose injected evaluator records the execId of each wrapper it runs. */
 const channel = () => {

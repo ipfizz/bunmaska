@@ -23,7 +23,7 @@ import type {
   WindowEventType,
 } from '../native';
 import { windowControlsScript } from '../window-controls';
-import { ExecResultChannel } from './eval-js';
+import { ExecResultChannel } from '../exec-result-channel';
 import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkFFI } from './gtk-ffi';
 import {

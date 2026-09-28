@@ -1,5 +1,5 @@
-import { createLogger } from '../../../common/logger';
-import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
+import { createLogger } from '../../common/logger';
+import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../ipc/exec-wrapper';
 
 const log = createLogger('eval-js');
 

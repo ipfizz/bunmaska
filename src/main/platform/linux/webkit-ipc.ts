@@ -1,7 +1,7 @@
 import type { Pointer } from 'bun:ffi';
 import { cstr } from '../cstr';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
-import { EXEC_HANDLER_NAME } from './eval-js';
+import { EXEC_HANDLER_NAME } from '../exec-result-channel';
 import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
 import {
