@@ -30,11 +30,10 @@ const ensureDelegateClass = (): Handle => {
       // BOOL applicationShouldHandleReopen:(id)sender hasVisibleWindows:(BOOL)flag
       selector: 'applicationShouldHandleReopen:hasVisibleWindows:',
       typeEncoding: 'c@:@c',
-      args: ['object', 'object'],
+      args: ['object', 'bool'],
       returns: 'bool',
       impl: (_self, _cmd, _sender, flag) => {
-        // Only the low byte of a BOOL register is defined by the ABI.
-        const hasVisibleWindows = (flag & 0xffn) !== 0n;
+        const hasVisibleWindows = flag !== 0n;
         current?.activate(hasVisibleWindows);
         return hasVisibleWindows ? 1 : 0;
       },
