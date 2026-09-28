@@ -133,7 +133,7 @@ app.whenReady().then(() => {
 
 Clears the default data store's website data and resolves when the clear completes.
 
-This is the all-or-nothing form. Bunmaska does not yet accept Electron's `options` argument (`origin` / `storages`), so you cannot scope the clear to a specific origin or storage type.
+This is the all-or-nothing form. Passing Electron's `options` argument (`origin` / `storages`) rejects with an `UnsupportedPlatformError` rather than quietly widening your careful little clear into a full wipe.
 
 Platform notes on exactly _what_ gets cleared:
 
@@ -156,7 +156,7 @@ async function signOut() {
 The default session is deliberately minimal right now. Compared to Electron's `session` module, the following are **not** implemented:
 
 - **`session.fromPartition()` / `session.fromPath()`** - no partitioned or path-based sessions; there is only `defaultSession`. The `cache` option and `persist:` semantics don't exist.
-- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options are ignored/absent; only the unscoped clear exists. It works on macOS (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up); Linux rejects.
+- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options reject with an `UnsupportedPlatformError`; only the unscoped clear exists. It works on macOS (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up); Linux rejects.
 - **Cookie extras** - `cookies.get`/`set`/`remove` exist (macOS/Linux; Windows rejects), but not the `changed` event, `flushStore()`, or set-details fields beyond the documented ones (`sameSite` cannot be set; macOS stores `lax`).
 - **Cache (`ses.getCacheSize()`, `ses.clearCache()`)** - no granular cache inspection or HTTP-cache-only clear (use `clearStorageData()`, which clears everything on macOS and cookies + fetch caches on Windows).
 - **Proxy (`ses.setProxy()`, `ses.resolveProxy()`, `ses.forceReloadProxyConfig()`)** - no proxy configuration.

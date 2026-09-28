@@ -38,6 +38,10 @@ try {
 
 Some calls do not throw but tell you they did nothing useful - `openDevTools` on Windows, `setWindowOpenHandler` returning `allow`, a custom scheme Windows cannot serve. Those warnings (and errors Bunmaska catches for you, such as a throwing IPC listener) go to stderr, prefixed `[bunmaska:<module>]`. When a page says "logs a warning", that line is what it means.
 
+## Uncaught exceptions
+
+As in Electron, an exception nothing catches in the main process does not take the app down. Once the app has started, Bunmaska logs it and shows an error box ("A JavaScript error occurred in the main process", stack included), and the app keeps running, slightly embarrassed. That covers a throw from a menu click, a tray click or a global shortcut too: Bunmaska rethrows those on a clean stack rather than letting them unwind into native code. Register your own `process.on('uncaughtException', ...)` listener and Bunmaska steps aside and lets you handle it.
+
 ## Platform checks
 
 - `currentPlatform()` - returns `'macos' | 'linux' | 'windows'` (the `Platform` type is exported too).
