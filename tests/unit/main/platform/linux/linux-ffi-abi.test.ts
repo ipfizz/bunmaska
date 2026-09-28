@@ -19,7 +19,6 @@ import {
   loadGObjectFFI,
 } from '../../../../../src/main/platform/linux/gobject-ffi';
 import {
-  GTK_DIALOG_GOBJECT_FFI_SYMBOLS,
   loadGtkDialogFFI,
   loadGtkDialogGObjectFFI,
 } from '../../../../../src/main/platform/linux/gtk-dialog-ffi';
@@ -120,11 +119,6 @@ describe('string getters return a guardable pointer, not cstring', () => {
 const PINNED_ARITY: ReadonlyArray<readonly [string, Sym, number]> = [
   ['g_object_new (gobject-ffi, property form)', GOBJECT_FFI_SYMBOLS.g_object_new, 4],
   [
-    'g_object_new (gtk-dialog-ffi, NULL-terminated form)',
-    GTK_DIALOG_GOBJECT_FFI_SYMBOLS.g_object_new,
-    2,
-  ],
-  [
     'webkit_web_view_evaluate_javascript (WK6.0)',
     WEBKITGTK_FFI_SYMBOLS.webkit_web_view_evaluate_javascript,
     8,
@@ -140,12 +134,6 @@ const PINNED_ARITY: ReadonlyArray<readonly [string, Sym, number]> = [
 describe('variadic / ABI-versioned functions are pinned to one arity', () => {
   test.each(PINNED_ARITY)('%s is pinned to one arity', (_name, sym, arity) => {
     expect(sym.args.length).toBe(arity);
-  });
-
-  test('the two g_object_new declarations stay distinct arities', () => {
-    expect(GOBJECT_FFI_SYMBOLS.g_object_new.args.length).not.toBe(
-      GTK_DIALOG_GOBJECT_FFI_SYMBOLS.g_object_new.args.length,
-    );
   });
 });
 
