@@ -1,5 +1,3 @@
-import { statSync } from 'node:fs';
-import { basename, dirname, isAbsolute } from 'node:path';
 import { createLogger } from '../../common/logger';
 import { selectBackend } from '../platform/index';
 import { linuxDialogBackend } from '../platform/linux/gtk-dialog';
@@ -47,7 +45,7 @@ export type OpenDialogReturnValue = {
 };
 
 export type SaveDialogOptions = {
-  /** A file name, a full path or an existing folder; the folder is honoured on macOS only. */
+  /** A file name, or on Windows also a full path. */
   readonly defaultPath?: string;
   /** The allowed extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;
@@ -98,19 +96,6 @@ export const setDialogBackendForTesting = setForTesting;
 
 const log = createLogger('dialog');
 
-/** Electron's `defaultPath` forms: an existing folder, an absolute file path, or a bare name. */
-const saveDefaults = (
-  defaultPath: string | undefined,
-): { defaultDirectory?: string; defaultName: string } => {
-  if (defaultPath === undefined || !isAbsolute(defaultPath)) {
-    return { defaultName: defaultPath ?? '' };
-  }
-  if (statSync(defaultPath, { throwIfNoEntry: false })?.isDirectory() === true) {
-    return { defaultDirectory: defaultPath, defaultName: '' };
-  }
-  return { defaultDirectory: dirname(defaultPath), defaultName: basename(defaultPath) };
-};
-
 /** Electron's optional leading window: accepted, but the dialog is not attached as a sheet. */
 type WithWindow<T> = [window: BrowserWindow, options: T];
 
@@ -156,7 +141,7 @@ export const dialog: Dialog = {
   async showSaveDialog(...args) {
     const options = (args.length === 2 ? args[1] : args[0]) ?? {};
     const filePath = await getBackend().showSaveDialog({
-      ...saveDefaults(options.defaultPath),
+      defaultName: options.defaultPath ?? '', // ponytail: macOS/Linux need dir + name split in their backends
       extensions: flattenFilterExtensions(options.filters),
     });
     return { canceled: filePath.length === 0, filePath };
