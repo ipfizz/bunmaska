@@ -5,10 +5,7 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * Bridges `WKNavigationDelegate` callbacks to JS (D026), one instance per web
- * view, routed by the `self` handle delivered to the IMP.
- */
+/** `WKNavigationDelegate` bridge (D026): one instance per web view, routed by the IMP's `self`. */
 
 const registry = new Map<Handle, (event: NativeNavigationEvent) => void>();
 

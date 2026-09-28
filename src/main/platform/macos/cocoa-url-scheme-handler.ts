@@ -12,26 +12,11 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * Bridges `WKURLSchemeHandler` callbacks to the `protocol` module on macOS.
- *
- * A `WKWebView` routes a custom scheme here (via `setURLSchemeHandler:forURLScheme:`
- * on its `WKWebViewConfiguration`) and we serve the task synchronously.
- *
- * The class is defined once at runtime via {@link defineObjcClass} (D026); its
- * IMP `JSCallback`s are retained for the process lifetime by the runtime-class
- * helper's `retainedCallbacks`, so they are NEVER freed inside their own
- * invocation (the JSCallback-lifecycle discipline that prevents the SIGSEGV).
- */
-
 const log = createLogger('macos-url-scheme-handler');
 
-/** The Bunmaska error domain for a failed custom-scheme task. */
 const ERROR_DOMAIN = 'BunmaskaProtocol';
-/** `NSURLErrorResourceUnavailable`-ish code for an unhandled/declined request. */
-const ERROR_CODE_NO_HANDLER = -1100n;
+const ERROR_CODE_NO_HANDLER = -1100n; // NSURLErrorFileDoesNotExist
 
-/** The dispatcher the IMP calls to serve a URL; defaults to {@link protocol.dispatch}. */
 let dispatcher: (url: string) => BuiltProtocolResponse | undefined = protocol.dispatch;
 
 /** Override the URL dispatcher. Test-only. */
@@ -41,11 +26,7 @@ export const setUrlSchemeDispatcherForTesting = (
   dispatcher = fake ?? protocol.dispatch;
 };
 
-/**
- * Fail `task` with an `NSError` (no registered handler / declined / empty body).
- * Best-effort: a task that WebKit has already finished/stopped throws on a
- * second response, so swallow.
- */
+/** Fail `task` as declined. The catch covers JS/FFI errors only; an NSException aborts. */
 const failTask = (task: Handle): void => {
   try {
     const rt = cocoa();
@@ -62,16 +43,9 @@ const failTask = (task: Handle): void => {
   }
 };
 
-/**
- * Serve `built` to `task`: build an `NSData` from the bytes and an
- * `NSURLResponse` for `url`, then drive the task through
- * `didReceiveResponse:` → `didReceiveData:` → `didFinish`.
- */
 const serveTask = (task: Handle, url: Handle, built: BuiltProtocolResponse): void => {
   const rt = cocoa();
-  // NSData dataWithBytes:length: copies, so `bytes` only needs to outlive this
-  // call — no long-lived pinning. A zero-length body still produces a valid
-  // (empty) NSData.
+  // dataWithBytes:length: copies, so `bytes` only has to outlive this call.
   const bytes = built.bytes;
   const dataPtr = bytes.length === 0 ? 0n : BigInt(ptr(bytes));
   const data = msgSendPtrI64(
@@ -102,10 +76,7 @@ const serveTask = (task: Handle, url: Handle, built: BuiltProtocolResponse): voi
   rt.msgSend(task, rt.selectors.get('didFinish'));
 };
 
-/**
- * @internal The body of `webView:startURLSchemeTask:`. Never throws out into the
- * IMP (any error fails the task instead).
- */
+/** @internal `webView:startURLSchemeTask:`; never throws into the IMP, any error fails the task. */
 export const handleStartTask = (task: Handle): void => {
   try {
     const rt = cocoa();
@@ -133,7 +104,6 @@ const ensureHandlerClass = (): Handle => {
       selector: 'webView:startURLSchemeTask:',
       typeEncoding: 'v@:@@',
       args: ['object', 'object'],
-      // (self, _cmd, webView, task) — the task is the 2nd declared arg.
       impl: (_self, _cmd, _webView, task) => {
         handleStartTask(task);
       },
@@ -142,8 +112,7 @@ const ensureHandlerClass = (): Handle => {
       selector: 'webView:stopURLSchemeTask:',
       typeEncoding: 'v@:@@',
       args: ['object', 'object'],
-      // We serve synchronously, so there is nothing to cancel — but the selector
-      // MUST exist or WebKit refuses the handler (the protocol requires both).
+      // Tasks finish synchronously, but WebKit rejects a handler without this selector.
       impl: () => undefined,
     },
   ]);
@@ -158,7 +127,7 @@ export type UrlSchemeHandler = {
 
 let shared: UrlSchemeHandler | undefined;
 
-/** The process-wide `WKURLSchemeHandler`; it holds no per-window state, so every configuration shares it. */
+/** The process-wide handler: it has no per-window state, so every configuration shares it. */
 export const createUrlSchemeHandler = (): UrlSchemeHandler => {
   if (shared === undefined) {
     const rt = cocoa();

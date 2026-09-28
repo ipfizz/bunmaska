@@ -4,15 +4,6 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * Bridges `NSApplicationDelegate` callbacks to JS (D026).
- *
- * `applicationShouldHandleReopen:hasVisibleWindows:` is AppKit's Dock-reopen
- * hook and the source of Electron's `activate` event. The delegate object is
- * created with `alloc`/`init` (retain count +1) and never released, so it
- * outlives `NSApp` (which holds its delegate weakly).
- */
-
 /** JS handlers an `NSApplicationDelegate` instance routes callbacks to. */
 export type AppDelegateHandlers = {
   /** The app was re-activated; `hasVisibleWindows` is AppKit's flag. */
@@ -73,8 +64,8 @@ export type AppDelegate = {
 };
 
 /**
- * Create an `NSApplicationDelegate` instance routing callbacks to `handlers`.
- * There is one application delegate per process; the most recent handlers win.
+ * Create the app delegate; the most recent `handlers` win. Its alloc/init +1 is never
+ * released because `NSApp` holds its delegate weakly.
  */
 export const createAppDelegate = (handlers: AppDelegateHandlers): AppDelegate => {
   const rt = cocoa();

@@ -20,17 +20,11 @@ import { cocoa } from './cocoa-runtime';
 import { loadWebKit } from './cocoa-webkit';
 import type { Handle } from './objc';
 
-/**
- * `session.cookies` on macOS via `WKHTTPCookieStore`. Every completion handler
- * is a one-shot Block (D022b) fired on the pumped run loop.
- */
-
 const TIMEOUT_MS = 15_000;
 
 /** The default data store's `WKHTTPCookieStore`. */
 const cookieStore = (): Handle => {
-  // WKWebsiteDataStore registers only once WebKit.framework is loaded; without
-  // this, cookies called before any window exists fail with class-not-found.
+  // WKWebsiteDataStore exists only once WebKit is loaded; before any window it is class-not-found.
   loadWebKit();
   const rt = cocoa();
   const store = rt.msgSend(
@@ -87,9 +81,8 @@ const readCookie = (handle: Handle): Cookie => {
 };
 
 /**
- * Fetch every cookie handle via `getAllCookies:`. `onCookies` runs INSIDE the
- * completion block, while the autoreleased NSArray still owns the cookies - any
- * per-cookie native call (e.g. `deleteCookie:`) must be issued there, not later.
+ * `onCookies` runs INSIDE the `getAllCookies:` block, while the autoreleased NSArray still
+ * owns the cookies: issue every per-cookie native call (e.g. `deleteCookie:`) there, not later.
  */
 const getAllCookieHandles = (onCookies: (handles: Handle[]) => void): void => {
   const rt = cocoa();
