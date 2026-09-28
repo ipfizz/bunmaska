@@ -13,12 +13,6 @@ import {
   PNG_ENCODER_CLSID,
 } from './win32-gdiplus-ffi';
 
-/**
- * Windows `nativeImage` backend via GDI+. Encoding writes to an HGLOBAL-backed stream and
- * reads the bytes out via `GlobalLock`, avoiding `IStream::Read`. JPEG quality is GDI+'s
- * default in v1 (an `EncoderParameters` follow-up).
- */
-
 const HANDLE_SIZE = 8;
 const DWORD_SIZE = 4;
 /** `IUnknown` vtable slot of `Release` (QueryInterface=0, AddRef=1, Release=2). */
@@ -30,7 +24,7 @@ const POINTER_SIZE = 8;
 
 let gdiplusStarted = false;
 
-/** Initialise GDI+ once for the process (never shut down — it lives until exit). */
+/** Start GDI+ once; it is never shut down, so it lives until process exit. */
 export const ensureGdiplus = (): void => {
   if (gdiplusStarted) {
     return;
@@ -104,7 +98,7 @@ const toDecoded = (handle: bigint): DecodedImage => {
   return { handle, width, height, empty: false };
 };
 
-/** Read one out-pointer (`GpImage*`/`GpBitmap*`/`GpGraphics*`) the GDI+ call wrote. */
+/** An 8-byte out-parameter slot for a handle a native call writes. */
 const handleOut = (): { buffer: Uint8Array; pointer: ReturnType<typeof ptr> } => {
   const buffer = new Uint8Array(HANDLE_SIZE);
   return { buffer, pointer: ptr(buffer) };
@@ -125,8 +119,7 @@ const decode = (source: string | Uint8Array): DecodedImage => {
   const gdip = loadGdiplus().symbols;
   const out = handleOut();
   if (source.length === 0) {
-    // An empty buffer is an empty image — `ptr()` rejects zero-length views, so
-    // short-circuit rather than fault (Electron's createFromBuffer([]) is empty).
+    // Empty in, empty out (as Electron); ptr() also rejects a zero-length view.
     return toDecoded(0n);
   }
   const stream = loadShlwapi().symbols.SHCreateMemStream(ptr(source), source.length);
@@ -138,7 +131,7 @@ const decode = (source: string | Uint8Array): DecodedImage => {
     return toDecoded(0n);
   }
   const image = read.u64(out.pointer, 0);
-  // Clone so the result owns no reference to the soon-to-be-released stream.
+  // Keep only a clone: the stream-loaded image is tied to the stream released below.
   const clone = handleOut();
   gdip.GdipCloneImage(image, clone.pointer);
   gdip.GdipDisposeImage(image);
@@ -184,6 +177,7 @@ export const windowsNativeImageBackend: NativeImageBackend = {
     return encode(handle, PNG_ENCODER_CLSID);
   },
 
+  // ponytail: GDI+'s default JPEG quality; honour `quality` via EncoderParameters
   encodeJpeg(handle: NativeImageHandle, _quality: number): Uint8Array {
     return encode(handle, JPEG_ENCODER_CLSID);
   },

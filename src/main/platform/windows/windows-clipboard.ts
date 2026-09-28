@@ -12,25 +12,14 @@ import {
 } from './win32-gdiplus-ffi';
 import { ensureGdiplus, windowsNativeImageBackend } from './windows-native-image';
 
-/**
- * Windows clipboard backend. Text and HTML round-trip through the flat Win32 clipboard
- * API with `GlobalAlloc`-backed transfer buffers; images round-trip through the `CF_DIB`
- * format, converted to/from PNG with the GDI+ codec the `nativeImage` backend uses.
- */
-
 const log = createLogger('windows-clipboard');
 
-/** `CF_UNICODETEXT` — UTF-16LE text, the modern text clipboard format. */
 const CF_UNICODETEXT = 13;
-/** `CF_TEXT` — legacy ANSI text (read fallback only). */
-const CF_TEXT = 1;
-/** `CF_BITMAP`/`CF_DIB` — a device-(in)dependent bitmap is on the clipboard. */
+const CF_TEXT = 1; // legacy ANSI text, checked for availability only
 const CF_BITMAP = 2;
 const CF_DIB = 8;
-/** `GMEM_MOVEABLE` — clipboard transfer buffers must be movable global memory. */
-const GMEM_MOVEABLE = 0x0002;
+const GMEM_MOVEABLE = 0x0002; // SetClipboardData requires movable memory
 
-/** The registered "HTML Format" clipboard format id, looked up once and cached. */
 let htmlFormatId: number | undefined;
 const cfHtmlFormat = (): number => {
   if (htmlFormatId === undefined) {
@@ -46,10 +35,8 @@ const FRAGMENT_START = '<!--StartFragment-->';
 const FRAGMENT_END = '<!--EndFragment-->';
 
 /**
- * Wrap HTML `markup` in a Windows CF_HTML payload: a UTF-8 document whose header
- * carries BYTE offsets (`StartHTML`/`EndHTML`/`StartFragment`/`EndFragment`) into
- * itself. Fixed-width offsets keep the header length constant, so the offsets can
- * be computed in one pass. Pure.
+ * Wrap `markup` in a CF_HTML payload: UTF-8 whose header holds BYTE offsets into itself.
+ * Fixed-width offsets keep the header length constant, so one pass computes them. Pure.
  */
 export const buildCfHtml = (markup: string): string => {
   const header = (startHtml: number, endHtml: number, startFrag: number, endFrag: number): string =>
@@ -66,11 +53,7 @@ export const buildCfHtml = (markup: string): string => {
   return `${header(startHtml, endHtml, startFragment, endFragment)}${pre}${markup}${post}`;
 };
 
-/**
- * Extract the HTML fragment from a CF_HTML payload via the standard
- * `<!--StartFragment-->`/`<!--EndFragment-->` markers (which browsers also emit),
- * falling back to the document body when they are absent. Pure.
- */
+/** The fragment between the StartFragment/EndFragment markers, else from the first tag. Pure. */
 export const extractCfHtmlFragment = (cfHtml: string): string => {
   const start = cfHtml.indexOf(FRAGMENT_START);
   const end = cfHtml.indexOf(FRAGMENT_END);
@@ -165,7 +148,7 @@ const decodeUtf16 = (bytes: Uint8Array): string => {
   for (let i = 0; i + 1 < bytes.length; i += 2) {
     const unit = view.getUint16(i, true);
     if (unit === 0) {
-      break; // NUL terminator — the rest is allocation padding.
+      break; // NUL terminator; the rest is allocation padding
     }
     result += String.fromCharCode(unit);
   }
@@ -176,13 +159,11 @@ const decodeUtf16 = (bytes: Uint8Array): string => {
 const decodeUtf8 = (bytes: Uint8Array): string =>
   new TextDecoder().decode(bytes).replace(/\0[\s\S]*$/, '');
 
-/** Size of a `BITMAPINFOHEADER` (the smallest DIB header). */
 const BITMAPINFOHEADER_SIZE = 40;
-/** `biCompression` = `BI_RGB`: uncompressed pixels. */
 const BI_RGB = 0;
-/** `biCompression` = `BI_BITFIELDS` — 3 trailing color-mask DWORDs after a v3 header. */
+/** `biCompression`: 3 trailing color-mask DWORDs after a v3 header. */
 const BI_BITFIELDS = 3;
-/** `biCompression` = `BI_ALPHABITFIELDS` — 4 trailing color-mask DWORDs. */
+/** `biCompression`: 4 trailing color-mask DWORDs after a v3 header. */
 const BI_ALPHABITFIELDS = 6;
 
 /**
@@ -266,7 +247,6 @@ export const buildPackedDib = (
   return dib;
 };
 
-/** Lock a GDI+ bitmap's pixels as 32bpp BGRA and pack them into a `CF_DIB` payload. */
 const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8Array => {
   const gdip = loadGdiplus().symbols;
   const rect = new Uint8Array(16); // GpRect { INT X, Y, Width, Height }
@@ -286,7 +266,7 @@ const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8
   ) {
     throw new FFIError('clipboard: GdipBitmapLockBits failed');
   }
-  // Native WROTE these fields — read them back through the pointer, not the array (D020).
+  // Native writes land behind ptr(): read them via read.*, never the JS array (CODEMAP).
   const stride = Math.abs(read.i32(dataPtr, 8));
   const scan0 = read.u64(dataPtr, 16);
   const pixels = new Uint8Array(
