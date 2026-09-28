@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { currentPlatform } from '../../../src/common/platform';
 import { nativeImage } from '../../../src/main/api/native-image';
 import { windowsNativeImageBackend } from '../../../src/main/platform/windows/windows-native-image';
@@ -39,6 +42,24 @@ if (currentPlatform() === 'windows') {
       expect(png.length).toBeGreaterThan(0);
       // PNG magic: 89 50 4E 47.
       expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    });
+
+    test('decode from a path does not keep the file locked', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bunmaska-image-'));
+      const path = join(dir, 'icon.png');
+      writeFileSync(path, PNG_1x1);
+      try {
+        expect(windowsNativeImageBackend.decode(path).empty).toBe(false);
+        expect(() => unlinkSync(path)).not.toThrow();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('decode of a missing path is an empty image', () => {
+      expect(windowsNativeImageBackend.decode('C:\\bunmaska_no_such_image_zzz.png').empty).toBe(
+        true,
+      );
     });
 
     test('encodeJpeg produces valid JPEG bytes', () => {

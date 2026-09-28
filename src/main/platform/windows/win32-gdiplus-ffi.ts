@@ -11,8 +11,6 @@ import { winLibraryAccessor } from './win32';
 const GDIPLUS_SYMBOLS = {
   // (ULONG_PTR* token, GdiplusStartupInput* input, GdiplusStartupOutput* output) -> Status
   GdiplusStartup: { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
-  // (LPCWSTR filename, GpImage** out) -> Status
-  GdipLoadImageFromFile: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
   // (IStream*, GpImage** out) -> Status
   GdipLoadImageFromStream: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   // (GpImage*, GpImage** out) -> Status — an independent copy (decouples from the source stream).

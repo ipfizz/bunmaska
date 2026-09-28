@@ -1,6 +1,6 @@
 import { CFunction, FFIType, type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
+import { readFileSync } from 'node:fs';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
-import { wstr } from './win32';
 import { loadKernel32, loadOle32 } from './win32-ffi';
 import {
   GDIP_OK,
@@ -83,16 +83,19 @@ const handleOut = (): { buffer: Uint8Array; pointer: ReturnType<typeof ptr> } =>
 };
 
 const decode = (source: string | Uint8Array): DecodedImage => {
+  if (typeof source === 'string') {
+    // GdipLoadImageFromFile would share-lock the file for the image's lifetime.
+    let bytes: Uint8Array;
+    try {
+      bytes = readFileSync(source);
+    } catch {
+      return toDecoded(0n);
+    }
+    return decode(bytes);
+  }
   ensureGdiplus();
   const gdip = loadGdiplus().symbols;
   const out = handleOut();
-  if (typeof source === 'string') {
-    const nameBuffer = wstr(source);
-    if (gdip.GdipLoadImageFromFile(ptr(nameBuffer), out.pointer) !== GDIP_OK) {
-      return toDecoded(0n);
-    }
-    return toDecoded(read.u64(out.pointer, 0));
-  }
   if (source.length === 0) {
     // An empty buffer is an empty image — `ptr()` rejects zero-length views, so
     // short-circuit rather than fault (Electron's createFromBuffer([]) is empty).
