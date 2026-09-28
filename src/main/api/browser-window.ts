@@ -68,24 +68,6 @@ const WINDOW_EVENT_TYPES: readonly WindowEventType[] = [
   'ready-to-show',
 ];
 
-/** Passed to `close` listeners; {@link preventDefault} vetoes the close. */
-export type WindowCloseEvent = {
-  preventDefault(): void;
-  readonly defaultPrevented: boolean;
-};
-
-const makeCloseEvent = (): WindowCloseEvent => {
-  let prevented = false;
-  return {
-    preventDefault(): void {
-      prevented = true;
-    },
-    get defaultPrevented(): boolean {
-      return prevented;
-    },
-  };
-};
-
 const registry = new Map<number, BrowserWindow>();
 /** So `Menu.popup` can anchor to a window without a menu→window import cycle. */
 const popupTargets = new WeakMap<BrowserWindow, PopupTarget>();
@@ -169,7 +151,7 @@ export class BrowserWindow extends EventEmitter {
     });
     // Returning true tells the backend to stay open.
     this.#native.onClose(() => {
-      const event = makeCloseEvent();
+      const event = makeCancelableEvent();
       this.emit('close', event);
       return event.defaultPrevented;
     });
