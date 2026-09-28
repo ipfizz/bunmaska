@@ -22,7 +22,7 @@ export type NativeWindowOptions = {
   readonly fullscreen?: boolean;
   /**
    * User preload SOURCE (never a path, D024), injected at document-start after the bridge
-   * bootstrap. Every backend injects it into sub-frames too, cross-origin iframes included.
+   * bootstrap. Main frame only on every backend, as Electron's `nodeIntegrationInSubFrames: false`.
    */
   readonly preloadScript?: string;
 };
