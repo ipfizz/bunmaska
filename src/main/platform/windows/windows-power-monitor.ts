@@ -15,7 +15,8 @@ export const WM_WTSSESSION_CHANGE = 0x02b1;
 
 /** `WM_POWERBROADCAST` events: the system is suspending / has resumed. */
 const PBT_APMSUSPEND = 0x0004;
-const PBT_APMRESUMESUSPEND = 0x0007;
+// Sent on every resume; a user-initiated wake also sends PBT_APMRESUMESUSPEND after
+// it, which is ignored so 'resume' fires once (as Chromium does).
 const PBT_APMRESUMEAUTOMATIC = 0x0012;
 
 /** `WM_WTSSESSION_CHANGE` events: the session was locked / unlocked. */
@@ -34,7 +35,7 @@ export const dispatchPowerMessage = (
   if (message === WM_POWERBROADCAST) {
     if (wParam === PBT_APMSUSPEND) {
       handlers.onSuspend();
-    } else if (wParam === PBT_APMRESUMESUSPEND || wParam === PBT_APMRESUMEAUTOMATIC) {
+    } else if (wParam === PBT_APMRESUMEAUTOMATIC) {
       handlers.onResume();
     }
     return;
