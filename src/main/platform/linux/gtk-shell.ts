@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { cstr } from '../cstr';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';
@@ -7,22 +8,17 @@ import { loadGioFFI } from './gio-ffi';
  * Desktop integration via GIO + GDK — the Linux half of Electron's `shell`.
  */
 
-/**
- * Convert an absolute filesystem path to a `file://` URI, percent-encoding each
- * path segment (spaces, `#`, `?`, …) while preserving the `/` separators. The
- * leading slash of an absolute path yields the `file:///` triple-slash form.
- */
-export const pathToFileUri = (absPath: string): string =>
-  `file://${absPath.split('/').map(encodeURIComponent).join('/')}`;
-
 /** Open a URL in the default application. Returns whether the OS accepted it. */
 export const openExternal = (url: string): boolean =>
   loadGioFFI().symbols.g_app_info_launch_default_for_uri(cstr(url), null, null) === 1;
 
 /** Open a file or folder path with its default application. Returns success. */
 export const openPath = (path: string): boolean =>
-  loadGioFFI().symbols.g_app_info_launch_default_for_uri(cstr(pathToFileUri(path)), null, null) ===
-  1;
+  loadGioFFI().symbols.g_app_info_launch_default_for_uri(
+    cstr(pathToFileURL(path).href),
+    null,
+    null,
+  ) === 1;
 
 /**
  * Reveal a file or folder by opening its containing directory in the file
@@ -32,7 +28,7 @@ export const openPath = (path: string): boolean =>
  */
 export const showItemInFolder = (path: string): void => {
   loadGioFFI().symbols.g_app_info_launch_default_for_uri(
-    cstr(pathToFileUri(dirname(path))),
+    cstr(pathToFileURL(dirname(path)).href),
     null,
     null,
   );

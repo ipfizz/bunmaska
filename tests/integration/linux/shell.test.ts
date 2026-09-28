@@ -4,7 +4,6 @@ import {
   beep,
   openExternal,
   openPath,
-  pathToFileUri,
   showItemInFolder,
 } from '../../../src/main/platform/linux/gtk-shell';
 
@@ -26,10 +25,6 @@ describe.skipIf(!isLinux)('Linux shell backend', () => {
     expect(typeof openPath).toBe('function');
     expect(typeof showItemInFolder).toBe('function');
     expect(typeof beep).toBe('function');
-  });
-
-  test('pathToFileUri builds an encoded file:// URI', () => {
-    expect(pathToFileUri('/tmp/a b.txt')).toBe('file:///tmp/a%20b.txt');
   });
 
   test('beep() runs on a real GDK display without throwing', () => {
