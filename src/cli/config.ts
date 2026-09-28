@@ -4,18 +4,9 @@
  */
 
 import { existsSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { CONFIG_FILE_NAMES, type BunmaskaConfig, validateConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
-
-export {
-  CONFIG_FILE_NAMES,
-  configChannel,
-  defineConfig,
-  type BunmaskaConfig,
-  type BunmaskaUpdatesConfig,
-  validateConfig,
-} from '../common/config-schema';
 
 /**
  * Absolute path of the project's config file, or `undefined`. The first name in
@@ -36,7 +27,7 @@ export const findConfigFile = (cwd: string): string | undefined => {
  * {@link InvalidArgumentError} if neither is present or the value is malformed.
  */
 export const loadConfigFile = async (path: string): Promise<BunmaskaConfig> => {
-  const absolute = isAbsolute(path) ? path : resolve(path);
+  const absolute = resolve(path);
   let module: Record<string, unknown>;
   try {
     module = (await import(absolute)) as Record<string, unknown>;
