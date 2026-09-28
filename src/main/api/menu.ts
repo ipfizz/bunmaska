@@ -492,6 +492,7 @@ export class Menu {
 
   /** `null` removes the application menu everywhere, including bars already installed. */
   static setApplicationMenu(menu: Menu | null): void {
+    applicationMenuSet = true;
     applicationMenu = menu;
     // null must reach the native side too: it clears the menu bar (Electron
     // semantics on Windows/Linux; on macOS it empties the main menu).
@@ -530,8 +531,36 @@ export class Menu {
 }
 
 let applicationMenu: Menu | null = null;
+let applicationMenuSet = false;
+
+/** Electron's default menu, minus the roles Bunmaska lacks; skipped once the app set one, even `null`. */
+export const installDefaultApplicationMenu = (appName: string): void => {
+  if (applicationMenuSet) {
+    return;
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: appName,
+        submenu: [
+          { role: 'about', label: `About ${appName}` },
+          { type: 'separator' },
+          { role: 'hide', label: `Hide ${appName}` },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit', label: `Quit ${appName}` },
+        ],
+      },
+      { label: 'File', submenu: [{ role: 'close' }] },
+      { role: 'editMenu' },
+      { role: 'windowMenu' },
+    ]),
+  );
+};
 
 /** @internal */
 export const resetApplicationMenuForTesting = (): void => {
   applicationMenu = null;
+  applicationMenuSet = false;
 };

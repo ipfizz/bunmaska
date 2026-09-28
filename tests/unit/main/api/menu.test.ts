@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
 import type { BrowserWindow } from '../../../../src/main/api/browser-window';
 import {
+  installDefaultApplicationMenu,
   Menu,
   MenuItem,
   type MenuRealizer,
@@ -389,6 +390,22 @@ describe('Menu realization spec', () => {
   test('separators become separator specs', () => {
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ type: 'separator' }]));
     expect(realized?.[0]?.type).toBe('separator');
+  });
+});
+
+describe('installDefaultApplicationMenu', () => {
+  test('installs App, File, Edit and Window menus when the app set none', () => {
+    installDefaultApplicationMenu('Notes');
+    expect(realized?.map((spec) => spec.label)).toEqual(['Notes', 'File', 'Edit', 'Window']);
+    expect(realized?.[0]?.submenu?.at(-1)).toMatchObject({ label: 'Quit Notes', role: 'quit' });
+    expect(Menu.getApplicationMenu()).not.toBeNull();
+  });
+
+  test('leaves an app-set menu, including null, alone', () => {
+    Menu.setApplicationMenu(null);
+    installDefaultApplicationMenu('Notes');
+    expect(installed).toBe(1);
+    expect(Menu.getApplicationMenu()).toBeNull();
   });
 });
 
