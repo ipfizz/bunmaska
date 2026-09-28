@@ -4,14 +4,7 @@ import {
   windowControlsScript,
 } from '../../../../src/main/platform/window-controls';
 
-/**
- * Regression guard for the page-world title-bar script. On platforms with a real
- * isolated world (macOS/Linux) the page world must NEVER carry a `__bunmaska`
- * handle — that defeats context isolation (and trips the isolation e2e tests). The
- * control global is opt-in via `nativeOpChannel`, which only the page-world-bridge
- * platform (Windows) sets. This unit test runs on every OS, so the leak is caught
- * on Windows CI too, not only on the macOS/Linux e2e runners.
- */
+// Runs on every OS, so a page-world `__bunmaska` leak is caught on Windows CI too.
 describe('windowControlsScript', () => {
   test('the default (isolated-world platforms) never leaks a __bunmaska handle', () => {
     const script = windowControlsScript();

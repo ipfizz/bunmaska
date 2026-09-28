@@ -13,7 +13,7 @@ import type { NativeApplication, NativeWindow } from '../../../src/main/platform
  * isolation), so the renderer-side test logic ships as a PRELOAD (which runs in
  * that world) and is triggered via `sendEnvelopeToRenderer` (which also targets
  * the isolated world). Page-world `executeJavaScript` can no longer reach
- * `__bunmaska` — that is the isolation guarantee, proven in `isolation-e2e.test.ts`.
+ * `__bunmaska` - that is the isolation guarantee, proven in `isolation-e2e.test.ts`.
  */
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
