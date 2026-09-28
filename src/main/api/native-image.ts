@@ -127,7 +127,7 @@ export class NativeImage {
     return Buffer.from(this.#backend.encodePng(this.#handle));
   }
 
-  /** `quality` is 0-100, default 92, honored on macOS only. Zero-length when the image is empty. */
+  /** `quality` is 0-100, default 92, ignored on Windows. Zero-length when the image is empty. */
   toJPEG(quality = 92): Buffer {
     if (this.#empty) {
       return Buffer.alloc(0);
