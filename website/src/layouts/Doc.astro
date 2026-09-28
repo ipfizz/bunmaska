@@ -122,23 +122,3 @@ const techArticle = {
   }
 </style>
 
-<script>
-  // The copy buttons themselves are injected at build time (rehype-copy-button),
-  // so the icon ships in the SSR'd HTML. This only wires the click behaviour.
-  document
-    .querySelectorAll<HTMLButtonElement>(".copy-btn--prose")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const pre = btn.closest("pre");
-        const code = pre?.querySelector("code");
-        const text = (code ?? pre)?.textContent ?? "";
-        try {
-          await navigator.clipboard.writeText(text);
-          btn.classList.add("copied");
-          setTimeout(() => btn.classList.remove("copied"), 1400);
-        } catch {
-          // Clipboard access denied - the copy button is a progressive enhancement.
-        }
-      });
-    });
-</script>

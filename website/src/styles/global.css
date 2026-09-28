@@ -416,10 +416,20 @@
     border-color 0.15s ease;
 }
 
-.prose pre:hover .copy-btn--prose,
+.pre-wrap {
+  position: relative;
+}
+
+.pre-wrap:hover .copy-btn--prose,
 .copy-btn--prose:focus-visible,
 .copy-btn--prose.copied {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .copy-btn--prose {
+    opacity: 1;
+  }
 }
 
 /* Dual-theme Shiki: panel bg is --surface (matches the install box); token colours

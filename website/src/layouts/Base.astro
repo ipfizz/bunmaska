@@ -163,5 +163,20 @@ const graphs = [website, ...(isHome ? [organization, softwareApp, sourceCode] : 
       >Skip to content</a
     >
     <slot />
+    <script>
+      // One handler for every code-block copy button: markdown (rehype-copy-button) and CodeBlock.
+      document.addEventListener("click", async (e) => {
+        const btn = e.target instanceof Element ? e.target.closest(".copy-btn") : null;
+        const code = btn?.closest(".pre-wrap, .codepanel")?.querySelector("code");
+        if (!btn || !code) return;
+        try {
+          await navigator.clipboard.writeText(code.textContent ?? "");
+          btn.classList.add("copied");
+          setTimeout(() => btn.classList.remove("copied"), 1400);
+        } catch {
+          // Clipboard access denied - the copy button is a progressive enhancement.
+        }
+      });
+    </script>
   </body>
 </html>
