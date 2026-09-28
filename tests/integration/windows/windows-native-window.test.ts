@@ -289,6 +289,16 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     }
   });
 
+  test('a minimized window is not visible', () => {
+    const win = new NativeWin32Window({ title: 'MinVis', width: 320, height: 240, show: true });
+    try {
+      loadUser32().symbols.ShowWindow(win.hwnd(), SW_MINIMIZE);
+      expect(win.isVisible()).toBe(false);
+    } finally {
+      win.destroy();
+    }
+  });
+
   test('getBounds reports the restored rect while minimized, not the -32000 icon slot', () => {
     const win = new NativeWin32Window({ title: 'Bounds', width: 400, height: 300, show: true });
     try {

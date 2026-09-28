@@ -529,8 +529,10 @@ export class NativeWin32Window {
     this.emit('hide');
   }
 
+  /** Shown and not minimized (Electron's Windows semantics). */
   isVisible(): boolean {
-    return loadUser32().symbols.IsWindowVisible(this.#hwnd) !== 0;
+    const user32 = loadUser32().symbols;
+    return user32.IsWindowVisible(this.#hwnd) !== 0 && user32.IsIconic(this.#hwnd) === 0;
   }
 
   /** Preventable close: consults the veto, then commits (the same path as `WM_CLOSE`). */
