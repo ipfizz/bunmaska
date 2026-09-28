@@ -1,19 +1,8 @@
-import { selectBackend } from '../platform/index';
 import { currentPlatform } from '../../common/platform';
-import { linuxGlobalShortcutBackend } from '../platform/linux/x11-global-shortcut';
-import { macosGlobalShortcutBackend } from '../platform/macos/carbon-global-shortcut';
-import { windowsGlobalShortcutBackend } from '../platform/windows/windows-global-shortcut';
+import { service } from '../platform/index';
 import { parseAccelerator } from './accelerator';
-import type { GlobalShortcutBackend } from '../platform/services';
 
-const macosBackend: GlobalShortcutBackend = macosGlobalShortcutBackend;
-const linuxBackend: GlobalShortcutBackend = linuxGlobalShortcutBackend; // ponytail: X11 only; Wayland needs the GlobalShortcuts portal
-
-const { get: getBackend, setForTesting } = selectBackend<GlobalShortcutBackend>('globalShortcut', {
-  macos: () => macosBackend,
-  linux: () => linuxBackend,
-  windows: () => windowsGlobalShortcutBackend,
-});
+const { get: getBackend, setForTesting } = service('globalShortcut');
 
 /** @internal */
 export const setGlobalShortcutBackendForTesting = setForTesting;

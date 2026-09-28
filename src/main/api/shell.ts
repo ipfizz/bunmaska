@@ -1,28 +1,6 @@
-import { selectBackend } from '../platform/index';
-import * as gtkShell from '../platform/linux/gtk-shell';
-import * as cocoaShell from '../platform/macos/cocoa-shell';
-import { windowsShellBackend } from '../platform/windows/windows-shell';
-import type { ShellBackend } from '../platform/services';
+import { service } from '../platform/index';
 
-const macosBackend: ShellBackend = {
-  openExternal: (url) => cocoaShell.openExternal(url),
-  openPath: (path) => cocoaShell.openPath(path),
-  showItemInFolder: (path) => cocoaShell.showItemInFolder(path),
-  beep: () => cocoaShell.beep(),
-};
-
-const linuxBackend: ShellBackend = {
-  openExternal: (url) => gtkShell.openExternal(url),
-  openPath: (path) => gtkShell.openPath(path),
-  showItemInFolder: (path) => gtkShell.showItemInFolder(path),
-  beep: () => gtkShell.beep(),
-};
-
-const { get: getBackend, setForTesting } = selectBackend<ShellBackend>('shell', {
-  macos: () => macosBackend,
-  linux: () => linuxBackend,
-  windows: () => windowsShellBackend,
-});
+const { get: getBackend, setForTesting } = service('shell');
 
 /** @internal */
 export const setShellBackendForTesting = setForTesting;

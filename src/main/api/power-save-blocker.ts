@@ -1,42 +1,23 @@
-import { currentPlatform } from '../../common/platform';
+import { service } from '../platform/index';
 import { app } from './app';
-import { linuxPowerSaveBlockerBackend } from '../platform/linux/linux-power-save-blocker';
-import { cocoaPowerSaveBlockerBackend } from '../platform/macos/cocoa-power-save-blocker';
-import { windowsPowerSaveBlockerBackend } from '../platform/windows/windows-power-save-blocker';
 import type {
   NativeBlocker,
   PowerSaveBlockerBackend,
   PowerSaveBlockerType,
 } from '../platform/services';
 
-const noopBackend: PowerSaveBlockerBackend = {
-  acquire: () => null,
-  release: () => undefined,
-};
-
-const platformBackend = (): PowerSaveBlockerBackend => {
-  const platform = currentPlatform();
-  if (platform === 'macos') {
-    return cocoaPowerSaveBlockerBackend;
-  }
-  if (platform === 'linux') {
-    return linuxPowerSaveBlockerBackend;
-  }
-  if (platform === 'windows') {
-    return windowsPowerSaveBlockerBackend;
-  }
-  return noopBackend;
-};
+const { get: getBackend } = service('powerSaveBlocker');
 
 type Entry = { readonly type: PowerSaveBlockerType; readonly nativeHandle: NativeBlocker | null };
 
 export class PowerSaveBlockerImpl {
-  readonly #backend: PowerSaveBlockerBackend;
+  readonly #backend: () => PowerSaveBlockerBackend;
   readonly #blockers = new Map<number, Entry>();
   #nextId = 1;
 
-  constructor(backend: PowerSaveBlockerBackend = platformBackend()) {
-    this.#backend = backend;
+  /** Without `backend`, the OS one is resolved on first use, never at import. */
+  constructor(backend?: PowerSaveBlockerBackend) {
+    this.#backend = backend === undefined ? getBackend : () => backend;
   }
 
   /** A fresh, never-reused id even with no mechanism (Linux without its gate, D038), as in Electron. */
@@ -44,7 +25,7 @@ export class PowerSaveBlockerImpl {
     const id = this.#nextId++;
     let nativeHandle: NativeBlocker | null = null;
     try {
-      nativeHandle = this.#backend.acquire(type, app.getName());
+      nativeHandle = this.#backend().acquire(type, app.getName());
     } catch {
       nativeHandle = null; // A failed acquire is a no-op block, never a throw.
     }
@@ -61,7 +42,7 @@ export class PowerSaveBlockerImpl {
     this.#blockers.delete(id);
     if (entry.nativeHandle !== null) {
       try {
-        this.#backend.release(entry.nativeHandle);
+        this.#backend().release(entry.nativeHandle);
       } catch {
         // Best-effort release; the id is already forgotten.
       }

@@ -1,10 +1,7 @@
 import { createLogger } from '../../common/logger';
-import { selectBackend } from '../platform/index';
-import { linuxDialogBackend } from '../platform/linux/gtk-dialog';
-import * as cocoaDialog from '../platform/macos/cocoa-dialog';
-import { windowsDialogBackend } from '../platform/windows/windows-dialog';
+import { service } from '../platform/index';
 import type { BrowserWindow } from './browser-window';
-import type { DialogBackend, MessageBoxType } from '../platform/services';
+import type { MessageBoxType } from '../platform/services';
 
 export type MessageBoxOptions = {
   readonly message: string;
@@ -73,17 +70,7 @@ export type SaveDialogReturnValue = {
   readonly filePath: string;
 };
 
-const macosBackend: DialogBackend = {
-  showMessageBox: (spec) => cocoaDialog.showMessageBox(spec),
-  showOpenDialog: (spec) => cocoaDialog.showOpenDialog(spec),
-  showSaveDialog: (spec) => cocoaDialog.showSaveDialog(spec),
-};
-
-const { get: getBackend, setForTesting } = selectBackend<DialogBackend>('dialog', {
-  macos: () => macosBackend,
-  linux: () => linuxDialogBackend,
-  windows: () => windowsDialogBackend,
-});
+const { get: getBackend, setForTesting } = service('dialog');
 
 /** @internal */
 export const setDialogBackendForTesting = setForTesting;

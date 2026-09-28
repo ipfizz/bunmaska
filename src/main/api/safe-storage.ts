@@ -1,10 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { selectBackend } from '../platform/index';
 import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
-import { currentPlatform } from '../../common/platform';
-import { linuxLibsecretBackend } from '../platform/linux/libsecret-keyring';
-import { macosKeychainBackend } from '../platform/macos/cocoa-safe-storage';
-import { windowsDpapiBackend } from '../platform/windows/windows-safe-storage';
+import { service } from '../platform/index';
 import type { KeyringBackend } from '../platform/services';
 
 /**
@@ -56,21 +52,9 @@ const decryptWithKey = (key: Buffer, blob: Buffer): string => {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 };
 
-const unavailableBackend: KeyringBackend = {
-  isAvailable: () => false,
-  getOrCreateKey: () => {
-    throw new BunmaskaError(`safeStorage has no keyring backend on ${currentPlatform()}`);
-  },
-};
-
 let cachedKey: Buffer | undefined;
 let cachedAvailable: boolean | undefined;
-const { get: getBackend, setForTesting } = selectBackend<KeyringBackend>('safeStorage', {
-  macos: () => macosKeychainBackend,
-  linux: () => linuxLibsecretBackend,
-  windows: () => windowsDpapiBackend,
-  fallback: () => unavailableBackend,
-});
+const { get: getBackend, setForTesting } = service('safeStorage');
 
 /** Probed once then memoised, as Electron caches at startup. */
 const isAvailable = (): boolean => {

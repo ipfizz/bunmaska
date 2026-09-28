@@ -1,9 +1,5 @@
-import { selectBackend } from '../platform/index';
-import { linuxClipboardBackend } from '../platform/linux/gtk-clipboard';
-import * as macosClipboard from '../platform/macos/cocoa-clipboard';
-import { windowsClipboardBackend } from '../platform/windows/windows-clipboard';
+import { service } from '../platform/index';
 import { type NativeImage, nativeImage } from './native-image';
-import type { ClipboardBackend } from '../platform/services';
 
 /** Reads are async everywhere because GDK 4 can only read async (D033); Electron's are sync. */
 export type Clipboard = {
@@ -22,22 +18,7 @@ export type Clipboard = {
   clear(): void;
 };
 
-const macosBackend: ClipboardBackend = {
-  readText: () => macosClipboard.readText(),
-  writeText: (text) => macosClipboard.writeText(text),
-  readHTML: () => macosClipboard.readHTML(),
-  writeHTML: (markup) => macosClipboard.writeHTML(markup),
-  readImage: () => macosClipboard.readImage(),
-  writeImage: (bytes) => macosClipboard.writeImage(bytes),
-  availableFormats: () => macosClipboard.availableFormats(),
-  clear: () => macosClipboard.clear(),
-};
-
-const { get: getBackend, setForTesting } = selectBackend<ClipboardBackend>('clipboard', {
-  macos: () => macosBackend,
-  linux: () => linuxClipboardBackend,
-  windows: () => windowsClipboardBackend,
-});
+const { get: getBackend, setForTesting } = service('clipboard');
 
 /** @internal */
 export const setClipboardBackendForTesting = setForTesting;

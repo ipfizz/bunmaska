@@ -132,6 +132,17 @@ export type NativeImageBackend = {
   release?(handle: NativeImageHandle): void;
 };
 
+export type ThemeSource = 'system' | 'light' | 'dark';
+
+export type NativeThemeBackend = {
+  shouldUseDarkColors(): boolean;
+  prefersReducedTransparency(): boolean;
+  /** Re-themes the app's windows; a no-op where the OS has no app-wide override. */
+  setThemeSource(source: ThemeSource): void;
+  /** Calls `onChange` on every OS appearance change, for the process lifetime. */
+  observe(onChange: () => void): void;
+};
+
 export type NotificationSpec = {
   readonly title: string;
   readonly body: string;
@@ -237,4 +248,22 @@ export type TrayInstance = {
 export type TrayBackend = {
   /** `image` is a filesystem path, never a NativeImage; `appName` is `app.getName()`. */
   create(image: string, options?: TrayImageOptions, appName?: string): TrayInstance;
+};
+
+/** One OS's services; `service(key)` in platform/index.ts picks the current OS's row. */
+export type PlatformServices = {
+  readonly clipboard: ClipboardBackend;
+  readonly dialog: DialogBackend;
+  readonly globalShortcut: GlobalShortcutBackend;
+  readonly menu: MenuRealizer;
+  readonly nativeImage: NativeImageBackend;
+  readonly nativeTheme: NativeThemeBackend;
+  readonly notification: NotificationBackend;
+  readonly powerMonitor: (handlers: PowerEventHandlers) => void;
+  readonly powerSaveBlocker: PowerSaveBlockerBackend;
+  readonly safeStorage: KeyringBackend;
+  readonly screen: ScreenBackend;
+  readonly session: SessionBackend;
+  readonly shell: ShellBackend;
+  readonly tray: TrayBackend;
 };

@@ -1,10 +1,7 @@
 import { EventEmitter } from 'node:events';
-import { selectBackend } from '../platform/index';
-import { linuxNotificationBackend } from '../platform/linux/gtk-notification';
-import { macosNotificationBackend } from '../platform/macos/cocoa-notification';
-import { windowsNotificationBackend } from '../platform/windows/windows-notification';
+import { service } from '../platform/index';
 import { app } from './app';
-import type { NotificationBackend, NotificationHandle } from '../platform/services';
+import type { NotificationHandle } from '../platform/services';
 
 export type NotificationOptions = {
   readonly title?: string;
@@ -13,14 +10,7 @@ export type NotificationOptions = {
   readonly silent?: boolean;
 };
 
-const macosBackend: NotificationBackend = macosNotificationBackend;
-const linuxBackend: NotificationBackend = linuxNotificationBackend;
-
-const { get: getBackend, setForTesting } = selectBackend<NotificationBackend>('Notification', {
-  macos: () => macosBackend,
-  linux: () => linuxBackend,
-  windows: () => windowsNotificationBackend,
-});
+const { get: getBackend, setForTesting } = service('notification');
 
 /** @internal */
 export const setNotificationBackendForTesting = setForTesting;

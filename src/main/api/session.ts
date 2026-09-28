@@ -1,6 +1,6 @@
 // No BrowserWindow import: windows read the session at construction (a cycle otherwise).
 import { InvalidArgumentError, UnsupportedPlatformError } from '../../common/errors';
-import { selectBackend } from '../platform/index';
+import { service } from '../platform/index';
 import { ensureNativeStarted } from '../bootstrap';
 import {
   type Cookie,
@@ -8,34 +8,9 @@ import {
   type CookieSetDetails,
   cookieFromSetDetails,
 } from './cookie-util';
-import * as macosCookies from '../platform/macos/cocoa-cookies';
-import * as macosWebsiteData from '../platform/macos/cocoa-website-data';
-import * as linuxCookies from '../platform/linux/webkit-cookies';
-import { windowsSessionBackend } from '../platform/windows/windows-session';
 import type { SessionBackend } from '../platform/services';
 
-const macosBackend: SessionBackend = {
-  clearStorageData: () => macosWebsiteData.clearStorageData(),
-  getCookies: (filter) => macosCookies.getCookies(filter),
-  setCookie: (cookie) => macosCookies.setCookie(cookie),
-  removeCookie: (url, name) => macosCookies.removeCookie(url, name),
-};
-
-const linuxBackend: SessionBackend = {
-  clearStorageData: () =>
-    Promise.reject(
-      new UnsupportedPlatformError('session.clearStorageData is not yet wired on Linux'),
-    ), // ponytail: wire WebKitWebsiteDataManager clearing
-  getCookies: (filter) => linuxCookies.getCookies(filter),
-  setCookie: (cookie) => linuxCookies.setCookie(cookie),
-  removeCookie: (url, name) => linuxCookies.removeCookie(url, name),
-};
-
-const { get: getBackend, setForTesting } = selectBackend<SessionBackend>('session', {
-  macos: () => macosBackend,
-  linux: () => linuxBackend,
-  windows: () => windowsSessionBackend,
-});
+const { get: getBackend, setForTesting } = service('session');
 
 let fakeInstalled = false;
 /** @internal */

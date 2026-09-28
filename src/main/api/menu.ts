@@ -1,10 +1,7 @@
-import { BunmaskaError, InvalidArgumentError, UnsupportedPlatformError } from '../../common/errors';
-import { currentPlatform } from '../../common/platform';
-import { linuxMenuRealizer } from '../platform/linux/gtk-menu';
+import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
+import { service } from '../platform/index';
 import { parseAccelerator } from './accelerator';
-import * as cocoaMenu from '../platform/macos/cocoa-menu';
-import { windowsMenuRealizer } from '../platform/windows/windows-menu';
-import type { MenuRealizer, MenuWindowAction, NativeMenuItemSpec } from '../platform/services';
+import type { MenuWindowAction, NativeMenuItemSpec } from '../platform/services';
 import type { BrowserWindow } from './browser-window';
 
 export type MenuItemType = 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
@@ -268,33 +265,10 @@ export class MenuItem {
   }
 }
 
-const macosRealizer: MenuRealizer = {
-  realize: (items) => cocoaMenu.realizeMenu(items),
-  setApplicationMenu: (menu) => cocoaMenu.setApplicationMenu(menu ?? 0n),
-};
-
-let realizer: MenuRealizer | undefined;
-
-const getRealizer = (): MenuRealizer => {
-  if (realizer !== undefined) {
-    return realizer;
-  }
-  if (currentPlatform() === 'macos') {
-    return macosRealizer;
-  }
-  if (currentPlatform() === 'linux') {
-    return linuxMenuRealizer;
-  }
-  if (currentPlatform() === 'windows') {
-    return windowsMenuRealizer;
-  }
-  throw new UnsupportedPlatformError(`Menu is not supported on ${currentPlatform()} yet`);
-};
+const { get: getRealizer, setForTesting } = service('menu');
 
 /** @internal */
-export const setMenuRealizerForTesting = (fake: MenuRealizer | undefined): void => {
-  realizer = fake;
-};
+export const setMenuRealizerForTesting = setForTesting;
 
 /** Electron groups radio items by the separators around them. */
 const radioGroup = (item: MenuItem, siblings: readonly MenuItem[]): MenuItem[] => {

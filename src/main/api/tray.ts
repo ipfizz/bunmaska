@@ -1,26 +1,16 @@
 import { EventEmitter } from 'node:events';
-import { selectBackend } from '../platform/index';
+import { service } from '../platform/index';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { linuxTrayBackend } from '../platform/linux/sni-tray';
-import { macosTrayBackend } from '../platform/macos/cocoa-tray';
-import { windowsTrayBackend } from '../platform/windows/windows-tray';
 import { app } from './app';
 import type { Menu } from './menu';
 import type { NativeImage } from './native-image';
-import type { TrayBackend, TrayImageOptions, TrayInstance } from '../platform/services';
+import type { TrayImageOptions, TrayInstance } from '../platform/services';
 
 export type TrayImage = string | NativeImage;
 
-const macosBackend: TrayBackend = macosTrayBackend;
-const linuxBackend: TrayBackend = linuxTrayBackend;
-
-const { get: getBackend, setForTesting } = selectBackend<TrayBackend>('Tray', {
-  macos: () => macosBackend,
-  linux: () => linuxBackend,
-  windows: () => windowsTrayBackend,
-});
+const { get: getBackend, setForTesting } = service('tray');
 
 /** @internal */
 export const setTrayBackendForTesting = setForTesting;

@@ -1,20 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { currentPlatform } from '../../common/platform';
-import { observePowerEvents as linuxObservePowerEvents } from '../platform/linux/linux-power-monitor';
-import { observePowerEvents as macosObservePowerEvents } from '../platform/macos/cocoa-power';
+import { service } from '../platform/index';
 import type { PowerEventHandlers } from '../platform/services';
-import { observePowerEvents as windowsObservePowerEvents } from '../platform/windows/windows-power-monitor';
 
-const observePower = (handlers: PowerEventHandlers): void => {
-  const platform = currentPlatform();
-  if (platform === 'macos') {
-    macosObservePowerEvents(handlers);
-  } else if (platform === 'linux') {
-    linuxObservePowerEvents(handlers);
-  } else if (platform === 'windows') {
-    windowsObservePowerEvents(handlers);
-  }
-};
+const { get: getObserver } = service('powerMonitor');
 
 /**
  * Emits `suspend`, `resume`, `lock-screen` and `unlock-screen`. Linux listens only with
@@ -29,7 +17,7 @@ let observing = false;
 
 /** Called once from bootstrap `onReady` (D034); later calls are no-ops. @internal */
 export const startPowerMonitorObserving = (
-  observe: (handlers: PowerEventHandlers) => void = observePower,
+  observe: (handlers: PowerEventHandlers) => void = (handlers) => getObserver()(handlers),
 ): void => {
   if (observing) {
     return;

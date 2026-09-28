@@ -1,10 +1,7 @@
 import { BunmaskaError } from '../../common/errors';
-import { selectBackend } from '../platform/index';
-import { gdkScreenBackend } from '../platform/linux/gdk-screen';
-import { cocoaScreenBackend } from '../platform/macos/cocoa-screen';
+import { service } from '../platform/index';
 import type { Rect } from '../platform/native';
-import { windowsScreenBackend } from '../platform/windows/windows-screen';
-import type { Point, RawDisplay, ScreenBackend } from '../platform/services';
+import type { Point, RawDisplay } from '../platform/services';
 
 export type Size = {
   readonly width: number;
@@ -38,11 +35,7 @@ const toDisplay = (raw: RawDisplay): Display => ({
   internal: raw.internal,
 });
 
-const { get: getBackend, setForTesting } = selectBackend<ScreenBackend>('screen', {
-  macos: () => cocoaScreenBackend,
-  linux: () => gdkScreenBackend,
-  windows: () => windowsScreenBackend,
-});
+const { get: getBackend, setForTesting } = service('screen');
 
 /** @internal */
 export const setScreenBackendForTesting = setForTesting;

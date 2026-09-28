@@ -1,7 +1,4 @@
-import { selectBackend } from '../platform/index';
-import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
-import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
-import { windowsNativeImageBackend } from '../platform/windows/windows-native-image';
+import { service } from '../platform/index';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../platform/services';
 
 /** Preserves aspect ratio when one dimension is omitted. */
@@ -156,11 +153,7 @@ export class NativeImage {
   }
 }
 
-const { get: getBackend, setForTesting } = selectBackend<NativeImageBackend>('nativeImage', {
-  macos: () => cocoaNativeImageBackend,
-  linux: () => gdkNativeImageBackend,
-  windows: () => windowsNativeImageBackend,
-});
+const { get: getBackend, setForTesting } = service('nativeImage');
 
 /** @internal */
 export const setNativeImageBackendForTesting = setForTesting;
