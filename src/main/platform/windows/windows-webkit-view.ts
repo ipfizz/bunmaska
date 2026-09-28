@@ -212,6 +212,12 @@ export interface WebViewOptions {
   readonly onNavigationEvent?: (event: NativeNavigationEvent) => void;
 }
 
+/** What the process-lifetime trampolines call; dispose empties it so they pin no closed window. */
+type TrampolineSinks = {
+  readonly messages: Map<string, (body: string) => void>;
+  navigation: ((event: NativeNavigationEvent) => void) | undefined;
+};
+
 /** A live WebKit view + its retained FFI resources. */
 export class WindowsWebView {
   readonly #view: Pointer;
@@ -219,6 +225,7 @@ export class WindowsWebView {
   readonly #hostWindow: bigint;
   readonly #retainedController: Pointer;
   readonly #callbacks: JSCallback[];
+  readonly #sinks: TrampolineSinks;
   #disposed = false;
   #heldButtons = 0;
 
@@ -228,12 +235,14 @@ export class WindowsWebView {
     hostWindow: bigint,
     controller: Pointer,
     callbacks: JSCallback[],
+    sinks: TrampolineSinks,
   ) {
     this.#view = view;
     this.#page = page;
     this.#hostWindow = hostWindow;
     this.#retainedController = controller;
     this.#callbacks = callbacks;
+    this.#sinks = sinks;
   }
 
   /** Build a wired WebKit view hosted in a native child of `options.hwnd`. */
@@ -252,19 +261,22 @@ export class WindowsWebView {
       throw new FFIError('WKUserContentControllerCreate returned NULL');
     }
 
-    // Register the renderer->main message handlers. Each callback is retained for
-    // the view's lifetime; the OS invokes it synchronously during the message pump.
+    const sinks: TrampolineSinks = {
+      messages: new Map(options.messageHandlers.map(({ name, onMessage }) => [name, onMessage])),
+      navigation: options.onNavigationEvent,
+    };
     const callbacks: JSCallback[] = [];
-    for (const handler of options.messageHandlers) {
+    for (const { name } of options.messageHandlers) {
+      const onMessage = (body: string): void => sinks.messages.get(name)?.(body);
       const callback = new JSCallback(
         (messageRef: Pointer, listenerRef: Pointer | null) =>
-          deliverScriptMessage(messageRef, listenerRef, handler.onMessage, s),
+          deliverScriptMessage(messageRef, listenerRef, onMessage, s),
         { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.void },
       );
       if (callback.ptr === null) {
-        throw new FFIError(`failed to allocate the '${handler.name}' message-handler trampoline`);
+        throw new FFIError(`failed to allocate the '${name}' message-handler trampoline`);
       }
-      const nameRef = wkString(handler.name);
+      const nameRef = wkString(name);
       s.WKUserContentControllerAddScriptMessageHandler(controller, nameRef, callback.ptr, null);
       wkRelease(nameRef);
       callbacks.push(callback);
@@ -305,10 +317,10 @@ export class WindowsWebView {
     }
 
     if (options.onNavigationEvent !== undefined) {
-      callbacks.push(...setupNavigationClient(page, options.onNavigationEvent));
+      callbacks.push(...setupNavigationClient(page, (event) => sinks.navigation?.(event)));
     }
 
-    return new WindowsWebView(view, page, hostWindow, controller, callbacks);
+    return new WindowsWebView(view, page, hostWindow, controller, callbacks, sinks);
   }
 
   /** Navigate to a URL (http/https/file/about). */
@@ -432,6 +444,8 @@ export class WindowsWebView {
     wk.WKUserContentControllerRemoveAllUserScripts(this.#retainedController);
     this.loadURL('about:blank');
     wkRelease(this.#retainedController);
+    this.#sinks.messages.clear();
+    this.#sinks.navigation = undefined;
     retainTrampolines(this.#callbacks);
   }
 }
