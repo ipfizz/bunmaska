@@ -27,8 +27,9 @@ import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkFFI } from './gtk-ffi';
 import {
   ACTION_GROUP_PREFIX,
+  type CurrentAppMenu,
   getCurrentAppMenu,
-  onAppMenuCleared,
+  onAppMenuChanged,
   realizeForWindow,
   rewireForWindow,
 } from './gtk-menu';
@@ -279,6 +280,8 @@ class LinuxWebContents implements NativeWebContents {
 /** Title, visibility and minimized state are tracked in JS: GTK 4 has no reliable getters for them. */
 class LinuxWindow implements NativeWindow {
   readonly #window: Pointer;
+  readonly #box: Pointer;
+  #menuBar: Pointer | null = null;
   readonly #webContents: LinuxWebContents;
   readonly #registry = new SignalRegistry();
   #title: string;
@@ -322,28 +325,17 @@ class LinuxWindow implements NativeWindow {
     }
 
     this.#webContents = new LinuxWebContents(options.preloadScript);
-    const appMenu = getCurrentAppMenu();
-    if (appMenu === undefined) {
-      gtk.symbols.gtk_window_set_child(this.#window, this.#webContents.view());
-    } else {
-      // Per-window model + group, so role items act on THIS window's own view (D039).
-      const menu = loadGtkMenuFFI();
-      const view = this.#webContents.view();
-      const entry = realizeForWindow(appMenu.specs, (spec) => this.#dispatchRole(spec));
-      const model = Number(entry.model) as unknown as Pointer;
-      const group = Number(entry.group) as unknown as Pointer;
-      const box = menu.symbols.gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-      const bar = menu.symbols.gtk_popover_menu_bar_new_from_model(model);
-      menu.symbols.gtk_box_append(box, bar);
-      menu.symbols.gtk_box_append(box, view);
-      this.#releaseAppMenu = onAppMenuCleared(() => {
-        if (!this.#closed) {
-          menu.symbols.gtk_box_remove(box, bar);
-        }
-      });
-      menu.symbols.gtk_widget_insert_action_group(this.#window, cstr(ACTION_GROUP_PREFIX), group);
-      gtk.symbols.gtk_window_set_child(this.#window, box);
+    // Always a box, so a later setApplicationMenu can prepend a bar without reparenting the view.
+    const menu = loadGtkMenuFFI().symbols;
+    const box = menu.gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    if (box === null) {
+      throw new Error('gtk_box_new() returned NULL');
     }
+    this.#box = box;
+    menu.gtk_box_append(box, this.#webContents.view());
+    gtk.symbols.gtk_window_set_child(this.#window, box);
+    this.#setAppMenu(getCurrentAppMenu());
+    this.#releaseAppMenu = onAppMenuChanged((appMenu) => this.#setAppMenu(appMenu));
 
     this.#registry.connect(
       this.#window,
@@ -411,6 +403,34 @@ class LinuxWindow implements NativeWindow {
 
   get webContents(): NativeWebContents {
     return this.#webContents;
+  }
+
+  /** Swap this window's bar for `appMenu`'s, realized per window so role items act here (D039). */
+  #setAppMenu(appMenu: CurrentAppMenu | undefined): void {
+    if (this.#closed) {
+      return;
+    }
+    const menu = loadGtkMenuFFI().symbols;
+    if (this.#menuBar !== null) {
+      menu.gtk_box_remove(this.#box, this.#menuBar);
+      this.#menuBar = null;
+    }
+    if (appMenu === undefined) {
+      return;
+    }
+    // ponytail: a replaced bar's realization stays retained; release it once the bar is finalized.
+    const entry = realizeForWindow(appMenu.specs, (spec) => this.#dispatchRole(spec));
+    const bar = menu.gtk_popover_menu_bar_new_from_model(Number(entry.model) as unknown as Pointer);
+    if (bar === null) {
+      return;
+    }
+    menu.gtk_box_prepend(this.#box, bar);
+    this.#menuBar = bar;
+    menu.gtk_widget_insert_action_group(
+      this.#window,
+      cstr(ACTION_GROUP_PREFIX),
+      Number(entry.group) as unknown as Pointer,
+    );
   }
 
   /** Run a menu role on this window and its view (D039). */

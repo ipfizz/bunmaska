@@ -63,7 +63,7 @@ export type MenuEntry = {
 
 const menuEntries = new Map<bigint, MenuEntry>();
 
-type CurrentAppMenu = {
+export type CurrentAppMenu = {
   readonly model: bigint;
   readonly group: bigint;
   readonly specs: ReadonlyArray<NativeMenuItemSpec>;
@@ -71,12 +71,14 @@ type CurrentAppMenu = {
 
 let currentAppMenu: CurrentAppMenu | undefined;
 
-/** Windows with a live bar register here so `setApplicationMenu(null)` can tear it down. */
-const clearListeners = new Set<() => void>();
-export const onAppMenuCleared = (listener: () => void): (() => void) => {
-  clearListeners.add(listener);
+/** Live windows register here to swap their bar on every `setApplicationMenu`. */
+const appMenuListeners = new Set<(menu: CurrentAppMenu | undefined) => void>();
+export const onAppMenuChanged = (
+  listener: (menu: CurrentAppMenu | undefined) => void,
+): (() => void) => {
+  appMenuListeners.add(listener);
   return () => {
-    clearListeners.delete(listener);
+    appMenuListeners.delete(listener);
   };
 };
 
@@ -285,22 +287,20 @@ export const rewireForWindow = (
   return realizeCore(original.specs, dispatchRole);
 };
 
-/** `null` also removes the bars of live windows. */
+/** Also swaps (or, for `null`, removes) the bars of live windows, as Electron does on Linux. */
 const setApplicationMenu = (menuHandle: bigint | null): void => {
-  // ponytail: a non-null menu reaches only windows created later; live ones need a bar swap.
   if (menuHandle === null) {
     currentAppMenu = undefined;
-    for (const listener of [...clearListeners]) {
-      listener();
+  } else {
+    const entry = menuEntries.get(menuHandle);
+    if (entry === undefined) {
+      throw new Error(`setApplicationMenu: unknown menu handle ${menuHandle}`);
     }
-    clearListeners.clear();
-    return;
+    currentAppMenu = { model: entry.model, group: entry.group, specs: entry.specs };
   }
-  const entry = menuEntries.get(menuHandle);
-  if (entry === undefined) {
-    throw new Error(`setApplicationMenu: unknown menu handle ${menuHandle}`);
+  for (const listener of [...appMenuListeners]) {
+    listener(currentAppMenu);
   }
-  currentAppMenu = { model: entry.model, group: entry.group, specs: entry.specs };
 };
 
 /** `undefined` for an unknown handle. */

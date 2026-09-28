@@ -203,8 +203,9 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
   );
 
   test.skipIf(!hasDisplay)(
-    'the default (no app menu) window path still builds without throwing',
+    'a window built with no app menu takes, swaps and drops a later one live',
     async () => {
+      setBindingsForTesting(undefined);
       resetCurrentAppMenuForTesting();
       const app = createLinuxApplication();
       app.start();
@@ -213,8 +214,21 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
         window = app.createWindow({ width: 320, height: 240, title: 'NoMenu', show: true });
       }).not.toThrow();
       await pump(100);
+      const bar = (label: string) =>
+        linuxMenuRealizer.realize([
+          { label, type: 'submenu', enabled: true, keyEquivalent: '', submenu: [] },
+        ]);
+      expect(() => {
+        linuxMenuRealizer.setApplicationMenu(bar('First'));
+        linuxMenuRealizer.setApplicationMenu(bar('Second'));
+        linuxMenuRealizer.setApplicationMenu(null);
+        linuxMenuRealizer.setApplicationMenu(bar('Third'));
+      }).not.toThrow();
+      await pump(100);
       window?.close();
+      linuxMenuRealizer.setApplicationMenu(null);
       app.quit();
+      resetCurrentAppMenuForTesting();
     },
   );
 });

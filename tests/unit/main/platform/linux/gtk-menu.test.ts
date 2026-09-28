@@ -7,6 +7,7 @@ import {
   getCurrentAppMenu,
   getMenuEntry,
   linuxMenuRealizer,
+  onAppMenuChanged,
   realizeForWindow,
   resetCurrentAppMenuForTesting,
   rewireForWindow,
@@ -415,6 +416,21 @@ describe('shared app-menu state', () => {
     const entry = getMenuEntry(handle);
     expect(current?.model).toBe(entry?.model as bigint);
     expect(current?.group).toBe(entry?.group as bigint);
+  });
+
+  test('setApplicationMenu tells live windows about a new menu and about null', () => {
+    const { bindings } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    const seen: Array<bigint | undefined> = [];
+    const unsubscribe = onAppMenuChanged((menu) => seen.push(menu?.model));
+    const first = linuxMenuRealizer.realize([]);
+    const second = linuxMenuRealizer.realize([]);
+    linuxMenuRealizer.setApplicationMenu(first);
+    linuxMenuRealizer.setApplicationMenu(null);
+    linuxMenuRealizer.setApplicationMenu(second);
+    unsubscribe();
+    linuxMenuRealizer.setApplicationMenu(first);
+    expect(seen).toEqual([first, undefined, second]);
   });
 
   test('throws if setApplicationMenu is given an unknown handle', () => {
