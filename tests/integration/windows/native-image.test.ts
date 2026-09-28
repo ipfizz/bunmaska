@@ -62,6 +62,12 @@ if (currentPlatform() === 'windows') {
       );
     });
 
+    test('encodePng ends exactly at the IEND chunk (no trailing HGLOBAL bytes)', () => {
+      const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+      const png = windowsNativeImageBackend.encodePng(handle);
+      expect([...png.subarray(-8)]).toEqual([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+    });
+
     test('encodeJpeg produces valid JPEG bytes', () => {
       const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
       const jpeg = windowsNativeImageBackend.encodeJpeg(handle, 90);

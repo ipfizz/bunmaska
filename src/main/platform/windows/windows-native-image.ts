@@ -23,6 +23,9 @@ const HANDLE_SIZE = 8;
 const DWORD_SIZE = 4;
 /** `IUnknown` vtable slot of `Release` (QueryInterface=0, AddRef=1, Release=2). */
 const IUNKNOWN_RELEASE_SLOT = 2;
+/** `IStream::Seek` follows IUnknown (0-2) and ISequentialStream Read/Write (3-4). */
+const ISTREAM_SEEK_SLOT = 5;
+const STREAM_SEEK_END = 2;
 const POINTER_SIZE = 8;
 
 let gdiplusStarted = false;
@@ -64,6 +67,20 @@ const comMethod = (
 /** Drop our reference to an `IStream`. */
 const releaseStream = (stream: bigint): void => {
   comMethod(stream, IUNKNOWN_RELEASE_SLOT, [FFIType.u64], FFIType.u32)(stream);
+};
+
+/** The stream's logical length (a seek to its end), or `undefined` if the seek fails. */
+const streamLength = (stream: bigint): number | undefined => {
+  const end = handleOut();
+  const seek = comMethod(
+    stream,
+    ISTREAM_SEEK_SLOT,
+    [FFIType.u64, FFIType.i64, FFIType.u32, FFIType.ptr],
+    FFIType.i32,
+  );
+  return seek(stream, 0n, STREAM_SEEK_END, end.pointer) === 0
+    ? Number(read.u64(end.pointer, 0))
+    : undefined;
 };
 
 /** Read a GDI+ image's pixel dimensions via the scalar `GdipGetImage{Width,Height}` getters. */
@@ -150,7 +167,9 @@ const encode = (handle: NativeImageHandle, encoderClsid: Uint8Array): Uint8Array
   ole32.GetHGlobalFromStream(stream, hglobalOut.pointer);
   const hglobal = read.u64(hglobalOut.pointer, 0);
   const dataPtr = kernel32.GlobalLock(hglobal);
-  const size = Number(kernel32.GlobalSize(hglobal));
+  // GlobalSize can exceed the bytes written; the stream tracks its own length.
+  const allocated = Number(kernel32.GlobalSize(hglobal));
+  const size = Math.min(allocated, streamLength(stream) ?? allocated);
   const bytes =
     dataPtr === null ? new Uint8Array(0) : new Uint8Array(toArrayBuffer(dataPtr, 0, size)).slice();
   kernel32.GlobalUnlock(hglobal);
