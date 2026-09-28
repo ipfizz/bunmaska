@@ -66,5 +66,11 @@ if (currentPlatform() === 'windows') {
       windowsClipboardBackend.writeText('no image here');
       expect(windowsClipboardBackend.readImage() as Uint8Array).toHaveLength(0);
     });
+
+    test('writeImage of undecodable bytes leaves the clipboard alone instead of throwing', () => {
+      windowsClipboardBackend.writeText('kept');
+      expect(() => windowsClipboardBackend.writeImage(new Uint8Array([1, 2, 3]))).not.toThrow();
+      expect(windowsClipboardBackend.readText()).toBe('kept');
+    });
   });
 }

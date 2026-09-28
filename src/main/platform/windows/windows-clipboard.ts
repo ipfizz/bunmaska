@@ -1,5 +1,6 @@
 import { type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
+import { createLogger } from '../../../common/logger';
 import type { ClipboardBackend } from '../../api/clipboard';
 import { wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
@@ -16,6 +17,8 @@ import { ensureGdiplus, windowsNativeImageBackend } from './windows-native-image
  * API with `GlobalAlloc`-backed transfer buffers; images round-trip through the `CF_DIB`
  * format, converted to/from PNG with the GDI+ codec the `nativeImage` backend uses.
  */
+
+const log = createLogger('windows-clipboard');
 
 /** `CF_UNICODETEXT` — UTF-16LE text, the modern text clipboard format. */
 const CF_UNICODETEXT = 13;
@@ -80,17 +83,31 @@ export const extractCfHtmlFragment = (cfHtml: string): string => {
   return firstTag === -1 ? '' : cfHtml.slice(firstTag);
 };
 
-/** Run `fn` while the clipboard is open, always closing it afterward. */
-const withClipboard = <T>(fn: () => T): T => {
-  const user32 = loadUser32().symbols;
-  // OpenClipboard can briefly fail while another process holds it; retry a bounded
-  // number of times rather than failing on a momentary clipboard-manager grab.
-  let opened = false;
-  for (let attempt = 0; attempt < 10 && !opened; attempt += 1) {
-    opened = user32.OpenClipboard(0n) !== 0;
+/** Try `open` up to 10 times 5 ms apart: a clipboard manager or rdpclip holds it briefly. */
+export const openWithRetry = (
+  open: () => boolean,
+  sleep: (ms: number) => void = Bun.sleepSync,
+): boolean => {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (attempt > 0) {
+      sleep(5);
+    }
+    if (open()) {
+      return true;
+    }
   }
-  if (!opened) {
-    throw new FFIError('clipboard: OpenClipboard failed (held by another process)');
+  return false;
+};
+
+/**
+ * Run `fn` while the clipboard is open, always closing it afterward. A clipboard still
+ * held by another process yields `fallback` (like macOS and Linux, never a throw).
+ */
+const withClipboard = <T>(fallback: T, fn: () => T): T => {
+  const user32 = loadUser32().symbols;
+  if (!openWithRetry(() => user32.OpenClipboard(0n) !== 0)) {
+    log.warn('clipboard is held by another process; skipping');
+    return fallback;
   }
   try {
     return fn();
@@ -255,35 +272,35 @@ const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8
 
 export const windowsClipboardBackend: ClipboardBackend = {
   readText(): string {
-    return withClipboard(() => {
+    return withClipboard('', () => {
       const bytes = getClipboardBytes(CF_UNICODETEXT);
       return bytes === undefined ? '' : decodeUtf16(bytes);
     });
   },
 
   writeText(text: string): void {
-    withClipboard(() => {
+    withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
       setClipboardBytes(CF_UNICODETEXT, wstr(text));
     });
   },
 
   readHTML(): string {
-    return withClipboard(() => {
+    return withClipboard('', () => {
       const bytes = getClipboardBytes(cfHtmlFormat());
       return bytes === undefined ? '' : extractCfHtmlFragment(decodeUtf8(bytes));
     });
   },
 
   writeHTML(markup: string): void {
-    withClipboard(() => {
+    withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
       setClipboardBytes(cfHtmlFormat(), new TextEncoder().encode(buildCfHtml(markup)));
     });
   },
 
   readImage(): Uint8Array {
-    const dib = withClipboard(() => getClipboardBytes(CF_DIB));
+    const dib = withClipboard(undefined, () => getClipboardBytes(CF_DIB));
     if (dib === undefined || dib.length < BITMAPINFOHEADER_SIZE) {
       return new Uint8Array(0);
     }
@@ -312,11 +329,12 @@ export const windowsClipboardBackend: ClipboardBackend = {
   writeImage(bytes: Uint8Array): void {
     const decoded = windowsNativeImageBackend.decode(bytes);
     if (decoded.empty) {
-      throw new FFIError('clipboard: could not decode the image to write');
+      log.warn('clipboard: writeImage got undecodable bytes; nothing written');
+      return;
     }
     try {
       const dib = bitmapToPackedDib(decoded.handle, decoded.width, decoded.height);
-      withClipboard(() => {
+      withClipboard(undefined, () => {
         loadUser32().symbols.EmptyClipboard();
         setClipboardBytes(CF_DIB, dib);
       });
@@ -326,7 +344,7 @@ export const windowsClipboardBackend: ClipboardBackend = {
   },
 
   availableFormats(): string[] {
-    return withClipboard(() => {
+    return withClipboard<string[]>([], () => {
       const user32 = loadUser32().symbols;
       const has = (format: number): boolean => user32.IsClipboardFormatAvailable(format) !== 0;
       const formats: string[] = [];
@@ -344,7 +362,7 @@ export const windowsClipboardBackend: ClipboardBackend = {
   },
 
   clear(): void {
-    withClipboard(() => {
+    withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
     });
   },

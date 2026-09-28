@@ -4,6 +4,7 @@ import {
   buildPackedDib,
   dibBitsOffset,
   extractCfHtmlFragment,
+  openWithRetry,
 } from '../../../../../src/main/platform/windows/windows-clipboard';
 
 /** Construct a `BITMAPINFOHEADER` with the fields `dibBitsOffset` reads. */
@@ -157,5 +158,30 @@ describe('buildPackedDib', () => {
     const dib = buildPackedDib(1, 2, padded, 8);
     expect([...dib.subarray(40, 44)]).toEqual([20, 21, 22, 23]); // bottom row first
     expect([...dib.subarray(44, 48)]).toEqual([10, 11, 12, 13]);
+  });
+});
+
+describe('openWithRetry', () => {
+  test('sleeps between attempts until the clipboard opens', () => {
+    const results = [false, false, true];
+    const sleeps: number[] = [];
+    expect(
+      openWithRetry(
+        () => results.shift() ?? false,
+        (ms) => sleeps.push(ms),
+      ),
+    ).toBe(true);
+    expect(sleeps).toEqual([5, 5]);
+  });
+
+  test('gives up after a bounded wait when another process keeps it', () => {
+    const sleeps: number[] = [];
+    expect(
+      openWithRetry(
+        () => false,
+        (ms) => sleeps.push(ms),
+      ),
+    ).toBe(false);
+    expect(sleeps.reduce((total, ms) => total + ms, 0)).toBeLessThanOrEqual(50);
   });
 });
