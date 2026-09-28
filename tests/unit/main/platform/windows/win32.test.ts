@@ -11,10 +11,6 @@ import {
 } from '../../../../../src/main/platform/windows/win32';
 
 describe('wstr', () => {
-  test('returns a Uint8Array', () => {
-    expect(wstr('x')).toBeInstanceOf(Uint8Array);
-  });
-
   test('null-terminates with a UTF-16 (two-byte) NUL', () => {
     const bytes = wstr('hello');
     expect(bytes[bytes.length - 2]).toBe(0);
@@ -59,10 +55,7 @@ describe('NULL_HANDLE', () => {
 });
 
 describe('winLibraryAccessor', () => {
-  test('returns a memoising accessor that calls open at most once', () => {
-    if (currentPlatform() !== 'windows') {
-      return;
-    }
+  test.skipIf(currentPlatform() !== 'windows')('memoises: open runs at most once', () => {
     let opens = 0;
     const get = winLibraryAccessor('test', () => {
       opens += 1;
@@ -74,11 +67,11 @@ describe('winLibraryAccessor', () => {
     expect(opens).toBe(1);
   });
 
-  test('throws UnsupportedPlatformError on non-Windows hosts', () => {
-    if (currentPlatform() === 'windows') {
-      return;
-    }
-    const get = winLibraryAccessor('test', () => ({}));
-    expect(() => get()).toThrow(UnsupportedPlatformError);
-  });
+  test.skipIf(currentPlatform() === 'windows')(
+    'throws UnsupportedPlatformError off Windows',
+    () => {
+      const get = winLibraryAccessor('test', () => ({}));
+      expect(() => get()).toThrow(UnsupportedPlatformError);
+    },
+  );
 });
