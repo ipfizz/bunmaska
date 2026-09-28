@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { UpdateManifest } from '../../../../src/common/manifest';
@@ -94,34 +94,78 @@ describe('shQuote', () => {
   });
 });
 
+/** Polls for a file a backgrounded helper writes; throws after 3s. */
+const waitForFile = async (path: string): Promise<void> => {
+  const deadline = Date.now() + 3000;
+  while (!existsSync(path)) {
+    if (Date.now() > deadline) {
+      throw new Error(`${path} never appeared`);
+    }
+    await Bun.sleep(20);
+  }
+};
+
+/** Runs the real sh helper against a temp install root holding `v` = "old". */
+const runShHelper = async (
+  tarContents: 'new-bundle' | 'missing-tar',
+): Promise<{ root: string; relaunched: string; cleanup: () => void }> => {
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-helper-'));
+  const root = join(dir, 'Demo');
+  mkdirSync(root);
+  writeFileSync(join(root, 'v'), 'old');
+  const tarPath = join(dir, 'up.tar');
+  if (tarContents === 'new-bundle') {
+    mkdirSync(join(dir, 'src', 'Demo'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'Demo', 'v'), 'new');
+    Bun.spawnSync(['tar', '-cf', tarPath, '-C', join(dir, 'src'), 'Demo']);
+  }
+  const exited = Bun.spawn(['true']);
+  await exited.exited;
+  const relaunched = join(dir, 'relaunched');
+  const scriptPath = join(dir, 'install.sh');
+  writeFileSync(
+    scriptPath,
+    buildShInstallScript({
+      pid: exited.pid,
+      tarPath,
+      installRoot: root,
+      bundleDirName: 'Demo',
+      relaunchArgv: ['touch', relaunched],
+    }),
+  );
+  Bun.spawnSync(['/bin/sh', scriptPath]);
+  return { root, relaunched, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+};
+
 describe('buildShInstallScript', () => {
-  test('waits for the pid, extracts to a temp sibling, rename-swaps, relaunches, self-deletes', () => {
-    const script = buildShInstallScript({
-      pid: 4242,
-      tarPath: '/tmp/bunmaska-update-abc123.tar',
-      installRoot: '/Applications/My App.app',
-      bundleDirName: 'My App.app',
-      relaunchArgv: ['open', '/Applications/My App.app'],
-    });
-    expect(script).toBe(
-      [
-        '#!/bin/sh',
-        '# bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
-        'while kill -0 4242 2>/dev/null; do sleep 0.5; done',
-        "rm -rf '/Applications/My App.app.update-staging' '/Applications/My App.app.update-old'",
-        "mkdir -p '/Applications/My App.app.update-staging' || exit 1",
-        "tar -xf '/tmp/bunmaska-update-abc123.tar' -C '/Applications/My App.app.update-staging' || { rm -rf '/Applications/My App.app.update-staging'; exit 1; }",
-        "[ -d '/Applications/My App.app.update-staging/My App.app' ] || { rm -rf '/Applications/My App.app.update-staging'; exit 1; }",
-        "mv '/Applications/My App.app' '/Applications/My App.app.update-old' || exit 1",
-        "mv '/Applications/My App.app.update-staging/My App.app' '/Applications/My App.app' || { mv '/Applications/My App.app.update-old' '/Applications/My App.app'; exit 1; }",
-        "rm -rf '/Applications/My App.app.update-old' '/Applications/My App.app.update-staging'",
-        "rm -f '/tmp/bunmaska-update-abc123.tar'",
-        "'open' '/Applications/My App.app' &",
-        'rm -f -- "$0"',
-        '',
-      ].join('\n'),
-    );
-  });
+  test.skipIf(process.platform === 'win32')(
+    'swaps the extracted bundle into place and relaunches it',
+    async () => {
+      const run = await runShHelper('new-bundle');
+      try {
+        await waitForFile(run.relaunched);
+        expect(readFileSync(join(run.root, 'v'), 'utf8')).toBe('new');
+        expect(existsSync(`${run.root}.update-old`)).toBe(false);
+        expect(existsSync(`${run.root}.update-staging`)).toBe(false);
+      } finally {
+        run.cleanup();
+      }
+    },
+  );
+
+  test.skipIf(process.platform === 'win32')(
+    'a failed extract leaves the installed app untouched and still relaunches it',
+    async () => {
+      const run = await runShHelper('missing-tar');
+      try {
+        await waitForFile(run.relaunched);
+        expect(readFileSync(join(run.root, 'v'), 'utf8')).toBe('old');
+        expect(existsSync(`${run.root}.update-staging`)).toBe(false);
+      } finally {
+        run.cleanup();
+      }
+    },
+  );
 
   test('Linux relaunch execs the AppDir binary instead of open', () => {
     const script = buildShInstallScript({
@@ -137,7 +181,7 @@ describe('buildShInstallScript', () => {
 });
 
 describe('buildCmdInstallScript', () => {
-  test('generates the wait-swap-start cmd script (live Windows path untested on this host)', () => {
+  test('generates the wait-swap-start cmd script whose every failure relaunches the app', () => {
     const script = buildCmdInstallScript({
       pid: 7,
       tarPath: 'C:\\tmp\\up.tar',
@@ -154,19 +198,24 @@ describe('buildCmdInstallScript', () => {
         'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)',
         'if exist "C:\\Apps\\Demo.update-old" rmdir /s /q "C:\\Apps\\Demo.update-old"',
         'if exist "C:\\Apps\\Demo.update-staging" rmdir /s /q "C:\\Apps\\Demo.update-staging"',
-        'mkdir "C:\\Apps\\Demo.update-staging" || exit /b 1',
+        'mkdir "C:\\Apps\\Demo.update-staging" || goto fail',
         'rem extract from cwd, not tar -C: Windows bsdtar mangles backslash -C paths',
-        'cd /d "C:\\Apps\\Demo.update-staging" || exit /b 1',
-        'tar -xf "C:\\tmp\\up.tar" || exit /b 1',
+        'cd /d "C:\\Apps\\Demo.update-staging" || goto fail',
+        'tar -xf "C:\\tmp\\up.tar" || goto fail',
         'cd /d "%TEMP%"',
-        'if not exist "C:\\Apps\\Demo.update-staging\\Demo" exit /b 1',
-        'move "C:\\Apps\\Demo" "C:\\Apps\\Demo.update-old" || exit /b 1',
-        'move "C:\\Apps\\Demo.update-staging\\Demo" "C:\\Apps\\Demo" || (move "C:\\Apps\\Demo.update-old" "C:\\Apps\\Demo" & exit /b 1)',
+        'if not exist "C:\\Apps\\Demo.update-staging\\Demo" goto fail',
+        'move "C:\\Apps\\Demo" "C:\\Apps\\Demo.update-old" || goto fail',
+        'move "C:\\Apps\\Demo.update-staging\\Demo" "C:\\Apps\\Demo" || (move "C:\\Apps\\Demo.update-old" "C:\\Apps\\Demo" & goto fail)',
         'rmdir /s /q "C:\\Apps\\Demo.update-old"',
         'rmdir /s /q "C:\\Apps\\Demo.update-staging"',
         'del /q "C:\\tmp\\up.tar"',
         'start "" "C:\\Apps\\Demo\\Demo.exe"',
         '(goto) 2>nul & del "%~f0"',
+        ':fail',
+        'cd /d "%TEMP%"',
+        'if exist "C:\\Apps\\Demo.update-staging" rmdir /s /q "C:\\Apps\\Demo.update-staging"',
+        'start "" "C:\\Apps\\Demo\\Demo.exe"',
+        'exit /b 1',
         '',
       ].join('\r\n'),
     );
@@ -250,13 +299,7 @@ describe('spawnDetachedScript', () => {
           '-c',
           `ps -o pgid= -p $$ > ${shQuote(`${out}.tmp`)}; mv ${shQuote(`${out}.tmp`)} ${shQuote(out)}`,
         ]);
-        const deadline = Date.now() + 5000;
-        while (!existsSync(out)) {
-          if (Date.now() > deadline) {
-            throw new Error('the detached helper never ran');
-          }
-          await Bun.sleep(20);
-        }
+        await waitForFile(out);
         expect(readFileSync(out, 'utf8').trim()).not.toBe(pgidOf(process.pid));
       } finally {
         rmSync(dir, { recursive: true, force: true });

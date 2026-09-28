@@ -86,15 +86,17 @@ export const buildShInstallScript = (spec: ShInstallSpec): string => {
   return [
     '#!/bin/sh',
     '# bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
+    // Every failure path relaunches the old app; a failed update must not leave the user with none.
+    `fail() { rm -rf ${staging}; ${relaunch} & exit 1; }`,
     `while kill -0 ${spec.pid} 2>/dev/null; do sleep 0.5; done`,
     `rm -rf ${staging} ${old}`,
-    `mkdir -p ${staging} || exit 1`,
+    `mkdir -p ${staging} || fail`,
     // A failed extract only dirties the staging dir; the installed app is untouched.
-    `tar -xf ${tar} -C ${staging} || { rm -rf ${staging}; exit 1; }`,
-    `[ -d ${fresh} ] || { rm -rf ${staging}; exit 1; }`,
+    `tar -xf ${tar} -C ${staging} || fail`,
+    `[ -d ${fresh} ] || fail`,
     // The swap is two renames; a failed second rename rolls the first back.
-    `mv ${root} ${old} || exit 1`,
-    `mv ${fresh} ${root} || { mv ${old} ${root}; exit 1; }`,
+    `mv ${root} ${old} || fail`,
+    `mv ${fresh} ${root} || { mv ${old} ${root}; fail; }`,
     `rm -rf ${old} ${staging}`,
     `rm -f ${tar}`,
     `${relaunch} &`,
@@ -115,6 +117,7 @@ export type CmdInstallSpec = {
 export const buildCmdInstallScript = (spec: CmdInstallSpec): string => {
   const staging = `${spec.installRoot}.update-staging`;
   const old = `${spec.installRoot}.update-old`;
+  const start = `start "" "${spec.installRoot}\\${spec.exeName}"`;
   return [
     '@echo off',
     'rem bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
@@ -123,19 +126,24 @@ export const buildCmdInstallScript = (spec: CmdInstallSpec): string => {
     'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)',
     `if exist "${old}" rmdir /s /q "${old}"`,
     `if exist "${staging}" rmdir /s /q "${staging}"`,
-    `mkdir "${staging}" || exit /b 1`,
+    `mkdir "${staging}" || goto fail`,
     'rem extract from cwd, not tar -C: Windows bsdtar mangles backslash -C paths',
-    `cd /d "${staging}" || exit /b 1`,
-    `tar -xf "${spec.tarPath}" || exit /b 1`,
+    `cd /d "${staging}" || goto fail`,
+    `tar -xf "${spec.tarPath}" || goto fail`,
     'cd /d "%TEMP%"',
-    `if not exist "${staging}\\${spec.bundleDirName}" exit /b 1`,
-    `move "${spec.installRoot}" "${old}" || exit /b 1`,
-    `move "${staging}\\${spec.bundleDirName}" "${spec.installRoot}" || (move "${old}" "${spec.installRoot}" & exit /b 1)`,
+    `if not exist "${staging}\\${spec.bundleDirName}" goto fail`,
+    `move "${spec.installRoot}" "${old}" || goto fail`,
+    `move "${staging}\\${spec.bundleDirName}" "${spec.installRoot}" || (move "${old}" "${spec.installRoot}" & goto fail)`,
     `rmdir /s /q "${old}"`,
     `rmdir /s /q "${staging}"`,
     `del /q "${spec.tarPath}"`,
-    `start "" "${spec.installRoot}\\${spec.exeName}"`,
+    start,
     '(goto) 2>nul & del "%~f0"',
+    ':fail',
+    'cd /d "%TEMP%"',
+    `if exist "${staging}" rmdir /s /q "${staging}"`,
+    start,
+    'exit /b 1',
     '',
   ].join('\r\n');
 };
