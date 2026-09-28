@@ -132,7 +132,7 @@ Because it goes through `app.quit()`, a `before-quit`, window `close` or `will-q
 
 Two honest caveats:
 
-- It refuses to swap when the running process is not an installed bundle: `bun main.ts` in dev, or a binary outside the layout `bunmaska build` produces (`<Name>.app/Contents/MacOS/<Name>`, an AppDir's `usr/bin/<slug>`, or `<Name>/<Name>.exe` on Windows). It then **throws** without quitting, leaving the staged tar in place.
+- It refuses to swap when the running process is not an installed bundle: `bun main.ts` in dev, or a binary outside the layout `bunmaska build` produces (`<Name>.app/Contents/MacOS/<Name>`, an AppDir's `usr/lib/<slug>/<slug>`, or `<Name>/<Name>.exe` on Windows). A `.deb` install counts as outside it: that one belongs to the package manager. It then **throws** without quitting, leaving the staged tar in place.
 - The helper-script *generators* are unit-tested on all three platforms; the live swap itself is the one step the test suite does not exercise end to end. If you need a different install strategy, the installer is injectable (see _Replacing the installer_ below).
 
 ```ts

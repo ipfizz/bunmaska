@@ -53,13 +53,13 @@ Compiles your app with `bun build --compile`, bundles it next to the Bun runtime
 - **Linux** - an AppDir `.tar.gz` and a `.deb`.
 - **Windows** (`--target windows`) - a portable `<Name>/` directory and a `.zip` (x64); `--embed-engine <dir>`, or `engine.embed: true` with an installed pin, bundles a WinCairo engine into it.
 
-`--embed-engine`, `--sign`, `--notarize` and `--dmg` are rejected for targets they do not apply to, and `--notarize` without `--sign` is refused before anything is built.
+`--embed-engine`, `--sign`, `--notarize` and `--dmg` are rejected for targets they do not apply to, and `--notarize` without a Developer ID `--sign` (none at all, or ad-hoc `-`) is refused before anything is built.
 
 ```sh
 bunmaska build
 ```
 
-The entry defaults to the `entry` in your `bunmaska.config.ts` (the `init` scaffold sets it); pass it explicitly (`bunmaska build src/main.ts`) to override. `name`, `id` and `icon` are read from the same config when the flags are not given - flag beats config, config beats the fallback derived from the entry file name.
+The entry defaults to the `entry` in your `bunmaska.config.ts` (the `init` scaffold sets it); pass it explicitly (`bunmaska build src/main.ts`) to override. `name`, `id` and `icon` are read from the same config when the flags are not given - flag beats config, config beats the fallback derived from the entry file name. One config serves every target, so a config `icon` the target cannot use (a `.icns` on a Linux build, say) is skipped with a warning; an explicit `--icon` of the wrong type is still an error.
 
 ## `bunmaska build --update`
 

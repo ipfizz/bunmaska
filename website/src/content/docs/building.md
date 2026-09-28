@@ -43,7 +43,7 @@ BUNMASKA_NOTARIZE_PASSWORD="app-specific-password" \
 bunmaska build --sign "Developer ID Application: Your Name (TEAMID)" --notarize
 ```
 
-`--notarize` requires `--sign`; the build refuses the pair up front rather than failing after a full compile. Signing with a real identity requests a secure timestamp, which notarization demands. `--notarize` zips the signed `.app`, submits it via `xcrun notarytool --wait`, and staples the ticket. If the three env vars above are missing it is skipped with a message telling you which ones to set, rather than failing the build. A signed + notarized app passes macOS Gatekeeper without a warning. (Requires an Apple Developer account - $99/yr, one account, unlimited apps.)
+`--notarize` requires `--sign` with a Developer ID identity; the build refuses a missing or ad-hoc (`-`) signature up front, since Apple rejects both, rather than letting you find out after a full compile. Signing with a real identity requests a secure timestamp, which notarization demands. `--notarize` zips the signed `.app`, submits it via `xcrun notarytool --wait`, and staples the ticket. If the three env vars above are missing it is skipped with a message telling you which ones to set, rather than failing the build. A signed + notarized app passes macOS Gatekeeper without a warning. (Requires an Apple Developer account - $99/yr, one account, unlimited apps.)
 
 ### Architectures
 
@@ -57,10 +57,10 @@ bunmaska build                 # > <Name>-linux-<arch>.tar.gz + <slug>_<version>
 
 You get:
 
-- **`<Name>-linux-<arch>.tar.gz`** - a relocatable AppDir bundle.
+- **`<Name>-linux-<arch>.tar.gz`** - a relocatable AppDir bundle. The binary and its assets live together in `usr/lib/<slug>/`, and `usr/bin/<slug>` is a relative link to the binary, so a `.deb` install puts only that one link in the shared `/usr/bin`.
 - **`<slug>_<app-version>_<arch>.deb`** - the app version comes from your project's `package.json` (`0.0.0` if absent), with a prerelease dash turned into `~` so `1.0.0-beta.1` sorts below `1.0.0` the way Debian expects; for Debian/Ubuntu and derivatives (the `ar` archive is assembled in pure JS - no `dpkg` toolchain required to produce it).
 
-> The generated `.deb` depends on exactly `libwebkitgtk-6.0-4` and `libgtk-4-1` (and recommends `libnotify4` for notifications), so a user's `apt install` pulls the engine in automatically - you don't ship it, and they don't hunt for it. The package does not pin minimum versions yet, so on older distros check the [GTK and WebKitGTK floors](/docs/platforms#linux) yourself. Bunmaska never bundles a browser.
+> The generated `.deb` depends on `libwebkitgtk-6.0-4 (>= 2.42)` and `libgtk-4-1 (>= 4.10)` (and recommends `libnotify4` for notifications), so a user's `apt install` pulls the engine in automatically - you don't ship it, and they don't hunt for it. Those are the [GTK and WebKitGTK floors](/docs/platforms#linux) the runtime needs, so a distro too old to run your app refuses the package instead of letting it crash at launch. Bunmaska never bundles a browser.
 
 ### Architectures
 
