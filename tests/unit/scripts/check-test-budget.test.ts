@@ -29,7 +29,7 @@ describe('budgetProblems', () => {
     }
     // The unit tier alone passed 1414 on macOS: a lost integration tier must not pass.
     expect(budgetProblems(darwin, { pass: 1414, skip: 4, fail: 0 }, 0)).toHaveLength(1);
-    expect(budgetProblems(darwin, { pass: 1623, skip: 76, fail: 0 }, 0)).toEqual([]);
+    expect(budgetProblems(darwin, { pass: 1838, skip: 103, fail: 0 }, 0)).toEqual([]);
   });
 
   test('an unparseable summary fails even when the run exited 0', () => {
