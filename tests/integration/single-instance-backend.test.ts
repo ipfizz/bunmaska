@@ -61,6 +61,35 @@ describe('createLockBackend — pidfile', () => {
     backend.clearLock(lockPath);
     expect(existsSync(lockPath)).toBe(false);
   });
+
+  /** Run `body` in a child Bun process with `backend` = a fresh live backend. */
+  const runChild = (body: string): number | null => {
+    const backendModule = join(import.meta.dir, '../../src/main/api/single-instance-backend.ts');
+    const script = [
+      `import { writeFileSync } from 'node:fs';`,
+      `import { createLockBackend } from ${JSON.stringify(backendModule)};`,
+      'const backend = createLockBackend();',
+      `const lockPath = ${JSON.stringify(lockPath)};`,
+      body,
+      'process.exit(0);',
+    ].join('\n');
+    return Bun.spawnSync([process.execPath, '-e', script]).exitCode;
+  };
+
+  test('a lock still held when the process exits is removed', () => {
+    expect(runChild('backend.tryCreateLock(lockPath, process.pid);')).toBe(0);
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
+  test("exit leaves alone a lock another instance took after this one's release", () => {
+    const body = [
+      'backend.tryCreateLock(lockPath, process.pid);',
+      `backend.stop(lockPath, lockPath + '.sock');`,
+      `writeFileSync(lockPath, '1');`,
+    ].join('\n');
+    expect(runChild(body)).toBe(0);
+    expect(existsSync(lockPath)).toBe(true);
+  });
 });
 
 describe('createLockBackend — socket hand-off', () => {
