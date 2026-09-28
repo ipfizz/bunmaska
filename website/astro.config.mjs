@@ -8,7 +8,6 @@ import tailwindcss from '@tailwindcss/vite';
 
 import rehypeCopyButton from './src/rehype-copy-button.mjs';
 
-// https://astro.build/config
 export default defineConfig({
   site: 'https://bunmaska.org',
   output: 'static',

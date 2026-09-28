@@ -26,7 +26,7 @@ const { title, description, seoTitle, keywords, slug, headings } = Astro.props;
 const { prev, next } = prevNext(slug);
 const abs = (path: string) => new URL(path, Astro.site).href;
 
-// Breadcrumb graph (Home > Group > Page) built from the nav, absolute URLs.
+// The last crumb (this page) has no item URL, so first-in-group pages don't list theirs twice.
 const crumbs = [{ label: "Home", href: "/" }, ...breadcrumbItems(slug)];
 const breadcrumbList = {
   "@context": "https://schema.org",

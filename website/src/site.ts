@@ -1,5 +1,3 @@
-// Single source of truth for site-wide constants.
-
 import pkg from '../../package.json';
 
 // The framework's package.json is the only place the version lives.
@@ -10,11 +8,7 @@ export const NPM = 'https://www.npmjs.com/package/bunmaska';
 /** The public URL path of a page; a file-format build reports `/about.html` and `/index.html`. */
 export const pagePath = (url: URL): string => url.pathname.replace(/(\/index)?\.html$/, '') || '/';
 
-/**
- * GitHub star count, fetched once at build time (this module evaluates once
- * per build). `null` when the API is unreachable, so the CTA degrades to a
- * plain "Star on GitHub" rather than a fake number.
- */
+/** Stars fetched once per build; null when GitHub is unreachable, so the CTA shows no fake number. */
 export const STARS: number | null = await (async () => {
   try {
     const token = process.env['GITHUB_TOKEN'];

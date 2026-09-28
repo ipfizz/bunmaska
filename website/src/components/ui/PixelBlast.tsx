@@ -1,9 +1,4 @@
-/**
- * PixelBlast - animated dithered-pixel background (adapted from reactbits.dev).
- * WebGL fullscreen quad: FBM noise through a Bayer dither, optional click
- * ripples. Adapted for strict TS (no non-null assertions, checked indexing)
- * and pared down to what the hero uses: no liquid/noise post-processing.
- */
+// Adapted from reactbits.dev PixelBlast: FBM noise through a Bayer dither on a WebGL quad.
 import type { CSSProperties, FC } from 'react';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';

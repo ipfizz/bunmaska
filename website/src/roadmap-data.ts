@@ -1,6 +1,4 @@
-// The roadmap's single source of truth. Every milestone on /roadmap renders
-// from this file - no prose hidden in component frontmatter, no drift.
-// Rule of the page: if it isn't built, it says so here.
+// Every milestone on /roadmap renders from this file.
 
 export type MilestoneStatus = 'shipped' | 'now' | 'beta' | 'later';
 

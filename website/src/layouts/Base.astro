@@ -27,17 +27,14 @@ const {
   jsonLd,
 } = Astro.props;
 
-// A page passes its keyword-rich phrase as `title`; the brand suffix is added
-// once. The home page (no title) uses the full default.
+// Pages pass a brand-free title; the suffix is added here, once.
 const fullTitle = title ? `${title} | bunmaska` : DEFAULT_TITLE;
 const path = pagePath(Astro.url);
 const canonical = new URL(path, Astro.site).href;
 const ogImage = new URL(image, Astro.site).href;
 const isHome = path === "/";
 
-// Site-wide identity graph. SoftwareApplication only where it belongs (home);
-// WebSite everywhere. Page-specific graphs (FAQPage/Breadcrumb/TechArticle)
-// are appended via the `jsonLd` prop.
+// WebSite on every page; Organization, SoftwareApplication and source code on home only.
 const website = {
   "@context": "https://schema.org",
   "@type": "WebSite",

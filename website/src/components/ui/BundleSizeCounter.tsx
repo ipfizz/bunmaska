@@ -56,7 +56,6 @@ export default function BundleCounter({
     return () => observer.disconnect();
   }, [from, to, duration]);
 
-  // Red -> current text color
   const color = `color-mix(
     in srgb,
     #ef4444 ${(1 - progress) * 100}%,
