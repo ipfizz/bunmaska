@@ -8,7 +8,7 @@ import { createLinuxApplication } from '../../../src/main/platform/linux/linux-b
  * `xvfb-run -a`; inert elsewhere via `describe.skipIf`.
  */
 
-const isLinux = process.platform === 'linux';
+const hasDisplay = process.platform === 'linux' && loadGtkFFI().symbols.gtk_init_check() !== 0;
 
 const pump = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -19,11 +19,8 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
   }
 };
 
-describe.skipIf(!isLinux)('capturePage over a real WebKitGTK webview', () => {
+describe.skipIf(!hasDisplay)('capturePage over a real WebKitGTK webview', () => {
   test('resolves non-empty bytes starting with the PNG signature', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
     const app = createLinuxApplication();
     app.start();
     const window = app.createWindow({ width: 400, height: 300, title: 'capture', show: true });

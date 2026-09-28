@@ -1,17 +1,10 @@
 import type { ParsedAccelerator } from '../../api/accelerator';
 
-/**
- * Pure X11 keysym-name + modifier-mask mapping for the Linux global-shortcut
- * backend. No FFI here — these map a parsed accelerator onto the X keysym NAME
- * (resolved to a real keysym via `XStringToKeysym` at registration time) and the
- * X modifier mask.
- */
-
 /** X11 modifier mask bits (`X.h`). */
-export const SHIFT_MASK = 1 << 0; // 1
-export const CONTROL_MASK = 1 << 2; // 4
-export const MOD1_MASK = 1 << 3; // 8  (Alt)
-export const MOD4_MASK = 1 << 6; // 64 (Super)
+export const SHIFT_MASK = 1 << 0;
+export const CONTROL_MASK = 1 << 2;
+export const MOD1_MASK = 1 << 3; // Alt
+export const MOD4_MASK = 1 << 6; // Super
 
 /** `KeyPress` event type and the XEvent byte offsets we read (64-bit ABI). */
 export const KEY_PRESS = 2;
@@ -21,23 +14,19 @@ export const XKEY_STATE_OFFSET = 80;
 export const XKEY_KEYCODE_OFFSET = 84;
 export const XEVENT_BUFFER_SIZE = 192;
 
-/** Lock (CapsLock) and Mod2 (NumLock) — state bits a shortcut must not care about. */
-export const IGNORED_STATE_MASK = (1 << 1) | (1 << 4); // LockMask | Mod2Mask
-
 /**
  * The lock-bit grab variants: `XGrabKey(mods)` never fires while NumLock or
  * CapsLock is on, so every registration grabs all four combinations.
  */
 export const GRAB_VARIANTS: readonly number[] = [0, 1 << 1, 1 << 4, (1 << 1) | (1 << 4)];
 
-/** Whether a KeyPress `state` matches a registered modifier mask, ignoring lock bits. Pure. */
+const REGISTRABLE_MODIFIERS = SHIFT_MASK | CONTROL_MASK | MOD1_MASK | MOD4_MASK;
+
+/** Compares only the registrable modifiers: `state` also carries lock, pointer-button and XKB group bits. */
 export const x11StateMatches = (state: number, modifiers: number): boolean =>
-  (state & ~IGNORED_STATE_MASK) === modifiers;
+  (state & REGISTRABLE_MODIFIERS) === modifiers;
 
-/** `KeyPressMask` for `XSelectInput` (`X.h`). */
-export const KEY_PRESS_MASK = 1 << 0; // 1
-
-/** Named keys → the X keysym string `XStringToKeysym` understands. */
+/** Accelerator key names to `XStringToKeysym` names. */
 const KEYSYM_NAMES: ReadonlyMap<string, string> = new Map([
   ['SPACE', 'space'],
   ['TAB', 'Tab'],
@@ -58,15 +47,14 @@ const KEYSYM_NAMES: ReadonlyMap<string, string> = new Map([
 
 const isFunctionKey = (key: string): boolean => /^F([1-9]|1[0-9]|2[0-4])$/.test(key);
 
-/**
- * Map a parsed accelerator key to the X keysym NAME string for
- * `XStringToKeysym`, or `undefined` if it cannot be expressed. Single letters
- * become their lowercase form (`'K'` → `'k'`); digits stay as-is.
- */
+/** The keysym NAME for `XStringToKeysym`, or `undefined` when X cannot express the key. */
 export const x11KeysymName = (key: string): string | undefined => {
   const upper = key.toUpperCase();
   if (key.length === 1) {
-    return /[A-Z]/.test(upper) ? upper.toLowerCase() : key;
+    // XStringToKeysym takes names ('comma'), not characters; `U<hex>` names any character.
+    return /[A-Z0-9]/.test(upper)
+      ? upper.toLowerCase()
+      : `U${key.toLowerCase().charCodeAt(0).toString(16)}`;
   }
   if (isFunctionKey(upper)) {
     return upper;
@@ -74,7 +62,6 @@ export const x11KeysymName = (key: string): string | undefined => {
   return KEYSYM_NAMES.get(upper);
 };
 
-/** Build the X modifier mask for a parsed accelerator (CmdOrCtrl already resolved). */
 export const x11ModifierMask = (parsed: ParsedAccelerator): number => {
   let mask = 0;
   if (parsed.shift) {
@@ -86,7 +73,7 @@ export const x11ModifierMask = (parsed: ParsedAccelerator): number => {
   if (parsed.alt) {
     mask |= MOD1_MASK;
   }
-  // On Linux, Super (and Cmd-as-meta, which CmdOrCtrl never sets here) maps to Mod4.
+  // Super and Cmd both map to Mod4.
   if (parsed.super || parsed.meta) {
     mask |= MOD4_MASK;
   }

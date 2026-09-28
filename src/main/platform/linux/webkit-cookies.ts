@@ -12,10 +12,7 @@ import { loadGlibFFI } from './glib-ffi';
 import { loadSoupFFI } from './soup-ffi';
 import { loadWebKitGtkFFI } from './webkitgtk-ffi';
 
-/**
- * `session.cookies` on Linux (WebKitGTK 6.0) via the default network session's
- * `WebKitCookieManager`. Async settles follow the gasync.ts callback rules.
- */
+// Async settles follow the gasync.ts callback rules.
 
 const COOKIE_TIMEOUT_MS = 15_000;
 
@@ -52,11 +49,7 @@ const readSoupCookie = (cookie: Pointer): Cookie => {
   };
 };
 
-/**
- * Drain a transfer-full `GList` of `SoupCookie*` into JS cookies: each node's
- * data is `soup_cookie_free`d and the cells `g_list_free`d (the finish
- * contract - anything less leaks per call).
- */
+/** Takes a transfer-full `GList` of `SoupCookie*`: every node is `soup_cookie_free`d and the list `g_list_free`d, or each call leaks. */
 const drainCookieList = (list: Pointer | null): Cookie[] => {
   const soup = loadSoupFFI().symbols;
   const glib = loadGlibFFI().symbols;
@@ -93,19 +86,23 @@ export const getCookies = (filter: CookieFilter): Promise<Cookie[]> =>
     'cookies.get',
   );
 
-/** Build a `SoupCookie*` from the normalized shape; expiration maps to max-age seconds. */
+/**
+ * Seconds until `expirationDate` for `soup_cookie_new`; -1 is a session cookie. Clamped to
+ * the i32 max: the FFI wraps a year-9999 expiry negative and libsoup drops it as expired.
+ */
+export const maxAgeFor = (expirationDate: number | undefined, nowSec: number): number =>
+  expirationDate === undefined
+    ? -1
+    : Math.min(0x7fffffff, Math.max(0, Math.round(expirationDate - nowSec)));
+
 const buildSoupCookie = (cookie: Cookie): Pointer => {
   const soup = loadSoupFFI().symbols;
-  const maxAge =
-    cookie.expirationDate === undefined
-      ? -1
-      : Math.max(0, Math.round(cookie.expirationDate - Date.now() / 1000));
   const soupCookie = soup.soup_cookie_new(
     cstr(cookie.name),
     cstr(cookie.value),
     cstr(cookie.domain),
     cstr(cookie.path),
-    maxAge,
+    maxAgeFor(cookie.expirationDate, Date.now() / 1000),
   );
   if (soupCookie === null) {
     throw new InvalidArgumentError('cookies.set: soup_cookie_new rejected the cookie fields');
@@ -137,11 +134,7 @@ export const setCookie = (cookie: Cookie): Promise<void> => {
   );
 };
 
-/**
- * Delete one stored cookie. The match goes through soup_cookie_equal, which
- * compares the VALUE too - blanking it made every delete a silent no-op (a CI
- * catch), so the cookie is rebuilt verbatim from the read-back fields.
- */
+/** soup_cookie_equal compares the VALUE too: rebuild the cookie verbatim, or the delete is a silent no-op. */
 const deleteOne = (target: Cookie): Promise<void> => {
   const wk = loadWebKitGtkFFI().symbols;
   const soup = loadSoupFFI().symbols;

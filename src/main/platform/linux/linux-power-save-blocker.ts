@@ -8,33 +8,19 @@ import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
 import { callMethodSync, getSessionBus } from './linux-dbus';
 
-/**
- * Linux power-save blocker via `org.freedesktop.ScreenSaver` inhibition (session bus).
- *
- * v1 maps BOTH types to ScreenSaver `Inhibit(app, reason) -> u cookie`; `UnInhibit(cookie)`
- * releases. This is the freedesktop fallback Chromium itself uses and avoids ALL fd /
- * GUnixFDList complexity (a plain u32 cookie, not a Unix fd). Documented coarseness:
- * 'prevent-app-suspension' uses the same idle inhibition as 'prevent-display-sleep' — it
- * blocks idle-triggered sleep but is slightly less authoritative than logind's
- * `Inhibit(what='sleep')` fd path (a future upgrade), which also blocks lid/explicit sleep.
- *
- * DEADLOCK-SAFE: the only blocking call is the bounded {@link callMethodSync} (5s timeout),
- * whose reply is delivered by GIO's private worker thread, not Bunmaska's pump. CI-HANG-SAFE:
- * gated behind `BUNMASKA_ENABLE_LINUX_POWER_BLOCKER` (CI never sets it), so `getSessionBus()`
- * returns null and `acquire` is a no-op (`start()` still returns an id).
- */
+// D038: both types map to ScreenSaver idle inhibition on the gated session bus.
+// ponytail: 'prevent-app-suspension' does not block lid or explicit sleep; logind Inhibit('sleep') is the upgrade.
 
 const SS_NAME = 'org.freedesktop.ScreenSaver';
 const SS_PATH = '/org/freedesktop/ScreenSaver';
 const SS_IFACE = 'org.freedesktop.ScreenSaver';
 const INHIBIT = 'Inhibit';
 const UNINHIBIT = 'UnInhibit';
-const APP_NAME = 'Bunmaska';
+const APP_NAME = 'Bunmaska'; // ponytail: every app inhibits as 'Bunmaska'; needs app.getName() from the api layer.
 
 const reasonFor = (type: PowerSaveBlockerType): string =>
   type === 'prevent-display-sleep' ? 'Preventing display sleep' : 'Preventing app suspension';
 
-/** Build the floating `(ss)` arg tuple for Inhibit (consumed by callMethodSync). */
 const inhibitArgs = (app: string, reason: string): Pointer | null => {
   const glib = loadGlibFFI();
   const a = glib.symbols.g_variant_new_string(cstr(app));
@@ -46,7 +32,6 @@ const inhibitArgs = (app: string, reason: string): Pointer | null => {
   return glib.symbols.g_variant_new_tuple(ptr(children), 2n); // sinks a, r
 };
 
-/** Build the floating `(u)` arg tuple for UnInhibit. */
 const uninhibitArgs = (cookie: number): Pointer | null => {
   const glib = loadGlibFFI();
   const c = glib.symbols.g_variant_new_uint32(cookie);
@@ -57,7 +42,7 @@ const uninhibitArgs = (cookie: number): Pointer | null => {
   return glib.symbols.g_variant_new_tuple(ptr(children), 1n);
 };
 
-/** Read the `u` cookie out of an `(u)` reply tuple, guarding type (a wrong type ABORTS). */
+/** Type-guarded: `g_variant_get_uint32` on a non-`u` child ABORTS. */
 const readCookie = (reply: Pointer): number | null => {
   const glib = loadGlibFFI();
   if (glib.symbols.g_variant_n_children(reply) < 1n) {
@@ -80,7 +65,7 @@ const readCookie = (reply: Pointer): number | null => {
 const acquire = (type: PowerSaveBlockerType): NativeBlocker | null => {
   const bus = getSessionBus();
   if (bus === null) {
-    return null; // gate off / no session bus → no-op (start() still returns an id).
+    return null;
   }
   const args = inhibitArgs(APP_NAME, reasonFor(type));
   if (args === null) {
@@ -88,7 +73,7 @@ const acquire = (type: PowerSaveBlockerType): NativeBlocker | null => {
   }
   const reply = callMethodSync(bus, SS_NAME, SS_PATH, SS_IFACE, INHIBIT, args);
   if (reply === null) {
-    return null; // no ScreenSaver impl, or it errored/timed out.
+    return null;
   }
   try {
     return readCookie(reply);
@@ -108,9 +93,8 @@ const release = (handle: NativeBlocker): void => {
   }
   const reply = callMethodSync(bus, SS_NAME, SS_PATH, SS_IFACE, UNINHIBIT, args);
   if (reply !== null) {
-    loadGlibFFI().symbols.g_variant_unref(reply); // UnInhibit returns an empty tuple; still unref.
+    loadGlibFFI().symbols.g_variant_unref(reply); // transfer-full, even when empty.
   }
 };
 
-/** The Linux power-save-blocker backend (org.freedesktop.ScreenSaver inhibition). */
 export const linuxPowerSaveBlockerBackend: PowerSaveBlockerBackend = { acquire, release };
