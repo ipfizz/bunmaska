@@ -3,20 +3,12 @@ import { describe, expect, it, test } from 'bun:test';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
   type AsyncStreamReader,
-  CLIPBOARD_READ_CB_DEF,
   drainStreamAsync,
   formatsFromGdk,
   linuxClipboardBackend,
-  settleReadStreamAsync,
+  settleReadStream,
   settleReadText,
 } from '../../../../../src/main/platform/linux/gtk-clipboard';
-
-describe('CLIPBOARD_READ_CB_DEF (GAsyncReadyCallback ABI, shape-only)', () => {
-  it('is (source, result, user_data) -> void', () => {
-    expect(CLIPBOARD_READ_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
-    expect(CLIPBOARD_READ_CB_DEF.returns).toBe('void');
-  });
-});
 
 describe('linuxClipboardBackend shape', () => {
   it('exposes readText, writeText, readHTML, writeHTML and clear', () => {
@@ -111,9 +103,10 @@ describe('drainStreamAsync (injected AsyncStreamReader, no real GInputStream)', 
   });
 });
 
-describe('settleReadStreamAsync (injected finish + async drain, no real clipboard)', () => {
+describe('settleReadStream (injected finish + async drain, no real clipboard)', () => {
   it('drains the stream when finish yields a non-null GInputStream*', async () => {
-    const value = await settleReadStreamAsync({
+    const value = await settleReadStream({
+      empty: '',
       result: 1 as unknown as Pointer,
       finish: () => 42 as unknown as Pointer,
       drain: (stream) => {
@@ -125,7 +118,8 @@ describe('settleReadStreamAsync (injected finish + async drain, no real clipboar
   });
 
   it('returns empty string when finish yields null (no matching format)', async () => {
-    const value = await settleReadStreamAsync({
+    const value = await settleReadStream({
+      empty: '',
       result: 0 as unknown as Pointer,
       finish: () => null,
       drain: () => {
@@ -136,7 +130,8 @@ describe('settleReadStreamAsync (injected finish + async drain, no real clipboar
   });
 
   it('returns empty string when finish throws (GError path)', async () => {
-    const value = await settleReadStreamAsync({
+    const value = await settleReadStream({
+      empty: '',
       result: 0 as unknown as Pointer,
       finish: () => {
         throw new Error('read failed');

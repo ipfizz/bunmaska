@@ -1,6 +1,7 @@
 import { CString, JSCallback, type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
 import type { ClipboardBackend } from '../../api/clipboard';
 import { cstr } from '../cstr';
+import { GASYNC_READY_CB_DEF } from './gasync';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
@@ -46,9 +47,6 @@ import { loadGObjectFFI } from './gobject-ffi';
  * allocates a FRESH one-shot callback per chunk (reads are strictly serial, so
  * there is never more than one in flight per stream — no `G_IO_ERROR_PENDING`).
  */
-
-/** ABI shape for `GAsyncReadyCallback`: `(source, result, user_data) -> void`. */
-export const CLIPBOARD_READ_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
 /** The MIME type GDK uses for UTF-8 plain text on the clipboard. */
 const TEXT_MIME = 'text/plain;charset=utf-8';
@@ -158,46 +156,25 @@ export const drainStreamAsync = async (reader: AsyncStreamReader): Promise<strin
   new TextDecoder().decode(await drainStreamBytesAsync(reader));
 
 /** Settle inputs for `gdk_clipboard_read_finish`, with finish + async drain injectable. */
-export type SettleReadStreamArgs = {
+export type SettleReadStreamArgs<T> = {
   readonly result: Pointer;
   /** Calls `gdk_clipboard_read_finish`; returns a `GInputStream*` or null; may throw. */
   readonly finish: (result: Pointer) => Pointer | null;
-  /** Drains a non-null `GInputStream*` to a string. */
-  readonly drain: (stream: Pointer) => Promise<string>;
+  /** Drains a non-null `GInputStream*`. */
+  readonly drain: (stream: Pointer) => Promise<T>;
+  /** The payload when there is no stream. */
+  readonly empty: T;
 };
 
-/**
- * Produce the clipboard payload from a `GAsyncResult`. A null stream (no matching
- * format) or a thrown `finish` (GError path) yields `''`.
- */
-export const settleReadStreamAsync = async (args: SettleReadStreamArgs): Promise<string> => {
+/** The clipboard payload from a `GAsyncResult`; `empty` for a null stream or a throwing finish. */
+export const settleReadStream = async <T>(args: SettleReadStreamArgs<T>): Promise<T> => {
   let stream: Pointer | null;
   try {
     stream = args.finish(args.result);
   } catch {
-    return '';
+    return args.empty;
   }
-  return stream === null ? '' : args.drain(stream);
-};
-
-/** Settle inputs for a binary `gdk_clipboard_read_finish`, draining to raw bytes. */
-export type SettleReadStreamBytesArgs = {
-  readonly result: Pointer;
-  readonly finish: (result: Pointer) => Pointer | null;
-  readonly drain: (stream: Pointer) => Promise<Uint8Array>;
-};
-
-/** Like {@link settleReadStreamAsync} but yields raw bytes (empty on no-match/error). */
-export const settleReadStreamBytesAsync = async (
-  args: SettleReadStreamBytesArgs,
-): Promise<Uint8Array> => {
-  let stream: Pointer | null;
-  try {
-    stream = args.finish(args.result);
-  } catch {
-    return new Uint8Array(0);
-  }
-  return stream === null ? new Uint8Array(0) : args.drain(stream);
+  return stream === null ? args.empty : args.drain(stream);
 };
 
 /**
@@ -250,7 +227,7 @@ const realAsyncStreamReader = (stream: Pointer): AsyncStreamReader => {
             inFlight.delete(cb);
             cb.close();
           }, 0);
-        }, CLIPBOARD_READ_CB_DEF);
+        }, GASYNC_READY_CB_DEF);
         inFlight.add(cb);
         const cbPtr = cb.ptr;
         if (cbPtr === null) {
@@ -286,7 +263,7 @@ const readText = (): Promise<string> =>
         inFlight.delete(callback);
         callback.close();
       }, 0);
-    }, CLIPBOARD_READ_CB_DEF);
+    }, GASYNC_READY_CB_DEF);
     inFlight.add(callback);
     const cbPtr = callback.ptr;
     if (cbPtr === null) {
@@ -337,17 +314,18 @@ const readHTML = (): Promise<string> =>
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
       // The drain is async (yields to the pump between chunks); resolve when it
       // settles. This kickoff callback's own work is done synchronously here.
-      void settleReadStreamAsync({
+      void settleReadStream({
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
         drain: (stream) => drainStreamAsync(realAsyncStreamReader(stream)),
+        empty: '',
       }).then(resolve, reject);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);
         callback.close();
       }, 0);
-    }, CLIPBOARD_READ_CB_DEF);
+    }, GASYNC_READY_CB_DEF);
     inFlight.add(callback);
     retainedReadBuffers.set(callback, { mime, mimeArray });
     const cbPtr = callback.ptr;
@@ -367,17 +345,18 @@ const readImage = (): Promise<Uint8Array> =>
     const mime = new TextEncoder().encode(`${IMAGE_PNG_MIME}\0`);
     const mimeArray = new BigUint64Array([BigInt(ptr(mime)), 0n]);
     const callback = new JSCallback((_source: Pointer, result: Pointer, _userData: Pointer) => {
-      void settleReadStreamBytesAsync({
+      void settleReadStream({
         result,
         finish: (r) => gdk.symbols.gdk_clipboard_read_finish(clipboard, r, null, null),
         drain: (stream) => drainStreamBytesAsync(realAsyncStreamReader(stream)),
+        empty: new Uint8Array(0),
       }).then(resolve, reject);
       setTimeout(() => {
         inFlight.delete(callback);
         retainedReadBuffers.delete(callback);
         callback.close();
       }, 0);
-    }, CLIPBOARD_READ_CB_DEF);
+    }, GASYNC_READY_CB_DEF);
     inFlight.add(callback);
     retainedReadBuffers.set(callback, { mime, mimeArray });
     const cbPtr = callback.ptr;
