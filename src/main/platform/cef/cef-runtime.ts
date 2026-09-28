@@ -47,6 +47,8 @@ const objcExtras = macOSLibraryAccessor('objc super + protocols', () =>
     objc_msgSendSuper: { args: [FFIType.ptr, FFIType.u64, FFIType.u64], returns: FFIType.void },
     objc_getProtocol: { args: [FFIType.cstring], returns: FFIType.u64 },
     class_addProtocol: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u8 },
+    object_getClass: { args: [FFIType.u64], returns: FFIType.u64 },
+    object_setClass: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u64 },
   }),
 );
 
@@ -54,9 +56,8 @@ let handlingSendEvent = false;
 
 /**
  * Chromium requires NSApp to be an NSApplication subclass answering
- * `isHandlingSendEvent` (CrAppControlProtocol), created before anything calls
- * `+sharedApplication`; `sendEvent:` brackets every dispatch with the flag.
- * Must run after the CEF framework is loaded (it registers the protocols).
+ * `isHandlingSendEvent` (CrAppControlProtocol); `sendEvent:` brackets every dispatch
+ * with the flag. Must run after the CEF framework is loaded (it registers the protocols).
  */
 export const installCefApplicationClass = (): void => {
   const rt = cocoa();
@@ -104,7 +105,12 @@ export const installCefApplicationClass = (): void => {
       objc.symbols.class_addProtocol(cls, protocol);
     }
   }
-  rt.msgSend(cls, rt.selectors.get('sharedApplication'));
+  const app = rt.msgSend(cls, rt.selectors.get('sharedApplication'));
+  // An AppKit call before ready (nativeTheme.themeSource, Menu.setApplicationMenu) already
+  // made a plain NSApp, which Chromium aborts on; the subclass adds no ivars, so swap in place.
+  if (objc.symbols.object_getClass(app) === superclass) {
+    objc.symbols.object_setClass(app, cls);
+  }
 };
 
 /**
