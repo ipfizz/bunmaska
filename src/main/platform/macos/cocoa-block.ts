@@ -1,7 +1,7 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import { cstr } from '../cstr';
-import type { Handle } from './objc';
+import { callFromNative, type Handle } from './objc';
 
 /**
  * Hand-built ObjC **Blocks** for bun:ffi — the primitive that unblocks every
@@ -86,19 +86,15 @@ export const makeOneShotBlock = (
   let blockPtr = 0n;
   const cb = new JSCallback(
     (...all: BlockArg[]) => {
-      const entry = retained.get(blockPtr);
-      try {
-        if (entry !== undefined && !entry.cancelled) {
-          // Drop the leading block pointer; hand the real args to the caller.
-          handler(...all.slice(1));
-        }
-      } finally {
-        // Deferred close: never free the trampoline inside its own invocation.
-        setTimeout(() => {
-          retained.delete(blockPtr);
-          cb.close();
-        }, 0).unref();
+      if (retained.get(blockPtr)?.cancelled === false) {
+        // Drop the leading block pointer; hand the real args to the caller.
+        callFromNative(undefined, () => handler(...all.slice(1)));
       }
+      // Deferred close: never free the trampoline inside its own invocation.
+      setTimeout(() => {
+        retained.delete(blockPtr);
+        cb.close();
+      }, 0).unref();
     },
     { args: [FFIType.ptr, ...argTypes], returns: FFIType.void },
   );

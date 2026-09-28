@@ -23,6 +23,22 @@ export const bigIntOut = (pointer: Pointer | null): Handle =>
   pointer === null ? 0n : BigInt(pointer);
 
 /**
+ * Run JS that native code called. A throw must never unwind through native frames
+ * (Bun then skips every later JSCallback in that native call), so it is rethrown on
+ * a microtask as an ordinary uncaught exception and `fallback` goes back to native.
+ */
+export const callFromNative = <T>(fallback: T, run: () => T): T => {
+  try {
+    return run();
+  } catch (error) {
+    queueMicrotask(() => {
+      throw error;
+    });
+    return fallback;
+  }
+};
+
+/**
  * Build a memoising accessor for a macOS-only resource. The accessor opens the
  * resource on first call and caches it; it throws {@link UnsupportedPlatformError}
  * on any non-macOS host so importing modules stay safe to load everywhere.

@@ -3,7 +3,7 @@ import { FFIType, JSCallback } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import { cstr } from '../cstr';
 import { cocoa } from './cocoa-runtime';
-import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
+import { callFromNative, type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
 /**
  * Define Objective-C classes at runtime with JS-backed methods:
@@ -18,8 +18,8 @@ import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
  * A JS-backed method to attach to a runtime class.
  *
  * `returns` defaults to `'void'`. A `'bool'` method's `impl` must return `0`/`1`
- * (NO/YES) — used for delegate predicates like `windowShouldClose:` whose BOOL
- * answer flows back to AppKit through the IMP's return register.
+ * (NO/YES); a throwing one answers YES, as in Electron a throwing listener cannot
+ * veto. A throwing `'object'` method answers nil. See {@link callFromNative}.
  */
 export type ObjcMethodSpec = {
   /** The selector name, e.g. `userContentController:didReceiveScriptMessage:`. */
@@ -61,37 +61,33 @@ const getRuntime = macOSLibraryAccessor('objc runtime class', () =>
 const retainedCallbacks: JSCallback[] = [];
 
 const buildCallback = (method: ObjcMethodSpec): JSCallback => {
-  const argTypes = [FFIType.u64, FFIType.u64, ...method.args.map(() => FFIType.u64)];
+  const args = [FFIType.u64, FFIType.u64, ...method.args.map(() => FFIType.u64)];
+  const impl = method.impl as (...handles: Handle[]) => unknown;
+  const call = (raw: ReadonlyArray<number | bigint>): unknown =>
+    impl(...raw.map((value) => BigInt(value)));
   if (method.returns === 'bool') {
     return new JSCallback(
-      (...raw: number[]): number => {
-        const handles = raw.map((value) => BigInt(value)) as [Handle, Handle, ...Handle[]];
-        // A BOOL IMP must return 0/1; the spec types `impl` as `void` for the
-        // common case, so read the runtime value through `unknown` and coerce a
-        // stray non-1 to 0 (NO) defensively.
-        const result = (method.impl as (...a: Handle[]) => unknown)(...handles);
-        return result === 1 ? 1 : 0;
-      },
-      { args: argTypes, returns: FFIType.u8 },
+      (...raw: number[]): number => callFromNative(1, () => (call(raw) === 1 ? 1 : 0)),
+      { args, returns: FFIType.u8 },
     );
   }
   if (method.returns === 'object') {
     return new JSCallback(
-      (...raw: number[]): bigint => {
-        const handles = raw.map((value) => BigInt(value)) as [Handle, Handle, ...Handle[]];
-        // An object-returning IMP yields a Handle (0n = nil); coerce defensively.
-        const result = (method.impl as (...a: Handle[]) => unknown)(...handles);
-        return typeof result === 'bigint' ? result : 0n;
-      },
-      { args: argTypes, returns: FFIType.u64 },
+      (...raw: number[]): bigint =>
+        callFromNative(0n, () => {
+          const result = call(raw);
+          return typeof result === 'bigint' ? result : 0n;
+        }),
+      { args, returns: FFIType.u64 },
     );
   }
   return new JSCallback(
     (...raw: number[]) => {
-      const handles = raw.map((value) => BigInt(value)) as [Handle, Handle, ...Handle[]];
-      method.impl(...handles);
+      callFromNative(undefined, () => {
+        call(raw);
+      });
     },
-    { args: argTypes, returns: FFIType.void },
+    { args, returns: FFIType.void },
   );
 };
 
