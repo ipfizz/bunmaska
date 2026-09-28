@@ -51,6 +51,13 @@ export const resetBootstrapForTesting = (): void => {
 };
 
 app.setStartHook(ensureNativeStarted);
+// Electron starts on its own, so a bare `app.on('ready', ...)` must not let the process
+// exit; the timer keeps code later in this tick ahead of the start, as in Electron.
+app.on('newListener', (event: string | symbol) => {
+  if (event === 'ready' && !started) {
+    setTimeout(ensureNativeStarted, 0);
+  }
+});
 // `quit` fires only after `before-quit` and `will-quit` had their chance to veto,
 // so a vetoed quit leaves the run loop pumping (stopping it on `will-quit` killed
 // every later native callback in an app that cancelled its own quit).
