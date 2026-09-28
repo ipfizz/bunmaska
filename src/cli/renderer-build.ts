@@ -1,10 +1,4 @@
-/**
- * The renderer build Bunmaska owns (`config.renderer`). One recipe, deliberately:
- * a classic IIFE bundle, because `loadFile` serves `file://` where an ES module
- * fails the CORS null-origin check. `NODE_ENV` is defined per mode: `bunmaska dev`
- * builds the development React runtime (warnings, jsxDEV), `bunmaska build` the
- * production one. See .admin/RENDERER-BUILD.md for the derivation.
- */
+// A classic IIFE: `loadFile` serves `file://`, where an ES module fails the CORS null-origin check.
 
 import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -12,17 +6,14 @@ import type { BunmaskaRendererConfig } from '../common/config-schema';
 import { rendererOutDir } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 
-/** What one renderer build produced. */
 export type RendererBuildResult = {
-  /** Absolute path of the output directory. */
   readonly outDir: string;
-  /** Output file names written into `outDir` (bundle first, then copies). */
+  /** File names written into `outDir`: the bundle first, then the copies. */
   readonly written: readonly string[];
 };
 
 export type RendererMode = 'development' | 'production';
 
-/** The bundler seam: builds `entry` into `outDir`, returns written file names. */
 export type RendererBundler = (
   entry: string,
   outDir: string,
@@ -38,6 +29,7 @@ const defaultBundler: RendererBundler = async (entry, outDir, mode) => {
     // The define picks the JSX runtime too: development emits jsxDEV, production jsx.
     define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
     naming: '[dir]/[name].[ext]',
+    throw: false,
   });
   if (!result.success) {
     const messages = result.logs.map((log) => log.message).join('\n');
@@ -46,11 +38,7 @@ const defaultBundler: RendererBundler = async (entry, outDir, mode) => {
   return result.outputs.map((artifact) => basename(artifact.path));
 };
 
-/**
- * Build the configured renderer into its output directory: bundle the entry,
- * then copy the static files (`copy`) in verbatim. Paths resolve against
- * `projectDir`.
- */
+/** Bundle the entry, then copy `copy` in verbatim; paths resolve against `projectDir`. */
 export const buildRenderer = async (
   projectDir: string,
   renderer: BunmaskaRendererConfig,

@@ -1,18 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
-import { BUNMASKA_VERSION } from '../../../src/common/version';
 
-/**
- * Integration test for the macOS `.app` bundler. It writes a trivial entry
- * (not a real Bunmaska app — the bundler only packages it), compiles it with
- * `bun build --compile`, lays out the `.app`, then asserts the on-disk
- * structure. The produced binary is exec'd to confirm it actually runs.
- */
+// Compiles a trivial entry into a real .app and runs the binary.
 if (currentPlatform() === 'macos') {
   describe('buildMacApp (integration)', () => {
     let workDir: string;
@@ -37,6 +39,7 @@ if (currentPlatform() === 'macos') {
         name,
         id: 'com.example.hi',
         out: outDir,
+        version: '2.3.0',
       });
 
       expect(appPath).toBe(join(outDir, `${name}.app`));
@@ -48,7 +51,7 @@ if (currentPlatform() === 'macos') {
       expect(plistText).toContain('<key>CFBundleIdentifier</key>');
       expect(plistText).toContain('com.example.hi');
       expect(plistText).toContain(name);
-      expect(plistText).toContain(BUNMASKA_VERSION);
+      expect(plistText).toContain('<key>CFBundleVersion</key>\n  <string>2.3.0</string>');
 
       const exe = join(appPath, 'Contents', 'MacOS', name);
       expect(existsSync(exe)).toBe(true);
@@ -56,10 +59,38 @@ if (currentPlatform() === 'macos') {
       // Executable bit set for owner/group/other.
       expect(mode & 0o111).not.toBe(0);
 
+      // LaunchServices must refuse an OS the compiled binary cannot load on.
+      const build = spawnSync('vtool', ['-show-build', exe], { encoding: 'utf8' });
+      const minos = /minos (\S+)/.exec(build.stdout)?.[1];
+      expect(plistText).toContain(`<key>LSMinimumSystemVersion</key>\n  <string>${minos}</string>`);
+
       // The compiled binary should actually run and print 'hi'.
       const result = spawnSync(exe, [], { encoding: 'utf8' });
       expect(result.status).toBe(0);
       expect(result.stdout).toContain('hi');
+    }, 30000);
+
+    test('replaces an earlier bundle instead of merging into it', async () => {
+      const out = join(workDir, 'rebuild');
+      const stale = join(out, 'Re App.app', 'Contents', 'MacOS', 'stale.html');
+      mkdirSync(dirname(stale), { recursive: true });
+      writeFileSync(stale, 'old');
+      await buildMacApp({ entry, name: 'Re App', out });
+      expect(existsSync(stale)).toBe(false);
+    }, 30000);
+
+    test('compiles with the running Bun, not whichever bun is on PATH', () => {
+      const builder = join(import.meta.dir, '../../../src/cli/build-macos.ts');
+      const script = `const { buildMacApp } = await import(${JSON.stringify(builder)});
+        await buildMacApp({ entry: ${JSON.stringify(entry)}, name: 'No Path', out: ${JSON.stringify(join(workDir, 'nopath'))} });`;
+      const run = spawnSync(process.execPath, ['-e', script], {
+        encoding: 'utf8',
+        env: { PATH: '/usr/bin:/bin' },
+      });
+      expect(run.stderr).toBe('');
+      expect(
+        existsSync(join(workDir, 'nopath', 'No Path.app', 'Contents', 'MacOS', 'No Path')),
+      ).toBe(true);
     }, 30000);
 
     test('defaults the bundle id from the name when --id is omitted', async () => {

@@ -1,25 +1,24 @@
-/**
- * Windows ships no system WebKit, so at launch Bunmaska `dlopen`s a WinCairo
- * `WebKit2.dll`. With `--embed-engine` that engine's whole directory is copied
- * into the bundle's `webkit/` folder and the `.exe` runs with NO environment
- * variables; without it the launch relies on the engine store (the baked
- * `engine.id`) or `BUNMASKA_WEBKIT_PATH`.
- */
+// Windows has no system WebKit: the app loads a WinCairo engine from `webkit/` (--embed-engine),
+// the engine store (the baked `engine.id`) or `BUNMASKA_WEBKIT_PATH`.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
+import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 import { runTool } from './run-tool';
-import { bundleIdSlug } from './build-macos';
+import { bundleIdSlug, numericVersion } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
 
-/**
- * The bundle subdirectory an embedded WinCairo engine is copied into. The runtime
- * looks for `<exeDir>/webkit/WebKit2.dll` (see `webkit2-ffi.ts`'s `bundledEngineDir`,
- * which carries the matching constant) — keep the two in sync.
- */
-export const BUNDLED_ENGINE_DIRNAME = 'webkit';
+export const BUNDLED_ENGINE_DIRNAME = 'webkit'; // ponytail: copied in webkit2-ffi.ts; share it
 
 export type WindowsLayout = {
   readonly appDir: string;
@@ -44,33 +43,13 @@ export const windowsLayout = (out: string, name: string): WindowsLayout => {
 
 export const zipFileName = (name: string): string => `${name}-windows-x64.zip`;
 
-/**
- * A Windows PE VERSIONINFO resource (`--windows-version`) accepts only a numeric
- * `major.minor.patch`, so `+build` and `-prerelease` are dropped, short segments
- * zero-padded, and a non-numeric segment becomes `0`. `0.1.0-alpha.2` -> `0.1.0`.
- */
-export const numericVersion = (version: string): string => {
-  const core = (version.split('+', 1)[0] ?? '').split('-', 1)[0] ?? '';
-  const parts = core
-    .split('.')
-    .slice(0, 3)
-    .map((segment) => {
-      const value = Number.parseInt(segment, 10);
-      return Number.isNaN(value) ? '0' : String(value);
-    });
-  while (parts.length < 3) {
-    parts.push('0');
-  }
-  return parts.join('.');
-};
-
 export type WindowsMetadata = {
   readonly title: string;
   readonly publisher: string;
   readonly version: string;
   readonly description: string;
   readonly hideConsole: boolean;
-  /** Optional executable icon — must be a `.ico` (Bun does not convert on Windows). */
+  /** A `.ico`; Bun does not convert other formats. */
   readonly icon?: string;
 };
 
@@ -78,6 +57,7 @@ export const buildCompileArgs = (
   entry: string,
   outfile: string,
   meta: WindowsMetadata,
+  host: Platform = currentPlatform(),
 ): string[] => {
   const args = ['build', entry, '--compile', '--target=bun-windows-x64', '--outfile', outfile];
   // Shrink the binary WITHOUT mangling identifiers: mangling would rename the user
@@ -86,6 +66,10 @@ export const buildCompileArgs = (
   args.push('--minify-whitespace', '--minify-syntax');
   if (meta.hideConsole) {
     args.push('--windows-hide-console');
+  }
+  // Bun rejects every other --windows-* flag unless it runs on Windows (Bun 1.4.2).
+  if (host !== 'windows') {
+    return args;
   }
   args.push('--windows-title', meta.title);
   args.push('--windows-publisher', meta.publisher);
@@ -97,10 +81,6 @@ export const buildCompileArgs = (
   return args;
 };
 
-/**
- * Spawns the RUNNING Bun (`process.execPath`) rather than a bare `bun`, so the
- * build does not depend on Bun being on `$PATH`.
- */
 const compileWindowsBinary = async (
   entry: string,
   outfile: string,
@@ -112,10 +92,7 @@ const compileWindowsBinary = async (
   ]);
 };
 
-/**
- * Entry names use forward slashes (the ZIP convention) under a single
- * `<topPrefix>/` folder, so extracting yields one top-level directory.
- */
+/** Forward-slash names under one `<topPrefix>/` folder, so extraction yields one directory. */
 const collectZipEntries = (rootDir: string, topPrefix: string): ZipEntry[] => {
   const entries: ZipEntry[] = [];
   const walk = (dir: string, rel: string): void => {
@@ -139,12 +116,14 @@ export type BuildWindowsAppOptions = {
   readonly entry: string;
   readonly name: string;
   readonly out?: string;
-  /** App icon — a `.ico` embedded into the `.exe`. */
+  /** A `.ico` embedded into the `.exe` (Windows hosts only). */
   readonly icon?: string;
   /** Engine-id to bake (the per-app pin); `system` is a no-op on Windows (no OS WebKit). */
   readonly engineId?: string;
   /** Directory of a WinCairo WebKit engine to bundle into the app's `webkit/` folder. */
   readonly embedEngine?: string;
+  /** The app's own version for the .exe; defaults to the framework version. */
+  readonly version?: string;
 };
 
 export type BuildWindowsAppResult = {
@@ -168,37 +147,42 @@ export const buildWindowsApp = async (
     }
   }
 
-  // Validate the engine to embed BEFORE the (slow) compile, so a bad path fails fast.
+  // Validate before the slow compile so a bad path fails fast.
   if (opts.embedEngine !== undefined && !existsSync(join(opts.embedEngine, 'WebKit2.dll'))) {
     throw new Error(
       `bunmaska build: --embed-engine directory has no WebKit2.dll: ${opts.embedEngine}`,
     );
   }
 
+  // cpSync merges, so clear our own earlier output (it holds engine.id) or stale files ship again.
+  if (existsSync(layout.engineIdPath)) {
+    rmSync(layout.appDir, { recursive: true, force: true });
+  }
   mkdirSync(layout.appDir, { recursive: true });
 
+  if (currentPlatform() !== 'windows') {
+    process.stderr.write(
+      'bunmaska build: only a Windows host can embed the .exe icon and version info; building without them.\n',
+    );
+  }
   const meta: WindowsMetadata = {
     title: opts.name,
-    publisher: 'Bunmaska',
-    version: numericVersion(BUNMASKA_VERSION),
+    publisher: opts.name,
+    version: numericVersion(opts.version ?? BUNMASKA_VERSION),
     description: `${opts.name} built with Bunmaska`,
     hideConsole: true,
     ...(opts.icon !== undefined ? { icon: opts.icon } : {}),
   };
   await compileWindowsBinary(opts.entry, layout.exePath, meta);
 
-  // Bundle a module-using preload so it runs as a classic script in the packaged app.
-  bundlePreloadAssets(layout.appDir, copyAppAssets(opts.entry, layout.appDir));
+  bundlePreloadAssets(opts.entry, layout.appDir, copyAppAssets(opts.entry, layout.appDir));
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.appDir, 'renderer'), { recursive: true });
   }
 
-  // Bake the engine-id the app pins, read at launch by the engine resolver.
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
 
-  // Copy the engine's whole directory closure (WebKit2.dll + ICU/libcurl/ANGLE +
-  // the helper processes) into `<Name>/webkit/`, which the runtime finds next to
-  // the executable, so the .exe runs with no env vars.
+  // The whole directory: WebKit2.dll needs its ICU/libcurl/ANGLE DLLs and helper processes.
   if (opts.embedEngine !== undefined) {
     cpSync(opts.embedEngine, join(layout.appDir, BUNDLED_ENGINE_DIRNAME), { recursive: true });
   }

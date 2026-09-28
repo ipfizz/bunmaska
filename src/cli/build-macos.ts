@@ -1,8 +1,3 @@
-/**
- * No WebKit/AppKit framework is bundled: Bunmaska dlopens the SYSTEM
- * frameworks at runtime via bun:ffi.
- */
-
 import {
   cpSync,
   chmodSync,
@@ -19,7 +14,8 @@ import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 import { runTool } from './run-tool';
 
-const MINIMUM_SYSTEM_VERSION = '11.0';
+// The minos `bun build --compile` stamps into the Mach-O (Bun 1.4.2).
+const MINIMUM_SYSTEM_VERSION = '13.0';
 
 const escapeXml = (value: string): string =>
   value
@@ -40,6 +36,25 @@ export const bundleIdSlug = (name: string): string => {
 
 export const defaultBundleId = (name: string): string => `com.bunmaska.${bundleIdSlug(name)}`;
 
+/**
+ * Info.plist and a Windows VERSIONINFO accept only numeric `major.minor.patch`:
+ * `0.1.0-alpha.2+b5` -> `0.1.0`, `1.2` -> `1.2.0`, a non-numeric segment -> `0`.
+ */
+export const numericVersion = (version: string): string => {
+  const core = (version.split('+', 1)[0] ?? '').split('-', 1)[0] ?? '';
+  const parts = core
+    .split('.')
+    .slice(0, 3)
+    .map((segment) => {
+      const value = Number.parseInt(segment, 10);
+      return Number.isNaN(value) ? '0' : String(value);
+    });
+  while (parts.length < 3) {
+    parts.push('0');
+  }
+  return parts.join('.');
+};
+
 export type InfoPlistOptions = {
   readonly name: string;
   readonly bundleId: string;
@@ -58,8 +73,8 @@ export const buildInfoPlist = (opts: InfoPlistOptions): string => {
     plistString('CFBundleExecutable', opts.name),
     plistString('CFBundlePackageType', 'APPL'),
     plistString('CFBundleInfoDictionaryVersion', '6.0'),
-    plistString('CFBundleShortVersionString', opts.version),
-    plistString('CFBundleVersion', opts.version),
+    plistString('CFBundleShortVersionString', numericVersion(opts.version)),
+    plistString('CFBundleVersion', numericVersion(opts.version)),
     plistString('LSMinimumSystemVersion', MINIMUM_SYSTEM_VERSION),
     '  <key>NSHighResolutionCapable</key>\n  <true/>',
   ];
@@ -89,10 +104,6 @@ export type AppBundleLayout = {
   readonly iconPath: string;
 };
 
-/**
- * Compute every on-disk path of an `<out>/<Name>.app` bundle. POSIX joins keep
- * the layout identical when computed on a cross-building host.
- */
 export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
   const { join } = posix;
   const appDir = join(out, `${name}.app`);
@@ -113,10 +124,10 @@ export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
 };
 
 /**
- * Entitlements a Bun-compiled app needs under the Hardened Runtime: JIT and
- * unsigned executable memory for JavaScriptCore and bun:ffi, and library
- * validation disabled so the app can dlopen the system WebKit/AppKit at launch.
- * Without these a hardened-runtime app traps (SIGTRAP) on its first FFI call.
+ * `allow-jit` is mandatory: without it a hardened app throws "bun:ffi requires the JIT"
+ * (Bun 1.4.2); the system WebKit/AppKit load with it alone. `disable-library-validation`
+ * lets the app dlopen dylibs its team did not sign (user native modules).
+ * ponytail: the two extra grants ship by default; make them config opt-ins
  */
 export const codesignEntitlements = (): string =>
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -133,10 +144,7 @@ export const codesignEntitlements = (): string =>
 </plist>
 `;
 
-/**
- * `--options runtime` is required for notarization. `identity` is a real
- * `Developer ID Application: …` identity, or `-` for an ad-hoc signature.
- */
+/** `--options runtime` (the hardened runtime) is required for notarization; `-` signs ad hoc. */
 export const buildCodesignArgs = (
   identity: string,
   appPath: string,
@@ -146,6 +154,8 @@ export const buildCodesignArgs = (
   '--deep',
   '--options',
   'runtime',
+  // Notarization rejects a signature without a secure timestamp; ad-hoc cannot have one.
+  ...(identity === '-' ? [] : ['--timestamp']),
   '--entitlements',
   entitlementsPath,
   '--sign',
@@ -166,14 +176,7 @@ export type NotarizeOptions = {
   readonly password: string;
 };
 
-/**
- * Build the `xcrun notarytool submit …` argv. Pure.
- *
- * The default `--notarize` hook submits the ditto ZIP of the bundle (notarytool
- * refuses a bare `.app`), so `appPath` is the submit target, not always an app.
- * `password` is an app-specific password for the Apple ID. `--wait` blocks
- * until Apple finishes processing.
- */
+/** `appPath` is the zip notarize.ts submits; `password` is an app-specific password. */
 export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
   'xcrun',
   'notarytool',
@@ -188,12 +191,6 @@ export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
   '--wait',
 ];
 
-/**
- * Build the `xcrun stapler staple …` argv for an `.app` bundle. Pure.
- *
- * Stapling attaches the notarization ticket to the bundle and is only
- * meaningful after a successful notarytool submission.
- */
 export const buildStapleArgs = (appPath: string): string[] => [
   'xcrun',
   'stapler',
@@ -332,24 +329,37 @@ export type BuildMacAppOptions = {
   readonly signApp?: SignApp;
   readonly convertIcon?: ConvertIcon;
   readonly buildDmg?: BuildDmg;
+  /** Notarize and staple the signed bundle; runs before the `.dmg` is built. */
+  readonly notarize?: (appPath: string) => Promise<void>;
+  /** The app's own version for Info.plist; defaults to the framework version. */
+  readonly version?: string;
 };
 
 const compileBinary = (entry: string, outfile: string): Promise<void> =>
-  runTool('bun build --compile', ['bun', 'build', entry, '--compile', '--outfile', outfile]);
+  runTool('bun build --compile', [
+    process.execPath,
+    'build',
+    entry,
+    '--compile',
+    '--outfile',
+    outfile,
+  ]);
 
 export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => {
   const out = opts.out ?? process.cwd();
   const bundleId = opts.id ?? defaultBundleId(opts.name);
+  const version = opts.version ?? BUNMASKA_VERSION;
   const layout = appBundleLayout(out, opts.name);
 
+  // Start clean: cpSync merges, so files an earlier build shipped would ship again.
+  rmSync(layout.appDir, { recursive: true, force: true });
   mkdirSync(layout.macosDir, { recursive: true });
   mkdirSync(layout.resourcesDir, { recursive: true });
 
   await compileBinary(opts.entry, layout.executablePath);
   chmodSync(layout.executablePath, 0o755);
 
-  // Bundle a module-using preload so it runs as a classic script in the packaged app.
-  bundlePreloadAssets(layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
+  bundlePreloadAssets(opts.entry, layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.macosDir, 'renderer'), { recursive: true });
   }
@@ -371,19 +381,21 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
 
   const plist = buildInfoPlist(
     iconFile === undefined
-      ? { name: opts.name, bundleId, version: BUNMASKA_VERSION }
-      : { name: opts.name, bundleId, version: BUNMASKA_VERSION, iconFile },
+      ? { name: opts.name, bundleId, version }
+      : { name: opts.name, bundleId, version, iconFile },
   );
   writeFileSync(layout.infoPlistPath, plist);
 
-  // Sign last, once the bundle (binary + Info.plist + resources) is fully laid
-  // out, so the signature covers the final contents.
+  // Sign last so the seal covers the final bundle.
   if (opts.sign !== undefined) {
     const signApp = opts.signApp ?? codesignApp;
     await signApp(opts.sign, layout.appDir);
   }
+  if (opts.notarize !== undefined) {
+    await opts.notarize(layout.appDir);
+  }
 
-  // The .dmg packages the signed bundle, so it is produced after signing.
+  // The .dmg packages the final bundle, so it comes after signing and stapling.
   if (opts.dmg === true) {
     const dmg = opts.buildDmg ?? buildDmg;
     await dmg({ appDir: layout.appDir, name: opts.name, outDmg: join(out, `${opts.name}.dmg`) });

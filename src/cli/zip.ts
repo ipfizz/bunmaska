@@ -1,8 +1,5 @@
-/**
- * Windows has no dependable zip tool: the system `bsdtar` can, but a dev box's
- * PATH routinely shadows it with Git's GNU tar, which cannot. The output is a
- * standard PKZIP 2.0 (method 8) archive.
- */
+// Hand-written because Windows has no dependable zip tool: Git's GNU tar routinely shadows the
+// system bsdtar on PATH and cannot write zips. ponytail: no ZIP64, so 65,535 files / 4 GiB max
 
 import { deflateRawSync } from 'node:zlib';
 
@@ -15,7 +12,7 @@ export type ZipEntry = {
 const LOCAL_FILE_HEADER_SIG = 0x04034b50;
 const CENTRAL_DIR_HEADER_SIG = 0x02014b50;
 const END_OF_CENTRAL_DIR_SIG = 0x06054b50;
-const VERSION_NEEDED = 20; // 2.0 — the floor for DEFLATE.
+const VERSION_NEEDED = 20; // 2.0, the floor for DEFLATE
 /** General-purpose bit 11: the file name (and comment) are UTF-8 encoded. */
 const FLAG_UTF8 = 0x0800;
 const METHOD_STORE = 0;
@@ -66,7 +63,6 @@ const prepareEntry = (entry: ZipEntry, localOffset: number): PreparedEntry => {
   };
 };
 
-/** The local file header (30 fixed bytes + name) that precedes an entry's data. */
 const localHeader = (entry: PreparedEntry): Uint8Array => {
   const header = new Uint8Array(LOCAL_HEADER_FIXED + entry.nameBytes.length);
   const view = new DataView(header.buffer);
@@ -85,7 +81,6 @@ const localHeader = (entry: PreparedEntry): Uint8Array => {
   return header;
 };
 
-/** One central-directory record (46 fixed bytes + name) describing an entry. */
 const centralHeader = (entry: PreparedEntry): Uint8Array => {
   const header = new Uint8Array(CENTRAL_HEADER_FIXED + entry.nameBytes.length);
   const view = new DataView(header.buffer);
@@ -124,12 +119,7 @@ const endOfCentralDir = (count: number, cdSize: number, cdOffset: number): Uint8
   return eocd;
 };
 
-const concat = (chunks: readonly Uint8Array[]): Uint8Array => Buffer.concat(chunks);
-
-/**
- * Entry paths use `/` separators. Local headers + data, then the central
- * directory, then the EOCD, in spec order.
- */
+/** Entry names use `/` separators. */
 export const buildZipArchive = (entries: readonly ZipEntry[]): Uint8Array => {
   const localChunks: Uint8Array[] = [];
   const prepared: PreparedEntry[] = [];
@@ -144,7 +134,17 @@ export const buildZipArchive = (entries: readonly ZipEntry[]): Uint8Array => {
 
   const centralChunks = prepared.map(centralHeader);
   const cdSize = centralChunks.reduce((n, chunk) => n + chunk.length, 0);
+  // DataView wraps silently past these, producing a corrupt archive that "built" fine.
+  if (
+    prepared.length > 0xffff ||
+    offset + cdSize > 0xffffffff ||
+    prepared.some((item) => item.uncompressedSize > 0xffffffff)
+  ) {
+    throw new Error(
+      'bunmaska build: the zip exceeds 65,535 files or 4 GiB, which needs ZIP64 (unsupported).',
+    );
+  }
   const eocd = endOfCentralDir(prepared.length, cdSize, offset);
 
-  return concat([...localChunks, ...centralChunks, eocd]);
+  return Buffer.concat([...localChunks, ...centralChunks, eocd]);
 };

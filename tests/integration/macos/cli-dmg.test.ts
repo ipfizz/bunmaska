@@ -6,13 +6,7 @@ import { join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * Integration test for the `.dmg` path of the macOS bundler. It builds a real
- * `.app` from a trivial entry with `--dmg`, then asserts a non-empty
- * `<Name>.dmg` is produced and that the REAL `hdiutil verify` passes
- * (exitCode 0) — a genuine on-host disk-image checksum verification. No volume
- * is mounted: `hdiutil create` + `verify` need none.
- */
+// `hdiutil verify` checksums the real image; no volume is mounted.
 if (currentPlatform() === 'macos') {
   describe('buildMacApp dmg creation (integration)', () => {
     let workDir: string;
@@ -55,5 +49,26 @@ if (currentPlatform() === 'macos') {
       const verify = spawnSync('hdiutil', ['verify', dmgPath], { encoding: 'utf8' });
       expect(verify.status).toBe(0);
     });
+
+    test('notarizes the signed app before packaging it, so the dmg holds the stapled app', async () => {
+      const order: string[] = [];
+      await buildMacApp({
+        entry,
+        name: 'Order App',
+        out: join(workDir, 'order'),
+        sign: '-',
+        dmg: true,
+        signApp: async () => {
+          order.push('sign');
+        },
+        notarize: async () => {
+          order.push('notarize');
+        },
+        buildDmg: async () => {
+          order.push('dmg');
+        },
+      });
+      expect(order).toEqual(['sign', 'notarize', 'dmg']);
+    }, 30000);
   });
 }

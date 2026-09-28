@@ -1,18 +1,54 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildLinuxApp } from '../../../src/cli/build-linux';
 import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * Integration test for the Linux distributable builder, guarded to macOS so it
- * exercises Bun's `--target=bun-linux-x64` CROSS-compilation. It writes a
- * trivial entry, cross-compiles it, lays out the AppDir, and asserts the
- * compiled binary is a real Linux ELF (not a host Mach-O), the .desktop file is
- * correct, and the .tar.gz / .deb archives exist and list the expected members.
- */
+/** Members of a gzipped tar: name, owner uid and typeflag (`x` = pax header). */
+const tarMembers = (
+  gz: Uint8Array,
+): { name: string; uid: number; type: string; body: string }[] => {
+  const tar = Bun.gunzipSync(new Uint8Array(gz));
+  const text = (from: number, to: number): string =>
+    new TextDecoder().decode(tar.subarray(from, to)).replace(/\0.*$/s, '');
+  const members = [];
+  for (let at = 0; at + 512 <= tar.length && tar[at] !== 0; ) {
+    const size = Number.parseInt(text(at + 124, at + 136), 8);
+    members.push({
+      name: text(at, at + 100),
+      uid: Number.parseInt(text(at + 108, at + 116), 8),
+      type: text(at + 156, at + 157),
+      body: text(at + 512, at + 512 + size),
+    });
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  return members;
+};
+
+/** The bytes of one member of an `ar` archive (a `.deb`). */
+const arMember = (ar: Uint8Array, wanted: string): Uint8Array => {
+  for (let at = 8; at < ar.length; ) {
+    const name = new TextDecoder().decode(ar.subarray(at, at + 16)).trim();
+    const size = Number.parseInt(new TextDecoder().decode(ar.subarray(at + 48, at + 58)), 10);
+    if (name === wanted) {
+      return ar.subarray(at + 60, at + 60 + size);
+    }
+    at += 60 + size + (size % 2);
+  }
+  throw new Error(`no ${wanted} in the ar archive`);
+};
+
+// Cross-compiles for Linux from macOS, so the binary must be an ELF, not a host Mach-O.
 if (currentPlatform() === 'macos') {
   describe('buildLinuxApp cross-compile (integration)', () => {
     let workDir: string;
@@ -24,8 +60,6 @@ if (currentPlatform() === 'macos') {
       workDir = mkdtempSync(join(tmpdir(), 'bunmaska-cli-build-linux-'));
       outDir = join(workDir, 'out');
       const entry = join(workDir, 'entry.ts');
-      Bun.write(entry, "console.log('hi');\nprocess.exit(0);\n");
-      // Bun.write returns a promise; ensure it landed before compiling.
       await Bun.write(entry, "console.log('hi');\nprocess.exit(0);\n");
       result = await buildLinuxApp({
         arch: 'x64',
@@ -92,6 +126,27 @@ if (currentPlatform() === 'macos') {
       expect(listing.stdout).toContain('debian-binary');
       expect(listing.stdout).toContain('control.tar.gz');
       expect(listing.stdout).toContain('data.tar.gz');
+      expect(readdirSync(outDir).filter((name) => name.startsWith('.'))).toEqual([]);
+    });
+
+    test('a rebuild drops files the previous build shipped', async () => {
+      const stale = join(result.appDir, 'usr', 'bin', 'stale.html');
+      writeFileSync(stale, 'old');
+      await buildLinuxApp({ arch: 'x64', entry: join(workDir, 'entry.ts'), name, out: outDir });
+      expect(existsSync(stale)).toBe(false);
+    }, 30000);
+
+    test('archives carry no AppleDouble files, xattrs or builder ownership', () => {
+      const deb = readFileSync(result.deb as string);
+      for (const gz of [readFileSync(result.tarball), arMember(deb, 'data.tar.gz')]) {
+        for (const member of tarMembers(gz)) {
+          expect(member.name).not.toMatch(/(^|\/)\._/);
+          expect(member.body).not.toContain('xattr');
+          if (member.type !== 'x') {
+            expect(member.uid).toBe(0);
+          }
+        }
+      }
     });
   });
 }

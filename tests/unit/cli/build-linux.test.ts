@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
+  buildArArchive,
   buildControlFile,
+  buildLinuxApp,
   buildDesktopEntry,
   debFileName,
   DEFAULT_LINUX_DEPENDS,
@@ -48,6 +53,10 @@ describe('tarballName / debFileName', () => {
   test('deb is <slug>_<version>_amd64.deb', () => {
     expect(debFileName('My App', '1.2.3', 'x64')).toBe('my-app_1.2.3_amd64.deb');
     expect(debFileName('My App', '1.2.3', 'arm64')).toBe('my-app_1.2.3_arm64.deb');
+  });
+
+  test('deb names a prerelease with the Debian tilde', () => {
+    expect(debFileName('My App', '1.0.0-beta.1', 'x64')).toBe('my-app_1.0.0~beta.1_amd64.deb');
   });
 });
 
@@ -103,6 +112,17 @@ describe('buildControlFile', () => {
     expect(text).toContain('Architecture: amd64');
     expect(text).toContain('Maintainer: Bunmaska <noreply@bunmaska.dev>');
     expect(text).toContain('Description: My App built with Bunmaska');
+    expect(text).toContain('Recommends: libnotify4');
+  });
+
+  test('maps a semver prerelease to a tilde so the final release sorts above it', () => {
+    const pre = buildControlFile({
+      slug: 'my-app',
+      version: '1.0.0-beta.1',
+      maintainer: 'x <x@example.com>',
+      description: 'x',
+    });
+    expect(pre).toContain('Version: 1.0.0~beta.1\n');
   });
 
   test('ends with a trailing newline', () => {
@@ -122,7 +142,7 @@ describe('buildControlFile', () => {
     expect(withDeps.indexOf('Depends:')).toBeLessThan(withDeps.indexOf('Description:'));
   });
 
-  test('omits the Depends field entirely when deps are empty (embedded engine)', () => {
+  test('omits the Depends field entirely when deps are empty', () => {
     const noDeps = buildControlFile({
       slug: 'my-app',
       version: '1.0.0',
@@ -131,6 +151,30 @@ describe('buildControlFile', () => {
       depends: [],
     });
     expect(noDeps).not.toContain('Depends:');
+  });
+});
+
+describe('buildArArchive', () => {
+  test('pads an odd-length member so the next header starts on an even offset', () => {
+    const ar = buildArArchive([
+      { name: 'a', content: new Uint8Array([1, 2, 3]) },
+      { name: 'b', content: new Uint8Array([4]) },
+    ]);
+    const text = new TextDecoder('latin1').decode(ar);
+    expect(text.startsWith('!<arch>\n')).toBe(true);
+    expect(text.slice(8 + 48, 8 + 58).trim()).toBe('3');
+    expect(ar[8 + 60 + 3]).toBe(0x0a);
+    expect(text.slice(8 + 60 + 4, 8 + 60 + 5)).toBe('b');
+    expect(ar.length).toBe(8 + 60 + 4 + 60 + 2);
+  });
+});
+
+describe('buildLinuxApp', () => {
+  test('refuses a one-character package name before compiling', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'bunmaska-deb-name-'));
+    await expect(buildLinuxApp({ entry: 'missing.ts', name: 'X', out })).rejects.toThrow(
+      /at least 2 characters/,
+    );
   });
 });
 

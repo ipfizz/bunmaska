@@ -7,14 +7,7 @@ import { buildMacApp, convertPngToIcns } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
 import { makeTinyPng } from '../../fixtures/tiny-png';
 
-/**
- * Integration test for the PNG→.icns path of the macOS bundler. It generates a
- * real (tiny) PNG fixture, runs the actual `sips`/`iconutil` conversion via
- * `buildMacApp({ icon: <png> })`, and asserts the bundle holds a genuine
- * `.icns` (recognized by `file(1)`, round-trippable by `iconutil`, and carrying
- * the `icns` magic bytes), with `CFBundleIconFile` set in Info.plist. This
- * proves the conversion really works on-host, not that an opaque blob was copied.
- */
+// Runs the real sips/iconutil conversion and checks the result is a genuine .icns.
 if (currentPlatform() === 'macos') {
   describe('buildMacApp PNG icon conversion (integration)', () => {
     let workDir: string;
