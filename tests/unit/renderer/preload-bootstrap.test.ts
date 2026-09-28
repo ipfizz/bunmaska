@@ -83,6 +83,14 @@ describe('__bunmaska.invoke', () => {
     await expect(promise).rejects.toThrow('nope');
   });
 
+  test('starts each document at its own id, so a reply from before a reload cannot match', () => {
+    const first = evalBootstrap();
+    const second = evalBootstrap();
+    void first.bridge.invoke('a');
+    void second.bridge.invoke('a');
+    expect(JSON.parse(first.posted[0] ?? '').id).not.toBe(JSON.parse(second.posted[0] ?? '').id);
+  });
+
   test('assigns distinct ids to concurrent invokes', () => {
     const { bridge, posted } = evalBootstrap();
     void bridge.invoke('a');

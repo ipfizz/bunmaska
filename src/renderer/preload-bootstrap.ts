@@ -18,7 +18,7 @@ const BOOTSTRAP_SOURCE = `(function () {
     }
   }
 
-  var nextId = 1;
+  var nextId = Math.floor(Math.random() * 0x1fffffffffff) + 1; // ponytail: random base so a pre-reload reply misses; add an envelope nonce if one still lands
   var pending = new Map();
   var listeners = new Map();
 
