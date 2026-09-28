@@ -8,7 +8,12 @@ import {
 } from '../../../src/main/api/menu';
 import { resetNativeThemeObservingForTesting } from '../../../src/main/api/native-theme';
 import { resetPowerMonitorObservingForTesting } from '../../../src/main/api/power-monitor';
-import { ensureNativeStarted, resetBootstrapForTesting } from '../../../src/main/bootstrap';
+import { type DialogBackend, setDialogBackendForTesting } from '../../../src/main/api/dialog';
+import {
+  ensureNativeStarted,
+  reportUncaughtException,
+  resetBootstrapForTesting,
+} from '../../../src/main/bootstrap';
 import { setNativeAppForTesting } from '../../../src/main/native-app';
 import type { NativeApplication } from '../../../src/main/platform/native';
 import { armInertObservers, inertMenuRealizer } from '../../helpers/inert-observers';
@@ -234,5 +239,58 @@ describe('bootstrap quit wiring', () => {
     const counting = withCountingNative();
     app.quit();
     expect(counting.quits()).toBe(1);
+  });
+});
+
+describe("Electron's default uncaughtException handler", () => {
+  const shown: { message: string; detail: string }[] = [];
+  beforeEach(() => {
+    armInertObservers();
+    setMenuRealizerForTesting(inertMenuRealizer);
+    shown.length = 0;
+    const fake: DialogBackend = {
+      showMessageBox: (spec) => {
+        shown.push({ message: spec.message, detail: spec.detail });
+        return 0;
+      },
+      showOpenDialog: () => [],
+      showSaveDialog: () => '',
+    };
+    setDialogBackendForTesting(fake);
+  });
+  afterEach(() => {
+    setDialogBackendForTesting(undefined);
+    setMenuRealizerForTesting(undefined);
+    resetApplicationMenuForTesting();
+    setNativeAppForTesting(undefined);
+    resetBootstrapForTesting();
+  });
+
+  test('is installed when the native app starts', () => {
+    setNativeAppForTesting(makeNative().native);
+    ensureNativeStarted();
+    expect(process.listeners('uncaughtException')).toContain(reportUncaughtException);
+  });
+
+  test('shows the error in a box when the app has no handler of its own', () => {
+    const error = new Error('listener bug');
+    reportUncaughtException(error);
+    expect(shown).toEqual([
+      {
+        message: 'A JavaScript error occurred in the main process',
+        detail: `Uncaught Exception:\n${error.stack}`,
+      },
+    ]);
+  });
+
+  test("leaves the error to the app's own handler", () => {
+    const own = (): void => undefined;
+    process.on('uncaughtException', own);
+    try {
+      reportUncaughtException(new Error('handled elsewhere'));
+    } finally {
+      process.off('uncaughtException', own);
+    }
+    expect(shown).toEqual([]);
   });
 });
