@@ -25,7 +25,7 @@ import { MenuItem } from 'bunmaska';
 - `checked` boolean - defaults to `false`. Only meaningful for `'checkbox'` / `'radio'` items.
 - `accelerator` string - a keyboard accelerator like `'CmdOrCtrl+Q'` (see the limitations note below).
 - `role` [`MenuRole | MenuMacroRole`](#roles) - a predefined action. When set, the role supplies a default label and accelerator and provides the native behavior; if both a `role` and a `click` are given, the role wins and the `click` is ignored. Role names match case-insensitively; an unsupported role gives a plain item labelled with the role name.
-- `click` `(menuItem, window, event) => void` - called when the item is activated, with Electron's arguments: the item itself, then `window` (always `undefined` for now) and an empty `event` object. For a checkbox or radio item, `checked` has already been updated when it runs.
+- `click` `(menuItem, window, event) => void` - called when the item is activated, with Electron's arguments: the item itself, then `window` (the focused `BrowserWindow`, or `undefined` when none is focused) and an empty `event` object. For a checkbox or radio item, `checked` has already been updated when it runs.
 - `submenu` [`Menu`](/docs/api/menu) `| MenuItemOptions[]` - a child menu. A plain array is auto-converted via `Menu.buildFromTemplate`.
 
 ```ts
@@ -124,7 +124,7 @@ Menu.setApplicationMenu(menu);
 
 - _macOS_ - **all** item-level roles are wired. Each maps to a standard first-responder selector (e.g. `undo:`, `terminate:`, `toggleFullScreen:`) routed up the responder chain, so they behave exactly like the native shortcut. `quit` runs the full [`app.quit()`](/docs/api/app#appquitexitcode) sequence.
 - _Linux_ - the editing roles (`undo`, `redo`, `cut`, `copy`, `paste`, `pasteAndMatchStyle`, `delete`, `selectAll`), the window roles (`minimize`, `close`, `zoom`, `togglefullscreen`) and `quit` have menu-**click** wiring. `about`, `hide`, `hideOthers` and `unhide` render as labels with no click action. No role gets a keyboard shortcut: accelerators are not bound on Linux.
-- _Windows_ - `quit` runs `app.quit()`; every other role item is an inert label, and no accelerator table is installed.
+- _Windows_ - the window roles (`minimize`, `close`, `zoom`, `togglefullscreen`) act on the clicked window's frame and `quit` runs `app.quit()`; the editing roles are inert labels, and no accelerator table is installed.
 
 ## Not in Bunmaska (yet)
 
@@ -136,7 +136,7 @@ Bunmaska's `MenuItem` is a deliberately small, immutable subset of Electron's. N
 - **`sublabel`, `toolTip`, `accessibilityLabel`** _macOS_ - none of the macOS text adornments are exposed.
 - **`commandId`, `menu`, `userAccelerator`** - no back-references from an item to its sequential id, owning menu, or user-assigned accelerator.
 - **`registerAccelerator`, `acceleratorWorksWhenHidden`, `sharingItem`** - not supported.
-- **Click handler arguments** - the signature matches Electron, but `window` is always `undefined` and `event` is empty (no modifier keys, no `triggeredByAccelerator`).
+- **Click event details** - the signature matches Electron, but `event` is empty (no modifier keys, no `triggeredByAccelerator`).
 - **`type: 'header'` / `'palette'`** (macOS 14+) - not in the supported `type` set.
 - **Many roles** - only the roles listed above exist. Electron's `reload`, `forceReload`, `toggleDevTools`, `resetZoom`, `zoomIn`, `zoomOut`, `services`, `front`, `appMenu`, `viewMenu`, `fileMenu`, `shareMenu`, the spell-checker/substitutions/speech roles, the tab roles, and `recentDocuments` are **not** implemented. (`appMenu` and `viewMenu` macro roles are explicitly deferred - `appMenu` needs the app name and `viewMenu` needs reload/zoom/devtools roles that don't exist yet.)
 - **Item placement options** - `before`, `after`, `beforeGroupContaining`, `afterGroupContaining` are not supported; ordering is purely the order items are appended.

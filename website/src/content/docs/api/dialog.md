@@ -26,8 +26,8 @@ console.log(canceled, filePaths);
 ### `dialog.showOpenDialog([options])`
 
 * `options` Object (optional)
-  * `properties` string[] (optional) - Defaults to `['openFile']`. Supported values: `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS). Linux ignores `openDirectory` and `multiSelections`; Windows honours `openDirectory` only when `openFile` is not also set.
-  * `defaultPath` string (optional) - The directory the panel opens in (a file path opens its folder). Honoured on macOS and by the Windows file picker; the Windows folder picker and Linux ignore it.
+  * `properties` string[] (optional) - Defaults to `['openFile']`. Supported values: `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS). Linux and Windows cannot pick files and folders in one dialog, so there `openDirectory` wins over `openFile`, as in Electron; the Windows folder picker returns a single folder.
+  * `defaultPath` string (optional) - The directory the panel opens in (a file path opens its folder). Honoured everywhere except the Windows folder picker.
   * `filters` [FileFilter[]](#filefilter) (optional) - File-type filters; the selectable extensions are the union of every filter's `extensions`.
 
 Returns `Promise<Object>`:
@@ -56,7 +56,7 @@ if (!result.canceled) {
 ### `dialog.showSaveDialog([options])`
 
 * `options` Object (optional)
-  * `defaultPath` string (optional) - The suggested file name shown in the panel. Unlike Electron, it is a **name**, not a path, on macOS and Linux; Windows also accepts a full path.
+  * `defaultPath` string (optional) - A file name, a full file path, or a folder to open in, as in Electron. Windows takes a name or a full file path, but not a bare folder.
   * `filters` [FileFilter[]](#filefilter) (optional) - File-type filters; the allowed extensions are the union of every filter's `extensions`.
 
 Returns `Promise<Object>`:
@@ -141,5 +141,5 @@ The following Electron `dialog` members are not implemented in the Bunmaska sour
 - **A working `window` (parent) argument** - every method accepts the leading `BrowserWindow`, but ignores it, so dialogs are not attached as macOS sheets or made window-modal; they appear as independent panels. The whole "Sheets" and `setSheetOffset` story does not apply.
 - **macOS security-scoped bookmarks** - no `securityScopedBookmarks` option and no `bookmarks`/`bookmark` fields in the results.
 - **Most option fields** - `title`, `buttonLabel`, `message`/`detail` on file dialogs, `nameFieldLabel`, `showsTagField`, `defaultId`, `cancelId`, `signal` (AbortSignal), `icon`, `textWidth`, `checkboxLabel`/`checkboxChecked`, `noLink`, and `normalizeAccessKeys` are all unsupported. `showMessageBox` resolves with only `{ response }` - there is no `checkboxChecked` in the result.
-- **Open-dialog `properties` beyond the basics** - only `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS) are honored (and Linux picks a single file whatever you pass). `showHiddenFiles`, `promptToCreate`, `noResolveAliases`, `treatPackageAsDirectory`, and `dontAddToRecent` are not.
+- **Open-dialog `properties` beyond the basics** - only `openFile`, `openDirectory`, `multiSelections`, and `createDirectory` (macOS) are honored. `showHiddenFiles`, `promptToCreate`, `noResolveAliases`, `treatPackageAsDirectory`, and `dontAddToRecent` are not.
 - **Per-filter file-type dropdown** - filters are merged into one flat extension list rather than presented as selectable groups.

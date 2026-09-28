@@ -131,4 +131,4 @@ This module exposes no properties - only the methods above on the `globalShortcu
 - **`globalShortcut.isSuspended()`** - the companion getter for the above. Also absent.
 - **`registerAll` boolean result** - present, but its signature returns `void` rather than a batch boolean; check individual results with `isRegistered`.
 - **Wayland global shortcuts** - Linux support is X11-only and best-effort. Under Wayland the backend reports unsupported and `register` returns `false`; the `org.freedesktop.portal.GlobalShortcuts` path is deferred.
-- **macOS media-key accelerators** (`Media Play/Pause`, `Media Next Track`, etc.) - the accelerator parser recognizes a named-key set, but the documented Electron media keys and their accessibility-authorization caveat are not specially handled here; treat media-key support as unverified rather than guaranteed.
+- **Media-key accelerators** (`MediaPlayPause`, `MediaNextTrack`, `VolumeUp` and friends) - the parser accepts them, but no backend maps them to a key it can grab yet, so `register` returns `false` for them on every platform. The numpad and `Insert` keys do work everywhere.
