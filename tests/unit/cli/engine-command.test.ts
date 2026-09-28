@@ -5,9 +5,12 @@ import { join } from 'node:path';
 import type { BunmaskaConfig } from '../../../src/common/config-schema';
 import { runDoctor, runEngine } from '../../../src/cli/engine-command';
 import { installFromDir, linkApp } from '../../../src/cli/engine-store';
+import { currentArch, currentPlatform } from '../../../src/common/platform';
 
-const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
-const ID2 = 'webkitgtk-6.0-2.46.0-bunmaska1-linux-x64';
+const HOST = `${currentPlatform()}-${currentArch()}`;
+const ID = `webkitgtk-6.0-2.52.4-bunmaska1-${HOST}`;
+const ID2 = `webkitgtk-6.0-2.46.0-bunmaska1-${HOST}`;
+const FOREIGN = `webkit-2-2.52.4-bunmaska1-${currentPlatform() === 'windows' ? 'linux' : 'windows'}-x64`;
 
 const tmpDirs: string[] = [];
 const makeTmpDir = (): string => {
@@ -129,6 +132,14 @@ describe('engine which', () => {
     await runEngine({ action: 'which' }, c.deps);
     expect(c.text()).toContain(ID);
     expect(c.text()).toMatch(/NOT installed/);
+  });
+
+  test('a pin built for another machine is not reported as missing', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: FOREIGN } });
+    await runEngine({ action: 'which' }, c.deps);
+    expect(c.text()).toContain(FOREIGN);
+    expect(c.text()).toMatch(/not used on this machine/);
+    expect(c.text()).not.toMatch(/NOT installed/);
   });
 
   test('shows installed for a present engine', async () => {
@@ -318,6 +329,12 @@ describe('doctor', () => {
     expect(await runDoctor(undefined, c.deps)).toBe(0);
     expect(c.text()).toMatch(/Bunmaska doctor/);
     expect(c.text()).toMatch(/store:/);
+  });
+
+  test('exits 0 when the project pins an engine built for another machine', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: FOREIGN } });
+    expect(await runDoctor('.', c.deps)).toBe(0);
+    expect(c.text()).toMatch(/not used on this machine/);
   });
 
   test('exits 1 when the project pins an uninstalled engine', async () => {

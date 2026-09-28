@@ -24,6 +24,7 @@ const dir = (deps: ResolveDeps): string | undefined =>
     enginesRoot: ROOT,
     exists: () => true,
     readBakedId: () => null,
+    host: { os: 'windows', arch: 'x64' },
     ...deps,
   });
 

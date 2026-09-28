@@ -17,7 +17,13 @@ const ROOT = '/store/webkit';
 const slash = (s: string): string => s.replaceAll('\\', '/');
 
 const resolve = (deps: ResolveDeps) =>
-  resolveEngineWith({ enginesRoot: ROOT, exists: () => true, readBakedId: () => null, ...deps });
+  resolveEngineWith({
+    enginesRoot: ROOT,
+    exists: () => true,
+    readBakedId: () => null,
+    host: { os: 'linux', arch: 'x64' },
+    ...deps,
+  });
 
 describe('resolveEngineWith', () => {
   test('BUNMASKA_WEBKIT_PATH wins — explicit pinned dir, highest precedence', () => {
@@ -69,6 +75,21 @@ describe('resolveEngineWith', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     expect(r.id).toBe(ID);
     expect(r.root).toBe(ROOT);
+  });
+
+  test('an installed engine built for another os -> system, with no install advice', () => {
+    const windows = 'webkit-2-2.52.4-bunmaska1-windows-x64';
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: windows } });
+    expect(r.mode).toBe('system');
+    expect(r.warnings.join(' ')).toContain('windows-x64');
+    expect(r.warnings.join(' ')).not.toContain('engine install');
+  });
+
+  test('an installed engine built for another arch -> system', () => {
+    const arm = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-arm64';
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: arm } });
+    expect(r.mode).toBe('system');
+    expect(r.warnings.join(' ')).toContain('linux-arm64');
   });
 
   test('explicit BUNMASKA_WEBKIT_PATH pin carries no id/root (nothing to refcount)', () => {

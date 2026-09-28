@@ -1,5 +1,10 @@
 import { existsSync, statSync } from 'node:fs';
-import { compareEngineIds, isSystemEngine, parseEngineId } from '../common/engine-id';
+import {
+  compareEngineIds,
+  type EngineRef,
+  isSystemEngine,
+  parseEngineId,
+} from '../common/engine-id';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import type { EngineSubcommand } from './parse-args';
@@ -50,6 +55,25 @@ const sortIds = (ids: readonly string[]): string[] =>
 
 /** The pinned engine declared by a project's config (defaults to the system sentinel). */
 const configPin = (config: BunmaskaConfig): string => config.engine?.webkit ?? 'system';
+
+type PinState = 'system' | 'bare' | 'foreign' | 'installed' | 'missing';
+
+/** How this machine treats a pin; `foreign` = built for another os/arch, never loaded here. */
+const pinState = (pin: string, root: string): PinState => {
+  if (isSystemEngine(pin)) {
+    return 'system';
+  }
+  let ref: EngineRef;
+  try {
+    ref = parseEngineId(pin);
+  } catch {
+    return 'bare';
+  }
+  if (ref.os !== currentPlatform() || ref.arch !== currentArch()) {
+    return 'foreign';
+  }
+  return isInstalled(root, pin) ? 'installed' : 'missing';
+};
 
 const runList = (deps: EngineCommandDeps): number => {
   const installed = listInstalled(deps.root);
@@ -103,18 +127,22 @@ const runAvailable = async (deps: EngineCommandDeps): Promise<number> => {
 const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Promise<number> => {
   const config = await deps.readConfig(target ?? '.');
   const pin = configPin(config);
-  if (isSystemEngine(pin)) {
-    deps.out('system — uses the OS WebView (no pinned engine)');
-    return 0;
-  }
-  try {
-    parseEngineId(pin);
-    const state = isInstalled(deps.root, pin)
-      ? 'installed'
-      : 'NOT installed — run `bunmaska engine install`';
-    deps.out(`${pin}  [${state}]`);
-  } catch {
-    deps.out(`${pin}  (bare upstream — resolved to a full engine-id at build time)`);
+  switch (pinState(pin, deps.root)) {
+    case 'system':
+      deps.out('system — uses the OS WebView (no pinned engine)');
+      break;
+    case 'bare':
+      deps.out(`${pin}  (bare upstream — resolved to a full engine-id at build time)`);
+      break;
+    case 'foreign':
+      deps.out(`${pin}  [built for another os/arch, not used on this machine]`);
+      break;
+    case 'installed':
+      deps.out(`${pin}  [installed]`);
+      break;
+    case 'missing':
+      deps.out(`${pin}  [NOT installed — run \`bunmaska engine install\`]`);
+      break;
   }
   return 0;
 };
@@ -301,24 +329,23 @@ export const runDoctor = async (
 
   const config = await deps.readConfig(target ?? '.');
   const pin = configPin(config);
-  if (isSystemEngine(pin)) {
-    deps.out('  project:   system WebKit (no pin)');
-    return 0;
+  switch (pinState(pin, deps.root)) {
+    case 'system':
+      deps.out('  project:   system WebKit (no pin)');
+      return 0;
+    case 'bare':
+      deps.out(`  project:   pins ${pin} (bare upstream, resolved at build time)`);
+      return 0;
+    case 'foreign':
+      deps.out(`  project:   pins ${pin} (built for another os/arch, not used on this machine)`);
+      return 0;
+    case 'installed':
+      deps.out(`  project:   pins ${pin} [installed ✓]`);
+      return 0;
+    case 'missing':
+      deps.err(
+        `  project:   pins ${pin} [NOT installed ✗] — run \`bunmaska engine install ${pin}\``,
+      );
+      return 1;
   }
-  let isFullId = true;
-  try {
-    parseEngineId(pin);
-  } catch {
-    isFullId = false;
-  }
-  if (!isFullId) {
-    deps.out(`  project:   pins ${pin} (bare upstream, resolved at build time)`);
-    return 0;
-  }
-  if (isInstalled(deps.root, pin)) {
-    deps.out(`  project:   pins ${pin} [installed ✓]`);
-    return 0;
-  }
-  deps.err(`  project:   pins ${pin} [NOT installed ✗] — run \`bunmaska engine install ${pin}\``);
-  return 1;
 };

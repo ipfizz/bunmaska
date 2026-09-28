@@ -11,7 +11,8 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { isSystemEngine, parseEngineId } from '../../common/engine-id';
+import { type EngineRef, isSystemEngine, parseEngineId } from '../../common/engine-id';
+import { type Arch, currentArch, currentPlatform, type Platform } from '../../common/platform';
 import {
   engineDir,
   enginesPath,
@@ -42,6 +43,8 @@ export type ResolveDeps = {
   readonly readBakedId?: () => string | null;
   /** Override the store root (default: {@link enginesPath} of `env`). */
   readonly enginesRoot?: string;
+  /** The machine the engine must be built for (default: this one). */
+  readonly host?: { readonly os: Platform; readonly arch: Arch };
 };
 
 /**
@@ -92,13 +95,25 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
     return { mode: 'system', warnings: [] };
   }
 
+  let ref: EngineRef;
   try {
-    parseEngineId(id); // validate shape; the parsed fields are not needed here
+    ref = parseEngineId(id);
   } catch {
     return {
       mode: 'system',
       warnings: [
         `bunmaska: pinned engine id ${JSON.stringify(id)} is malformed — using the system WebKit.`,
+      ],
+    };
+  }
+
+  const host = deps.host ?? { os: currentPlatform(), arch: currentArch() };
+  if (ref.os !== host.os || ref.arch !== host.arch) {
+    return {
+      mode: 'system',
+      warnings: [
+        `bunmaska: pinned engine ${id} is built for ${ref.os}-${ref.arch}, not this ` +
+          `${host.os}-${host.arch} machine, so it is not used.`,
       ],
     };
   }
