@@ -8,13 +8,7 @@ import { loadShell32, NIM_ADD, NIM_DELETE, NIM_MODIFY, notifyIconData } from './
 import { createMessageWindow } from './windows-message-window';
 import { windowsNativeImageBackend } from './windows-native-image';
 
-/**
- * `Shell_NotifyIcon` adds/updates/removes the icon; its callback message is delivered to a
- * hidden, non-WebKit window (see `windows-message-window.ts`), where a left click fires
- * `onClick`.
- */
-
-/** Custom callback message the tray icon posts to its owner window (WM_APP range). */
+/** The tray icon's callback message to its hidden message window (WM_APP range). */
 export const WM_TRAYICON = 0x8000 + 1;
 
 const IMAGE_ICON = 1;
@@ -27,10 +21,7 @@ const WM_LBUTTONUP = 0x0202;
 
 let nextUid = 1;
 
-/**
- * Whether a tray window message is this icon's left-click activation. Pure — the
- * low word of `lParam` is the mouse event, `wParam` is the icon id.
- */
+/** A left click on icon `uid`: `wParam` is the icon id, LOWORD(lParam) the mouse event. Pure. */
 export const isTrayActivation = (
   message: number,
   wParam: number,
@@ -119,8 +110,7 @@ export const windowsTrayBackend: TrayBackend = {
         releaseIcon(previous);
       },
       setContextMenu(_menu: Menu | null): void {
-        // ponytail: deferred — needs TrackPopupMenu on the tray's message window;
-        // windows-menu.ts already realizes the HMENU.
+        // ponytail: no tray context menu; TrackPopupMenu on the message window adds it
       },
       onClick(callback: () => void): void {
         clickCallback = callback;

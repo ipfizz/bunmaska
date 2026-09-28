@@ -8,14 +8,10 @@ import { loadUser32 } from './win32-ffi';
 import { loadShell32, NIM_ADD, NIM_DELETE, notifyIconData } from './win32-shell-ffi';
 import { createMessageWindow } from './windows-message-window';
 
-/**
- * A notification is shown as a tray-icon balloon (`Shell_NotifyIcon` with `NIF_INFO`),
- * which Windows 10/11 surfaces as a real toast in the Action Center — a FLAT-C path with
- * NO COM (the modern WinRT toast API is heavily COM-bound; this honours the minimal-COM
- * policy). Rich toasts and a registered AppUserModelID are a follow-up.
- */
+// A notification is a tray-icon balloon, which Windows 10/11 shows as a toast; flat C, no
+// WinRT COM. ponytail: no rich toasts or AppUserModelID, add them with the WinRT toast API.
 
-/** Custom callback message the notification icon posts (WM_APP range). */
+/** The notification icon's callback message (WM_APP range). */
 export const WM_NOTIFICATION = 0x8000 + 2;
 
 const NIIF_INFO = 0x1;
