@@ -67,7 +67,7 @@ class LinuxWebContents implements NativeWebContents {
   readonly #registry: SignalRegistry;
   readonly #exec = new ExecResultChannel((source) => evalInPageWorld(this.#view, source));
   #destroyed = false;
-  #didFinishLoad = false;
+  #bridgeReady = false;
   readonly #pendingEnvelopes: string[] = [];
   readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
@@ -86,6 +86,7 @@ class LinuxWebContents implements NativeWebContents {
       pageWorldSource: `${generatePageWorldStub(channelId)}\n${windowControlsScript()}`,
       ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {
+        this.#markBridgeReady();
         for (const callback of this.#rendererEnvelopeCallbacks) {
           callback(json);
         }
@@ -94,6 +95,7 @@ class LinuxWebContents implements NativeWebContents {
         this.#exec.deliverExecResult(json);
       },
       onDomReady: () => {
+        this.#markBridgeReady();
         this.#dispatchNavigation({ type: 'dom-ready' });
       },
     });
@@ -114,12 +116,7 @@ class LinuxWebContents implements NativeWebContents {
     );
     const load = makeLoadCallbacks((event) => {
       if (event.type === 'did-finish-load') {
-        this.#didFinishLoad = true;
-        const queued = [...this.#pendingEnvelopes];
-        this.#pendingEnvelopes.length = 0;
-        for (const json of queued) {
-          sendToRenderer(this.#view, json);
-        }
+        this.#markBridgeReady();
       }
       this.#dispatchNavigation(event);
     });
@@ -130,6 +127,17 @@ class LinuxWebContents implements NativeWebContents {
       'create',
       makeCreateCallback((url) => this.#windowOpenCallback?.(url)),
     );
+  }
+
+  /** Flush queued envelopes once the first page's isolated-world bridge is running. */
+  #markBridgeReady(): void {
+    if (this.#bridgeReady) {
+      return;
+    }
+    this.#bridgeReady = true;
+    for (const json of this.#pendingEnvelopes.splice(0)) {
+      this.sendEnvelopeToRenderer(json);
+    }
   }
 
   #dispatchNavigation(event: NativeNavigationEvent): void {
@@ -271,7 +279,7 @@ class LinuxWebContents implements NativeWebContents {
     if (this.#destroyed) {
       return; // an invoke reply or send() after close: the view is freed.
     }
-    if (!this.#didFinishLoad) {
+    if (!this.#bridgeReady) {
       this.#pendingEnvelopes.push(envelopeJson);
       return;
     }
