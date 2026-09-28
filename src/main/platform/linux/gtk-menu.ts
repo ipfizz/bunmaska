@@ -170,6 +170,31 @@ type WalkContext = {
   readonly dispatchRole?: ((spec: NativeMenuItemSpec) => void) | undefined;
 };
 
+/** A click handler's throw is re-thrown on a microtask; unwinding into the GLib dispatch loses it. */
+const guarded = (thunk: () => void) => (): void => {
+  try {
+    thunk();
+  } catch (error) {
+    queueMicrotask(() => {
+      throw error;
+    });
+  }
+};
+
+const wireAction = (
+  ctx: WalkContext,
+  model: bigint,
+  label: string,
+  name: string,
+  action: bigint,
+  thunk: () => void,
+): void => {
+  ctx.retained.push(ctx.b.connectActivate(action, guarded(thunk)));
+  ctx.b.gActionMapAddAction(ctx.group, action);
+  ctx.actionNames.push(name);
+  ctx.b.gMenuAppend(model, label, detailedAction(name));
+};
+
 const appendItems = (
   ctx: WalkContext,
   root: bigint,
@@ -201,33 +226,21 @@ const appendItems = (
       const action = ctx.b.gSimpleActionNew(name);
       ctx.b.gSimpleActionSetEnabled(action, spec.enabled === false ? 0 : 1);
       const dispatch = ctx.dispatchRole;
-      const retained = ctx.b.connectActivate(action, () => dispatch(spec));
-      ctx.b.gActionMapAddAction(ctx.group, action);
-      ctx.actionNames.push(name);
-      ctx.retained.push(retained);
-      ctx.b.gMenuAppend(model, spec.label, detailedAction(name));
+      wireAction(ctx, model, spec.label, name, action, () => dispatch(spec));
       continue;
     }
     if ((spec.type === 'checkbox' || spec.type === 'radio') && spec.onClick !== undefined) {
       const name = actionName();
       const action = ctx.b.gSimpleActionNewStatefulBool(name, spec.checked ?? false);
       ctx.b.gSimpleActionSetEnabled(action, spec.enabled ? 1 : 0);
-      const retained = ctx.b.connectActivate(action, spec.onClick);
-      ctx.b.gActionMapAddAction(ctx.group, action);
-      ctx.actionNames.push(name);
-      ctx.retained.push(retained);
-      ctx.b.gMenuAppend(model, spec.label, detailedAction(name));
+      wireAction(ctx, model, spec.label, name, action, spec.onClick);
       continue;
     }
     if (spec.type === 'normal' && spec.onClick !== undefined) {
       const name = actionName();
       const action = ctx.b.gSimpleActionNew(name);
       ctx.b.gSimpleActionSetEnabled(action, spec.enabled ? 1 : 0);
-      const retained = ctx.b.connectActivate(action, spec.onClick);
-      ctx.b.gActionMapAddAction(ctx.group, action);
-      ctx.actionNames.push(name);
-      ctx.retained.push(retained);
-      ctx.b.gMenuAppend(model, spec.label, detailedAction(name));
+      wireAction(ctx, model, spec.label, name, action, spec.onClick);
       continue;
     }
     // A normal item with no onClick: a static, inert label (e.g. a heading).

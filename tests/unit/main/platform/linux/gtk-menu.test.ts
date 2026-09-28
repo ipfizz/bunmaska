@@ -194,6 +194,42 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(fired).toEqual(['beta', 'alpha']);
   });
 
+  it('re-throws a failing click on a microtask instead of into the GLib dispatch', () => {
+    const { bindings } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    const boom = new Error('app bug');
+    const handle = linuxMenuRealizer.realize([
+      {
+        label: 'Bad',
+        type: 'normal',
+        enabled: true,
+        keyEquivalent: '',
+        onClick: () => {
+          throw boom;
+        },
+      },
+    ]);
+    const entry = getMenuEntry(handle);
+    const queued: Array<() => void> = [];
+    const original = globalThis.queueMicrotask;
+    globalThis.queueMicrotask = (cb) => {
+      queued.push(cb);
+    };
+    try {
+      const fire = (): void =>
+        bindings.activateAction(
+          entry?.group as bigint,
+          detailedAction(entry?.actionNames[0] as string),
+          null,
+        );
+      expect(fire).not.toThrow();
+    } finally {
+      globalThis.queueMicrotask = original;
+    }
+    expect(queued).toHaveLength(1);
+    expect(() => queued[0]?.()).toThrow(boom);
+  });
+
   it('honours enabled:false via g_simple_action_set_enabled(0)', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
