@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
+import { slugifyName } from '../common/manifest';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
@@ -25,16 +26,7 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-/** Lowercase DNS-label-ish slug; falls back to `app` when nothing survives. */
-export const bundleIdSlug = (name: string): string => {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug.length > 0 ? slug : 'app';
-};
-
-export const defaultBundleId = (name: string): string => `com.bunmaska.${bundleIdSlug(name)}`;
+export const defaultBundleId = (name: string): string => `com.bunmaska.${slugifyName(name)}`;
 
 /**
  * Info.plist and a Windows VERSIONINFO accept only numeric `major.minor.patch`:

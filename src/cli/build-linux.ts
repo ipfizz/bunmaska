@@ -10,11 +10,11 @@ import {
 } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
+import { slugifyName } from '../common/manifest';
 import { type Arch, currentArch, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
-import { bundleIdSlug } from './build-macos';
 import { packageDeb, tarGz } from './deb';
 
 export type LinuxLayout = {
@@ -32,7 +32,7 @@ export type LinuxLayout = {
 /** Paths of the `<out>/<Name>` AppDir tree; POSIX joins so any build host lays it out alike. */
 export const linuxLayout = (out: string, name: string): LinuxLayout => {
   const { join } = posix;
-  const slug = bundleIdSlug(name);
+  const slug = slugifyName(name);
   const appDir = join(out, name);
   return {
     appDir,

@@ -1,27 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
   appBundleLayout,
-  bundleIdSlug,
   buildInfoPlist,
   defaultBundleId,
   numericVersion,
 } from '../../../src/cli/build-macos';
-
-describe('bundleIdSlug', () => {
-  test('lowercases and hyphenates', () => {
-    expect(bundleIdSlug('My App')).toBe('my-app');
-  });
-
-  test('strips non-alphanumeric runs to single hyphens and trims edges', () => {
-    expect(bundleIdSlug('  Hello!!World  ')).toBe('hello-world');
-    expect(bundleIdSlug('a__b--c')).toBe('a-b-c');
-  });
-
-  test('falls back to app for an empty slug', () => {
-    expect(bundleIdSlug('!!!')).toBe('app');
-    expect(bundleIdSlug('')).toBe('app');
-  });
-});
 
 describe('defaultBundleId', () => {
   test('namespaces the slug under com.bunmaska', () => {

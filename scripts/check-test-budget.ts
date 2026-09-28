@@ -21,10 +21,10 @@ type Counts = { readonly pass: number; readonly skip: number; readonly fail: num
  * ponytail: counts only; a per-OS file floor would catch a few files vanishing in the headroom.
  */
 export const LEGS: Readonly<Record<string, Leg>> = {
-  darwin: { minPass: 1745, maxSkip: 194 },
-  linux: { minPass: 1640, maxSkip: 198 },
+  darwin: { minPass: 1742, maxSkip: 194 },
+  linux: { minPass: 1637, maxSkip: 198 },
   // ponytail: unmeasured; the full suite is not path-portable to Windows yet.
-  win32: { minPass: 1200, maxSkip: 130 },
+  win32: { minPass: 1197, maxSkip: 130 },
   'windows-scoped': {
     minPass: 210,
     maxSkip: 16,

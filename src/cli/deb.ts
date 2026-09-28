@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { slugifyName } from '../common/manifest';
 import { type Arch, currentArch, currentPlatform } from '../common/platform';
 import type { LinuxLayout } from './build-linux';
-import { bundleIdSlug } from './build-macos';
 import { runTool } from './run-tool';
 
 /** Debian's label for the architecture: `amd64` for x64, `arm64` as is. */
@@ -13,7 +13,7 @@ export const debArch = (arch: Arch): 'amd64' | 'arm64' => (arch === 'x64' ? 'amd
 const debVersion = (version: string): string => version.replace('-', '~');
 
 export const debFileName = (name: string, version: string, arch: Arch = currentArch()): string =>
-  `${bundleIdSlug(name)}_${debVersion(version)}_${debArch(arch)}.deb`;
+  `${slugifyName(name)}_${debVersion(version)}_${debArch(arch)}.deb`;
 
 /** A Debian `Maintainer` from package.json's `author`; `undefined` without the required email. */
 export const debMaintainer = (author: unknown): string | undefined => {

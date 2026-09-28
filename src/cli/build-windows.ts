@@ -12,11 +12,12 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { BUNDLED_ENGINE_DIRNAME } from '../common/engine-store';
+import { slugifyName } from '../common/manifest';
 import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
-import { bundleIdSlug, numericVersion } from './build-macos';
+import { numericVersion } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
 
 export type WindowsLayout = {
@@ -33,7 +34,7 @@ export const windowsLayout = (out: string, name: string): WindowsLayout => {
   const exeName = `${name}.exe`;
   return {
     appDir,
-    slug: bundleIdSlug(name),
+    slug: slugifyName(name),
     exeName,
     exePath: join(appDir, exeName),
     engineIdPath: join(appDir, 'engine.id'),
