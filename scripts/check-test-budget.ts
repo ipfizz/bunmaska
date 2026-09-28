@@ -15,18 +15,17 @@ type Leg = {
 type Counts = { readonly pass: number; readonly skip: number; readonly fail: number };
 
 /**
- * Full-suite legs by `os.platform()`, within ~5% of measured runs on the beta-review merge
- * (darwin 1850/103, linux 1724/110) plus the 79 Windows tests now registered as skips (darwin
- * 185 skips, linux 189), and `windows-scoped`, the suite `validate:windows` runs (222/15).
+ * Full-suite legs by `os.platform()`, within ~5% of measured CI runs at 9e2e312 (darwin 1901/185,
+ * linux 1730/189), plus `windows-scoped`, the suite `validate:windows` runs (231/15).
  * ponytail: counts only; a per-OS file floor would catch a few files vanishing in the headroom.
  */
 export const LEGS: Readonly<Record<string, Leg>> = {
-  darwin: { minPass: 1742, maxSkip: 194 },
+  darwin: { minPass: 1805, maxSkip: 194 },
   linux: { minPass: 1637, maxSkip: 198 },
   // ponytail: unmeasured; the full suite is not path-portable to Windows yet.
   win32: { minPass: 1197, maxSkip: 130 },
   'windows-scoped': {
-    minPass: 210,
+    minPass: 220,
     maxSkip: 16,
     paths: ['tests/unit/main/platform/windows', 'tests/integration/windows'],
     timeoutMs: 60000,
