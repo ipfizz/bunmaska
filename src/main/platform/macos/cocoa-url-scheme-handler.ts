@@ -111,6 +111,7 @@ const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): voi
   );
 
   msgSendPtr(task, rt.selectors.get('didReceiveResponse:'), response);
+  rt.msgSend(response, rt.selectors.get('release'));
   msgSendPtr(task, rt.selectors.get('didReceiveData:'), data);
   rt.msgSend(task, rt.selectors.get('didFinish'));
 };
