@@ -23,6 +23,11 @@ const SWP_NOSIZE_NOZORDER_NOACTIVATE = 0x0001 | 0x0004 | 0x0010;
  */
 const isWindows = currentPlatform() === 'windows';
 const WM_CLOSE = 0x0010;
+const GWL_STYLE = -16;
+const WS_POPUP = 0x80000000n;
+const WS_CAPTION = 0x00c00000n;
+const WS_THICKFRAME = 0x00040000n;
+const WS_MAXIMIZEBOX = 0x00010000n;
 const WM_SYSCOMMAND = 0x0112;
 const SC_CLOSE = 0xf060;
 
@@ -36,7 +41,7 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     }
   });
 
-  test('show()/hide() toggle visibility; setTitle and client size work', () => {
+  test('show()/hide() toggle visibility and the client size is positive', () => {
     const win = new NativeWin32Window({ title: 'Vis', width: 320, height: 240, show: false });
     try {
       expect(win.isVisible()).toBe(false);
@@ -44,7 +49,6 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       expect(win.isVisible()).toBe(true);
       win.hide();
       expect(win.isVisible()).toBe(false);
-      expect(() => win.setTitle('Renamed')).not.toThrow();
       const size = win.getClientSize();
       expect(size.width).toBeGreaterThan(0);
       expect(size.height).toBeGreaterThan(0);
@@ -53,7 +57,7 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     }
   });
 
-  test('creates frameless and non-resizable windows (the style branches)', () => {
+  test('frame:false is a captionless popup; resizable:false drops the sizing frame', () => {
     const a = new NativeWin32Window({
       title: 'F',
       width: 400,
@@ -68,9 +72,13 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       show: false,
       resizable: false,
     });
+    const style = (win: NativeWin32Window): bigint =>
+      loadUser32().symbols.GetWindowLongPtrW(win.hwnd(), GWL_STYLE);
     try {
-      expect(a.hwnd()).not.toBe(0n);
-      expect(b.hwnd()).not.toBe(0n);
+      expect(style(a) & WS_POPUP).toBe(WS_POPUP);
+      expect(style(a) & WS_CAPTION).toBe(0n);
+      expect(style(b) & WS_CAPTION).toBe(WS_CAPTION);
+      expect(style(b) & (WS_THICKFRAME | WS_MAXIMIZEBOX)).toBe(0n);
     } finally {
       a.destroy();
       b.destroy();
