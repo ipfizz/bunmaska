@@ -128,6 +128,7 @@ const makeFakeWindow = (options: NativeWindowOptions): FakeWindow => {
     },
     show: () => {
       visible = true;
+      eventCallbacks.get('show')?.();
     },
     hide: () => {
       visible = false;
@@ -316,13 +317,26 @@ describe('BrowserWindow runtime setters', () => {
 
 describe('BrowserWindow construction', () => {
   test('applies default options when none are given', () => {
-    new BrowserWindow();
-    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: true });
+    const win = new BrowserWindow();
+    expect(created[0]).toEqual({ width: 800, height: 600, title: 'Bunmaska', show: false });
+    expect(win.isVisible()).toBe(true);
   });
 
   test('passes through provided options', () => {
-    new BrowserWindow({ width: 1024, height: 768, title: 'My App', show: false });
+    const win = new BrowserWindow({ width: 1024, height: 768, title: 'My App', show: false });
     expect(created[0]).toEqual({ width: 1024, height: 768, title: 'My App', show: false });
+    expect(win.isVisible()).toBe(false);
+  });
+
+  test('the initial show is emitted after the window is wired and announced', () => {
+    let shown = 0;
+    app.on('browser-window-created', (_event: unknown, win: BrowserWindow) => {
+      win.on('show', () => {
+        shown += 1;
+      });
+    });
+    new BrowserWindow();
+    expect(shown).toBe(1);
   });
 
   test('forwards resizable, frame, and fullscreen when provided', () => {

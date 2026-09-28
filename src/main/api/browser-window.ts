@@ -122,7 +122,7 @@ export class BrowserWindow extends EventEmitter {
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,
       title: options.title ?? DEFAULT_TITLE,
-      show: options.show ?? true,
+      show: false,
       ...(preloadScript !== undefined ? { preloadScript } : {}),
       ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
       ...(options.frame !== undefined ? { frame: options.frame } : {}),
@@ -178,6 +178,10 @@ export class BrowserWindow extends EventEmitter {
     }
     registry.set(this.id, this);
     app.emit('browser-window-created', makeCancelableEvent(), this);
+    // Shown last so the initial `show`/`focus` reach the handlers wired above.
+    if (options.show ?? true) {
+      this.#native.show();
+    }
   }
 
   get #native(): NativeWindow {
