@@ -26,8 +26,8 @@ export type ObjcMethodSpec = {
   readonly selector: string;
   /** The ObjC type encoding, e.g. `v@:@` (void; self, _cmd, one object arg). */
   readonly typeEncoding: string;
-  /** The declared (post-`self`/`_cmd`) argument kinds; currently all objects. */
-  readonly args: ReadonlyArray<'object'>;
+  /** The declared (post-`self`/`_cmd`) argument kinds; a BOOL is only defined in its low byte. */
+  readonly args: ReadonlyArray<'object' | 'bool'>;
   /** Return kind; defaults to `'void'`. */
   readonly returns?: 'void' | 'bool' | 'object';
   /**
@@ -61,7 +61,11 @@ const getRuntime = macOSLibraryAccessor('objc runtime class', () =>
 const retainedCallbacks: JSCallback[] = [];
 
 const buildCallback = (method: ObjcMethodSpec): JSCallback => {
-  const args = [FFIType.u64, FFIType.u64, ...method.args.map(() => FFIType.u64)];
+  const args = [
+    FFIType.u64,
+    FFIType.u64,
+    ...method.args.map((kind) => (kind === 'bool' ? FFIType.u8 : FFIType.u64)),
+  ];
   const impl = method.impl as (...handles: Handle[]) => unknown;
   const call = (raw: ReadonlyArray<number | bigint>): unknown =>
     impl(...raw.map((value) => BigInt(value)));
