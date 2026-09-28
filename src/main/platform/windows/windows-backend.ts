@@ -109,9 +109,9 @@ class WindowsWindow implements NativeWindow {
         }
       }
     });
-    // `ready-to-show` fires once, when the page first reaches dom-ready.
+    // `ready-to-show` fires once, on the first finished load (as on macOS and Linux).
     this.#webContents.onNavigation((event) => {
-      if (event.type === 'dom-ready' && !this.#readyToShown) {
+      if (event.type === 'did-finish-load' && !this.#readyToShown) {
         this.#readyToShown = true;
         this.#native.emit('ready-to-show');
       }
@@ -349,7 +349,7 @@ class WindowsWindow implements NativeWindow {
   onWindowEvent(type: WindowEventType, callback: () => void): void {
     // focus/blur/move/resize/maximize/minimize/restore are surfaced by the pump poll
     // (pollWindows); show/hide fire from the window directly; ready-to-show fires
-    // on the first dom-ready. The close/closed pair flows through onClose/onClosed.
+    // on the first did-finish-load. The close/closed pair flows through onClose/onClosed.
     this.#native.onWindowEvent(type, callback);
   }
 
