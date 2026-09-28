@@ -40,6 +40,9 @@ export type UpdateManifest = {
   readonly artifact: string;
 };
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it rejects.
+const UNSAFE_NAME_CHARS = /["%/\\\u0000-\u001f\u007f]/;
+
 /** Serialize an {@link UpdateManifest} to the pretty JSON written to a feed. */
 export const serializeUpdateManifest = (manifest: UpdateManifest): string =>
   `${JSON.stringify(manifest, null, 2)}\n`;
@@ -82,8 +85,16 @@ export const parseUpdateManifest = (json: string): UpdateManifest => {
   if (arch !== 'x64' && arch !== 'arm64') {
     throw new Error(`update manifest: "arch" must be x64 or arm64 (got ${arch})`);
   }
+  // The name becomes a path segment in the install helper scripts: no separators,
+  // no dot-dirs, and nothing cmd.exe expands or unquotes (`"`, `%`, control chars).
+  const name = str('name');
+  if (name === '.' || name === '..' || UNSAFE_NAME_CHARS.test(name)) {
+    throw new Error(
+      `update manifest: "name" is not a safe bundle name (got ${JSON.stringify(name)})`,
+    );
+  }
   return {
-    name: str('name'),
+    name,
     version: str('version'),
     channel: str('channel'),
     os,
