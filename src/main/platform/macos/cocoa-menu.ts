@@ -31,7 +31,7 @@ export type NativeMenuItemSpec = {
   readonly checked?: boolean;
   /** Single-character key equivalent (e.g. `'q'`), or `''` for none. */
   readonly keyEquivalent: string;
-  /** `NSEventModifierFlags` mask for the key equivalent; absent ⇒ AppKit default (Command). */
+  /** `NSEventModifierFlags` mask for the key equivalent; absent means no modifiers. */
   readonly modifierMask?: bigint;
   /** A predefined role name (the item's behavior is native, not a JS click). */
   readonly role?: string;
@@ -115,8 +115,8 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
 
   // Apply the explicit modifier mask so multi-modifier accelerators (e.g. redo's
   // Shift+Cmd+Z) don't collapse to AppKit's Command-only default.
-  if (spec.modifierMask !== undefined && spec.keyEquivalent !== '') {
-    msgSendI64(item, rt.selectors.get('setKeyEquivalentModifierMask:'), spec.modifierMask);
+  if (spec.keyEquivalent !== '') {
+    msgSendI64(item, rt.selectors.get('setKeyEquivalentModifierMask:'), spec.modifierMask ?? 0n);
   }
 
   if (checkable) {

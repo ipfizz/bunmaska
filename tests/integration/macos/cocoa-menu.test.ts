@@ -9,6 +9,7 @@ import {
 } from '../../../src/main/platform/macos/cocoa-menu';
 import {
   msgSendI64,
+  msgSendReturnsI64,
   msgSendReturnsU8,
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
@@ -120,6 +121,16 @@ if (currentPlatform() === 'macos') {
         keyEquivalent: '',
       });
       expect(isEnabled(item)).toBe(true);
+    });
+
+    test('a bare-key accelerator carries no Command modifier', () => {
+      const { item } = realizeAndValidate({
+        label: 'Search',
+        type: 'normal',
+        enabled: true,
+        keyEquivalent: '/',
+      });
+      expect(msgSendReturnsI64(item, cocoa().selectors.get('keyEquivalentModifierMask'))).toBe(0n);
     });
 
     test('a submenu is realized with its own items', () => {
