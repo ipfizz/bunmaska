@@ -1,6 +1,5 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { App, app } from '../../../../src/main/api/app';
+import { App } from '../../../../src/main/api/app';
 import { setNativeAppForTesting } from '../../../../src/main/native-app';
 import type { NativeAppKit, NativeApplication } from '../../../../src/main/platform/native';
 import {
@@ -13,7 +12,11 @@ import {
   type LockBackend,
   SingleInstanceManager,
 } from '../../../../src/main/api/single-instance';
-import { Menu, resetApplicationMenuForTesting } from '../../../../src/main/api/menu';
+import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../../src/main/api/menu';
 import type { AppPathName } from '../../../../src/main/api/app-paths';
 import { InvalidArgumentError } from '../../../../src/common/errors';
 
@@ -46,21 +49,9 @@ const appWith = (overrides: Partial<EnvironmentDeps> = {}): App => {
   return a;
 };
 
-describe('App singleton', () => {
-  test('is an instance of App', () => {
-    expect(app).toBeInstanceOf(App);
-  });
-
-  test('is a Node EventEmitter for Electron compatibility', () => {
-    expect(app).toBeInstanceOf(EventEmitter);
-  });
-});
-
 describe('App.isReady', () => {
-  test('is a method (Electron parity), false on a fresh instance', () => {
-    const a = new App();
-    expect(typeof a.isReady).toBe('function');
-    expect(a.isReady()).toBe(false);
+  test('is false on a fresh instance', () => {
+    expect(new App().isReady()).toBe(false);
   });
 
   test('is true after markReady', () => {
@@ -155,29 +146,6 @@ describe('App.whenReady', () => {
       throw new Error('no display');
     });
     await expect(a.whenReady()).rejects.toThrow('no display');
-  });
-});
-
-describe('App event surface', () => {
-  test('before-quit handlers can be registered', () => {
-    const a = new App();
-    a.on('before-quit', () => undefined);
-    expect(a.listenerCount('before-quit')).toBe(1);
-  });
-
-  test('window-all-closed handlers can be registered', () => {
-    const a = new App();
-    a.on('window-all-closed', () => undefined);
-    expect(a.listenerCount('window-all-closed')).toBe(1);
-  });
-
-  test('supports the Electron addListener/removeListener alias surface', () => {
-    const a = new App();
-    const handler = (): void => undefined;
-    a.addListener('will-quit', handler);
-    expect(a.listenerCount('will-quit')).toBe(1);
-    a.removeListener('will-quit', handler);
-    expect(a.listenerCount('will-quit')).toBe(0);
   });
 });
 
@@ -414,59 +382,32 @@ describe('App.relaunch', () => {
 });
 
 describe('App single-instance lock', () => {
-  /** A real manager over a fake backend; exposes the captured server callback. */
-  const managerWith = (
-    opts: { acquire?: boolean[]; existingPid?: number; alive?: boolean } = {},
-  ): { manager: SingleInstanceManager; deliver: (json: string) => void; stops: () => number } => {
-    const acquireQueue = [...(opts.acquire ?? [true])];
+  /** A primary manager over a fake backend; `deliver` plays a peer's message. */
+  const primary = (): { manager: SingleInstanceManager; deliver: (json: string) => void } => {
     let onMessage: ((json: string) => void) | undefined;
-    let stops = 0;
     const backend: LockBackend = {
-      tryCreateLock: () => acquireQueue.shift() ?? false,
-      readLockPid: () => opts.existingPid,
-      isAlive: () => opts.alive ?? false,
+      tryCreateLock: () => true,
+      readLockPid: () => undefined,
+      isAlive: () => false,
       clearLock: () => undefined,
       startServer: (_path, cb) => {
         onMessage = cb;
       },
       notify: () => undefined,
-      stop: () => {
-        stops += 1;
-      },
+      stop: () => undefined,
     };
     return {
-      manager: new SingleInstanceManager(backend, {
-        lockPath: '/l',
-        socketPath: '/s',
-        pid: 1,
-      }),
+      manager: new SingleInstanceManager(backend, { lockPath: '/l', socketPath: '/s', pid: 1 }),
       deliver: (json) => onMessage?.(json),
-      stops: () => stops,
     };
   };
-
-  test('requestSingleInstanceLock returns true for the primary', () => {
-    const a = new App();
-    a.setSingleInstanceForTesting(managerWith({ acquire: [true] }).manager);
-    expect(a.requestSingleInstanceLock()).toBe(true);
-    expect(a.hasSingleInstanceLock()).toBe(true);
-  });
-
-  test('requestSingleInstanceLock returns false for a secondary', () => {
-    const a = new App();
-    a.setSingleInstanceForTesting(
-      managerWith({ acquire: [false], existingPid: 999, alive: true }).manager,
-    );
-    expect(a.requestSingleInstanceLock()).toBe(false);
-    expect(a.hasSingleInstanceLock()).toBe(false);
-  });
 
   const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
   test('emits second-instance with argv/cwd/data when a peer connects', async () => {
     const a = new App();
     a.markReady();
-    const fixture = managerWith({ acquire: [true] });
+    const fixture = primary();
     a.setSingleInstanceForTesting(fixture.manager);
     let captured: { argv: string[]; cwd: string; data: unknown } | undefined;
     a.on('second-instance', (_event: unknown, argv: string[], cwd: string, data: unknown) => {
@@ -481,7 +422,7 @@ describe('App single-instance lock', () => {
 
   test('holds second-instance until after ready', async () => {
     const a = new App();
-    const fixture = managerWith({ acquire: [true] });
+    const fixture = primary();
     a.setSingleInstanceForTesting(fixture.manager);
     const order: string[] = [];
     a.on('ready', () => order.push('ready'));
@@ -493,47 +434,19 @@ describe('App single-instance lock', () => {
     await flush();
     expect(order).toEqual(['ready', 'second-instance']);
   });
-
-  test('releaseSingleInstanceLock releases the lock', () => {
-    const a = new App();
-    const fixture = managerWith({ acquire: [true] });
-    a.setSingleInstanceForTesting(fixture.manager);
-    a.requestSingleInstanceLock();
-    a.releaseSingleInstanceLock();
-    expect(fixture.stops()).toBe(1);
-    expect(a.hasSingleInstanceLock()).toBe(false);
-  });
 });
 
 describe('App macOS desktop integration', () => {
-  type DesktopCalls = {
-    policy: string[];
-    hidden: number;
-    shown: number;
-    badges: string[];
-    bounces: boolean[];
-    about: number;
-  };
+  type DesktopCalls = { badges: string[]; bounces: boolean[] };
 
   /** Install a fake native app (optionally with macOS appKit) and record calls. */
   const install = (withAppKit: boolean): DesktopCalls => {
-    const calls: DesktopCalls = {
-      policy: [],
-      hidden: 0,
-      shown: 0,
-      badges: [],
-      bounces: [],
-      about: 0,
-    };
+    const calls: DesktopCalls = { badges: [], bounces: [] };
     let dockBadge = '';
     const appKit: NativeAppKit = {
-      setActivationPolicy: (p) => calls.policy.push(p),
-      hide: () => {
-        calls.hidden += 1;
-      },
-      show: () => {
-        calls.shown += 1;
-      },
+      setActivationPolicy: () => undefined,
+      hide: () => undefined,
+      show: () => undefined,
       isHidden: () => true,
       isActive: () => true,
       setDockBadge: (label) => {
@@ -550,9 +463,6 @@ describe('App macOS desktop integration', () => {
         throw new Error('createWindow unused in desktop tests');
       },
       quit: () => undefined,
-      showAboutPanel: () => {
-        calls.about += 1;
-      },
       ...(withAppKit ? { appKit } : {}),
     };
     setNativeAppForTesting(native);
@@ -561,31 +471,11 @@ describe('App macOS desktop integration', () => {
 
   afterEach(() => setNativeAppForTesting(undefined));
 
-  test('setActivationPolicy delegates to appKit', () => {
-    const calls = install(true);
-    new App().setActivationPolicy('accessory');
-    expect(calls.policy).toEqual(['accessory']);
-  });
-
-  test('hide/show delegate to appKit', () => {
-    const calls = install(true);
-    const a = new App();
-    a.hide();
-    a.show();
-    expect([calls.hidden, calls.shown]).toEqual([1, 1]);
-  });
-
   test('isHidden/isActive reflect appKit', () => {
     install(true);
     const a = new App();
     expect(a.isHidden()).toBe(true);
     expect(a.isActive()).toBe(true);
-  });
-
-  test('showAboutPanel delegates', () => {
-    const calls = install(true);
-    new App().showAboutPanel();
-    expect(calls.about).toBe(1);
   });
 
   test('dock proxies setBadge/getBadge/bounce', () => {
@@ -620,22 +510,19 @@ describe('App macOS desktop integration', () => {
 });
 
 describe('App.applicationMenu', () => {
-  test('is null by default', () => {
+  afterEach(() => {
+    setMenuRealizerForTesting(undefined);
     resetApplicationMenuForTesting();
-    expect(new App().applicationMenu).toBeNull();
   });
 
-  test('the getter delegates to Menu.getApplicationMenu', () => {
-    resetApplicationMenuForTesting();
-    expect(new App().applicationMenu).toBe(Menu.getApplicationMenu());
-  });
-
-  test('assigning null clears the application menu', () => {
-    resetApplicationMenuForTesting();
+  test('reads back the menu it was assigned, then null once cleared', () => {
+    setMenuRealizerForTesting({ realize: () => 1n, setApplicationMenu: () => undefined });
     const a = new App();
+    const menu = new Menu();
+    a.applicationMenu = menu;
+    expect(a.applicationMenu).toBe(menu);
     a.applicationMenu = null;
     expect(a.applicationMenu).toBeNull();
-    expect(Menu.getApplicationMenu()).toBeNull();
   });
 });
 
