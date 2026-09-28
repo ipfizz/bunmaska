@@ -161,6 +161,9 @@ const enableDeveloperExtras = (preferences: Handle): void => {
   }
 };
 
+/** One stateless handler serves every scheme of every window. */
+let schemeHandler: Handle | undefined;
+
 /** RFC 3986 scheme syntax. */
 const VALID_SCHEME = /^[a-z][a-z0-9+.-]*$/;
 
@@ -177,7 +180,7 @@ const registerCustomSchemes = (configuration: Handle): void => {
     return;
   }
   const rt = cocoa();
-  const handler = createUrlSchemeHandler();
+  schemeHandler ??= createUrlSchemeHandler().handle;
   for (const scheme of schemes) {
     const unsupported =
       !VALID_SCHEME.test(scheme) ||
@@ -194,7 +197,7 @@ const registerCustomSchemes = (configuration: Handle): void => {
       msgSendPtrPtr(
         configuration,
         rt.selectors.get('setURLSchemeHandler:forURLScheme:'),
-        handler.handle,
+        schemeHandler,
         nsString(scheme),
       );
     } catch (error) {
@@ -1124,6 +1127,7 @@ class MacOSApplication implements NativeApplication {
         world,
       );
       msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
+      rt.msgSend(userScript, rt.selectors.get('release'));
     };
 
     // Per-window cross-world channel id for contextBridge (Phase B). The page
@@ -1156,6 +1160,8 @@ class MacOSApplication implements NativeApplication {
       frame,
       configuration,
     );
+    // The web view copies the configuration; the copy shares its user content controller.
+    rt.msgSend(configuration, rt.selectors.get('release'));
     contents = new MacOSWebContents(webview, isolatedWorld);
 
     // Forward-declared so the navigation + window delegate closures can reference

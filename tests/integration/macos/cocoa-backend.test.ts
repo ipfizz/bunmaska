@@ -1,15 +1,18 @@
 import { describe, expect, jest, test } from 'bun:test';
+import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
 import { protocol } from '../../../src/main/api/protocol';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
 import { retainedBlockCount } from '../../../src/main/platform/macos/cocoa-block';
-import { nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
+import { nsString, nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
 import {
   msgSendI64,
+  msgSendPtr,
   msgSendReturnsI64,
   msgSendReturnsU8,
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
+import { LIBOBJC_PATH } from '../../../src/main/platform/macos/objc';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -26,6 +29,33 @@ const nsWindowTitled = (title: string): bigint => {
     }
   }
   return 0n;
+};
+
+const weakRefs = (): {
+  readonly observe: (object: bigint) => BigUint64Array;
+  readonly isAlive: (slot: BigUint64Array) => boolean;
+  readonly forget: (slot: BigUint64Array) => void;
+} => {
+  const objc = dlopen(LIBOBJC_PATH, {
+    objc_initWeak: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    objc_loadWeakRetained: { args: [FFIType.ptr], returns: FFIType.u64 },
+    objc_destroyWeak: { args: [FFIType.ptr], returns: FFIType.void },
+  }).symbols;
+  return {
+    observe: (object) => {
+      const slot = new BigUint64Array(1);
+      objc.objc_initWeak(ptr(slot), object);
+      return slot;
+    },
+    isAlive: (slot) => {
+      const object = objc.objc_loadWeakRetained(ptr(slot));
+      if (object !== 0n) {
+        cocoa().msgSend(object, cocoa().selectors.get('release'));
+      }
+      return object !== 0n;
+    },
+    forget: (slot) => objc.objc_destroyWeak(ptr(slot)),
+  };
 };
 
 const waitFor = async (predicate: () => boolean, ms = 3_000): Promise<void> => {
@@ -419,6 +449,62 @@ if (currentPlatform() === 'macos') {
       } finally {
         protocol.unhandle('https');
         protocol.unhandle('my_app');
+        app.quit();
+      }
+    });
+
+    test('a closed window releases its configuration and user scripts', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      const weak = weakRefs();
+      try {
+        const win = app.createWindow({ width: 320, height: 240, title: 'scripts', show: true });
+        const rt = cocoa();
+        const webview = rt.msgSend(nsWindowTitled('scripts'), rt.selectors.get('contentView'));
+        const configuration = rt.msgSend(webview, rt.selectors.get('configuration'));
+        const controller = rt.msgSend(configuration, rt.selectors.get('userContentController'));
+        const scripts = rt.msgSend(controller, rt.selectors.get('userScripts'));
+        const slot = weak.observe(msgSendI64(scripts, rt.selectors.get('objectAtIndex:'), 0n));
+        try {
+          win.close();
+          await waitFor(() => !weak.isAlive(slot));
+          expect(weak.isAlive(slot)).toBe(false);
+        } finally {
+          weak.forget(slot);
+        }
+      } finally {
+        app.quit();
+      }
+    });
+
+    test('windows share one URL scheme handler', () => {
+      const app = createMacOSApplication();
+      app.start();
+      protocol.handle('bmshared', () => ({ data: 'x' }));
+      try {
+        const rt = cocoa();
+        const handlerOf = (title: string): bigint => {
+          const webview = rt.msgSend(nsWindowTitled(title), rt.selectors.get('contentView'));
+          const configuration = rt.msgSend(webview, rt.selectors.get('configuration'));
+          return msgSendPtr(
+            configuration,
+            rt.selectors.get('urlSchemeHandlerForURLScheme:'),
+            nsString('bmshared'),
+          );
+        };
+        const first = app.createWindow({ width: 200, height: 100, title: 'scheme-a', show: false });
+        const second = app.createWindow({
+          width: 200,
+          height: 100,
+          title: 'scheme-b',
+          show: false,
+        });
+        expect(handlerOf('scheme-a')).not.toBe(0n);
+        expect(handlerOf('scheme-a')).toBe(handlerOf('scheme-b'));
+        first.destroy();
+        second.destroy();
+      } finally {
+        protocol.unhandle('bmshared');
         app.quit();
       }
     });
