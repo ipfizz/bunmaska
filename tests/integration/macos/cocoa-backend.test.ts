@@ -2,6 +2,7 @@ import { describe, expect, jest, test } from 'bun:test';
 import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
 import { protocol } from '../../../src/main/api/protocol';
+import { decodeEnvelope, encodeEnvelope } from '../../../src/main/ipc/ipc-protocol';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
 import { retainedBlockCount } from '../../../src/main/platform/macos/cocoa-block';
 import { nsString, nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
@@ -193,6 +194,33 @@ if (currentPlatform() === 'macos') {
         win.webContents.loadHTML('<html><body><h1>Bunmaska</h1></body></html>', 'about:blank');
         await delay(250);
         expect(win.webContents.getURL()).toBe('about:blank');
+      } finally {
+        app.quit();
+      }
+    });
+
+    test('a send before the first load reaches the preload exactly once', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({
+          width: 320,
+          height: 240,
+          title: 't',
+          show: true,
+          preloadScript:
+            "window.__bunmaska.on('early', function (n) { window.__bunmaska.send('got', n); });",
+        });
+        const received: string[] = [];
+        win.webContents.onRendererEnvelope((json) => received.push(json));
+        win.webContents.sendEnvelopeToRenderer(
+          encodeEnvelope({ kind: 'send', channel: 'early', args: [7] }),
+        );
+        win.webContents.loadHTML('<p>x</p>', 'about:blank');
+        await waitFor(() => received.length > 0);
+        await delay(100);
+        expect(received.map(decodeEnvelope)).toEqual([{ kind: 'send', channel: 'got', args: [7] }]);
+        win.destroy();
       } finally {
         app.quit();
       }
