@@ -241,8 +241,14 @@ const runBuild = async (
       return 1;
     }
   }
-  if (command.options.notarize === true && command.options.sign === undefined) {
-    err('bunmaska build: --notarize requires --sign (Apple rejects an unsigned app).');
+  if (
+    command.options.notarize === true &&
+    (command.options.sign === undefined || command.options.sign === '-')
+  ) {
+    err(
+      'bunmaska build: --notarize requires --sign with a Developer ID identity ' +
+        '(Apple rejects unsigned and ad-hoc signed apps).',
+    );
     return 1;
   }
 
