@@ -24,10 +24,6 @@ ENGINE_DIR="${OUT_DIR}/${ENGINE_ID}"
 LIB_DIR="${ENGINE_DIR}/lib"
 LIBEXEC_DIR="${ENGINE_DIR}/libexec"
 
-# Core glibc/loader libraries that must stay the system's — bundling them causes
-# loader/symbol conflicts. Everything else in the closure gets bundled.
-KEEP_SYSTEM="ld-linux-x86-64.so.2 ld-linux-aarch64.so.1 libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libresolv.so.2 libgcc_s.so.1"
-
 log() { printf '  • %s\n' "$*"; }
 
 command -v patchelf >/dev/null || { echo "patchelf is required (apt install patchelf)"; exit 1; }
@@ -46,7 +42,20 @@ log "GTK:       $GTK_PATH"
 
 mkdir -p "$LIB_DIR" "$LIBEXEC_DIR"
 
-is_kept() { case " $KEEP_SYSTEM " in *" $1 "*) return 0;; *) return 1;; esac; }
+# Libraries that must stay the host's. Everything else in the closure is bundled.
+is_kept() {
+  case "$1" in
+    # glibc/loader: bundling them causes loader/symbol conflicts.
+    ld-linux*|libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|libresolv.so.*|libgcc_s.so.*) return 0 ;;
+    # Driver- and display-coupled (the AppImage excludelist): the host's GPU driver
+    # loads against these by soname, so an older bundled copy breaks EGL/GL init
+    # ("GLIBCXX_x not found" from a newer Mesa against a bundled libstdc++).
+    libGL.so.*|libGLX*.so.*|libEGL*.so.*|libGLdispatch.so.*|libOpenGL.so.*|libglapi.so.*) return 0 ;;
+    libgbm.so.*|libdrm*.so.*|libX11*.so.*|libxcb*.so.*|libasound.so.*) return 0 ;;
+    libfontconfig.so.*|libfreetype.so.*|libstdc++.so.*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # Collect the full transitive .so closure of both roots (ldd is transitive).
 collect_closure() {
