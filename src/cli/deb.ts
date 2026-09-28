@@ -41,9 +41,13 @@ export type ControlFileOptions = {
 
 /**
  * The system WebKitGTK 6.0 and GTK 4 the app dlopens; without them an `apt install`
- * on a minimal box crashes at the first `dlopen`. Names confirmed on Debian sid.
+ * on a minimal box crashes at the first `dlopen`. Names confirmed on Debian sid. The
+ * floors are hard: one symbol missing from an older library fails its whole table.
  */
-export const DEFAULT_LINUX_DEPENDS: readonly string[] = ['libwebkitgtk-6.0-4', 'libgtk-4-1'];
+export const DEFAULT_LINUX_DEPENDS: readonly string[] = [
+  'libwebkitgtk-6.0-4 (>= 2.42)',
+  'libgtk-4-1 (>= 4.10)',
+];
 
 export const buildControlFile = (opts: ControlFileOptions): string =>
   [

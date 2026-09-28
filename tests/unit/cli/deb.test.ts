@@ -58,7 +58,7 @@ describe('buildControlFile', () => {
       description: 'My App built with Bunmaska',
       depends: DEFAULT_LINUX_DEPENDS,
     });
-    expect(withDeps).toContain('Depends: libwebkitgtk-6.0-4, libgtk-4-1');
+    expect(withDeps).toContain('Depends: libwebkitgtk-6.0-4 (>= 2.42), libgtk-4-1 (>= 4.10)');
     // Depends precedes Description (Debian field ordering).
     expect(withDeps.indexOf('Depends:')).toBeLessThan(withDeps.indexOf('Description:'));
   });
