@@ -3,12 +3,9 @@ import { FFIError } from '../../../common/errors';
 import { cstr } from '../cstr';
 import { loadWebKit2 } from './webkit2-ffi';
 
-/**
- * WK string objects are reference-counted: every `wk*` creator here returns a +1
- * reference the caller must hand to {@link wkRelease}.
- */
+// Every `wk*` creator here returns a +1 reference the caller must hand to `wkRelease`.
 
-/** Create a `WKStringRef` from a JS string. Caller releases it with {@link wkRelease}. */
+/** Create a `WKStringRef` from a JS string. */
 export const wkString = (value: string): Pointer => {
   const ref = loadWebKit2().symbols.WKStringCreateWithUTF8CString(cstr(value));
   if (ref === null) {
@@ -33,7 +30,7 @@ export const wkStringToJs = (ref: Pointer): string => {
   return new TextDecoder().decode(buffer.subarray(0, length));
 };
 
-/** Create a `WKURLRef` from a URL string. Caller releases it with {@link wkRelease}. */
+/** Create a `WKURLRef` from a URL string. */
 export const wkUrl = (value: string): Pointer => {
   const ref = loadWebKit2().symbols.WKURLCreateWithUTF8CString(cstr(value));
   if (ref === null) {

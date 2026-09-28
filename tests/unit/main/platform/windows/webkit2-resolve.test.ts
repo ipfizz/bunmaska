@@ -6,15 +6,7 @@ import {
   resolveWindowsEngineDir,
 } from '../../../../../src/main/platform/windows/webkit2-ffi';
 
-/**
- * `resolveWindowsEngineDir` decides which WinCairo WebKit directory THIS Windows
- * process loads. Windows ships no system WebKit, so — unlike Linux, where the
- * resolver can fall back to the OS WebKitGTK — every "system" outcome here means
- * "no engine" (`undefined`). It delegates to the cross-platform `resolveEngineWith`,
- * so the precedence (BUNMASKA_WEBKIT_PATH > BUNMASKA_WEBKIT_ID > baked engine.id)
- * and the store layout (`<root>/<id>/lib`) are inherited; these tests pin down the
- * Windows-specific mapping of that resolution to a directory.
- */
+// Windows ships no system WebKit, so every "system" resolution means "no engine" (`undefined`).
 const ID = 'webkit-2-2.52.4-bunmaska1-windows-x64';
 const ROOT = 'C:\\store\\webkit';
 const APP_DIR = 'C:\\Program Files\\My App';

@@ -1,13 +1,9 @@
 import type { MouseButton, NativeInputEvent } from '../native';
 import { loadUser32 } from './win32-ffi';
 
-/**
- * WinCairo WebKit's WKView hosts itself in an HWND whose window procedure turns native
- * Win32 input messages into engine-level `PlatformMouseEvent`s, so the page sees
- * `isTrusted === true` — exactly what a script-dispatched `element.click()` cannot
- * produce. Coordinates are client pixels relative to the view's top-left; per-monitor DPI
- * scaling is a follow-up — at 100% scale logical and client pixels coincide.
- */
+// Win32 messages to the WKView's HWND become engine-level events with `isTrusted === true`,
+// which a script-dispatched `element.click()` cannot produce.
+// ponytail: coordinates are client px, equal to logical px only while bun.exe is DPI-unaware.
 
 const WM_MOUSEMOVE = 0x0200;
 const WM_LBUTTONDOWN = 0x0201;
@@ -20,7 +16,7 @@ const WM_KEYDOWN = 0x0100;
 const WM_KEYUP = 0x0101;
 const WM_CHAR = 0x0102;
 
-/** WPARAM button bits for a *BUTTONDOWN message (which buttons are currently down). */
+/** MK_* WPARAM bits: which buttons are down. */
 const MK_LBUTTON = 0x0001;
 const MK_RBUTTON = 0x0002;
 const MK_MBUTTON = 0x0010;

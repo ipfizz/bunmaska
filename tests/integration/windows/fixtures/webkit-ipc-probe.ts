@@ -4,7 +4,7 @@
  * main process through the cooperative pump. Prints `IPC_OK <body>` on success.
  *
  * Run in a fresh Bun process (not under bun:test) because WebKit's multi-process
- * IPC + thread affinity are incompatible with the test-runner host — the Linux
+ * IPC + thread affinity are incompatible with the test-runner host; the Linux
  * engine-pinned-load test uses the same spawned-subprocess pattern. Requires
  * BUNMASKA_WEBKIT_PATH to point at a WinCairo engine directory.
  */

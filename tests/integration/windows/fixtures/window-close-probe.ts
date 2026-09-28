@@ -1,5 +1,5 @@
 /**
- * Subprocess fixture: a real BrowserWindow loads a page, then closes — proving
+ * Subprocess fixture: a real BrowserWindow loads a page, then closes, proving
  * the WebKit-view teardown on window close is crash-free. The `window-all-closed`
  * listener keeps the app alive so this isolates the window close from app-exit
  * (synchronous WebKit shutdown at process exit is a separate, documented item).

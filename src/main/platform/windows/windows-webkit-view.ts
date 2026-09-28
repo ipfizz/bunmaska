@@ -7,39 +7,23 @@ import { loadKernel32, loadUser32 } from './win32-ffi';
 import { heldButtonsAfter, postWindowsInputEvent } from './windows-input';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
-/**
- * The view is parented into a dedicated NATIVE-WndProc child window
- * ({@link createNativeChildHost}); WebKit floods its host with re-entrant messages during
- * a load, which a `bun:ffi` `JSCallback` WndProc cannot survive. The public WebKit2 C API
- * exposes no named content world, so the injected scripts and the
- * `window.webkit.messageHandlers.<name>` bridge run in the PAGE world.
- */
+// D043: the view's host must be a native-WndProc child; WebKit's re-entrant message flood
+// kills a JSCallback WndProc. The C API has no named content world, so every injected script
+// and message handler lives in the PAGE world.
 
-/** `SetWindowPos` flags for an in-place resize (keep position, z-order, focus). */
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 
-/**
- * Trampolines kept alive for the process lifetime. WebKit's multi-process engine
- * tears down asynchronously and may still call a view's script-message/navigation
- * callbacks after `dispose`, so they are retained here rather than closed (a small,
- * bounded per-window retention — closing them mid-teardown is a use-after-free).
- */
+/** Never closed (D043: closing one mid-teardown is a use-after-free); dispose empties its sinks. */
 const retainedTrampolines: JSCallback[] = [];
 const retainTrampolines = (callbacks: readonly JSCallback[]): void => {
   retainedTrampolines.push(...callbacks);
 };
 
-/** `(HANDLE)-1` — the pseudo-handle for the current process. */
+/** `(HANDLE)-1`, the current-process pseudo-handle. */
 const CURRENT_PROCESS = 0xffffffffffffffffn;
 let cleanExitInstalled = false;
 
-/**
- * Install a one-shot `exit` handler that HARD-terminates the process. WinCairo
- * WebKit crashes in its static / DLL-detach teardown when a process with a live
- * engine exits normally; terminating from the `exit` handler — after the app's
- * quit events have already run — bypasses that teardown for a clean exit code.
- * Installed lazily on first view creation (i.e. only once the engine is loaded).
- */
+/** D043: WinCairo crashes in DLL-detach teardown on a normal exit, so hard-terminate on `exit`. */
 const installCleanExit = (): void => {
   if (cleanExitInstalled) {
     return;
@@ -50,12 +34,7 @@ const installCleanExit = (): void => {
   });
 };
 
-/**
- * A single `WKContext` — WebKit's process pool + default website data store (cookies, localStorage)
- * — shared by EVERY view, so all windows see ONE session, matching Electron's default-session
- * semantics (a per-view context would start each new window logged out). Created lazily and retained
- * for the process lifetime (it outlives individual views — never freed).
- */
+/** One process pool for every view, never freed. Cookies live in the default WebsiteDataStore. */
 let sharedContext: Pointer | null = null;
 const sharedWebKitContext = (): Pointer => {
   if (sharedContext !== null) {
@@ -97,12 +76,7 @@ const readWkError = (errorRef: Pointer | null): { code: number; description: str
   return { code, description };
 };
 
-/**
- * Register the page navigation client (the WinCairo peer of the macOS/Linux
- * navigation delegates) and return the retained trampolines. Each callback fires
- * during WebKit's message processing — the same controlled context as the
- * script-message handlers — and is closed only on view teardown.
- */
+/** Register the page navigation client; returns its trampolines for D043 retention. */
 const setupNavigationClient = (
   page: Pointer,
   onEvent: (event: NativeNavigationEvent) => void,
@@ -208,7 +182,7 @@ export interface WebViewOptions {
   readonly userScripts: readonly string[];
   /** Renderer->main message handlers, keyed by their `messageHandlers` name. */
   readonly messageHandlers: readonly ScriptMessageHandler[];
-  /** Navigation lifecycle sink (did-start/commit/finish/fail). Optional. */
+  /** Navigation lifecycle sink (did-start/commit/finish/fail). */
   readonly onNavigationEvent?: (event: NativeNavigationEvent) => void;
 }
 
@@ -251,9 +225,6 @@ export class WindowsWebView {
     installCleanExit();
     const wk = loadWebKit2();
     const s = wk.symbols;
-
-    // Shared session (Electron parity): every view uses ONE context, so a window opened after login
-    // sees the logged-in session — the SSO bridge windows (AIS/TRACES) depend on this.
     const context = sharedWebKitContext();
 
     const controller = s.WKUserContentControllerCreate();
@@ -282,7 +253,7 @@ export class WindowsWebView {
       callbacks.push(callback);
     }
 
-    // Inject the preload/bridge sources at document-start, in order.
+    // Main frame only: with no isolated world, an iframe must never get the bridge.
     for (const source of options.userScripts) {
       const sourceRef = wkString(source);
       const userScript = s.WKUserScriptCreateWithSource(sourceRef, WK_INJECT_AT_DOCUMENT_START, 1);
@@ -302,8 +273,7 @@ export class WindowsWebView {
 
     const hostWindow = createNativeChildHost(options.hwnd, options.width, options.height);
 
-    // RECT{left,top,right,bottom}: fill the host child. Win64 passes the 16-byte
-    // struct by hidden pointer, so we hand WKViewCreate the RECT buffer.
+    // RECT{left,top,right,bottom}, passed by hidden pointer (see WKViewCreate in webkit2-ffi.ts).
     const rect = new Int32Array([0, 0, options.width, options.height]);
     const view = s.WKViewCreate(ptr(rect), pageConfig, hostWindow);
     wkRelease(pageConfig);
