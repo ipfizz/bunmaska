@@ -23,16 +23,23 @@ export const buildExecWrapper = (execId: number, handlerName: string, code: stri
   const name = JSON.stringify(handlerName);
   const src = JSON.stringify(code);
   return `(function(){
+  var __msg = function(e){
+    try { return String((e && e.message) || e); } catch (x) { return 'non-printable error'; }
+  };
   var __post = function(payload){
-    try { window.webkit.messageHandlers[${name}].postMessage(JSON.stringify(payload)); } catch (e) {}
+    var json;
+    try { json = JSON.stringify(payload); } catch (e) {
+      json = JSON.stringify({ execId: ${id}, ok: false, error: 'result is not JSON-serializable: ' + __msg(e) });
+    }
+    try { window.webkit.messageHandlers[${name}].postMessage(json); } catch (e) {}
   };
   try {
     Promise.resolve((0, eval)(${src})).then(
       function(v){ __post({ execId: ${id}, ok: true, result: v }); },
-      function(e){ __post({ execId: ${id}, ok: false, error: String((e && e.message) || e) }); }
+      function(e){ __post({ execId: ${id}, ok: false, error: __msg(e) }); }
     );
   } catch (e) {
-    __post({ execId: ${id}, ok: false, error: String((e && e.message) || e) });
+    __post({ execId: ${id}, ok: false, error: __msg(e) });
   }
 })();`;
 };
