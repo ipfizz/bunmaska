@@ -393,11 +393,6 @@ export class WindowsApplication implements NativeApplication {
     }
     ensureOleInitialized();
     this.#started = true;
-    this.#ready = true;
-    for (const callback of this.#readyCallbacks) {
-      callback();
-    }
-    this.#readyCallbacks.length = 0;
     // WM_HOTKEY is a thread message with no window proc, so only the drain sees it.
     const drainMessages = createWindowsDrain((_hwnd, message, wParam) =>
       windowsGlobalShortcutBackend.dispatchHotkeyMessage(message, wParam),
@@ -407,6 +402,10 @@ export class WindowsApplication implements NativeApplication {
       pollWindows();
     });
     this.#pump.start();
+    this.#ready = true;
+    for (const callback of this.#readyCallbacks.splice(0)) {
+      callback();
+    }
   }
 
   onReady(callback: () => void): void {
