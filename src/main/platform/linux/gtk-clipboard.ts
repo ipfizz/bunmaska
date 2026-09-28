@@ -303,7 +303,7 @@ const writeBytes = (mime: string, bytes: Uint8Array): void => {
   const glib = loadGlibFFI();
   const clipboard = getClipboard();
   // `g_bytes_new` copies, so `bytes` need only outlive that call.
-  const gbytes = glib.symbols.g_bytes_new(ptr(bytes), bytes.length);
+  const gbytes = glib.symbols.g_bytes_new(bytes.length === 0 ? null : ptr(bytes), bytes.length);
   if (gbytes === null) {
     throw new Error('g_bytes_new() returned null');
   }

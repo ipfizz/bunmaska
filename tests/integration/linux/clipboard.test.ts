@@ -145,6 +145,17 @@ describe.skipIf(!isLinux)('Linux clipboard backend (GDK 4)', () => {
   );
 
   test.skipIf(!hasDisplay)(
+    'writeText of an empty string reads back empty (a zero-length payload is valid)',
+    async () => {
+      linuxClipboardBackend.writeText('bunmaska-clip-before-empty');
+      linuxClipboardBackend.writeText('');
+      const got = await awaitWithPump(linuxClipboardBackend.readText(), 5000);
+      expect(got).toBe('');
+    },
+    15000,
+  );
+
+  test.skipIf(!hasDisplay)(
     'clear then readText returns empty string',
     async () => {
       linuxClipboardBackend.writeText('bunmaska-clip-to-be-cleared');
