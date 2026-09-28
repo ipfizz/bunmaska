@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
@@ -263,6 +271,20 @@ describe('gc', () => {
     };
     await expect(gc(root, { exists: () => true, remove })).rejects.toThrow('interrupted');
     expect(isInstalled(root, ID)).toBe(false);
+  });
+
+  test('reclaims interrupted installs: old staging dirs and marker-less engine dirs', async () => {
+    const root = makeTmpDir();
+    for (const name of ['.tmp-old', '.tmp-new', ID2]) {
+      mkdirSync(join(root, name, 'lib'), { recursive: true });
+    }
+    const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    utimesSync(join(root, '.tmp-old'), hourAgo, hourAgo);
+    const result = await gc(root, { exists: () => true });
+    expect(existsSync(join(root, '.tmp-old'))).toBe(false);
+    expect(existsSync(join(root, '.tmp-new'))).toBe(true); // may be an install in progress
+    expect(existsSync(engineDir(root, ID2))).toBe(false);
+    expect(result.removed).toEqual([ID2]);
   });
 
   test('drops links whose app no longer exists, freeing its engine', async () => {

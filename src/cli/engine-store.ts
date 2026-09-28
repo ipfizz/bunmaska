@@ -23,6 +23,7 @@ import {
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve, sep } from 'node:path';
+import { parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
 import { contentHash } from '../common/manifest';
 
@@ -32,6 +33,8 @@ const LOCK_FILE = '__dirlock';
 const STALE_LOCK_MS = 30_000;
 const LOCK_RETRY_MS = 5;
 const LOCK_TIMEOUT_MS = 10_000;
+/** Younger staging dirs may belong to an install still extracting. */
+const STALE_STAGING_MS = 60 * 60_000;
 
 export type StoreEnv = Record<string, string | undefined>;
 
@@ -84,6 +87,15 @@ export const linkPath = (root: string, appPath: string): string =>
 export const lockPath = (root: string): string => join(root, LOCK_FILE);
 
 export const isInstalled = (root: string, id: string): boolean => existsSync(markerPath(root, id));
+
+const isEngineId = (name: string): boolean => {
+  try {
+    parseEngineId(name);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** The installed (marker-complete) engine ids in the store, sorted. */
 export const listInstalled = (root: string): string[] => {
@@ -342,12 +354,26 @@ export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => 
       }
     }
     const installed = listInstalled(root);
-    const removed = installed.filter((id) => !used.has(id)).sort();
+    const dirs = existsSync(root)
+      ? readdirSync(root, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+      : [];
+    const broken = dirs.filter((name) => isEngineId(name) && !isInstalled(root, name));
+    const staleStaging = dirs.filter(
+      (name) =>
+        name.startsWith('.tmp-') &&
+        Date.now() - statSync(join(root, name)).mtimeMs > STALE_STAGING_MS,
+    );
+    const removed = [...installed.filter((id) => !used.has(id)), ...broken].sort();
     const kept = installed.filter((id) => used.has(id)).sort();
     if (!dryRun) {
       for (const id of removed) {
         remove(markerPath(root, id)); // first, so a half-deleted engine never looks installed
         remove(engineDir(root, id));
+      }
+      for (const name of staleStaging) {
+        remove(join(root, name));
       }
     }
     return { kept, removed, droppedLinks };
