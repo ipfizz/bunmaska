@@ -5,23 +5,21 @@
 
 export type SpawnedChild = {
   readonly exited: Promise<number>;
+  readonly kill: (signal: NodeJS.Signals) => void;
 };
 
 export type Spawner = (
   command: readonly string[],
-  options: {
-    readonly stdio: readonly ['inherit', 'inherit', 'inherit'];
-    readonly env?: Readonly<Record<string, string | undefined>>;
-  },
+  options: { readonly env?: Readonly<Record<string, string | undefined>> },
 ) => SpawnedChild;
 
 const defaultSpawner: Spawner = (command, options) =>
   Bun.spawn(command as string[], {
-    stdin: options.stdio[0],
-    stdout: options.stdio[1],
-    stderr: options.stdio[2],
+    stdio: ['inherit', 'inherit', 'inherit'],
     ...(options.env !== undefined ? { env: options.env } : {}),
   });
+
+const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
 /** Resolves to the child's exit code. */
 export const runApp = async (
@@ -31,8 +29,18 @@ export const runApp = async (
 ): Promise<number> => {
   const spawn = deps.spawn ?? defaultSpawner;
   const child = spawn(['bun', 'run', entry, ...args], {
-    stdio: ['inherit', 'inherit', 'inherit'],
     ...(deps.extraEnv !== undefined ? { env: { ...process.env, ...deps.extraEnv } } : {}),
   });
-  return await child.exited;
+  // Killing the CLI (IDE stop button, process manager) must not orphan the app window.
+  const forwards = FORWARDED_SIGNALS.map((signal) => [signal, () => child.kill(signal)] as const);
+  for (const [signal, forward] of forwards) {
+    process.on(signal, forward);
+  }
+  try {
+    return await child.exited;
+  } finally {
+    for (const [signal, forward] of forwards) {
+      process.off(signal, forward);
+    }
+  }
 };
