@@ -61,6 +61,35 @@ describe('dispatch resolves the build entry from bunmaska.config.ts', () => {
   });
 });
 
+describe('dispatch takes the .deb maintainer from package.json', () => {
+  const originalCwd = process.cwd();
+  let dir: string | undefined;
+  afterEach(() => {
+    process.chdir(originalCwd);
+    if (dir !== undefined) {
+      rmSync(dir, { recursive: true, force: true });
+      dir = undefined;
+    }
+  });
+
+  test('passes the author through to the Linux builder', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'bunmaska-build-maintainer-'));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ author: 'Ada <ada@example.com>' }));
+    process.chdir(dir);
+    let captured: BuildLinuxAppOptions | undefined;
+    await dispatch(
+      { kind: 'build', entry: 'app.ts', options: { target: 'linux', name: 'Demo' } },
+      {
+        buildLinux: async (opts) => {
+          captured = opts;
+          return { appDir: '', tarball: '', deb: '' };
+        },
+      },
+    );
+    expect(captured?.maintainer).toBe('Ada <ada@example.com>');
+  });
+});
+
 describe("dispatch hands every builder the app's own version", () => {
   const originalCwd = process.cwd();
   let dir: string | undefined;

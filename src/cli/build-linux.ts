@@ -74,6 +74,19 @@ const debVersion = (version: string): string => version.replace('-', '~');
 export const debFileName = (name: string, version: string, arch: Arch = currentArch()): string =>
   `${bundleIdSlug(name)}_${debVersion(version)}_${debArch(arch)}.deb`;
 
+/** A Debian `Maintainer` from package.json's `author`; `undefined` without the required email. */
+export const debMaintainer = (author: unknown): string | undefined => {
+  if (typeof author === 'string') {
+    const match = /^([^<(]*?)\s*<([^>]+)>/.exec(author.trim());
+    return match === null ? undefined : `${match[1]} <${match[2]}>`;
+  }
+  if (typeof author === 'object' && author !== null) {
+    const { name, email } = author as Record<string, unknown>;
+    return typeof name === 'string' && typeof email === 'string' ? `${name} <${email}>` : undefined;
+  }
+  return undefined;
+};
+
 export type DesktopEntryOptions = {
   readonly name: string;
   readonly slug: string;
@@ -193,6 +206,8 @@ export type BuildLinuxAppOptions = {
   readonly engineId?: string;
   /** The app's own version for the .deb; defaults to the framework version. */
   readonly version?: string;
+  /** The .deb `Maintainer`, `Name <email>`; defaults to one derived from the bundle id. */
+  readonly maintainer?: string;
   /** Target architecture; defaults to the host's. */
   readonly arch?: Arch;
 };
@@ -211,7 +226,8 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
       `bunmaska build: a .deb package name needs at least 2 characters (got "${layout.slug}"); use a longer app name.`,
     );
   }
-  const maintainer = `${opts.id ?? `com.bunmaska.${layout.slug}`} <noreply@bunmaska.dev>`;
+  const maintainer =
+    opts.maintainer ?? `${opts.id ?? `com.bunmaska.${layout.slug}`} <noreply@bunmaska.dev>`;
   const description = `${opts.name} built with Bunmaska`;
   const version = opts.version ?? BUNMASKA_VERSION;
 

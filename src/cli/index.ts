@@ -11,7 +11,7 @@ import {
 } from '../common/config-schema';
 import { type Arch, currentArch, currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
-import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
+import { buildLinuxApp, debMaintainer, resolveBuildEngineId } from './build-linux';
 import {
   type BuildDmg,
   type BuildMacAppOptions,
@@ -138,16 +138,20 @@ export type DispatchDeps = {
   readonly buildDmg?: BuildDmg;
 };
 
-/** Read the app version from the project's package.json, or `0.0.0` if absent. */
-const readAppVersion = (): string => {
+/** The project's package.json, or `{}` when it is absent or unreadable. */
+const readAppPackage = (): Record<string, unknown> => {
   try {
-    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
-      version?: unknown;
-    };
-    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+    const pkg: unknown = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    return typeof pkg === 'object' && pkg !== null ? (pkg as Record<string, unknown>) : {};
   } catch {
-    return '0.0.0';
+    return {};
   }
+};
+
+/** The app version from the project's package.json, or `0.0.0` if absent. */
+const readAppVersion = (): string => {
+  const version = readAppPackage()['version'];
+  return typeof version === 'string' ? version : '0.0.0';
 };
 
 /** The `--update` feed to emit beside the bundle. */
@@ -323,11 +327,13 @@ const runBuild = async (
       err('bunmaska build: engine.embed is not supported on Linux yet; remove it or set it false.');
       return 1;
     }
+    const maintainer = debMaintainer(readAppPackage()['author']);
     const result = await (deps.buildLinux ?? buildLinuxApp)({
       entry,
       name,
       engineId,
       version: readAppVersion(),
+      ...(maintainer !== undefined ? { maintainer } : {}),
       ...(id !== undefined ? { id } : {}),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(icon !== undefined ? { icon } : {}),

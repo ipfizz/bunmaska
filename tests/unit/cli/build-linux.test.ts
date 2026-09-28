@@ -10,6 +10,7 @@ import {
   debFileName,
   DEFAULT_LINUX_DEPENDS,
   linuxLayout,
+  debMaintainer,
   resolveBuildEngineId,
   tarballName,
 } from '../../../src/cli/build-linux';
@@ -179,6 +180,23 @@ describe('buildLinuxApp', () => {
     await expect(buildLinuxApp({ entry: 'missing.ts', name: 'X', out })).rejects.toThrow(
       /at least 2 characters/,
     );
+  });
+});
+
+describe('debMaintainer', () => {
+  test("reads package.json's author string and object forms", () => {
+    expect(debMaintainer('Ada Lovelace <ada@example.com> (https://ada.dev)')).toBe(
+      'Ada Lovelace <ada@example.com>',
+    );
+    expect(debMaintainer({ name: 'Ada Lovelace', email: 'ada@example.com' })).toBe(
+      'Ada Lovelace <ada@example.com>',
+    );
+  });
+
+  test('is undefined for an author without an email, which Debian requires', () => {
+    expect(debMaintainer('Ada Lovelace')).toBeUndefined();
+    expect(debMaintainer({ name: 'Ada Lovelace' })).toBeUndefined();
+    expect(debMaintainer(undefined)).toBeUndefined();
   });
 });
 
