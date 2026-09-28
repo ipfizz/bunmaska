@@ -28,7 +28,7 @@ const manifest = (name: string): UpdateManifest => ({
 
 const staged = (name = 'My App'): StagedUpdate => ({
   manifest: manifest(name),
-  tarPath: '/tmp/bunmaska-update-abc123.tar',
+  tarPath: '/tmp/bunmaska-update-Xy12/update.tar',
 });
 
 describe('deriveInstallRoot', () => {
@@ -258,7 +258,7 @@ describe('installStagedUpdate', () => {
     installStagedUpdate(staged(), h.deps);
     expect(h.scripts).toHaveLength(1);
     const script = h.scripts[0];
-    expect(script?.path.endsWith('.sh')).toBe(true);
+    expect(script?.path).toBe(join('/tmp/bunmaska-update-Xy12', 'install.sh'));
     expect(script?.text).toContain("'open' '/Applications/My App.app' &");
     expect(script?.text).toContain("mv '/Applications/My App.app'");
     expect(h.spawns).toEqual([['/bin/sh', script?.path ?? '']]);
@@ -276,7 +276,7 @@ describe('installStagedUpdate', () => {
     const h = makeDeps('/apps/My App/My App.exe', 'windows');
     installStagedUpdate(staged(), h.deps);
     const script = h.scripts[0];
-    expect(script?.path.endsWith('.cmd')).toBe(true);
+    expect(script?.path).toBe(join('/tmp/bunmaska-update-Xy12', 'install.cmd'));
     expect(h.spawns).toEqual([['cmd.exe', '/c', script?.path ?? '']]);
     expect(h.quits).toHaveLength(1);
   });

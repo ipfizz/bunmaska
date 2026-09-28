@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -70,7 +70,7 @@ export type UpdateInfo = {
 
 export type StagedUpdate = {
   readonly manifest: UpdateManifest;
-  /** Path to the decompressed `.tar` on disk. */
+  /** The decompressed `.tar`, alone in a private directory the default installer writes its helper into. */
   readonly tarPath: string;
 };
 
@@ -120,8 +120,9 @@ const markHandled = <T>(promise: Promise<T>): Promise<T> => {
   return promise;
 };
 
-const stageToTmp = async (tarBytes: Uint8Array, manifest: UpdateManifest): Promise<string> => {
-  const tarPath = join(tmpdir(), `bunmaska-update-${manifest.hash}.tar`);
+/** A fresh 0700 dir: a guessable name in a shared /tmp lets another user swap the verified tar. */
+export const stageToTmp = async (tarBytes: Uint8Array): Promise<string> => {
+  const tarPath = join(mkdtempSync(join(tmpdir(), 'bunmaska-update-')), 'update.tar');
   writeFileSync(tarPath, tarBytes);
   return tarPath;
 };

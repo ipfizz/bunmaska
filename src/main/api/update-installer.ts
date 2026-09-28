@@ -6,7 +6,6 @@
  */
 
 import { chmodSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type { ArtifactOs } from '../../common/manifest';
 import { currentPlatform } from '../../common/platform';
@@ -173,7 +172,7 @@ export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): 
   const bundleDirName = stagedBundleDirName(staged.manifest.name, os);
   const pid = deps.pid();
   if (os === 'windows') {
-    const scriptPath = join(tmpdir(), `bunmaska-install-${staged.manifest.hash}.cmd`);
+    const scriptPath = join(dirname(staged.tarPath), 'install.cmd');
     deps.writeScript(
       scriptPath,
       buildCmdInstallScript({
@@ -186,7 +185,7 @@ export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): 
     );
     deps.spawnDetached(['cmd.exe', '/c', scriptPath]);
   } else {
-    const scriptPath = join(tmpdir(), `bunmaska-install-${staged.manifest.hash}.sh`);
+    const scriptPath = join(dirname(staged.tarPath), 'install.sh');
     const relaunchArgv = os === 'macos' ? ['open', installRoot] : [execPath];
     deps.writeScript(
       scriptPath,

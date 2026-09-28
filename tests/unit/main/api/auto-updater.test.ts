@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync, rmSync, statSync } from 'node:fs';
+import { dirname } from 'node:path';
 import {
   assertSizeWithin,
   AutoUpdaterImpl,
@@ -6,6 +8,7 @@ import {
   MAX_COMPRESSED_ARTIFACT_BYTES,
   MAX_DECOMPRESSED_TAR_BYTES,
   type StagedUpdate,
+  stageToTmp,
 } from '../../../../src/main/api/auto-updater';
 import {
   contentHash,
@@ -328,5 +331,22 @@ describe('autoUpdater.quitAndInstall', () => {
     h.updater.quitAndInstall();
     expect(h.staged).toHaveLength(1);
     expect(h.staged[0]?.manifest.version).toBe('2.0.0');
+  });
+});
+
+describe('stageToTmp', () => {
+  test('writes the tar into a fresh private directory, never a guessable shared path', async () => {
+    const a = await stageToTmp(TAR);
+    const b = await stageToTmp(TAR);
+    try {
+      expect(dirname(a)).not.toBe(dirname(b));
+      expect(new Uint8Array(readFileSync(a))).toEqual(TAR);
+      if (process.platform !== 'win32') {
+        expect(statSync(dirname(a)).mode & 0o777).toBe(0o700);
+      }
+    } finally {
+      rmSync(dirname(a), { recursive: true, force: true });
+      rmSync(dirname(b), { recursive: true, force: true });
+    }
   });
 });
