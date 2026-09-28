@@ -4,55 +4,57 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { editorTempDir, makeContentFilter, makeWatchHandler } from '../../../src/cli/dev-watch';
 
+const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
+
 describe('makeContentFilter', () => {
   test('drops a save that did not change the bytes', () => {
-    const filter = makeContentFilter(() => 'same');
+    const filter = makeContentFilter(() => bytes('same'));
     expect(filter.changed('src/main.ts')).toBe(true);
     expect(filter.changed('src/main.ts')).toBe(false);
   });
 
   test('passes a real edit through', () => {
-    const files = new Map([['src/main.ts', 'v1']]);
+    const files = new Map([['src/main.ts', bytes('v1')]]);
     const filter = makeContentFilter((p) => files.get(p));
     expect(filter.changed('src/main.ts')).toBe(true);
-    files.set('src/main.ts', 'v2');
+    files.set('src/main.ts', bytes('v2'));
     expect(filter.changed('src/main.ts')).toBe(true);
   });
 
   test('tracks each path independently', () => {
-    const filter = makeContentFilter(() => 'same');
+    const filter = makeContentFilter(() => bytes('same'));
     expect(filter.changed('a.ts')).toBe(true);
     expect(filter.changed('b.ts')).toBe(true);
     expect(filter.changed('a.ts')).toBe(false);
   });
 
   test('always passes a vanished file through, and re-arms it', () => {
-    const files = new Map([['a.ts', 'v1']]);
+    const files = new Map([['a.ts', bytes('v1')]]);
     const filter = makeContentFilter((p) => files.get(p));
     expect(filter.changed('a.ts')).toBe(true);
     files.delete('a.ts');
     expect(filter.changed('a.ts')).toBe(true);
-    files.set('a.ts', 'v1');
+    files.set('a.ts', bytes('v1'));
     expect(filter.changed('a.ts')).toBe(true);
   });
 
   test('changedIfSeen seeds an unseen path silently and fires only on a later change', () => {
     // The rescan mode: firing on first sight would restart the app for every
     // untouched sibling of an editor temp file.
-    const files = new Map([['a.ts', 'v1']]);
+    const files = new Map([['a.ts', bytes('v1')]]);
     const filter = makeContentFilter((p) => files.get(p));
     expect(filter.changedIfSeen('a.ts')).toBe(false); // seeded, not fired
-    files.set('a.ts', 'v2');
+    files.set('a.ts', bytes('v2'));
     expect(filter.changedIfSeen('a.ts')).toBe(true);
     expect(filter.changedIfSeen('a.ts')).toBe(false);
   });
 
   test('changed and changedIfSeen share one baseline', () => {
-    const files = new Map([['a.ts', 'v1']]);
+    const files = new Map([['a.ts', bytes('v1')]]);
     const filter = makeContentFilter((p) => files.get(p));
     expect(filter.changed('a.ts')).toBe(true); // seeds via the normal path
     expect(filter.changedIfSeen('a.ts')).toBe(false); // same bytes, no fire
-    files.set('a.ts', 'v2');
+    files.set('a.ts', bytes('v2'));
     expect(filter.changedIfSeen('a.ts')).toBe(true);
   });
 });
@@ -102,6 +104,13 @@ describe('makeWatchHandler', () => {
     p.write('src/main.ts', 'v2');
     p.handle('src/.!4321!main.ts');
     expect(p.fired).toEqual(['src/main.ts']);
+  });
+
+  test('passes a binary edit that only changes bytes invalid as UTF-8', () => {
+    using p = project({ 'assets/a.png': new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x9a, 0x01]) });
+    p.write('assets/a.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x9b, 0x01]));
+    p.handle('assets/a.png');
+    expect(p.fired).toEqual(['assets/a.png']);
   });
 
   test('ignores edits inside dot directories', () => {

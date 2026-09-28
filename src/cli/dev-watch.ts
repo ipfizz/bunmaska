@@ -54,7 +54,7 @@ export type ContentFilter = {
  * without the filesystem.
  */
 export const makeContentFilter = (
-  readFile: (relPath: string) => string | undefined,
+  readFile: (relPath: string) => Uint8Array | undefined,
 ): ContentFilter => {
   const seen = new Map<string, string>();
   const hashOf = (relPath: string): string | undefined => {
@@ -148,7 +148,7 @@ export const makeWatchHandler = (
 ): ((filename: string | null) => void) => {
   const filter = makeContentFilter((relPath) => {
     try {
-      return readFileSync(resolve(dir, relPath), 'utf8');
+      return readFileSync(resolve(dir, relPath));
     } catch {
       return undefined;
     }
