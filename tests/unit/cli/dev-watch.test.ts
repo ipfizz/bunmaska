@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { editorTempDir, makeContentFilter } from '../../../src/cli/dev-watch';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { editorTempDir, makeContentFilter, makeWatchHandler } from '../../../src/cli/dev-watch';
 
 describe('makeContentFilter', () => {
   test('drops a save that did not change the bytes', () => {
@@ -66,5 +69,45 @@ describe('editorTempDir', () => {
     expect(editorTempDir('node_modules/.cache/x')).toBeUndefined();
     expect(editorTempDir('MyApp.app/.hidden')).toBeUndefined();
     expect(editorTempDir('.idea/.workspace.xml.tmp')).toBeUndefined();
+  });
+});
+
+describe('makeWatchHandler', () => {
+  /** A temp project with `files` written, plus a handler over it recording what fired. */
+  const project = (files: Record<string, string | Uint8Array>) => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-watch-'));
+    const write = (rel: string, contents: string | Uint8Array): void => {
+      mkdirSync(join(dir, rel, '..'), { recursive: true });
+      writeFileSync(join(dir, rel), contents);
+    };
+    for (const [rel, contents] of Object.entries(files)) {
+      write(rel, contents);
+    }
+    const fired: string[] = [];
+    const handle = makeWatchHandler(dir, (rel) => {
+      fired.push(rel);
+    });
+    return { fired, handle, write, [Symbol.dispose]: () => rmSync(dir, { recursive: true }) };
+  };
+
+  test('drops a save that rewrote identical bytes', () => {
+    using p = project({ 'src/main.ts': 'v1' });
+    p.write('src/main.ts', 'v1');
+    p.handle('src/main.ts');
+    expect(p.fired).toEqual([]);
+  });
+
+  test('an atomic save seen only as its dot temp file fires the real file', () => {
+    using p = project({ 'src/main.ts': 'v1', 'src/other.ts': 'x' });
+    p.write('src/main.ts', 'v2');
+    p.handle('src/.!4321!main.ts');
+    expect(p.fired).toEqual(['src/main.ts']);
+  });
+
+  test('ignores edits inside dot directories', () => {
+    using p = project({ '.idea/workspace.xml': 'a' });
+    p.write('.idea/workspace.xml', 'b');
+    p.handle('.idea/workspace.xml');
+    expect(p.fired).toEqual([]);
   });
 });
