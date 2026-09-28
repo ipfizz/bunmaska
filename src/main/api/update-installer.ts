@@ -123,13 +123,15 @@ export const buildCmdInstallScript = (spec: CmdInstallSpec): string => {
     'rem bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
     ':wait',
     `tasklist /FI "PID eq ${spec.pid}" | find "${spec.pid}" >nul`,
-    'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)',
+    // timeout.exe exits at once when stdin is redirected (the helper's is), spinning this loop.
+    'if not errorlevel 1 (ping -n 2 127.0.0.1 >nul & goto wait)',
     `if exist "${old}" rmdir /s /q "${old}"`,
     `if exist "${staging}" rmdir /s /q "${staging}"`,
     `mkdir "${staging}" || goto fail`,
     'rem extract from cwd, not tar -C: Windows bsdtar mangles backslash -C paths',
     `cd /d "${staging}" || goto fail`,
-    `tar -xf "${spec.tarPath}" || goto fail`,
+    // System bsdtar by full path: a Git-for-Windows GNU tar on PATH reads C:\ as a remote host.
+    `"%SystemRoot%\\System32\\tar.exe" -xf "${spec.tarPath}" || goto fail`,
     'cd /d "%TEMP%"',
     `if not exist "${staging}\\${spec.bundleDirName}" goto fail`,
     `move "${spec.installRoot}" "${old}" || goto fail`,
