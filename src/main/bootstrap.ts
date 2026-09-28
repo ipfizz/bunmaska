@@ -4,15 +4,10 @@ import { nativeTheme } from './api/native-theme';
 import { powerMonitor } from './api/power-monitor';
 import { nativeApp } from './native-app';
 
-/**
- * Wires the platform-agnostic {@link app} singleton to the native backend.
- * Imported for its side effects by the public barrel, and kept separate from both
- * `app` and `BrowserWindow` to avoid an import cycle.
- */
+// Wires `app` to the native backend; separate from `app` and `BrowserWindow` to avoid an import cycle.
 
 let started = false;
 
-/** Start the native app once and mark {@link app} ready when it signals ready. */
 export const ensureNativeStarted = (): void => {
   if (started) {
     return;
@@ -21,16 +16,13 @@ export const ensureNativeStarted = (): void => {
   const native = nativeApp();
   native.onReady(() => {
     app.markReady();
-    // The runtime is up (NSApp / GTK initialised), so the OS observers can safely
-    // attach their native notification hooks now.
+    // Observers attach native hooks, which need NSApp / GTK initialised first.
     nativeTheme.startObserving();
     powerMonitor.startObserving();
   });
-  // macOS Dock-reopen → Electron's `activate` (Linux backends omit onActivate).
   native.onActivate?.((hasVisibleWindows) => {
     app.emit('activate', makeCancelableEvent(), hasVisibleWindows);
   });
-  // macOS file/URL associations → Electron's `open-url` / `open-file`.
   native.onOpenUrl?.((url) => {
     app.emit('open-url', makeCancelableEvent(), url);
   });
@@ -45,7 +37,7 @@ export const ensureNativeStarted = (): void => {
   }
 };
 
-/** Reset the one-shot guard. Test-only. */
+/** @internal */
 export const resetBootstrapForTesting = (): void => {
   started = false;
 };
@@ -58,7 +50,5 @@ app.on('newListener', (event: string | symbol) => {
     setTimeout(ensureNativeStarted, 0);
   }
 });
-// `quit` fires only after `before-quit` and `will-quit` had their chance to veto,
-// so a vetoed quit leaves the run loop pumping (stopping it on `will-quit` killed
-// every later native callback in an app that cancelled its own quit).
+// Stop the pump on `quit`, never `will-quit`: a vetoed quit would kill every later native callback.
 app.on('quit', () => nativeApp().quit());

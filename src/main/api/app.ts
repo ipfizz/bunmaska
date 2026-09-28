@@ -12,13 +12,7 @@ import { nativeApp } from '../native-app';
 import { createLockBackend } from './single-instance-backend';
 import { SingleInstanceManager } from './single-instance';
 
-/**
- * Application lifecycle controller — the drop-in equivalent of Electron's `app`.
- *
- * Extends Node's {@link EventEmitter} so the full listener API matches
- * Electron's contract (D023). Events: `ready`, `before-quit`, `will-quit`,
- * `window-all-closed`, `quit`.
- */
+/** Electron's `app`; an EventEmitter so the full listener API matches (D023). */
 export class App extends EventEmitter {
   #ready = false;
   #quitting = false;
@@ -40,12 +34,7 @@ export class App extends EventEmitter {
     this.#env = env;
   }
 
-  /**
-   * Reset mutable state and app-level window-event listeners. Lifecycle
-   * listeners (`before-quit`/`will-quit`/`quit`) are left intact so the native
-   * bootstrap wiring survives.
-   * @internal
-   */
+  /** @internal Keeps lifecycle listeners, so the bootstrap wiring survives. */
   resetForTesting(): void {
     this.#env = undefined;
     this.#quitting = false;
@@ -89,10 +78,7 @@ export class App extends EventEmitter {
     });
   }
 
-  /**
-   * Mark the app ready and emit `ready`. Idempotent.
-   * @internal Invoked by the native bootstrap.
-   */
+  /** @internal Idempotent; called by the native bootstrap. */
   markReady(): void {
     if (this.#ready) {
       return;
@@ -103,10 +89,7 @@ export class App extends EventEmitter {
     queueMicrotask(() => this.emit('ready'));
   }
 
-  /**
-   * Register the native bootstrap to run on the first {@link whenReady}.
-   * @internal
-   */
+  /** @internal Runs on the first {@link whenReady}. */
   setStartHook(hook: () => void): void {
     this.#startHook = hook;
   }
@@ -133,11 +116,7 @@ export class App extends EventEmitter {
     return resolveAppVersion(this.#environment().manifest);
   }
 
-  /**
-   * The default User-Agent applied to new windows whose session has no explicit
-   * override (Electron's `app.userAgentFallback`). `''` means "use the platform
-   * WebKit default". A per-session `session.setUserAgent` takes precedence.
-   */
+  /** `''` means the WebKit default; a per-session `session.setUserAgent` wins. */
   get userAgentFallback(): string {
     return this.#userAgentFallback;
   }
@@ -252,10 +231,7 @@ export class App extends EventEmitter {
     return getDock();
   }
 
-  /**
-   * Set the app's badge count. On macOS shows it on the dock tile; the value is
-   * always cached for {@link getBadgeCount}. Returns whether it was displayed.
-   */
+  /** Always cached for {@link getBadgeCount}; returns whether the dock showed it (macOS only). */
   setBadgeCount(count = 0): boolean {
     this.#badgeCount = count;
     return displayBadgeCount(count);
@@ -301,12 +277,7 @@ export class App extends EventEmitter {
     this.#singleInstance = manager;
   }
 
-  /**
-   * Acquire the single-instance lock. Returns `true` if this is the primary
-   * instance; `false` if another instance already holds it (in which case it has
-   * been handed this process's argv/cwd via its `second-instance` event, and the
-   * caller should quit).
-   */
+  /** `false` when another instance holds the lock; it receives this argv/cwd asynchronously. */
   requestSingleInstanceLock(additionalData: unknown = undefined): boolean {
     const payload = { argv: [...process.argv], cwd: process.cwd(), additionalData };
     return this.#singleInstanceManager().request(payload, (p) => {
@@ -364,5 +335,4 @@ export class App extends EventEmitter {
   }
 }
 
-/** The application lifecycle singleton — Electron's `app`. */
 export const app = new App();

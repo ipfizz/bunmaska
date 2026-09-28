@@ -5,11 +5,6 @@ import { currentPlatform, type Platform } from '../../common/platform';
 import { findManifest, type Manifest, type ManifestReader, readManifest } from './app-metadata';
 import { normalizeLocale, parsePreferredLanguages } from './app-locale';
 
-/**
- * Assembles the host facts the `app` module needs — paths, manifest, locale,
- * packaged-state — from injected primitives.
- */
-
 export type EnvironmentDeps = {
   readonly platform: Platform;
   readonly home: string;
@@ -19,11 +14,11 @@ export type EnvironmentDeps = {
   readonly mainScript: string;
   readonly cwd: string;
   readonly env: Readonly<Record<string, string | undefined>>;
-  /** The raw locale tag from `Intl` or `$LANG`. */
+  /** The raw `Intl` locale tag. */
   readonly locale: string;
   readonly readFile: ManifestReader;
   readonly exit: (code: number) => void;
-  /** Spawn a detached copy of the app on exit (backs `app.relaunch`). */
+  /** Spawns the app again once this process exits (`app.relaunch`). */
   readonly relaunch: (execPath: string, args: string[]) => void;
 };
 
@@ -32,8 +27,8 @@ export type AppEnvironment = {
   readonly home: string;
   readonly temp: string;
   readonly execPath: string;
-  /** A compiled binary's own directory, else the nearest `package.json` directory, else cwd. */
   readonly appPath: string;
+  /** `process.env`, plus the Linux `user-dirs.dirs` entries. */
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly manifest: Manifest | undefined;
   /** Normalized BCP-47 locale (`''` if unknown). */
@@ -110,7 +105,6 @@ const safeRead: ManifestReader = (path) => {
   }
 };
 
-/** Built from the live host: `os`/`process`/`fs`/`Intl`. */
 export const defaultAppEnvironment = (): AppEnvironment =>
   buildAppEnvironment({
     platform: currentPlatform(),

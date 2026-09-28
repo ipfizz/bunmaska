@@ -1,11 +1,5 @@
-/**
- * Single-instance lock + second-instance messaging (Electron's
- * `requestSingleInstanceLock` / `second-instance`).
- *
- * The primary/secondary decision must stay SYNCHRONOUS — Electron's contract:
- * an atomically created pidfile that already names a live process makes this
- * process a secondary. Argv hand-off to the primary uses a unix socket.
- */
+// The primary/secondary decision must stay SYNCHRONOUS (Electron's contract, D031): an atomic
+// pidfile naming a live process makes this a secondary. The argv hand-off rides a unix socket.
 
 export type SecondInstancePayload = {
   readonly argv: string[];
@@ -25,12 +19,12 @@ export type LockBackend = {
   /** `undefined` if the lock file is missing or unreadable. */
   readLockPid(lockPath: string): number | undefined;
   isAlive(pid: number): boolean;
-  /** Removes the stale lock file and its socket. */
+  /** Removes the stale lock file (a stale socket is replaced by `startServer`). */
   clearLock(lockPath: string): void;
   startServer(socketPath: string, onMessage: (json: string) => void): void;
   /** Fire-and-forget. */
   notify(socketPath: string, json: string): void;
-  /** Stops the server and removes the lock + socket. */
+  /** Stops the server and removes the lock and socket. */
   stop(lockPath: string, socketPath: string): void;
 };
 
@@ -74,10 +68,7 @@ export class SingleInstanceManager {
     return this.#locked;
   }
 
-  /**
-   * `false` means another live instance holds the lock and has been handed
-   * `payload`, which surfaces there via its own `request` callback.
-   */
+  /** `false` means another live instance holds the lock; `payload` is sent to it asynchronously. */
   request(
     payload: SecondInstancePayload,
     onSecondInstance: (p: SecondInstancePayload) => void,
@@ -93,8 +84,8 @@ export class SingleInstanceManager {
       this.#backend.notify(this.#paths.socketPath, encodePayload(payload));
       return false;
     }
-    // The recorded primary is gone — reclaim the stale lock and retry once.
-    this.#backend.clearLock(this.#paths.lockPath);
+    // The recorded primary is gone: reclaim the stale lock and retry once.
+    this.#backend.clearLock(this.#paths.lockPath); // ponytail: races a concurrent reclaim and trusts a reusable pid; flock/LockFileEx fixes both
     return this.#acquire(onSecondInstance);
   }
 

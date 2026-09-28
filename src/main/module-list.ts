@@ -1,12 +1,6 @@
 /**
- * The canonical map of Electron's main-process module names and which ones
- * Bunmaska implements today (D028).
- */
-
-/**
- * Every main-process module `require('electron')` exposes, from Electron's
- * `lib/browser/api/module-list.ts`. Kept in sync by hand, not generated, so adding
- * a name is a conscious parity decision.
+ * Every module `require('electron')` exposes in the main process (Electron's browser and
+ * common `module-list.ts`, D028). Synced by hand: adding a name is a parity decision.
  */
 export const KNOWN_ELECTRON_MODULES = [
   'app',
@@ -55,7 +49,6 @@ export const KNOWN_ELECTRON_MODULES = [
 
 export type ElectronModuleName = (typeof KNOWN_ELECTRON_MODULES)[number];
 
-/** The modules Bunmaska actually ships. Grows phase by phase. */
 export const IMPLEMENTED_MODULES = [
   'app',
   'autoUpdater',
@@ -82,9 +75,7 @@ export const IMPLEMENTED_MODULES = [
 
 const implemented: ReadonlySet<string> = new Set(IMPLEMENTED_MODULES);
 
-/** Whether Bunmaska implements the given module today. */
 export const isImplemented = (name: string): boolean => implemented.has(name);
 
-/** The actionable error message for a not-yet-implemented Electron module. */
 export const notImplementedMessage = (name: string): string =>
   `Bunmaska: '${name}' is not yet implemented. Track progress at https://github.com/ipfizz/bunmaska`;

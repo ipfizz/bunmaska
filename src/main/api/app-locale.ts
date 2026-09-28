@@ -1,10 +1,7 @@
 /** POSIX placeholder locales that carry no real language information. */
 const POSIX_PLACEHOLDERS: ReadonlySet<string> = new Set(['C', 'POSIX']);
 
-/**
- * `en_US.UTF-8` → `en-US`. Returns `''` for the POSIX `C`/`POSIX` locales and
- * for empty input.
- */
+/** `en_US.UTF-8` → `en-US`; `''` for empty input and the POSIX `C`/`POSIX` locales. */
 export const normalizeLocale = (raw: string): string => {
   const base = raw.split('.')[0]?.split('@')[0] ?? '';
   if (base.length === 0 || POSIX_PLACEHOLDERS.has(base)) {
@@ -22,10 +19,7 @@ export const localeCountryCode = (locale: string): string => {
   }
 };
 
-/**
- * Most-preferred first, from the colon-separated `$LANGUAGE` list, falling back
- * to `$LANG`. POSIX placeholders and blanks are dropped.
- */
+/** Most-preferred first, from the colon-separated `$LANGUAGE`, else `$LANG`; placeholders and blanks dropped. */
 export const parsePreferredLanguages = (
   env: Readonly<Record<string, string | undefined>>,
 ): string[] => {

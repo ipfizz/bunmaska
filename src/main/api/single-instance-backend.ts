@@ -3,15 +3,11 @@ import { dirname } from 'node:path';
 import { createLogger } from '../../common/logger';
 import type { LockBackend } from './single-instance';
 
-/**
- * The live {@link LockBackend}. Stateful — it holds the listening server so
- * {@link LockBackend.stop} can close it — so each lock gets its own instance.
- */
-
 const log = createLogger('single-instance');
 
 type UnixSocketListener = { stop(closeActiveConnections?: boolean): void };
 
+/** Stateful (it holds the server `stop` closes): one instance per lock. */
 export const createLockBackend = (): LockBackend => {
   let server: UnixSocketListener | undefined;
   let removeLockOnExit: (() => void) | undefined;
@@ -28,7 +24,7 @@ export const createLockBackend = (): LockBackend => {
     tryCreateLock(lockPath, pid) {
       try {
         mkdirSync(dirname(lockPath), { recursive: true });
-        // `wx` fails if the file already exists — the atomic acquire.
+        // `wx` fails if the file already exists: the atomic acquire.
         writeFileSync(lockPath, String(pid), { flag: 'wx' });
         // A lock left behind names a pid the OS will reuse, blocking every later launch.
         // Prepended so it runs before the Windows TerminateProcess exit hook (D043).
@@ -51,11 +47,10 @@ export const createLockBackend = (): LockBackend => {
 
     isAlive(pid) {
       try {
-        // Signal 0 performs only the existence/permission check.
         process.kill(pid, 0);
         return true;
       } catch (error) {
-        // EPERM means the process exists but is owned by another user — alive.
+        // EPERM: the process exists but belongs to another user, so it is alive.
         return (error as NodeJS.ErrnoException).code === 'EPERM';
       }
     },

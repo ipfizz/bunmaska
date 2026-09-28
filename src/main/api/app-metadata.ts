@@ -1,17 +1,9 @@
 import { dirname, join } from 'node:path';
 
-/**
- * Resolution of the consuming app's name and version: walk up from the main
- * module's directory to the nearest `package.json`, as Electron does.
- */
-
 export const DEFAULT_APP_NAME = 'bunmaska-app';
 export const DEFAULT_APP_VERSION = '0.0.0';
 
-/**
- * Each field is explicitly `| undefined` (not merely optional) so a parsed
- * manifest can set a key to `undefined` under `exactOptionalPropertyTypes`.
- */
+/** Fields are `| undefined`, not just optional, so a parse can store `undefined` (`exactOptionalPropertyTypes`). */
 export type Manifest = {
   readonly name?: string | undefined;
   readonly productName?: string | undefined;
