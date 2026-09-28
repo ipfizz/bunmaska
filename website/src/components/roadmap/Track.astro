@@ -1,20 +1,21 @@
 ---
 import { HEAD } from "../../styles/constants";
-import { milestones, STATUS_LABEL } from "../../roadmap-data";
+import { milestones, STATUS_LABEL, type MilestoneStatus } from "../../roadmap-data";
 
 // One quiet color per status - used for the status label and the "now"/"beta"
 // row emphasis. No per-bullet color, no pills; hierarchy comes from tint + type.
-const STATUS_CLASS: Record<string, string> = {
+const STATUS_CLASS: Record<MilestoneStatus, string> = {
   shipped: "text-success",
   now: "text-accent-text",
-  next: "text-text-muted",
-  planned: "text-text-muted",
   beta: "text-accent-text",
   later: "text-text-faint",
 };
 
 const inlineCode = (text: string): string =>
-  text.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em] text-text">$1</code>');
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em] text-text">$1</code>');
 ---
 
 <section class="section-border py-16 sm:py-20">

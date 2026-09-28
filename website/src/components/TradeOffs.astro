@@ -3,8 +3,6 @@ import { Icon } from "astro-icon/components";
 import { HEAD } from "../styles/constants";
 import { homeFaq } from "../faq";
 
-// Shared with the home FAQPage JSON-LD (index.astro) so the markup matches the
-// visible cards exactly — a mismatch drops the rich result.
 const faqs = homeFaq.map((item) => [item.q, item.a] as const);
 ---
 

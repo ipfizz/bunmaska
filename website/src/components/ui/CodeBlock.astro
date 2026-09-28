@@ -17,19 +17,8 @@ const { code, lang = "ts", title } = Astro.props;
       <span class="codepanel-dots" aria-hidden="true"><i></i><i></i><i></i></span>
       <span>{title ?? lang}</span>
     </span>
-    <button type="button" class="copy-btn" data-code={code} aria-label="Copy code"></button>
+    <button type="button" class="copy-btn" aria-label="Copy code"></button>
   </div>
   <Code code={code} lang={lang} themes={{ light: "github-light", dark: "github-dark" }} />
 </div>
 
-<script>
-  document.querySelectorAll<HTMLButtonElement>(".codepanel .copy-btn[data-code]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(btn.dataset["code"] ?? "");
-        btn.classList.add("copied");
-        setTimeout(() => btn.classList.remove("copied"), 1400);
-      } catch {}
-    });
-  });
-</script>

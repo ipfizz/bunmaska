@@ -43,24 +43,7 @@ const items = breadcrumbItems(slug);
 </nav>
 
 <style>
-  nav[aria-label="Breadcrumb"] a {
-    text-decoration: none;
-  }
-</style>
-
-<style>
-  nav[aria-label="Breadcrumb"] {
-    --crumb-accent: var(--accent);
-  }
-
-  nav[aria-label="Breadcrumb"] ol {
-    align-items: center;
-  }
-
   nav[aria-label="Breadcrumb"] li {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
     white-space: nowrap;
   }
 
@@ -79,7 +62,7 @@ const items = breadcrumbItems(slug);
     transform-origin: center;
     width: 60%;
     height: 2px;
-    background: var(--crumb-accent);
+    background: var(--accent);
     border-radius: 2px;
     transition: transform 220ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease;
     opacity: 0;
@@ -97,7 +80,6 @@ const items = breadcrumbItems(slug);
     border-radius: 6px;
   }
 
-  /* Chevron micro-motion */
   nav[aria-label="Breadcrumb"] li:hover span > svg,
   nav[aria-label="Breadcrumb"] li:focus-within span > svg {
     transform: translateX(3px);

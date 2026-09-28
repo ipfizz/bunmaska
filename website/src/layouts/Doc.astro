@@ -17,15 +17,16 @@ interface Props {
   title: string;
   description?: string | undefined;
   seoTitle?: string | undefined;
+  keywords?: string[] | undefined;
   slug: string;
   headings: Heading[];
 }
 
-const { title, description, seoTitle, slug, headings } = Astro.props;
+const { title, description, seoTitle, keywords, slug, headings } = Astro.props;
 const { prev, next } = prevNext(slug);
 const abs = (path: string) => new URL(path, Astro.site).href;
 
-// Breadcrumb graph (Home > Group > Page) built from the nav, absolute URLs.
+// The last crumb (this page) has no item URL, so first-in-group pages don't list theirs twice.
 const crumbs = [{ label: "Home", href: "/" }, ...breadcrumbItems(slug)];
 const breadcrumbList = {
   "@context": "https://schema.org",
@@ -34,18 +35,21 @@ const breadcrumbList = {
     "@type": "ListItem",
     position: i + 1,
     name: c.label,
-    item: abs(c.href),
+    ...(i < crumbs.length - 1 ? { item: abs(c.href) } : {}),
   })),
 };
+// The home page's Organization, by @id, so docs credit the same entity.
+const org = { "@type": "Organization", "@id": abs("/#org"), name: "Bunmaska", url: abs("/") };
 // Every doc is a TechArticle; dates omitted rather than faked.
 const techArticle = {
   "@context": "https://schema.org",
   "@type": "TechArticle",
   headline: title,
   ...(description ? { description } : {}),
+  ...(keywords ? { keywords } : {}),
   url: abs(`/docs/${slug}`),
-  author: { "@type": "Organization", name: "bunmaska" },
-  publisher: { "@type": "Organization", name: "bunmaska" },
+  author: org,
+  publisher: org,
 };
 ---
 
@@ -79,7 +83,7 @@ const techArticle = {
         <Sidebar current={slug} />
       </aside>
 
-      <div class="min-w-0">
+      <main id="main" class="min-w-0">
         <Breadcrumbs slug={slug} />
         <header class="mt-4 border-b border-border pb-6">
           <h1 class="text-[1.75rem] leading-[1.15] font-medium tracking-tight text-balance">
@@ -91,7 +95,7 @@ const techArticle = {
           <slot />
         </article>
         <PrevNext prev={prev} next={next} />
-      </div>
+      </main>
 
       <aside
         class="hidden lg:block lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-10"
@@ -104,12 +108,6 @@ const techArticle = {
 </Base>
 
 <style>
-  .lead {
-    font-size: 0.9375rem;
-    line-height: 1.6;
-    color: var(--text-muted);
-    max-width: 66ch;
-  }
   .docs-menu summary {
     list-style: none;
   }
@@ -124,23 +122,3 @@ const techArticle = {
   }
 </style>
 
-<script>
-  // The copy buttons themselves are injected at build time (rehype-copy-button),
-  // so the icon ships in the SSR'd HTML. This only wires the click behaviour.
-  document
-    .querySelectorAll<HTMLButtonElement>(".copy-btn--prose")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const pre = btn.closest("pre");
-        const code = pre?.querySelector("code");
-        const text = (code ?? pre)?.textContent ?? "";
-        try {
-          await navigator.clipboard.writeText(text);
-          btn.classList.add("copied");
-          setTimeout(() => btn.classList.remove("copied"), 1400);
-        } catch {
-          // Clipboard access denied - the copy button is a progressive enhancement.
-        }
-      });
-    });
-</script>

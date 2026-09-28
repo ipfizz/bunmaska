@@ -1,7 +1,7 @@
 ---
 import "../fonts";
 import "../styles/global.css";
-import { VERSION, GITHUB, NPM } from "../site";
+import { VERSION, GITHUB, NPM, pagePath } from "../site";
 
 interface Props {
   title?: string | undefined;
@@ -27,16 +27,14 @@ const {
   jsonLd,
 } = Astro.props;
 
-// A page passes its keyword-rich phrase as `title`; the brand suffix is added
-// once. The home page (no title) uses the full default.
+// Pages pass a brand-free title; the suffix is added here, once.
 const fullTitle = title ? `${title} | bunmaska` : DEFAULT_TITLE;
-const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const path = pagePath(Astro.url);
+const canonical = new URL(path, Astro.site).href;
 const ogImage = new URL(image, Astro.site).href;
-const isHome = Astro.url.pathname === "/";
+const isHome = path === "/";
 
-// Site-wide identity graph. SoftwareApplication only where it belongs (home);
-// WebSite everywhere. Page-specific graphs (FAQPage/Breadcrumb/TechArticle)
-// are appended via the `jsonLd` prop.
+// WebSite on every page; Organization, SoftwareApplication and source code on home only.
 const website = {
   "@context": "https://schema.org",
   "@type": "WebSite",
@@ -51,6 +49,7 @@ const website = {
 const organization = {
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": `${Astro.site?.href}#org`,
   name: "Bunmaska",
   url: Astro.site?.href,
   logo: new URL("/logo.png", Astro.site).href,
@@ -125,7 +124,16 @@ const graphs = [website, ...(isHome ? [organization, softwareApp, sourceCode] : 
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    {graphs.map((g) => <script is:inline type="application/ld+json" set:html={JSON.stringify(g)} />)}
+    {/* Escape "<" so a "</script>" inside any string cannot end the block early. */}
+    {
+      graphs.map((g) => (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={JSON.stringify(g).replace(/</g, "\\u003c")}
+        />
+      ))
+    }
     {/* No-flash theme bootstrap - runs before paint. Dark is the default; the
         system preference only matters once the visitor has picked light. */}
     <script is:inline>
@@ -146,31 +154,26 @@ const graphs = [website, ...(isHome ? [organization, softwareApp, sourceCode] : 
     </script>
   </head>
   <body>
+    <a
+      href="#main"
+      class="fixed top-2 left-2 z-[60] rounded-sm border border-border-strong bg-bg px-4 py-2 text-sm not-focus:sr-only"
+      >Skip to content</a
+    >
     <slot />
     <script>
-      // Scroll reveals: hide-then-show only when we can actually observe.
-      const els = document.querySelectorAll(".reveal");
-      const motionOk = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (els.length && motionOk && "IntersectionObserver" in window) {
-        const io = new IntersectionObserver(
-          (entries) => {
-            for (const e of entries) {
-              if (e.isIntersecting) {
-                e.target.classList.add("reveal-in");
-                io.unobserve(e.target);
-              }
-            }
-          },
-          { threshold: 0.05 },
-        );
-        for (const el of els) {
-          // Never hide what's already on screen at load.
-          if (el.getBoundingClientRect().top > window.innerHeight) {
-            el.classList.add("reveal-init");
-            io.observe(el);
-          }
+      // One handler for every code-block copy button: markdown (rehype-copy-button) and CodeBlock.
+      document.addEventListener("click", async (e) => {
+        const btn = e.target instanceof Element ? e.target.closest(".copy-btn") : null;
+        const code = btn?.closest(".pre-wrap, .codepanel")?.querySelector("code");
+        if (!btn || !code) return;
+        try {
+          await navigator.clipboard.writeText(code.textContent ?? "");
+          btn.classList.add("copied");
+          setTimeout(() => btn.classList.remove("copied"), 1400);
+        } catch {
+          // Clipboard access denied - the copy button is a progressive enhancement.
         }
-      }
+      });
     </script>
   </body>
 </html>

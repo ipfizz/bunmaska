@@ -1,8 +1,6 @@
-// The roadmap's single source of truth. Every milestone on /roadmap renders
-// from this file - no prose hidden in component frontmatter, no drift.
-// Rule of the page: if it isn't built, it says so here.
+// Every milestone on /roadmap renders from this file.
 
-export type MilestoneStatus = 'shipped' | 'now' | 'next' | 'planned' | 'beta' | 'later';
+export type MilestoneStatus = 'shipped' | 'now' | 'beta' | 'later';
 
 export interface Milestone {
   readonly version: string;
@@ -16,8 +14,6 @@ export interface Milestone {
 export const STATUS_LABEL: Record<MilestoneStatus, string> = {
   shipped: 'Shipped',
   now: 'In progress',
-  next: 'Next',
-  planned: 'Planned',
   beta: 'The bar',
   later: 'After beta',
 };

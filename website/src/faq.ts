@@ -1,7 +1,4 @@
-// Canonical FAQ, rendered visibly + marked up as FAQPage JSON-LD on /alternatives.
-// The home page uses `homeFaq` (below) for both its visible TradeOffs cards and
-// its FAQPage JSON-LD. Answers stay honest and evergreen; anything that churns
-// links to docs.
+// FAQ copy for /alternatives (`faq`) and the home page (`homeFaq`); anything that churns links to docs.
 export interface FaqItem {
   readonly q: string;
   readonly a: string;
@@ -34,10 +31,8 @@ export const faq: readonly FaqItem[] = [
   },
 ];
 
-// The home page renders these four (TradeOffs.astro) - a tighter, wittier set
-// than the full /alternatives FAQ. Kept here so the visible cards and the home
-// FAQPage JSON-LD come from ONE source (Google requires the markup to match what
-// the visitor sees, or the rich result is dropped).
+// The home cards (TradeOffs.astro) and the home FAQPage JSON-LD both render this list:
+// Google drops the rich result when the markup differs from the visible text.
 export const homeFaq: readonly FaqItem[] = [
   {
     q: 'Windows?',

@@ -14,7 +14,7 @@ import HeroPixels from "./ui/HeroPixels.tsx";
 <section class="relative -mt-16 w-full overflow-hidden">
   <DashedBox columns={16} class="h-full w-full pb-12 pt-28">
     <div class="absolute inset-0" aria-hidden="true">
-      <HeroPixels client:load />
+      <HeroPixels client:media="(prefers-reduced-motion: no-preference)" />
     </div>
     {/* Content-protection scrim: quiets the dither behind the headline/code. */}
     <div
@@ -42,6 +42,9 @@ import HeroPixels from "./ui/HeroPixels.tsx";
           src={codeblock}
           alt="A minimal Bunmaska app - a few lines of TypeScript that open a native window"
           class="w-full max-w-[37.5rem] h-auto"
+          priority
+          widths={[600, 1200]}
+          sizes="(min-width: 40rem) 37.5rem, 100vw"
         />
       </div>
       <h2 class={HEAD}>
@@ -49,7 +52,7 @@ import HeroPixels from "./ui/HeroPixels.tsx";
         <span
           class="serif-accent text-accent-text"
         >
-          ~ 90 seconds.
+          90 seconds.
         </span>
       </h2>
       <div class="flex justify-center relative w-full">

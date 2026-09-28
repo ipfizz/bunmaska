@@ -1,25 +1,34 @@
-// Build-time (SSR) injection of a copy button into every markdown <pre> block.
-// The icon + states are pure CSS (see .copy-btn in global.css); a small client
-// script in Doc.astro wires the click. No client JS renders the icon.
+// Build-time copy button for every markdown <pre>, so the icon ships in the SSR'd HTML;
+// Base.astro wires the click. The button sits beside the <pre>, not inside it,
+// so it stays put while a wide block scrolls.
 export default function rehypeCopyButton() {
   return (tree) => {
     const walk = (node) => {
-      if (!node || typeof node !== "object") return;
-      if (node.type === "element" && node.tagName === "pre") {
-        node.children = node.children || [];
-        node.children.push({
+      if (!Array.isArray(node?.children)) return;
+      node.children = node.children.map((child) => {
+        if (child.type !== "element" || child.tagName !== "pre") {
+          walk(child);
+          return child;
+        }
+        return {
           type: "element",
-          tagName: "button",
-          properties: {
-            type: "button",
-            className: ["copy-btn", "copy-btn--prose"],
-            "aria-label": "Copy code",
-          },
-          children: [],
-        });
-        return; // don't descend into the <pre>
-      }
-      if (Array.isArray(node.children)) node.children.forEach(walk);
+          tagName: "div",
+          properties: { className: ["pre-wrap"] },
+          children: [
+            child,
+            {
+              type: "element",
+              tagName: "button",
+              properties: {
+                type: "button",
+                className: ["copy-btn", "copy-btn--prose"],
+                "aria-label": "Copy code",
+              },
+              children: [],
+            },
+          ],
+        };
+      });
     };
     walk(tree);
   };

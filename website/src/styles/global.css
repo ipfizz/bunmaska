@@ -1,9 +1,6 @@
 @import "tailwindcss";
 
-/* ------------------------------------------------------------------ *
- * Bunmaska design system - Apple-clean, warm "Maska Gold" accent,
- * hairline borders, ZERO drop shadows. Depth = border + bg-step.
- * ------------------------------------------------------------------ */
+/* Warm "Maska Gold" accent, hairline borders, zero drop shadows: depth is border + bg step. */
 
 @theme {
   --font-sans:
@@ -102,7 +99,6 @@
   --danger: light-dark(#c0392b, #e5736a);
 
   --width-page: 1152px;
-  --width-prose: 68ch;
 }
 
 :root[data-theme="light"] {
@@ -139,7 +135,6 @@
     box-shadow:
       0 0 0 2px var(--bg),
       0 0 0 4px var(--accent);
-    border-radius: var(--radius-sm);
   }
   a {
     color: inherit;
@@ -187,15 +182,6 @@
     }
   }
 
-  /* ----------------------------------------------------------------- *
-   * TYPE SCALE - STRICT: ≤3 size roles PER font family (design rule).
-   *   Sans (Inter):   heading 1.5rem · body 1rem · small .875rem
-   *   Serif (Instrument Serif, sized UP for its small x-height):
-   *                   display clamp(2.5-3.5rem) · accent 1.15em(inline) · note 1.15rem
-   *   Mono (Geist Mono): code .85rem · label .75rem  (inline uses .85em)
-   * Eyebrows + tags share the sans `small` role; differentiated by case/shape.
-   * ----------------------------------------------------------------- */
-
   .eyebrow {
     font-size: var(--text-sm);
     font-weight: 400;
@@ -204,9 +190,7 @@
     color: var(--accent-text);
   }
 
-  /* Serif inline `accent` role - the italic words inside sans headings.
-     Sized UP (1.15em) so Instrument Serif's small x-height reads level with,
-     then slightly above, the surrounding Inter. */
+  /* Italic serif words in sans headings, sized up: Instrument Serif's x-height is small. */
   .serif-accent {
     font-family: var(--font-serif);
     font-style: italic;
@@ -214,8 +198,7 @@
     line-height: 1;
   }
 
-  /* Serif `note` role - small italic accents (footer tagline, roadmap notes).
-     Sized UP so Instrument Serif reads at body weight, never tiny. */
+  /* Small italic serif notes (footer tagline, roadmap), sized up so they never read tiny. */
   .serif-note {
     font-family: var(--font-serif);
     font-size: 1.15rem;
@@ -241,8 +224,6 @@
       transform 0.15s ease;
     cursor: pointer;
   }
-  /* `.btn.x` out-specifies `.prose a`, which otherwise recolors and underlines a
-     button placed inside prose - a gold label on a gold button. */
   .btn.btn-accent {
     background-color: var(--accent);
     color: #1a1408;
@@ -298,7 +279,7 @@
   }
 }
 
-/* ---------------- Code blocks (match the install panel: surface bg, theme-switched syntax) ---------------- */
+/* Code blocks match the install panel: surface bg, theme-switched syntax. */
 .codepanel {
   position: relative;
   border: 1px solid var(--border);
@@ -418,10 +399,20 @@
     border-color 0.15s ease;
 }
 
-.prose pre:hover .copy-btn--prose,
+.pre-wrap {
+  position: relative;
+}
+
+.pre-wrap:hover .copy-btn--prose,
 .copy-btn--prose:focus-visible,
 .copy-btn--prose.copied {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .copy-btn--prose {
+    opacity: 1;
+  }
 }
 
 /* Dual-theme Shiki: panel bg is --surface (matches the install box); token colours
@@ -446,10 +437,7 @@
   }
 }
 
-/* ---------------- Docs prose ---------------- *
- * Compact documentation scale: 14px body (a touch above the 13px sidebar),
- * headings one weight (500) and at most two steps above body. Hierarchy =
- * size + space, never boldness.                                            */
+/* Docs prose: a compact 14px body, a step above the 13px sidebar. */
 .prose {
   color: var(--text);
   font-size: 0.875rem;
@@ -513,6 +501,15 @@
 .prose ul,
 .prose ol {
   color: var(--text);
+}
+
+/* `.prose .lead` outranks the unlayered `.prose p` above. */
+.lead,
+.prose .lead {
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 66ch;
 }
 
 .prose a {
@@ -649,10 +646,7 @@
   min-width: 0;
 }
 
-/* ------------------------------------------------------------------ *
- * Mobile app chrome: the fixed bottom tab bar (see Nav.astro) needs the
- * page to end above it, including the iPhone home-indicator inset.
- * ------------------------------------------------------------------ */
+/* The page ends above the fixed phone tab bar (Nav.astro) and the home indicator. */
 @media (max-width: 767px) {
   body {
     padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));

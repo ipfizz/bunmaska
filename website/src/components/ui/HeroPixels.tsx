@@ -4,16 +4,10 @@ import PixelBlast from './PixelBlast';
 /** The pixel yellow per theme - a step brighter/yellower than the accent gold. */
 const PIXEL_YELLOW = { light: '#c2870d', dark: '#d1a23e' } as const;
 
-const readTheme = (): 'light' | 'dark' => {
-  const forced = document.documentElement.getAttribute('data-theme');
-  if (forced === 'light' || forced === 'dark') return forced;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
+const readTheme = (): 'light' | 'dark' =>
+  document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 
-/**
- * The hero's PixelBlast layer, tuned for Maska Gold and kept in sync with the
- * theme (data-theme attribute and the system color-scheme both flip --accent).
- */
+/** The hero's PixelBlast layer, tuned for Maska Gold and recoloured when data-theme flips. */
 export default function HeroPixels() {
   const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
 
@@ -25,12 +19,7 @@ export default function HeroPixels() {
       attributes: true,
       attributeFilter: ['data-theme'],
     });
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    media.addEventListener('change', update);
-    return () => {
-      observer.disconnect();
-      media.removeEventListener('change', update);
-    };
+    return () => observer.disconnect();
   }, []);
 
   if (!theme) return null;
