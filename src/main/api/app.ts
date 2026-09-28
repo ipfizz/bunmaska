@@ -302,7 +302,17 @@ export class App extends EventEmitter {
   requestSingleInstanceLock(additionalData: unknown = undefined): boolean {
     const payload = { argv: [...process.argv], cwd: process.cwd(), additionalData };
     return this.#singleInstanceManager().request(payload, (p) => {
-      this.emit('second-instance', makeCancelableEvent(), p.argv, p.cwd, p.additionalData);
+      // Out of the socket handler, which swallows throws, and never before `ready` (Electron).
+      const emit = (): void => {
+        queueMicrotask(() => {
+          this.emit('second-instance', makeCancelableEvent(), p.argv, p.cwd, p.additionalData);
+        });
+      };
+      if (this.#ready) {
+        emit();
+      } else {
+        this.once('ready', emit);
+      }
     });
   }
 

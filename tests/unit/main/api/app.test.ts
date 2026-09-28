@@ -430,8 +430,11 @@ describe('App single-instance lock', () => {
     expect(a.hasSingleInstanceLock()).toBe(false);
   });
 
-  test('emits second-instance with argv/cwd/data when a peer connects', () => {
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test('emits second-instance with argv/cwd/data when a peer connects', async () => {
     const a = new App();
+    a.markReady();
     const fixture = managerWith({ acquire: [true] });
     a.setSingleInstanceForTesting(fixture.manager);
     let captured: { argv: string[]; cwd: string; data: unknown } | undefined;
@@ -440,7 +443,24 @@ describe('App single-instance lock', () => {
     });
     a.requestSingleInstanceLock();
     fixture.deliver(encodePayload({ argv: ['p', 'q'], cwd: '/peer', additionalData: { z: 1 } }));
+    expect(captured).toBeUndefined();
+    await flush();
     expect(captured).toEqual({ argv: ['p', 'q'], cwd: '/peer', data: { z: 1 } });
+  });
+
+  test('holds second-instance until after ready', async () => {
+    const a = new App();
+    const fixture = managerWith({ acquire: [true] });
+    a.setSingleInstanceForTesting(fixture.manager);
+    const order: string[] = [];
+    a.on('ready', () => order.push('ready'));
+    a.on('second-instance', () => order.push('second-instance'));
+    a.requestSingleInstanceLock();
+    fixture.deliver(encodePayload({ argv: [], cwd: '/peer', additionalData: undefined }));
+    await flush();
+    a.markReady();
+    await flush();
+    expect(order).toEqual(['ready', 'second-instance']);
   });
 
   test('releaseSingleInstanceLock releases the lock', () => {
