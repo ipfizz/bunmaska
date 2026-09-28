@@ -20,6 +20,8 @@ Emitted when the system is about to suspend (sleep).
 
 On macOS this is `NSWorkspaceWillSleepNotification`; on Linux it is logind's `PrepareForSleep(true)` on the system bus; on Windows it is `WM_POWERBROADCAST` (`PBT_APMSUSPEND`).
 
+On Linux this is best-effort: Bunmaska takes no logind delay inhibitor, so the machine may already be asleep by the time the signal is handled, and the event can arrive after wake. Don't count on it to finish work before the lid closes.
+
 ```ts
 import { powerMonitor } from 'bunmaska';
 
@@ -32,7 +34,7 @@ powerMonitor.on('suspend', () => {
 
 Emitted when the system resumes from suspend.
 
-On macOS this is `NSWorkspaceDidWakeNotification`; on Linux it is logind's `PrepareForSleep(false)`; on Windows it is `WM_POWERBROADCAST` (`PBT_APMRESUMESUSPEND`).
+On macOS this is `NSWorkspaceDidWakeNotification`; on Linux it is logind's `PrepareForSleep(false)`; on Windows it is `WM_POWERBROADCAST` (`PBT_APMRESUMEAUTOMATIC`, so it fires once per wake, as in Chromium).
 
 ```ts
 import { powerMonitor } from 'bunmaska';

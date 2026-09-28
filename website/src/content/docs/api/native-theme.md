@@ -46,8 +46,8 @@ win.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors);
 A `string` property - one of `'system'`, `'light'`, or `'dark'` - that overrides the appearance Bunmaska would otherwise pick from the OS. Defaults to `'system'`.
 
 - `'system'` removes the override and follows the OS appearance.
-- `'dark'` makes `shouldUseDarkColors` return `true` and the `prefers-color-scheme` CSS query match `dark`.
-- `'light'` makes `shouldUseDarkColors` return `false` and the CSS query match `light`.
+- `'dark'` makes `shouldUseDarkColors` return `true`, and on macOS makes the `prefers-color-scheme` CSS query match `dark`.
+- `'light'` makes `shouldUseDarkColors` return `false`, and on macOS makes the CSS query match `light`.
 
 Assigning this property always emits the `updated` event. On macOS it also applies an app-wide `NSAppearance` (`NSAppearanceNameDarkAqua` / `NSAppearanceNameAqua`), so native chrome and web views re-theme to match. _On Linux and Windows the override changes what `shouldUseDarkColors` and the `updated` event report, but it does not push an app-wide appearance to the toolkit_ - so wire your renderer's theme off `shouldUseDarkColors` (as you should anyway) rather than assuming native widgets will follow.
 
