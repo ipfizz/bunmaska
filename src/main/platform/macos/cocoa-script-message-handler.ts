@@ -1,4 +1,5 @@
 import { nsStringToString } from './cocoa-foundation';
+import { msgSendPtrReturnsU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
@@ -34,7 +35,15 @@ const ensureHandlerClass = (): Handle => {
           return;
         }
         const body = rt.msgSend(message, rt.selectors.get('body'));
-        callback(nsStringToString(body));
+        // Any page can post null/1/{}; UTF8String on a non-NSString is an uncatchable NSException.
+        const isString = msgSendPtrReturnsU8(
+          body,
+          rt.selectors.get('isKindOfClass:'),
+          rt.classes.get('NSString'),
+        );
+        if (isString === 1) {
+          callback(nsStringToString(body));
+        }
       },
     },
   ]);
