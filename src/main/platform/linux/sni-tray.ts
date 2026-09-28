@@ -208,6 +208,17 @@ const buildToolTip = (title: string, text: string): Pointer | null => {
   return value;
 };
 
+/** Fill a getter's `GError**`: GDBus g_asserts (aborts) on a NULL Get value without one. */
+const setGError = (out: Pointer | null, message: string): void => {
+  if (out === null) {
+    return; // GetAll passes NULL and skips the property.
+  }
+  const g = loadGlibFFI().symbols;
+  const domain = g.g_quark_from_string(cstr('bunmaska-tray'));
+  const gerror = g.g_error_new_literal(domain, 0, cstr(message));
+  new BigUint64Array(toArrayBuffer(out, 0, 8))[0] = BigInt(gerror ?? 0);
+};
+
 /** A floating one-string tuple `(s)`, or null. */
 const stringTuple = (value: string): Pointer | null => {
   const g = loadGlibFFI().symbols;
@@ -294,13 +305,17 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
 
   // The three vtable handlers — each wrapped so a JS throw can't cross the FFI boundary and
   // kill the pump. Retained FOREVER (the copied vtable holds their raw fn-pointers).
-  const getProp = new JSCallback((_c, _s, _p, _i, propName, _e, _u): Pointer | null => {
+  const getProp = new JSCallback((_c, _s, _p, _i, propName, error, _u): Pointer | null => {
+    let value: Pointer | null = null;
     try {
-      return getPropertyValue(state, propName === null ? '' : new CString(propName).toString());
+      value = getPropertyValue(state, propName === null ? '' : new CString(propName).toString());
     } catch {
-      // A failed getter returns null → GDBus synthesizes an error for that one property.
-      return null;
+      value = null;
     }
+    if (value === null) {
+      setGError(error, 'StatusNotifierItem property unavailable');
+    }
+    return value;
   }, DBUS_GET_PROPERTY_CB_DEF);
 
   const methodCall = new JSCallback((_c, _s, _p, _i, method, _params, invocation, _u): void => {
