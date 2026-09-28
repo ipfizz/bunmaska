@@ -24,6 +24,8 @@ const view = WindowsWebView.create({
   width: 800,
   height: 600,
   userScripts: [
+    // Non-string bodies first: each must be dropped, not read as a WKString.
+    'const h = window.webkit.messageHandlers.bunmaska; h.postMessage(1); h.postMessage(true); h.postMessage({});',
     'window.webkit.messageHandlers.bunmaska.postMessage(JSON.stringify({ ping: "pong" }));',
   ],
   messageHandlers: [
