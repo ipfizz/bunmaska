@@ -41,7 +41,9 @@ const readEntry = (bytes: Uint8Array, name: string): Uint8Array => {
       const localExtraLen = u16(bytes, localOffset + 28);
       const dataStart = localOffset + 30 + localNameLen + localExtraLen;
       const data = bytes.subarray(dataStart, dataStart + compSize);
-      return method === 0 ? new Uint8Array(data) : new Uint8Array(inflateRawSync(data));
+      const content = method === 0 ? new Uint8Array(data) : new Uint8Array(inflateRawSync(data));
+      expect(u32(bytes, p + 16)).toBe(Bun.hash.crc32(content) >>> 0);
+      return content;
     }
     p += 46 + nameLen + extraLen + commentLen;
   }

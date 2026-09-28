@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  buildArArchive,
   buildControlFile,
   buildLinuxApp,
   buildDesktopEntry,
@@ -150,6 +151,21 @@ describe('buildControlFile', () => {
       depends: [],
     });
     expect(noDeps).not.toContain('Depends:');
+  });
+});
+
+describe('buildArArchive', () => {
+  test('pads an odd-length member so the next header starts on an even offset', () => {
+    const ar = buildArArchive([
+      { name: 'a', content: new Uint8Array([1, 2, 3]) },
+      { name: 'b', content: new Uint8Array([4]) },
+    ]);
+    const text = new TextDecoder('latin1').decode(ar);
+    expect(text.startsWith('!<arch>\n')).toBe(true);
+    expect(text.slice(8 + 48, 8 + 58).trim()).toBe('3');
+    expect(ar[8 + 60 + 3]).toBe(0x0a);
+    expect(text.slice(8 + 60 + 4, 8 + 60 + 5)).toBe('b');
+    expect(ar.length).toBe(8 + 60 + 4 + 60 + 2);
   });
 });
 
