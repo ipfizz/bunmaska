@@ -29,12 +29,10 @@ class MockElement implements WebFrameElement {
     this.children.push(child);
   }
 
-  removeChild(child: MockElement): void {
-    const index = this.children.indexOf(child);
-    if (index !== -1) {
-      this.children.splice(index, 1);
-      child.parent = undefined;
-    }
+  remove(): void {
+    const siblings = this.parent?.children ?? [];
+    siblings.splice(siblings.indexOf(this), 1);
+    this.parent = undefined;
   }
 
   readonly children: MockElement[] = [];
@@ -91,6 +89,19 @@ describe('webFrame.insertCSS / removeInsertedCSS', () => {
     expect(doc.head.children.length).toBe(1);
     frame.removeInsertedCSS(key);
     expect(doc.head.children.length).toBe(0);
+  });
+
+  test('removeInsertedCSS removes a style inserted before <head> existed', () => {
+    const doc = new MockDocument();
+    const early: WebFrameDocument & { head?: MockElement } = {
+      documentElement: doc.documentElement,
+      createElement: doc.createElement.bind(doc),
+    };
+    const frame = createWebFrame({ document: early, globalThis });
+    const key = frame.insertCSS('a {}');
+    early.head = doc.head;
+    frame.removeInsertedCSS(key);
+    expect(doc.documentElement.children).toEqual([]);
   });
 
   test('removeInsertedCSS with an unknown key is a no-op', () => {

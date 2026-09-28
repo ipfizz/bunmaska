@@ -16,7 +16,7 @@ export type WebFrameElement = {
   readonly style: { zoom: string };
   setAttribute(name: string, value: string): void;
   appendChild(child: WebFrameElement): void;
-  removeChild(child: WebFrameElement): void;
+  remove(): void;
 };
 
 /** Minimal `document` surface webFrame touches. */
@@ -95,8 +95,7 @@ export const createWebFrame = (scope?: WebFrameScope): WebFrame => {
         return;
       }
       inserted.delete(key);
-      const mount = getDocument();
-      (mount.head ?? mount.documentElement).removeChild(style);
+      style.remove();
     },
 
     setZoomFactor(factor) {
