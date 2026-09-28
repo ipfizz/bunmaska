@@ -99,6 +99,24 @@ describe('__bunmaska.invoke', () => {
   });
 });
 
+describe('__bunmaska argument encoding', () => {
+  test('throws instead of silently mangling values JSON cannot carry', () => {
+    const { bridge, posted } = evalBootstrap();
+    expect(() => bridge.send('x', new Map([[1, 2]]))).toThrow(/cannot send a Map/);
+    expect(() => bridge.send('x', { bytes: new Uint8Array([7]) })).toThrow(
+      /cannot send a Uint8Array/,
+    );
+    expect(() => bridge.send('x', [() => 1])).toThrow(/cannot send a function/);
+    expect(posted).toEqual([]);
+  });
+
+  test('an invoke with an unsendable argument rejects without posting', async () => {
+    const { bridge, posted } = evalBootstrap();
+    await expect(bridge.invoke('x', 10n)).rejects.toThrow(/cannot send a bigint/);
+    expect(posted).toEqual([]);
+  });
+});
+
 describe('__bunmaska.on', () => {
   test('delivers a send envelope from main to a registered listener', () => {
     const { bridge } = evalBootstrap();

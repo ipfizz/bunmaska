@@ -12,9 +12,30 @@ const BOOTSTRAP_SOURCE = `(function () {
       ? g.webkit.messageHandlers.bunmaska
       : null;
 
+  // Throw on what JSON would silently drop or garble (Electron throws on functions too).
+  function unsendable(key, value) {
+    var type = typeof value;
+    if (type === 'object' && value !== null) {
+      type = Object.prototype.toString.call(value).slice(8, -1);
+    }
+    if (
+      type === 'function' ||
+      type === 'symbol' ||
+      type === 'bigint' ||
+      type === 'Map' ||
+      type === 'Set' ||
+      type === 'ArrayBuffer' ||
+      ArrayBuffer.isView(value)
+    ) {
+      throw new TypeError('IPC arguments are JSON-serialized; cannot send a ' + type);
+    }
+    return value;
+  }
+
   function post(envelope) {
+    var json = JSON.stringify(envelope, unsendable);
     if (channel) {
-      channel.postMessage(JSON.stringify(envelope));
+      channel.postMessage(json);
     }
   }
 
@@ -32,8 +53,8 @@ const BOOTSTRAP_SOURCE = `(function () {
       var id = nextId;
       nextId += 1;
       return new Promise(function (resolve, reject) {
-        pending.set(id, { resolve: resolve, reject: reject });
         post({ kind: 'invoke', id: id, channel: ch, args: args });
+        pending.set(id, { resolve: resolve, reject: reject });
       });
     },
     on: function (ch, listener) {
