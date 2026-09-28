@@ -219,10 +219,15 @@ const resolveProjectEngine = (
   return { engineId, embed: config.engine?.embed === true };
 };
 
-/** dev and run must forward the pin, or on Windows the app launches with no engine. */
+/**
+ * dev and run must forward the pin, or on Windows the app launches with no engine. Both
+ * names: an inherited BUNMASKA_ENGINE_ID would otherwise outrank the alias.
+ */
 const launchEngineEnv = (config: BunmaskaConfig, command: string): Record<string, string> => {
   const { engineId } = resolveProjectEngine(config, command);
-  return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
+  return engineId === 'system'
+    ? {}
+    : { BUNMASKA_ENGINE_ID: engineId, BUNMASKA_WEBKIT_ID: engineId };
 };
 
 const runBuild = async (

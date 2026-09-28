@@ -42,9 +42,9 @@ const runWithPin = async (
 };
 
 describe('dispatch run forwards the engine pin', () => {
-  test('a full engine id reaches the app as BUNMASKA_WEBKIT_ID', async () => {
+  test('a full engine id reaches the app under both names, so an inherited one never wins', async () => {
     const { env } = await runWithPin(ID);
-    expect(env).toEqual({ BUNMASKA_WEBKIT_ID: ID });
+    expect(env).toEqual({ BUNMASKA_ENGINE_ID: ID, BUNMASKA_WEBKIT_ID: ID });
   });
 
   test('a bare version warns and launches on the system WebKit', async () => {
