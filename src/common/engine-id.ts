@@ -41,22 +41,6 @@ const ENGINE_ARCHES: ReadonlySet<string> = new Set(['x64', 'arm64']);
 /** Whether `id` is the reserved system sentinel (case-insensitive). */
 export const isSystemEngine = (id: string): boolean => id.trim().toLowerCase() === SYSTEM_ENGINE;
 
-const assertNoDash = (value: string, field: string): void => {
-  if (value.length === 0 || value.includes('-')) {
-    throw new InvalidArgumentError(
-      `engine-id: "${field}" must be non-empty and contain no dash (got ${JSON.stringify(value)})`,
-    );
-  }
-};
-
-/** Format an {@link EngineRef} into its flat engine-id string. Throws on a dashed field. */
-export const formatEngineId = (ref: EngineRef): string => {
-  assertNoDash(ref.api, 'api');
-  assertNoDash(ref.upstream, 'upstream');
-  assertNoDash(ref.rev, 'rev');
-  return `${ref.engine}-${ref.api}-${ref.upstream}-${ref.rev}-${ref.os}-${ref.arch}`;
-};
-
 /**
  * Parse a flat engine-id back into an {@link EngineRef}, validating every field.
  * Throws {@link InvalidArgumentError} on the system sentinel or any malformed id.
