@@ -14,6 +14,8 @@ import {
   SingleInstanceManager,
 } from '../../../../src/main/api/single-instance';
 import { Menu, resetApplicationMenuForTesting } from '../../../../src/main/api/menu';
+import type { AppPathName } from '../../../../src/main/api/app-paths';
+import { InvalidArgumentError } from '../../../../src/common/errors';
 
 /** Normalize host separators to POSIX so path comparisons match on any host. */
 const slash = (s: string): string => s.replaceAll('\\', '/');
@@ -301,6 +303,21 @@ describe('App paths', () => {
     const a = appWith();
     a.setPath('userData', '/custom/data');
     expect(a.getPath('userData')).toBe('/custom/data');
+  });
+
+  test('setPath rejects a name getPath does not know', () => {
+    expect(() => appWith().setPath('bogus' as AppPathName, '/x')).toThrow(InvalidArgumentError);
+  });
+
+  test('setPath rejects a relative path', () => {
+    expect(() => appWith().setPath('userData', 'data')).toThrow(InvalidArgumentError);
+  });
+
+  test('setAppLogsPath without a path restores the platform default', () => {
+    const a = appWith();
+    a.setAppLogsPath('/var/log/custom');
+    a.setAppLogsPath();
+    expect(a.getPath('logs')).toBe('/Users/ada/Library/Logs/Demo App');
   });
 });
 

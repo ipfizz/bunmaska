@@ -62,6 +62,8 @@ const KNOWN_NAMES: ReadonlySet<string> = new Set<AppPathName>([
   'crashDumps',
 ]);
 
+export const isAppPathName = (name: string): name is AppPathName => KNOWN_NAMES.has(name);
+
 const envDir = (env: PathEnvironment['env'], variable: string, fallback: string): string => {
   const value = env[variable];
   return value !== undefined && value.length > 0 ? value : fallback;
@@ -184,7 +186,7 @@ const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
 
 /** Throws {@link InvalidArgumentError} on an unrecognized name, matching Electron. */
 export const resolveAppPath = (name: AppPathName, environment: PathEnvironment): string => {
-  if (!KNOWN_NAMES.has(name)) {
+  if (!isAppPathName(name)) {
     throw new InvalidArgumentError(`Failed to get '${name}' path: unknown path name`);
   }
   switch (environment.platform) {

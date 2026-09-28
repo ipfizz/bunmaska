@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { makeCancelableEvent } from '../../common/cancelable-event';
+import { InvalidArgumentError } from '../../common/errors';
 import { type AppEnvironment, defaultAppEnvironment } from './app-environment';
 import { localeCountryCode } from './app-locale';
 import { resolveAppName, resolveAppVersion } from './app-metadata';
-import { type AppPathName, resolveAppPath } from './app-paths';
+import { type AppPathName, isAppPathName, resolveAppPath } from './app-paths';
 import * as desktop from './app-desktop';
 import { Menu } from './menu';
 import { createLockBackend } from './single-instance-backend';
@@ -168,12 +169,21 @@ export class App extends EventEmitter {
     });
   }
 
+  /** Throws {@link InvalidArgumentError} on an unknown name or a relative path, like Electron. */
   setPath(name: AppPathName, path: string): void {
+    if (!isAppPathName(name)) {
+      throw new InvalidArgumentError(`Failed to set '${name}' path: unknown path name`);
+    }
+    if (!isAbsolute(path)) {
+      throw new InvalidArgumentError(`Failed to set '${name}' path: path must be absolute`);
+    }
     this.#pathOverrides.set(name, path);
   }
 
+  /** Without `path`, pins `logs` to the platform default. */
   setAppLogsPath(path?: string): void {
-    this.#pathOverrides.set('logs', path ?? this.getPath('logs'));
+    this.#pathOverrides.delete('logs');
+    this.setPath('logs', path ?? this.getPath('logs'));
   }
 
   /** A normalized BCP-47 tag. */
