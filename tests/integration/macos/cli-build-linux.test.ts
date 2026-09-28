@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildLinuxApp } from '../../../src/cli/build-linux';
@@ -124,6 +124,7 @@ if (currentPlatform() === 'macos') {
       expect(listing.stdout).toContain('debian-binary');
       expect(listing.stdout).toContain('control.tar.gz');
       expect(listing.stdout).toContain('data.tar.gz');
+      expect(readdirSync(outDir).filter((name) => name.startsWith('.'))).toEqual([]);
     });
 
     test('archives carry no AppleDouble files, xattrs or builder ownership', () => {

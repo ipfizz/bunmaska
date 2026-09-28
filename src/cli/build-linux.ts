@@ -4,7 +4,17 @@
  * packaged as a `.tar.gz` plus a `.deb`.
  */
 
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
 import { type Arch, currentArch, currentPlatform } from '../common/platform';
@@ -284,35 +294,36 @@ const packageDeb = async (args: {
   readonly depends: readonly string[];
 }): Promise<string> => {
   const { layout, out, version, arch, name, maintainer, description, depends } = args;
-  const staging = join(out, `.deb-${layout.slug}`);
-  const controlDir = join(staging, 'control-root');
-  mkdirSync(controlDir, { recursive: true });
+  const staging = mkdtempSync(join(tmpdir(), 'bunmaska-deb-'));
+  try {
+    const controlDir = join(staging, 'control-root');
+    mkdirSync(controlDir, { recursive: true });
+    writeFileSync(
+      join(controlDir, 'control'),
+      buildControlFile({
+        slug: layout.slug,
+        version,
+        arch: debArch(arch),
+        maintainer,
+        description,
+        depends,
+      }),
+    );
 
-  writeFileSync(
-    join(controlDir, 'control'),
-    buildControlFile({
-      slug: layout.slug,
-      version,
-      arch: debArch(arch),
-      maintainer,
-      description,
-      depends,
-    }),
-  );
+    const controlTar = join(staging, 'control.tar.gz');
+    await tarGz(controlTar, controlDir, 'control');
+    const dataTar = join(staging, 'data.tar.gz');
+    await tarGz(dataTar, layout.appDir, 'usr');
 
-  const controlTar = join(staging, 'control.tar.gz');
-  await tarGz(controlTar, controlDir, 'control');
-
-  const dataTar = join(staging, 'data.tar.gz');
-  await tarGz(dataTar, layout.appDir, 'usr');
-
-  const debPath = join(out, debFileName(name, version, arch));
-  const archive = buildArArchive([
-    { name: 'debian-binary', content: new TextEncoder().encode('2.0\n') },
-    { name: 'control.tar.gz', content: new Uint8Array(await Bun.file(controlTar).arrayBuffer()) },
-    { name: 'data.tar.gz', content: new Uint8Array(await Bun.file(dataTar).arrayBuffer()) },
-  ]);
-  await Bun.write(debPath, archive);
-
-  return debPath;
+    const debPath = join(out, debFileName(name, version, arch));
+    const archive = buildArArchive([
+      { name: 'debian-binary', content: new TextEncoder().encode('2.0\n') },
+      { name: 'control.tar.gz', content: new Uint8Array(await Bun.file(controlTar).arrayBuffer()) },
+      { name: 'data.tar.gz', content: new Uint8Array(await Bun.file(dataTar).arrayBuffer()) },
+    ]);
+    await Bun.write(debPath, archive);
+    return debPath;
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
 };
