@@ -5,7 +5,6 @@ import { dlopenLinux } from './glib-ffi';
 
 /** Needs GTK >= 4.10 (GtkAlertDialog/GtkFileDialog): Bun fails the whole table on older GTK. */
 const LIBGTK_PATH = 'libgtk-4.so.1';
-const LIBGOBJECT_PATH = 'libgobject-2.0.so.0';
 
 export const GTK_DIALOG_FFI_SYMBOLS = {
   gtk_alert_dialog_get_type: {
@@ -87,18 +86,9 @@ export const GTK_DIALOG_FFI_SYMBOLS = {
   },
 } as const;
 
-// ponytail: duplicate of gobject-ffi's g_object_new; delete once gtk-dialog.ts calls that one.
-export const GTK_DIALOG_GOBJECT_FFI_SYMBOLS = {
-  g_object_new: {
-    args: [FFIType.u64, FFIType.pointer],
-    returns: FFIType.pointer,
-  },
-} as const;
-
 const cache: {
   gtk: ReturnType<typeof dlopenLinux<typeof GTK_DIALOG_FFI_SYMBOLS>> | undefined;
-  gobject: ReturnType<typeof dlopenLinux<typeof GTK_DIALOG_GOBJECT_FFI_SYMBOLS>> | undefined;
-} = { gtk: undefined, gobject: undefined };
+} = { gtk: undefined };
 
 const requireLinux = (fn: string): void => {
   const platform = currentPlatform();
@@ -116,15 +106,5 @@ export const loadGtkDialogFFI = () => {
   }
   const ffi = dlopenLinux(LIBGTK_PATH, GTK_DIALOG_FFI_SYMBOLS);
   cache.gtk = ffi;
-  return ffi;
-};
-
-export const loadGtkDialogGObjectFFI = () => {
-  requireLinux('loadGtkDialogGObjectFFI');
-  if (cache.gobject) {
-    return cache.gobject;
-  }
-  const ffi = dlopenLinux(LIBGOBJECT_PATH, GTK_DIALOG_GOBJECT_FFI_SYMBOLS);
-  cache.gobject = ffi;
   return ffi;
 };

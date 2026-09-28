@@ -3,10 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { cstr } from '../../../src/main/platform/cstr';
 import { buildButtonsArray } from '../../../src/main/platform/linux/gtk-dialog';
-import {
-  loadGtkDialogFFI,
-  loadGtkDialogGObjectFFI,
-} from '../../../src/main/platform/linux/gtk-dialog-ffi';
+import { loadGtkDialogFFI } from '../../../src/main/platform/linux/gtk-dialog-ffi';
+import { loadGObjectFFI } from '../../../src/main/platform/linux/gobject-ffi';
 import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
 
 /**
@@ -45,18 +43,14 @@ describe.skipIf(!isLinux)('GTK dialog FFI + construction (Linux)', () => {
     }
   });
 
-  test('the 2-arity g_object_new resolves', () => {
-    const gobject = loadGtkDialogGObjectFFI();
-    expect(typeof gobject.symbols.g_object_new).toBe('function');
-  });
-
   test.skipIf(!hasDisplay)(
     'constructs a GtkAlertDialog and calls every setter without crashing',
     () => {
       const dialogLib = loadGtkDialogFFI();
-      const gobject = loadGtkDialogGObjectFFI();
-      const dialog = gobject.symbols.g_object_new(
+      const dialog = loadGObjectFFI().symbols.g_object_new(
         dialogLib.symbols.gtk_alert_dialog_get_type(),
+        null,
+        null,
         null,
       );
       expect(dialog).not.toBeNull();

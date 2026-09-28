@@ -5,7 +5,7 @@ import { runAsyncReady } from './gasync';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
-import { loadGtkDialogFFI, loadGtkDialogGObjectFFI } from './gtk-dialog-ffi';
+import { loadGtkDialogFFI } from './gtk-dialog-ffi';
 
 // GtkAlertDialog and GtkFileDialog (GTK 4.10+). Callback lifetime rules live in gasync.ts.
 
@@ -96,8 +96,13 @@ const showMessageBox = (spec: {
   readonly type?: string;
 }): Promise<number> => {
   const gtk = loadGtkDialogFFI();
-  const gobject = loadGtkDialogGObjectFFI();
-  const dialog = gobject.symbols.g_object_new(gtk.symbols.gtk_alert_dialog_get_type(), null);
+  const gobject = loadGObjectFFI();
+  const dialog = gobject.symbols.g_object_new(
+    gtk.symbols.gtk_alert_dialog_get_type(),
+    null,
+    null,
+    null,
+  );
   if (dialog === null) {
     throw new Error('g_object_new(GtkAlertDialog) returned null');
   }
