@@ -42,6 +42,7 @@ const VIRTUAL_KEY_CODES: ReadonlyMap<string, number> = new Map([
   ['6', 22],
   ['5', 23],
   ['=', 24],
+  ['PLUS', 24],
   ['9', 25],
   ['7', 26],
   ['-', 27],
@@ -94,6 +95,11 @@ const VIRTUAL_KEY_CODES: ReadonlyMap<string, number> = new Map([
   ['F13', 105],
   ['F14', 107],
   ['F15', 113],
+  ['F16', 106],
+  ['F17', 64],
+  ['F18', 79],
+  ['F19', 80],
+  ['F20', 90],
 ]);
 
 /**
@@ -111,7 +117,8 @@ export const carbonModifierMask = (parsed: ParsedAccelerator): number => {
   if (parsed.meta || parsed.super) {
     mask |= CMD_KEY;
   }
-  if (parsed.shift) {
+  // Plus is the shifted =/+ key; Electron adds Shift for it too.
+  if (parsed.shift || parsed.key.toUpperCase() === 'PLUS') {
     mask |= SHIFT_KEY;
   }
   if (parsed.alt) {

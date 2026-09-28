@@ -28,7 +28,11 @@ describe.skipIf(!isMac)('carbon-global-shortcut (macOS)', () => {
   });
 
   test('register() returns false for a key with no virtual-key mapping', () => {
-    expect(macosGlobalShortcutBackend.register('CmdOrCtrl+Plus', () => undefined)).toBe(false);
+    expect(macosGlobalShortcutBackend.register('CmdOrCtrl+F21', () => undefined)).toBe(false);
+  });
+
+  test('register() accepts Plus', () => {
+    expect(macosGlobalShortcutBackend.register('CmdOrCtrl+Plus', () => undefined)).toBe(true);
   });
 
   test('unregister() of a live shortcut runs clean', () => {

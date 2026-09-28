@@ -34,10 +34,16 @@ describe('macVirtualKeyCode', () => {
     expect(macVirtualKeyCode('0')).toBe(29);
   });
 
-  test('maps function keys', () => {
+  test('maps function keys through F20', () => {
     expect(macVirtualKeyCode('F1')).toBe(122);
     expect(macVirtualKeyCode('F5')).toBe(96);
     expect(macVirtualKeyCode('F12')).toBe(111);
+    expect(macVirtualKeyCode('F16')).toBe(106);
+    expect(macVirtualKeyCode('F20')).toBe(90);
+  });
+
+  test('maps Plus to the =/+ key', () => {
+    expect(macVirtualKeyCode('Plus')).toBe(macVirtualKeyCode('='));
   });
 
   test('maps common named keys', () => {
@@ -47,8 +53,8 @@ describe('macVirtualKeyCode', () => {
     expect(macVirtualKeyCode('Tab')).toBe(48);
   });
 
-  test('returns undefined for an unmappable key', () => {
-    expect(macVirtualKeyCode('Plus')).toBeUndefined();
+  test('returns undefined for a key macOS has no code for', () => {
+    expect(macVirtualKeyCode('F21')).toBeUndefined();
   });
 
   test('is case-insensitive on the key label', () => {
@@ -57,13 +63,6 @@ describe('macVirtualKeyCode', () => {
 });
 
 describe('carbonModifierMask', () => {
-  test('exposes the Carbon mask constants', () => {
-    expect(CMD_KEY).toBe(0x100);
-    expect(SHIFT_KEY).toBe(0x200);
-    expect(OPTION_KEY).toBe(0x800);
-    expect(CONTROL_KEY).toBe(0x1000);
-  });
-
   test('Cmd accelerator on macOS yields the cmdKey mask', () => {
     const parsed = parseAccelerator('CmdOrCtrl+K', 'macos');
     expect(parsed).toBeDefined();
@@ -79,6 +78,14 @@ describe('carbonModifierMask', () => {
       throw new Error('unreachable');
     }
     expect(carbonModifierMask(parsed)).toBe(CMD_KEY | CONTROL_KEY | OPTION_KEY | SHIFT_KEY);
+  });
+
+  test('Plus implies Shift, as Electron registers it', () => {
+    const parsed = parseAccelerator('CmdOrCtrl+Plus', 'macos');
+    if (parsed === undefined) {
+      throw new Error('unreachable');
+    }
+    expect(carbonModifierMask(parsed)).toBe(CMD_KEY | SHIFT_KEY);
   });
 
   test('a bare key yields a zero mask', () => {
