@@ -204,7 +204,7 @@ const parseEngine = (rest: readonly string[]): Command => {
     case 'install': {
       const source = args[0];
       if (source === undefined) {
-        return { kind: 'error', message: 'bunmaska engine install: missing <id|path>' };
+        return { kind: 'error', message: 'bunmaska engine install: missing <id|path|url>' };
       }
       return positional(1) ?? { kind: 'engine', sub: { action: 'install', source } };
     }

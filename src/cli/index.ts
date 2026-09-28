@@ -59,7 +59,7 @@ Usage:
   bunmaska engine <subcommand>           Manage the pinned-WebKit engine store
   bunmaska keygen [--out <dir>]          Generate the Ed25519 update-signing key
                                          pair (private + public .pem)
-  bunmaska doctor [dir]                   Report runtime, store, and the engine pin
+  bunmaska doctor [dir]                  Report runtime, store, and the engine pin
   bunmaska --help                        Show this help
   bunmaska --version                     Print the Bunmaska version
 
