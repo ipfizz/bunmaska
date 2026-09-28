@@ -5,34 +5,18 @@ import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
 import { loadWebKitGtkFFI, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START } from './webkitgtk-ffi';
 
-/** `WebKitUserContentInjectedFrames`: never inject into subframes, or a third-party iframe gets the bridge and every exposed API. */
+/** `WebKitUserContentInjectedFrames`: never subframes, or a third-party iframe gets every exposed API. */
 const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME = 1;
 
-/**
- * Name of the isolated JS world the bridge + user preload run in (Electron
- * `contextIsolation: true`). The page/main world is `NULL`. Must match the
- * macOS `PRELOAD_WORLD_NAME`.
- */
+/** The isolated world (Electron `contextIsolation`) the bridge and preloads run in. */
 export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 
-/**
- * WebKitGTK 6.0 IPC bridge. The `WebKitUserContentManager` must be fully wired
- * BEFORE the view is constructed (it is a construct-only property); envelopes go
- * back to the renderer fire-and-forget via `evaluate_javascript` (D022).
- */
-
-/** The script-message handler name the preload bridge posts to. */
+/** The isolated-world handler the preload bridge posts envelopes to. */
 export const HANDLER_NAME = 'bunmaska';
-/** The detailed signal connected before registering the handler (documented race). */
 export const SIGNAL = `script-message-received::${HANDLER_NAME}`;
 
-/**
- * Page-world handler name `executeJavaScript` posts its result to. Mirrors the
- * macOS `EXEC_RESULT_HANDLER_NAME` — the return channel for the public
- * `executeJavaScript`, registered in the PAGE world (world_name = NULL).
- */
+/** The page-world handler the `executeJavaScript` wrapper posts its result to. */
 export const EXEC_HANDLER_NAME = 'bunmaskaExec';
-/** The detailed signal connected before registering the exec handler. */
 export const EXEC_SIGNAL = `script-message-received::${EXEC_HANDLER_NAME}`;
 
 /** A web view wired for IPC, plus the manager and the signal registry to retain. */
@@ -43,20 +27,14 @@ export type WiredWebView = {
 };
 
 export type WebViewIpcOptions = {
-  /** The preload bridge source injected at document-start in the isolated world. */
   readonly preloadSource: string;
   readonly userPreloadSource?: string;
   readonly isolatedSetupSource: string;
   readonly isolatedHostSource: string;
   readonly pageWorldSource: string;
-  /** Called with each JSON envelope the renderer posts. */
   readonly onMessage: (json: string) => void;
-  /**
-   * Called with each JSON `{ execId, ok, result?, error? }` the page-world
-   * `executeJavaScript` wrapper posts to the `bunmaskaExec` handler. Optional.
-   */
+  /** Receives each `{ execId, ok, result?, error? }` JSON the exec wrapper posts. */
   readonly onExecMessage: (json: string) => void;
-  /** Called when the page-world dom-ready script fires (DOMContentLoaded). Optional. */
   readonly onDomReady: () => void;
 };
 
@@ -94,10 +72,10 @@ const addPageWorldScript = (ucm: Pointer, source: string): void => {
 };
 
 /**
- * Create a `WebKitWebView` with a pre-wired user-content-manager. Connect each
- * `script-message-received::` signal BEFORE registering its handler (documented
- * race), then pass the manager to `g_object_new` as a construct-only property —
- * its trailing arg MUST be a true null terminator (0).
+ * The user-content-manager is construct-only, so it is fully wired before
+ * `g_object_new`, whose varargs MUST end in a real NULL. Each
+ * `script-message-received::` signal is connected BEFORE its handler is
+ * registered (documented race).
  */
 export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView => {
   const webkit = loadWebKitGtkFFI();
@@ -112,19 +90,13 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   const callback = makeScriptMessageCallback(options.onMessage);
   registry.connect(ucm, SIGNAL, callback);
 
-  // Register the handler IN the isolated world so its `webkit.messageHandlers`
-  // binding is reachable only from there (matches the user-script world below).
+  // Isolated world only: page scripts must never reach the `bunmaska` handler.
   webkit.symbols.webkit_user_content_manager_register_script_message_handler(
     ucm,
     cstr(HANDLER_NAME),
     cstr(PRELOAD_WORLD_NAME),
   );
 
-  // Second handler in the PAGE world (world_name = NULL): the return channel for
-  // the public `executeJavaScript`, whose wrapper posts its result here. Its
-  // JSCallback is retained in the SAME registry so it is closed on window
-  // teardown — NEVER per-call (closing a JSCallback mid-invocation frees its
-  // native trampoline). Connect the detailed signal BEFORE registering (race).
   registry.connect(ucm, EXEC_SIGNAL, makeScriptMessageCallback(options.onExecMessage));
   webkit.symbols.webkit_user_content_manager_register_script_message_handler(
     ucm,
@@ -132,8 +104,6 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     null,
   );
 
-  // Page-world dom-ready handler: the injected script posts here on
-  // DOMContentLoaded. Same retain/connect-before-register discipline as exec.
   registry.connect(
     ucm,
     `script-message-received::${DOM_READY_HANDLER_NAME}`,
@@ -145,18 +115,15 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     null,
   );
 
-  // Isolated world: channel-id setup (if any) BEFORE the bridge, then the
-  // bridge, then the contextBridge host (installs exposeInMainWorld), then the
-  // user preload (so it can call exposeInMainWorld).
+  // Order matters: channel setup, bridge, contextBridge host (installs
+  // exposeInMainWorld), then the user preload that calls it.
   addUserScript(ucm, options.isolatedSetupSource);
   addUserScript(ucm, options.preloadSource);
   addUserScript(ucm, options.isolatedHostSource);
   if (options.userPreloadSource !== undefined) {
     addUserScript(ucm, options.userPreloadSource);
   }
-  // Page/main world: the cross-world contextBridge stub (Phase B).
   addPageWorldScript(ucm, options.pageWorldSource);
-  // Page/main world: the dom-ready notifier (posts on DOMContentLoaded).
   addPageWorldScript(ucm, generateDomReadyScript());
 
   const view = requirePointer(
@@ -172,19 +139,11 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   return { view, ucm, registry };
 };
 
-/**
- * Escape a JSON envelope string as a JS string literal so it can be embedded in
- * the `window.__bunmaska._dispatch(...)` call passed to `evaluate_javascript`.
- */
+/** A no-op until the isolated-world bridge exists. */
 export const buildDispatchScript = (envelopeJson: string): string =>
   `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(envelopeJson)});`;
 
-/**
- * Push a JSON envelope to the renderer's preload bridge via fire-and-forget
- * `evaluate_javascript` (length = -1 for NUL-terminated; cancellable/callback/
- * user_data are NULL). `world_name` targets the ISOLATED `BunmaskaPreload` world,
- * where `__bunmaska._dispatch` lives — NOT the page world.
- */
+/** Fire-and-forget into the ISOLATED world, where `__bunmaska._dispatch` lives (not the page world). */
 export const sendToRenderer = (view: Pointer, envelopeJson: string): void => {
   const webkit = loadWebKitGtkFFI();
   webkit.symbols.webkit_web_view_evaluate_javascript(
@@ -199,12 +158,7 @@ export const sendToRenderer = (view: Pointer, envelopeJson: string): void => {
   );
 };
 
-/**
- * Evaluate `source` in the PAGE/main world (world_name = NULL) fire-and-forget —
- * NO `GAsyncReadyCallback` (length = -1 for NUL-terminated; cancellable/callback/
- * user_data are NULL). Used to inject the `executeJavaScript` wrapper, whose
- * result returns out-of-band via the `bunmaskaExec` page-world handler.
- */
+/** Fire-and-forget into the page world (world_name NULL); used for the exec wrapper. */
 export const evalInPageWorld = (view: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
   webkit.symbols.webkit_web_view_evaluate_javascript(

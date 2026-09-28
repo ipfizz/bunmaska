@@ -40,15 +40,7 @@ import { capturePage as webkitCapturePage } from './webkit-snapshot';
 import { registerAllSchemes } from './webkit-uri-scheme';
 import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
 
-/**
- * Linux {@link NativeApplication} backend on GTK 4 + WebKitGTK 6.0, pure
- * `bun:ffi`. Mirrors `cocoa-backend.ts` structurally (D024): a thin lifecycle
- * shell over a cooperative GLib pump plus a window factory.
- *
- * The pump reuses the shared {@link CooperativePump} driven by the Linux drain
- * (`g_main_context_iteration` with `may_block = FALSE`) — NO `GtkApplication`
- * or `g_main_loop_run`, which would block Bun's thread (D020).
- */
+// Never GtkApplication or g_main_loop_run: both block Bun's only thread (D020).
 
 const log = createLogger('linux-backend');
 
@@ -57,10 +49,6 @@ const GTK_FALSE = 0;
 /** `GtkOrientation`: stack the menu bar above the webview vertically. */
 const GTK_ORIENTATION_VERTICAL = 1;
 
-/**
- * Linux {@link NativeWebContents}: a `WebKitWebView` wired for navigation, JS
- * evaluation, and the IPC round-trip.
- */
 class LinuxWebContents implements NativeWebContents {
   readonly #view: Pointer;
   readonly #ucm: Pointer;
@@ -79,11 +67,8 @@ class LinuxWebContents implements NativeWebContents {
       preloadSource: generatePreloadBootstrap(),
       isolatedSetupSource: generateIsolatedChannelSetup(channelId),
       isolatedHostSource: generateIsolatedHostSource(channelId),
-      // Page world: the cross-world stub + the custom-title-bar script. The page world
-      // stays free of any `__bunmaska` handle (context isolation), so it only mirrors
-      // `--app-region`; the window-op controls + native GTK handler are a follow-up on
-      // the isolated-world bridge.
-      pageWorldSource: `${generatePageWorldStub(channelId)}\n${windowControlsScript()}`,
+      // No `__bunmaska` in the page world (context isolation): it only mirrors `--app-region`.
+      pageWorldSource: `${generatePageWorldStub(channelId)}\n${windowControlsScript()}`, // ponytail: frameless window-op buttons wait on the isolated-world bridge (D045)
       ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
       onMessage: (json: string) => {
         this.#markBridgeReady();
@@ -102,13 +87,7 @@ class LinuxWebContents implements NativeWebContents {
     this.#view = wired.view;
     this.#ucm = wired.ucm;
     this.#registry = wired.registry;
-    // Wire every custom scheme registered via `protocol.handle` onto THIS view's
-    // WebKitWebContext before any load, so `app://…` loads are served. Each
-    // scheme registers once per process (the dedup guard inside); the request
-    // callback's JSCallback is retained there for the process lifetime.
     registerAllSchemes(this.#view);
-    // Enable developer extras so the inspector is available (right-click →
-    // Inspect Element, and openDevTools()). Stable WebKitGTK 6.0 API.
     const webkit = loadWebKitGtkFFI();
     webkit.symbols.webkit_settings_set_enable_developer_extras(
       webkit.symbols.webkit_web_view_get_settings(this.#view),
@@ -161,7 +140,7 @@ class LinuxWebContents implements NativeWebContents {
     this.#destroyed = true;
     this.#exec.destroy();
     this.#registry.disconnectAll();
-    // Deferred: close() can run inside this manager's own script-message emission.
+    // Unref on a later tick: close() may run inside this manager's own script-message emission.
     const ucm = this.#ucm;
     setTimeout(() => loadGObjectFFI().symbols.g_object_unref(ucm), 0);
   }
@@ -171,8 +150,7 @@ class LinuxWebContents implements NativeWebContents {
   }
 
   loadHTML(html: string, baseUrl?: string): void {
-    // base_uri is nullable; cstring cannot encode NULL, so pass a pinned
-    // NUL-terminated buffer for a real base or null for NULL.
+    // base_uri is nullable and FFI cstring cannot encode NULL.
     const baseUri = baseUrl === undefined ? null : cstr(baseUrl);
     this.#live()?.webkit_web_view_load_html(this.#view, cstr(html), baseUri);
   }
@@ -223,26 +201,19 @@ class LinuxWebContents implements NativeWebContents {
 
   setUserAgent(userAgent: string): void {
     const webkit = this.#live();
-    // Set on the view's WebKitSettings; takes effect on the next navigation.
+    // Takes effect on the next navigation.
     webkit?.webkit_settings_set_user_agent(
       webkit.webkit_web_view_get_settings(this.#view),
       cstr(userAgent),
     );
   }
 
-  /**
-   * Evaluate `code` in the PAGE world (world_name = NULL) and resolve to its
-   * completion value. The result returns out-of-band through the page-world
-   * `bunmaskaExec` handler (mirrors macOS, D022) — NO per-call native callback, so
-   * nothing is freed mid-invocation.
-   */
   executeJavaScript(code: string): Promise<unknown> {
     return this.#exec.executeJavaScript(code);
   }
 
   printToPDF(): Promise<Uint8Array> {
-    // WebKitGTK exposes only a printer/file print operation, not a page→PDF-bytes
-    // API like WKWebView's createPDFWithConfiguration. Deferred (see PARITY.md).
+    // WebKitGTK prints only to a printer or file; it has no page-to-PDF-bytes API.
     return Promise.reject(
       new UnsupportedPlatformError('webContents.printToPDF is not yet supported on Linux'),
     );
@@ -299,20 +270,7 @@ class LinuxWebContents implements NativeWebContents {
   }
 }
 
-/**
- * Linux {@link NativeWindow}: a `GtkWindow` hosting a `WebKitWebView` as its
- * single child. Title / visibility / minimized state are tracked in JS because
- * GTK 4 exposes no reliable getters for them.
- *
- * Lifecycle events: `focus`/`blur` (notify::is-active), `resize`
- * (notify::default-width/height), `maximize`/`unmaximize` (notify::maximized),
- * `show`/`hide` (emitted from show()/hide()), `ready-to-show` (first finished
- * load), and a preventable `close` (close-request veto). DEFERRED on Linux:
- * `minimize`/`restore` — GTK 4 has no public, notifiable minimized property nor
- * a `gtk_window_is_minimized` getter, so the window-manager-driven iconify state
- * cannot be observed reliably. `minimize()` still iconifies and `isMinimized()`
- * reports the JS-tracked flag; only the EVENT is unavailable.
- */
+/** Title, visibility and minimized state are tracked in JS: GTK 4 has no reliable getters for them. */
 class LinuxWindow implements NativeWindow {
   readonly #window: Pointer;
   readonly #webContents: LinuxWebContents;
@@ -331,7 +289,6 @@ class LinuxWindow implements NativeWindow {
   #releaseAppMenu: (() => void) | undefined;
   readonly #eventHandlers = new Map<WindowEventType, () => void>();
 
-  /** Surface a non-preventable lifecycle event to its registered handler. */
   #emitEvent(type: WindowEventType): void {
     this.#eventHandlers.get(type)?.();
   }
@@ -361,18 +318,15 @@ class LinuxWindow implements NativeWindow {
     this.#webContents = new LinuxWebContents(options.preloadScript);
     const appMenu = getCurrentAppMenu();
     if (appMenu === undefined) {
-      // Default path — unchanged: the webview is the window's sole child.
       gtk.symbols.gtk_window_set_child(this.#window, this.#webContents.view());
     } else {
-      // App-menu path: realize a PER-WINDOW model + action group from the app-menu spec tree,
-      // so role items (Copy/Paste/minimize/…) dispatch onto THIS window's own web view/window.
-      // Then stack a GtkPopoverMenuBar above the webview and insert this window's group.
+      // Per-window model + group, so role items act on THIS window's own view (D039).
       const menu = loadGtkMenuFFI();
       const view = this.#webContents.view();
       const win = this.#window;
       const dispatchRole = (spec: NativeMenuItemSpec): void => {
         if (this.#closed) {
-          return; // window torn down — its view/window pointers may be freed (use-after-free guard).
+          return; // the view and window may be freed (use-after-free guard, D039).
         }
         if (spec.editingCommand !== undefined) {
           loadWebKitGtkFFI().symbols.webkit_web_view_execute_editing_command(
@@ -398,8 +352,7 @@ class LinuxWindow implements NativeWindow {
             gtk.symbols.gtk_window_fullscreen(win);
           }
         }
-        // appAction roles (quit/about) are deferred on Linux v1 — a no-op here.
-      };
+      }; // ponytail: appAction roles (quit/about) are inert on a Linux click; their shortcuts work (D039)
       const entry = realizeForWindow(appMenu.specs, dispatchRole);
       const model = Number(entry.model) as unknown as Pointer;
       const group = Number(entry.group) as unknown as Pointer;
@@ -416,18 +369,12 @@ class LinuxWindow implements NativeWindow {
       gtk.symbols.gtk_window_set_child(this.#window, box);
     }
 
-    // Preventable close-request: consult the JS `close` listener first. If it
-    // vetoes, return true (1) so GTK's default handler does NOT destroy the
-    // window. Otherwise run teardown + fire `closed`, then return false (0) so
-    // GTK destroys it. Returning the veto is the Linux half of preventable close.
     this.#registry.connect(
       this.#window,
       'close-request',
       makeCloseRequestCallback(() => this.#requestClose()),
     );
 
-    // Focus/blur: `notify::is-active` fires when the active state flips; read the
-    // dedicated getter (no g_object_get varargs) and emit the matching edge.
     this.#registry.connect(
       this.#window,
       'notify::is-active',
@@ -441,7 +388,7 @@ class LinuxWindow implements NativeWindow {
       }),
     );
 
-    // Maximize/unmaximize: `notify::maximized` on the GtkWindow:maximized prop.
+    // GTK 4 leaves default-width/height untouched while maximized or fullscreen.
     this.#registry.connect(
       this.#window,
       'notify::maximized',
@@ -461,8 +408,7 @@ class LinuxWindow implements NativeWindow {
       makeNotifyCallback(() => this.#emitEvent('resize')),
     );
 
-    // Resize: the default-size props change when the window is resized. Two
-    // distinct callbacks so the registry closes each exactly once on teardown.
+    // One thunk per signal, so the registry closes each exactly once.
     this.#registry.connect(
       this.#window,
       'notify::default-width',
@@ -474,8 +420,6 @@ class LinuxWindow implements NativeWindow {
       makeNotifyCallback(() => this.#emitEvent('resize')),
     );
 
-    // ready-to-show: emit once on the first finished load (reuses the web
-    // contents' load-changed FINISHED signal).
     let readyToShowEmitted = false;
     this.#webContents.onNavigation((event) => {
       if (event.type === 'did-finish-load' && !readyToShowEmitted) {
@@ -493,15 +437,9 @@ class LinuxWindow implements NativeWindow {
     return this.#webContents;
   }
 
-  /**
-   * Consult the JS `close` listener for a native `close-request`. Returns true
-   * to VETO (the window stays open); on a non-veto runs the close bookkeeping +
-   * teardown and returns false so GTK destroys the window.
-   */
+  /** Native close: true vetoes; otherwise tear down and let GTK destroy the window. */
   #requestClose(): boolean {
     if (this.#closed) {
-      // Already torn down (e.g. programmatic close races the native request):
-      // allow GTK to finish destroying.
       return false;
     }
     if (this.#vetoed()) {
@@ -561,12 +499,10 @@ class LinuxWindow implements NativeWindow {
   }
 
   setPosition(_x: number, _y: number): void {
-    // GTK4 removed programmatic positioning; the compositor places the window
-    // (Wayland forbids clients moving themselves). No-op by design, like center().
+    // No-op: GTK 4 has no client positioning; the compositor places windows (Wayland forbids it).
   }
 
   setBounds(bounds: Rect): void {
-    // Only the size is honourable on GTK4; position is compositor-controlled.
     this.setSize(bounds.width, bounds.height);
   }
 
@@ -583,8 +519,7 @@ class LinuxWindow implements NativeWindow {
   }
 
   center(): void {
-    // GTK4 removed programmatic window positioning; the compositor places the
-    // window (and Wayland forbids clients moving themselves). No-op by design.
+    // No-op: see setPosition.
   }
 
   getBounds(): Rect {
@@ -650,7 +585,7 @@ class LinuxWindow implements NativeWindow {
   }
 
   isMinimized(): boolean {
-    return this.#minimized;
+    return this.#minimized; // ponytail: misses WM iconify and never emits minimize/restore; X11 reports it via GdkToplevel notify::state
   }
 
   restore(): void {
@@ -676,7 +611,7 @@ class LinuxWindow implements NativeWindow {
   }
 
   setAlwaysOnTop(_flag: boolean): void {
-    // GTK4 dropped keep-above; no portable client API. No-op (best-effort).
+    // No-op: GTK 4 dropped keep-above and has no portable replacement.
   }
 
   close(): void {
@@ -690,7 +625,6 @@ class LinuxWindow implements NativeWindow {
     if (this.#closed) {
       return;
     }
-    // Force-close: run teardown then destroy WITHOUT consulting the veto.
     this.#handleClosed();
     loadGtkFFI().symbols.gtk_window_destroy(this.#window);
   }
@@ -713,7 +647,7 @@ class LinuxWindow implements NativeWindow {
     }
     const entry = getMenuEntry(menuHandle);
     if (entry === undefined) {
-      return; // unknown handle — nothing to show.
+      return; // unknown handle
     }
     const menu = loadGtkMenuFFI();
     this.#closeActivePopover(); // replace any open popover.
@@ -724,13 +658,13 @@ class LinuxWindow implements NativeWindow {
       return;
     }
     menu.symbols.gtk_widget_set_parent(popover, this.#window);
-    // Insert the menu's action group so its items are live (mirrors the menu-bar path).
+    // Without its action group the items render but stay inert.
     menu.symbols.gtk_widget_insert_action_group(
       popover,
       cstr('bunmaska'),
       Number(entry.group) as unknown as Pointer,
     );
-    // GdkRectangle { x, y, width:1, height:1 } — a 1×1 rect is a point (window-relative coords).
+    // A 1x1 GdkRectangle { x, y, width, height } is a point, window-relative.
     menu.symbols.gtk_popover_set_pointing_to(popover, ptr(new Int32Array([x, y, 1, 1])));
     menu.symbols.gtk_popover_popup(popover); // non-blocking; item activation fires via the pump.
     this.#activePopover = popover;
@@ -751,10 +685,6 @@ class LinuxWindow implements NativeWindow {
   }
 }
 
-/**
- * Linux {@link NativeApplication}: initializes GTK, drives the cooperative pump,
- * and owns the set of live windows.
- */
 export class LinuxApplication implements NativeApplication {
   #pump: CooperativePump | undefined;
   #started = false;
@@ -788,10 +718,9 @@ export class LinuxApplication implements NativeApplication {
     this.#readyCallbacks.push(callback);
   }
 
-  /** Show a GTK about dialog (Electron's `showAboutPanel`). */
   showAboutPanel(): void {
     const gtk = loadGtkFFI();
-    const dialog = gtk.symbols.gtk_about_dialog_new();
+    const dialog = gtk.symbols.gtk_about_dialog_new(); // ponytail: no name, version or parent; needs gtk_about_dialog_set_* in gtk-ffi
     if (dialog !== null) {
       gtk.symbols.gtk_window_present(dialog);
     }
