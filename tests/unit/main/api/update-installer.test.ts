@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { UpdateManifest } from '../../../../src/common/manifest';
 import type { StagedUpdate } from '../../../../src/main/api/auto-updater';
 import {
@@ -8,6 +11,7 @@ import {
   installStagedUpdate,
   type InstallerDeps,
   shQuote,
+  spawnDetachedScript,
   stagedBundleDirName,
 } from '../../../../src/main/api/update-installer';
 
@@ -227,4 +231,36 @@ describe('installStagedUpdate', () => {
     expect(h.spawns).toEqual([['cmd.exe', '/c', script?.path ?? '']]);
     expect(h.quits).toHaveLength(1);
   });
+});
+
+const pgidOf = (pid: number | string): string =>
+  Bun.spawnSync(['ps', '-o', 'pgid=', '-p', String(pid)])
+    .stdout.toString()
+    .trim();
+
+describe('spawnDetachedScript', () => {
+  test.skipIf(process.platform === 'win32')(
+    'starts the helper in its own session so it outlives the quitting app',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bunmaska-detach-'));
+      try {
+        const out = join(dir, 'pgid');
+        spawnDetachedScript([
+          '/bin/sh',
+          '-c',
+          `ps -o pgid= -p $$ > ${shQuote(`${out}.tmp`)}; mv ${shQuote(`${out}.tmp`)} ${shQuote(out)}`,
+        ]);
+        const deadline = Date.now() + 5000;
+        while (!existsSync(out)) {
+          if (Date.now() > deadline) {
+            throw new Error('the detached helper never ran');
+          }
+          await Bun.sleep(20);
+        }
+        expect(readFileSync(out, 'utf8').trim()).not.toBe(pgidOf(process.pid));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });

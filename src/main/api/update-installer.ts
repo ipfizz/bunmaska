@@ -193,10 +193,13 @@ export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): 
   deps.quit();
 };
 
-const spawnDetachedScript = (argv: readonly string[]): void => {
-  // unref so app.quit() is not held open; a POSIX orphan reparents and lives on.
-  const proc = Bun.spawn([...argv], { stdio: ['ignore', 'ignore', 'ignore'] });
-  proc.unref();
+/**
+ * Must be `detached`: on Windows a non-detached child sits in the app's
+ * kill-on-close job and dies with it (D043's TerminateProcess exit), so the swap
+ * never runs; on POSIX it gets its own session. `unref` keeps quit from waiting.
+ */
+export const spawnDetachedScript = (argv: readonly string[]): void => {
+  Bun.spawn([...argv], { stdio: ['ignore', 'ignore', 'ignore'], detached: true }).unref();
 };
 
 /** The production default installer behind `autoUpdater.quitAndInstall`. */
