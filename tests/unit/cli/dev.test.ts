@@ -84,8 +84,9 @@ describe('classifyChange with a renderer root', () => {
 type HarnessOptions = {
   readonly classify?: (relPath: string) => ChangeAction;
   readonly rebuild?: () => void | Promise<void>;
-  /** Children never exit on kill; the test settles each exit itself. */
+  /** Children ignore a plain kill; the test settles each exit itself. */
   readonly manualExit?: boolean;
+  readonly killGraceMs?: number;
 };
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
@@ -97,6 +98,7 @@ const makeHarness = (opts: HarnessOptions = {}) => {
   const logs: string[] = [];
   const exits: Array<() => void> = [];
   let kills = 0;
+  let forceKills = 0;
   let reloads = 0;
   let rebuilds = 0;
   let closed = false;
@@ -104,6 +106,7 @@ const makeHarness = (opts: HarnessOptions = {}) => {
   let timerFn: (() => void) | undefined;
   const deps: DevDeps = {
     debounceMs: 100,
+    ...(opts.killGraceMs !== undefined ? { killGraceMs: opts.killGraceMs } : {}),
     ...(opts.classify !== undefined ? { classify: opts.classify } : {}),
     ...(opts.rebuild !== undefined
       ? {
@@ -123,7 +126,12 @@ const makeHarness = (opts: HarnessOptions = {}) => {
       exits.push(settle);
       return {
         exited,
-        kill: () => {
+        kill: (force) => {
+          if (force === true) {
+            forceKills += 1;
+            settle();
+            return;
+          }
           kills += 1;
           if (opts.manualExit !== true) {
             settle();
@@ -162,6 +170,9 @@ const makeHarness = (opts: HarnessOptions = {}) => {
     logs,
     get kills() {
       return kills;
+    },
+    get forceKills() {
+      return forceKills;
     },
     get reloads() {
       return reloads;
@@ -372,6 +383,17 @@ describe('DevSupervisor child lifecycle', () => {
     h.settleExit(0);
     await flush();
     expect(h.spawns).toHaveLength(2);
+  });
+
+  test('a child that ignores the kill is force-killed so restarts never wedge', async () => {
+    const h = makeHarness({ manualExit: true, killGraceMs: 5 });
+    new DevSupervisor('/proj', 'src/main.ts', h.deps);
+    h.fire('src/main.ts');
+    await h.tick();
+    await Bun.sleep(30);
+    expect(h.forceKills).toBe(1);
+    expect(h.spawns).toHaveLength(2);
+    expect(h.logs.join(' ')).toContain('force-killed');
   });
 
   test('a reload after the app quits says so instead of reporting success', async () => {

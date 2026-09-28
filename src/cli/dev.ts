@@ -14,6 +14,19 @@ export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 /** Default debounce window (ms) collapsing a burst of file changes into one action. */
 export const DEV_DEBOUNCE_MS = 120;
 
+/** Default for {@link DevDeps.killGraceMs}. */
+const DEV_KILL_GRACE_MS = 3000;
+
+/** Resolves true once `promise` settles, or false after `ms`. */
+const settlesWithin = (promise: Promise<unknown> | undefined, ms: number): Promise<boolean> =>
+  new Promise((resolvePromise) => {
+    const timer = setTimeout(() => resolvePromise(false), ms);
+    void Promise.resolve(promise).then(() => {
+      clearTimeout(timer);
+      resolvePromise(true);
+    });
+  });
+
 /**
  * Precedence: the explicit argument, then the config's `entry`, then
  * {@link DEV_DEFAULT_ENTRY}.
@@ -70,7 +83,8 @@ const ACTION_RANK: Record<Exclude<ChangeAction, 'ignore'>, number> = {
 };
 
 export type DevChild = {
-  readonly kill: () => void;
+  /** SIGTERM, or SIGKILL when `force`. */
+  readonly kill: (force?: boolean) => void;
   /** Ask the running child to live-reload its open windows (a renderer-only change). */
   readonly reload: () => void;
   /**
@@ -94,6 +108,8 @@ export type DevDeps = {
   readonly timers: DevTimers;
   readonly log: (message: string) => void;
   readonly debounceMs?: number;
+  /** How long a killed child gets to exit before it is force-killed. */
+  readonly killGraceMs?: number;
   /** Overrides {@link classifyChange} (e.g. bound to a renderer root). */
   readonly classify?: (relPath: string) => ChangeAction;
   /** Rebuild the configured renderer; also runs before every restart. A throw is logged. */
@@ -210,7 +226,13 @@ export class DevSupervisor {
     try {
       const previous = this.#child;
       previous.kill();
-      await previous.exited;
+      // A child that traps SIGTERM (a vetoed quit) would otherwise wedge every later restart.
+      const grace = this.#deps.killGraceMs ?? DEV_KILL_GRACE_MS;
+      if (!(await settlesWithin(previous.exited, grace))) {
+        this.#deps.log(`app did not exit ${grace}ms after SIGTERM; force-killed it`);
+        previous.kill(true);
+        await previous.exited;
+      }
       // Spawning mid-build would load a stale or half-written bundle.
       while (this.#rebuilding !== undefined) {
         await this.#rebuilding;
@@ -285,8 +307,8 @@ export const defaultDevDeps = (
     });
     return {
       exited: proc.exited,
-      kill: () => {
-        proc.kill();
+      kill: (force) => {
+        proc.kill(force === true ? 'SIGKILL' : undefined);
       },
       reload: () => {
         try {
