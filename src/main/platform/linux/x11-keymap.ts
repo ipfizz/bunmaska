@@ -21,18 +21,17 @@ export const XKEY_STATE_OFFSET = 80;
 export const XKEY_KEYCODE_OFFSET = 84;
 export const XEVENT_BUFFER_SIZE = 192;
 
-/** Lock (CapsLock) and Mod2 (NumLock) — state bits a shortcut must not care about. */
-export const IGNORED_STATE_MASK = (1 << 1) | (1 << 4); // LockMask | Mod2Mask
-
 /**
  * The lock-bit grab variants: `XGrabKey(mods)` never fires while NumLock or
  * CapsLock is on, so every registration grabs all four combinations.
  */
 export const GRAB_VARIANTS: readonly number[] = [0, 1 << 1, 1 << 4, (1 << 1) | (1 << 4)];
 
-/** Whether a KeyPress `state` matches a registered modifier mask, ignoring lock bits. Pure. */
+const REGISTRABLE_MODIFIERS = SHIFT_MASK | CONTROL_MASK | MOD1_MASK | MOD4_MASK;
+
+/** Compares only the registrable modifiers: `state` also carries lock, pointer-button and XKB group bits. */
 export const x11StateMatches = (state: number, modifiers: number): boolean =>
-  (state & ~IGNORED_STATE_MASK) === modifiers;
+  (state & REGISTRABLE_MODIFIERS) === modifiers;
 
 /** `KeyPressMask` for `XSelectInput` (`X.h`). */
 export const KEY_PRESS_MASK = 1 << 0; // 1

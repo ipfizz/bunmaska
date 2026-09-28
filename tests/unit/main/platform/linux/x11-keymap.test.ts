@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { parseAccelerator } from '../../../../../src/main/api/accelerator';
 import {
   CONTROL_MASK,
-  IGNORED_STATE_MASK,
   MOD1_MASK,
   MOD4_MASK,
   SHIFT_MASK,
@@ -114,6 +113,15 @@ describe('x11StateMatches', () => {
   });
 
   test('ignores CapsLock and NumLock state bits', () => {
-    expect(x11StateMatches(CONTROL_MASK | IGNORED_STATE_MASK, CONTROL_MASK)).toBe(true);
+    const lockAndNumLock = (1 << 1) | (1 << 4);
+    expect(x11StateMatches(CONTROL_MASK | lockAndNumLock, CONTROL_MASK)).toBe(true);
+  });
+
+  test('ignores the XKB group bits of a second keyboard layout', () => {
+    expect(x11StateMatches(CONTROL_MASK | (1 << 13), CONTROL_MASK)).toBe(true);
+  });
+
+  test('ignores a held pointer button', () => {
+    expect(x11StateMatches(CONTROL_MASK | (1 << 8), CONTROL_MASK)).toBe(true);
   });
 });
