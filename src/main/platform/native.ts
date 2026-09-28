@@ -230,4 +230,6 @@ export interface NativeApplication {
   readonly appKit?: NativeAppKit;
   /** macOS and Linux. */
   showAboutPanel?(): void;
+  /** Blink keeps its profile here (`app.getPath('userData')`); set before {@link start}. */
+  setUserDataPath?(path: string): void;
 }
