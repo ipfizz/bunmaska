@@ -76,6 +76,15 @@ describe('resolveEngineWith', () => {
     expect(r.warnings.length).toBe(1);
   });
 
+  test('fallback warnings never promise a system WebKit (Windows has none)', () => {
+    const warnings = [
+      ...resolve({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } }).warnings,
+      ...resolve({ env: {}, readBakedId: () => ID, exists: () => false }).warnings,
+    ];
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join(' ')).not.toMatch(/system WebKit/);
+  });
+
   test('store-resolved pinned carries the engine id + root (for refcount linking)', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     expect(r.id).toBe(ID);

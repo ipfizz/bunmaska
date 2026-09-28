@@ -142,6 +142,13 @@ describe('engine which', () => {
     expect(c.text()).not.toMatch(/NOT installed/);
   });
 
+  test('a bare version pin says builds bake system, never that it resolves', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: '2.52.4' } });
+    await runEngine({ action: 'which' }, c.deps);
+    expect(c.text()).toMatch(/builds bake `system`/);
+    expect(c.text()).not.toMatch(/resolved to/);
+  });
+
   test('shows installed for a present engine', async () => {
     const root = makeTmpDir();
     await installFromDir(root, makeEngineDir(root, ID));
@@ -344,6 +351,21 @@ describe('doctor', () => {
     const c = capture(makeTmpDir(), { engine: { webkit: FOREIGN } });
     expect(await runDoctor('.', c.deps)).toBe(0);
     expect(c.text()).toMatch(/not used on this machine/);
+  });
+
+  test('a bare version pin says builds bake system (exit 0)', async () => {
+    const c = capture(makeTmpDir(), { engine: { webkit: '2.52.4' } });
+    expect(await runDoctor('.', c.deps)).toBe(0);
+    expect(c.text()).toMatch(/builds bake `system`/);
+  });
+
+  test('names the web engine this OS runs', async () => {
+    const c = capture(makeTmpDir());
+    await runDoctor(undefined, c.deps);
+    const engine = { macos: /WKWebView/, linux: /WebKitGTK/, windows: /WinCairo/ }[
+      currentPlatform()
+    ];
+    expect(c.text()).toMatch(engine);
   });
 
   test('exits 1 with a message when the config cannot be read', async () => {

@@ -103,7 +103,7 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
     return {
       mode: 'system',
       warnings: [
-        `bunmaska: pinned engine id ${JSON.stringify(id)} is malformed — using the system WebKit.`,
+        `bunmaska: pinned engine id ${JSON.stringify(id)} is malformed, so it is not used.`,
       ],
     };
   }
@@ -125,7 +125,7 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
     return {
       mode: 'system',
       warnings: [
-        `bunmaska: pinned engine ${id} is not installed — falling back to the system WebKit; ` +
+        `bunmaska: pinned engine ${id} is not installed, so it is not used and ` +
           `tested==shipped is not guaranteed. Run \`bunmaska engine install ${id}\` to restore it.`,
       ],
     };

@@ -132,7 +132,7 @@ const runWhich = async (target: string | undefined, deps: EngineCommandDeps): Pr
       deps.out('system — uses the OS WebView (no pinned engine)');
       break;
     case 'bare':
-      deps.out(`${pin}  (bare upstream — resolved to a full engine-id at build time)`);
+      deps.out(`${pin}  (bare version, not resolved yet: builds bake \`system\`; pin a full id)`);
       break;
     case 'foreign':
       deps.out(`${pin}  [built for another os/arch, not used on this machine]`);
@@ -318,11 +318,12 @@ const doctor = async (target: string | undefined, deps: EngineCommandDeps): Prom
   deps.out(`  platform:  ${currentPlatform()}-${currentArch()}`);
   deps.out(`  store:     ${deps.root}`);
   deps.out(`  engines:   ${installed.length} installed`);
-  deps.out(
-    currentPlatform() === 'macos'
-      ? '  webkit:    system WKWebView (pinning deferred on macOS)'
-      : '  webkit:    WebKitGTK 6.0 (system soname libwebkitgtk-6.0.so.4)',
-  );
+  const webkit = {
+    macos: 'system WKWebView (pinning deferred on macOS)',
+    linux: 'WebKitGTK 6.0 (system soname libwebkitgtk-6.0.so.4)',
+    windows: 'WinCairo WebKit (no system WebKit: bundle one or pin an installed engine)',
+  }[currentPlatform()];
+  deps.out(`  webkit:    ${webkit}`);
 
   const config = await deps.readConfig(target ?? '.');
   const pin = configPin(config);
@@ -331,7 +332,7 @@ const doctor = async (target: string | undefined, deps: EngineCommandDeps): Prom
       deps.out('  project:   system WebKit (no pin)');
       return 0;
     case 'bare':
-      deps.out(`  project:   pins ${pin} (bare upstream, resolved at build time)`);
+      deps.out(`  project:   pins ${pin} (bare version, not resolved yet: builds bake \`system\`)`);
       return 0;
     case 'foreign':
       deps.out(`  project:   pins ${pin} (built for another os/arch, not used on this machine)`);
