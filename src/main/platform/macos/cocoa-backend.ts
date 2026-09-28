@@ -153,15 +153,11 @@ const enableDeveloperExtras = (preferences: Handle): void => {
 /** One stateless handler serves every scheme of every window. */
 let schemeHandler: Handle | undefined;
 
-/** RFC 3986 scheme syntax. */
-const VALID_SCHEME = /^[a-z][a-z0-9+.-]*$/;
-
 /**
  * Put every `protocol.handle` scheme on `configuration`; WebKit only accepts
  * scheme handlers before the web view exists. `setURLSchemeHandler:` raises an
- * NSException for a scheme WebKit handles itself (https, file, ...) or a
- * malformed one, and an NSException aborts Bun past any JS catch, so those are
- * skipped up front.
+ * uncatchable NSInvalidArgumentException for a scheme WebKit serves itself:
+ * protocol.handle rejects the known ones, and `handlesURLScheme:` catches any it misses.
  */
 const registerCustomSchemes = (configuration: Handle): void => {
   const schemes = protocol.getRegisteredSchemes();
@@ -172,7 +168,6 @@ const registerCustomSchemes = (configuration: Handle): void => {
   schemeHandler ??= createUrlSchemeHandler().handle;
   for (const scheme of schemes) {
     const unsupported =
-      !VALID_SCHEME.test(scheme) ||
       msgSendPtrReturnsU8(
         rt.classes.get('WKWebView'),
         rt.selectors.get('handlesURLScheme:'),
