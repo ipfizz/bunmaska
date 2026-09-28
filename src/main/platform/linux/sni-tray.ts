@@ -4,7 +4,6 @@ import { cstr } from '../cstr';
 import {
   DBUS_GET_PROPERTY_CB_DEF,
   DBUS_METHOD_CALL_CB_DEF,
-  DBUS_SET_PROPERTY_CB_DEF,
   loadGDBusFFI,
   VTABLE_SLOTS,
 } from './gdbus-ffi';
@@ -39,7 +38,7 @@ import {
  * instance, no bus touched, no object exported.
  *
  * LIFETIME (load-bearing, blind — verified by review, not CI): `register_object` COPIES the
- * vtable, so the live wires are the THREE JSCallbacks (the copied vtable holds their raw
+ * vtable, so the live wires are the TWO JSCallbacks (the copied vtable holds their raw
  * fn-pointers) — they are retained FOREVER (never closed, mirroring the signal-subscription
  * discipline; closing would risk the in-flight-reply / own-invocation SIGSEGV class).
  * Property getters MUST be on the pumped main thread (the THREAD INVARIANT
@@ -303,7 +302,7 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
     click: null,
   };
 
-  // The three vtable handlers — each wrapped so a JS throw can't cross the FFI boundary and
+  // The two vtable handlers — each wrapped so a JS throw can't cross the FFI boundary and
   // kill the pump. Retained FOREVER (the copied vtable holds their raw fn-pointers).
   const getProp = new JSCallback((_c, _s, _p, _i, propName, error, _u): Pointer | null => {
     let value: Pointer | null = null;
@@ -330,25 +329,29 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
     gdbus.symbols.g_dbus_method_invocation_return_value(invocation, null);
   }, DBUS_METHOD_CALL_CB_DEF);
 
-  const setProp = new JSCallback((): number => 0, DBUS_SET_PROPERTY_CB_DEF); // all read-only
-
+  // Never registered, so native code holds neither: safe to close on the failure paths.
+  const closeCallbacks = (): null => {
+    methodCall.close();
+    getProp.close();
+    return null;
+  };
   const mcPtr = methodCall.ptr;
   const gpPtr = getProp.ptr;
-  const spPtr = setProp.ptr;
-  if (mcPtr === null || gpPtr === null || spPtr === null) {
-    return null;
+  if (mcPtr === null || gpPtr === null) {
+    return closeCallbacks();
   }
 
-  const vtable = new BigUint64Array(VTABLE_SLOTS); // [method_call, get_property, set_property, 0×8]
+  // [method_call, get_property, set_property = NULL, padding x8]: every property is read-only,
+  // so GDBus rejects a Set before it would dispatch one.
+  const vtable = new BigUint64Array(VTABLE_SLOTS);
   vtable[0] = BigInt(mcPtr);
   vtable[1] = BigInt(gpPtr);
-  vtable[2] = BigInt(spPtr);
 
   const regId = registerObject(conn, objectPath, iface, ptr(vtable));
   if (regId === 0) {
-    return null;
+    return closeCallbacks();
   }
-  retained.callbacks.push(methodCall, getProp, setProp); // load-bearing: the vtable copy points here.
+  retained.callbacks.push(methodCall, getProp); // load-bearing: the vtable copy points here.
   retained.misc.push(node, vtable);
 
   let destroyed = false;
