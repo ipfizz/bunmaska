@@ -9,19 +9,16 @@
  */
 
 import {
-  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
-  writeSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -358,40 +355,81 @@ export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => 
 
 const sleep = (ms: number): Promise<void> => Bun.sleep(ms);
 
+const errorCode = (error: unknown): string | undefined => (error as NodeJS.ErrnoException).code;
+
+const isAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return errorCode(error) === 'EPERM';
+  }
+};
+
+/** Whether a held lock may be stolen: its holder died, or it is older than STALE_LOCK_MS. */
+const isStaleLock = (lock: string): boolean => {
+  const pid = Number.parseInt(readFileSync(lock, 'utf8'), 10);
+  return (
+    (Number.isInteger(pid) && !isAlive(pid)) || Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS
+  );
+};
+
+/** Remove the lock only while it still holds `pid`: a stealer may have replaced it. */
+const releaseLock = (lock: string, pid: string): void => {
+  let holder: string;
+  try {
+    holder = readFileSync(lock, 'utf8');
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  if (holder === pid) {
+    rmSync(lock, { force: true });
+  }
+};
+
 /**
- * Run `fn` under the store's cross-process lock. A lock older than
- * STALE_LOCK_MS is stolen; the lock is always released, even if `fn` throws.
+ * Run `fn` under the store's cross-process lock, a pidfile. A stale lock is stolen;
+ * the lock is released even if `fn` throws, but only while it still holds our pid.
+ * ponytail: two contenders stealing one stale lock at once can both enter; add a steal lock if that bites.
  */
 export const withLock = async <T>(root: string, fn: () => Promise<T>): Promise<T> => {
   mkdirSync(root, { recursive: true });
   const lock = lockPath(root);
+  const pid = String(process.pid);
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   for (;;) {
     try {
-      const fd = openSync(lock, 'wx');
-      writeSync(fd, String(process.pid));
-      closeSync(fd);
+      writeFileSync(lock, pid, { flag: 'wx' });
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      if (errorCode(error) !== 'EEXIST') {
         throw error;
       }
-      const age = Date.now() - statSync(lock).mtimeMs;
-      if (age > STALE_LOCK_MS) {
+    }
+    try {
+      if (isStaleLock(lock)) {
         rmSync(lock, { force: true });
         continue;
       }
-      if (Date.now() > deadline) {
-        throw new BunmaskaError(`engine store: timed out acquiring lock at ${lock}`, {
-          code: 'ERR_ENGINE_LOCK',
-        });
+    } catch (error) {
+      if (errorCode(error) === 'ENOENT') {
+        continue; // released between our attempt and the check
       }
-      await sleep(LOCK_RETRY_MS);
+      throw error;
     }
+    if (Date.now() > deadline) {
+      throw new BunmaskaError(`engine store: timed out acquiring lock at ${lock}`, {
+        code: 'ERR_ENGINE_LOCK',
+      });
+    }
+    await sleep(LOCK_RETRY_MS);
   }
   try {
     return await fn();
   } finally {
-    rmSync(lock, { force: true });
+    releaseLock(lock, pid);
   }
 };

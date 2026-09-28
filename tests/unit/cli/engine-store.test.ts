@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
@@ -345,6 +345,50 @@ describe('withLock', () => {
     ).rejects.toThrow('boom');
     expect(existsSync(join(root, '__dirlock'))).toBe(false);
   });
+
+  test('steals a lock left behind by a dead process instead of timing out', async () => {
+    const root = makeTmpDir();
+    const dead = Bun.spawnSync([process.execPath, '-e', '']).pid;
+    writeFileSync(join(root, '__dirlock'), String(dead));
+    expect(await withLock(root, async () => 'ran')).toBe('ran');
+  }, 3000);
+
+  test('releases only a lock it still owns', async () => {
+    const root = makeTmpDir();
+    const lock = join(root, '__dirlock');
+    await withLock(root, async () => {
+      writeFileSync(lock, '424242'); // another process took the lock over
+    });
+    expect(readFileSync(lock, 'utf8')).toBe('424242');
+  });
+
+  test('concurrent processes never error or overlap in the critical section', async () => {
+    const root = makeTmpDir();
+    const store = join(import.meta.dir, '../../../src/cli/engine-store.ts');
+    const inside = join(root, 'inside');
+    const worker = `
+      import { rmSync, writeFileSync } from 'node:fs';
+      import { withLock } from ${JSON.stringify(store)};
+      let errors = 0;
+      const end = Date.now() + 1500;
+      while (Date.now() < end) {
+        try {
+          await withLock(${JSON.stringify(root)}, async () => {
+            writeFileSync(${JSON.stringify(inside)}, '', { flag: 'wx' });
+            rmSync(${JSON.stringify(inside)});
+          });
+        } catch (error) {
+          errors += 1;
+          console.error(String(error));
+        }
+      }
+      console.log(errors);`;
+    const procs = Array.from({ length: 4 }, () =>
+      Bun.spawn([process.execPath, '-e', worker], { stdout: 'pipe', stderr: 'pipe' }),
+    );
+    const outs = await Promise.all(procs.map((p) => new Response(p.stdout).text()));
+    expect(outs.map((o) => o.trim())).toEqual(['0', '0', '0', '0']);
+  }, 15000);
 
   test('serializes concurrent critical sections', async () => {
     const root = makeTmpDir();
