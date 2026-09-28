@@ -33,9 +33,6 @@ const REGISTRABLE_MODIFIERS = SHIFT_MASK | CONTROL_MASK | MOD1_MASK | MOD4_MASK;
 export const x11StateMatches = (state: number, modifiers: number): boolean =>
   (state & REGISTRABLE_MODIFIERS) === modifiers;
 
-/** `KeyPressMask` for `XSelectInput` (`X.h`). */
-export const KEY_PRESS_MASK = 1 << 0; // 1
-
 /** Named keys → the X keysym string `XStringToKeysym` understands. */
 const KEYSYM_NAMES: ReadonlyMap<string, string> = new Map([
   ['SPACE', 'space'],

@@ -5,7 +5,6 @@ import { cstr } from '../cstr';
 import { loadX11FFI } from './x11-ffi';
 import {
   KEY_PRESS,
-  KEY_PRESS_MASK,
   x11KeysymName,
   x11ModifierMask,
   XEVENT_BUFFER_SIZE,
@@ -38,16 +37,15 @@ import {
  *   on. That refinement is deferred.
  */
 
-type Registration = {
-  readonly keycode: number;
-  readonly modifiers: number;
-  readonly callback: () => void;
-};
+type Grab = { readonly keycode: number; readonly modifiers: number };
+type Registration = Grab & { readonly callback: () => void };
 
 let display: Pointer | null | undefined;
 let displayFailed = false;
 let rootWindow = 0n;
 const registrations: Registration[] = [];
+const eventBuffer = new Uint8Array(XEVENT_BUFFER_SIZE);
+const eventView = new DataView(eventBuffer.buffer);
 let errorTrap: JSCallback | undefined;
 
 /**
@@ -94,7 +92,6 @@ const ensureDisplay = (): Pointer | null => {
     display = dpy;
     installErrorTrap(x11);
     rootWindow = x11.symbols.XDefaultRootWindow(dpy);
-    x11.symbols.XSelectInput(dpy, rootWindow, KEY_PRESS_MASK);
     return dpy;
   } catch {
     displayFailed = true;
@@ -102,90 +99,68 @@ const ensureDisplay = (): Pointer | null => {
   }
 };
 
-const register = (accelerator: string, callback: () => void): boolean => {
+/** The keycode+modifier combo `accelerator` grabs, or undefined when X cannot express it. */
+const resolveGrab = (accelerator: string, dpy: Pointer): Grab | undefined => {
   const parsed = parseAccelerator(accelerator, 'linux');
-  if (parsed === undefined) {
-    return false;
-  }
-  const keysymName = x11KeysymName(parsed.key);
-  if (keysymName === undefined) {
-    return false;
-  }
-  const dpy = ensureDisplay();
-  if (dpy === null) {
-    return false;
+  const keysymName = parsed === undefined ? undefined : x11KeysymName(parsed.key);
+  if (parsed === undefined || keysymName === undefined) {
+    return undefined;
   }
   const x11 = loadX11FFI();
   const keysym = x11.symbols.XStringToKeysym(cstr(keysymName));
-  if (keysym === 0n) {
+  const keycode = keysym === 0n ? 0 : x11.symbols.XKeysymToKeycode(dpy, keysym);
+  return keycode === 0 ? undefined : { keycode, modifiers: x11ModifierMask(parsed) };
+};
+
+const ungrab = (dpy: Pointer, grab: Grab): void => {
+  const x11 = loadX11FFI();
+  for (const lockBits of GRAB_VARIANTS) {
+    x11.symbols.XUngrabKey(dpy, grab.keycode, grab.modifiers | lockBits, rootWindow);
+  }
+};
+
+const register = (accelerator: string, callback: () => void): boolean => {
+  const dpy = ensureDisplay();
+  const grab = dpy === null ? undefined : resolveGrab(accelerator, dpy);
+  if (dpy === null || grab === undefined) {
     return false;
   }
-  const keycode = x11.symbols.XKeysymToKeycode(dpy, keysym);
-  if (keycode === 0) {
-    return false;
-  }
-  const modifiers = x11ModifierMask(parsed);
+  const x11 = loadX11FFI();
   // owner_events FALSE(0), pointer_mode/keyboard_mode GrabModeAsync(1).
   for (const lockBits of GRAB_VARIANTS) {
-    x11.symbols.XGrabKey(dpy, keycode, modifiers | lockBits, rootWindow, 0, 1, 1);
+    x11.symbols.XGrabKey(dpy, grab.keycode, grab.modifiers | lockBits, rootWindow, 0, 1, 1);
   }
   // ponytail: a key another client holds still returns true; XSync + a trap flag reports it once x11-ffi declares XSync.
   x11.symbols.XFlush(dpy);
-  registrations.push({ keycode, modifiers, callback });
+  registrations.push({ ...grab, callback });
   return true;
-};
-
-const matches = (reg: Registration, accelerator: string): boolean => {
-  const parsed = parseAccelerator(accelerator, 'linux');
-  if (parsed === undefined) {
-    return false;
-  }
-  const dpy = display;
-  if (dpy === null || dpy === undefined) {
-    return false;
-  }
-  const keysymName = x11KeysymName(parsed.key);
-  if (keysymName === undefined) {
-    return false;
-  }
-  const x11 = loadX11FFI();
-  const keysym = x11.symbols.XStringToKeysym(cstr(keysymName));
-  const keycode = x11.symbols.XKeysymToKeycode(dpy, keysym);
-  return reg.keycode === keycode && reg.modifiers === x11ModifierMask(parsed);
 };
 
 const unregister = (accelerator: string): void => {
   const dpy = display;
-  if (dpy === null || dpy === undefined) {
+  const grab = dpy === null || dpy === undefined ? undefined : resolveGrab(accelerator, dpy);
+  if (dpy === null || dpy === undefined || grab === undefined) {
     return;
   }
-  const x11 = loadX11FFI();
   for (let i = registrations.length - 1; i >= 0; i -= 1) {
     const reg = registrations[i];
-    if (reg !== undefined && matches(reg, accelerator)) {
-      for (const lockBits of GRAB_VARIANTS) {
-        x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers | lockBits, rootWindow);
-      }
+    if (reg !== undefined && reg.keycode === grab.keycode && reg.modifiers === grab.modifiers) {
+      ungrab(dpy, reg);
       registrations.splice(i, 1);
     }
   }
-  x11.symbols.XFlush(dpy);
+  loadX11FFI().symbols.XFlush(dpy);
 };
 
 const unregisterAll = (): void => {
   const dpy = display;
-  if (dpy === null || dpy === undefined) {
-    registrations.length = 0;
-    return;
-  }
-  const x11 = loadX11FFI();
-  for (const reg of registrations) {
-    for (const lockBits of GRAB_VARIANTS) {
-      x11.symbols.XUngrabKey(dpy, reg.keycode, reg.modifiers | lockBits, rootWindow);
+  if (dpy !== null && dpy !== undefined) {
+    for (const reg of registrations) {
+      ungrab(dpy, reg);
     }
+    loadX11FFI().symbols.XFlush(dpy);
   }
   registrations.length = 0;
-  x11.symbols.XFlush(dpy);
 };
 
 /**
@@ -199,17 +174,15 @@ export const pollX11ShortcutsOnce = (): void => {
     return;
   }
   const x11 = loadX11FFI();
-  const buffer = new Uint8Array(XEVENT_BUFFER_SIZE);
-  const view = new DataView(buffer.buffer);
   let budget = 64;
   while (budget > 0 && x11.symbols.XPending(dpy) > 0) {
     budget -= 1;
-    x11.symbols.XNextEvent(dpy, ptr(buffer));
-    if (view.getInt32(XEVENT_TYPE_OFFSET, true) !== KEY_PRESS) {
+    x11.symbols.XNextEvent(dpy, ptr(eventBuffer));
+    if (eventView.getInt32(XEVENT_TYPE_OFFSET, true) !== KEY_PRESS) {
       continue;
     }
-    const keycode = view.getUint32(XKEY_KEYCODE_OFFSET, true);
-    const state = view.getUint32(XKEY_STATE_OFFSET, true);
+    const keycode = eventView.getUint32(XKEY_KEYCODE_OFFSET, true);
+    const state = eventView.getUint32(XKEY_STATE_OFFSET, true);
     for (const reg of registrations) {
       // Keycode alone once dispatched here, so Ctrl+K fired Ctrl+Shift+K too.
       if (reg.keycode === keycode && x11StateMatches(state, reg.modifiers)) {
