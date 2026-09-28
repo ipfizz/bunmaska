@@ -81,6 +81,29 @@ describe('Menu checkbox/radio items', () => {
     menu.realize();
     expect(realized?.[0]).toMatchObject({ type: 'radio', checked: false });
   });
+
+  test('clicking a checkbox flips checked before click sees the item', () => {
+    let seen: boolean | undefined;
+    const menu = Menu.buildFromTemplate([
+      { label: 'Wrap', type: 'checkbox', checked: true, click: (item) => (seen = item.checked) },
+    ]);
+    menu.realize();
+    realized?.[0]?.onClick?.();
+    expect(seen).toBe(false);
+    expect(menu.items[0]?.checked).toBe(false);
+  });
+
+  test('clicking a radio checks it and clears the rest of its separator-bounded group', () => {
+    const menu = Menu.buildFromTemplate([
+      { label: 'A', type: 'radio', checked: true },
+      { label: 'B', type: 'radio' },
+      { type: 'separator' },
+      { label: 'C', type: 'radio', checked: true },
+    ]);
+    menu.realize();
+    realized?.[1]?.onClick?.();
+    expect(menu.items.map((i) => i.checked)).toEqual([false, true, false, true]);
+  });
 });
 
 describe('MenuItem roles', () => {
@@ -339,10 +362,20 @@ describe('Menu realization spec', () => {
     expect(realized?.[0]?.modifierMask).toBe(1n << 20n);
   });
 
-  test('carries the click handler through to the spec', () => {
-    const click = (): void => undefined;
-    Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Go', click }]));
-    expect(realized?.[0]?.onClick).toBe(click);
+  test('click receives the item, the focused window and an event, as in Electron', () => {
+    const focused = {} as BrowserWindow;
+    setWindowResolverForTesting({
+      focused: () => undefined,
+      mostRecent: () => undefined,
+      resolve: () => undefined,
+      focusedWindow: () => focused,
+    });
+    const calls: unknown[][] = [];
+    const menu = Menu.buildFromTemplate([{ label: 'Go', click: (...args) => calls.push(args) }]);
+    Menu.setApplicationMenu(menu);
+    realized?.[0]?.onClick?.();
+    setWindowResolverForTesting(undefined);
+    expect(calls).toEqual([[menu.items[0], focused, {}]]);
   });
 
   test('nests submenu specs', () => {

@@ -58,9 +58,16 @@ export type MenuItemOptions = {
   /** The key must be a SINGLE character, e.g. `'CmdOrCtrl+Q'`. */
   readonly accelerator?: string;
   readonly role?: MenuRole | MenuMacroRole;
-  readonly click?: () => void;
+  readonly click?: MenuItemClick;
   readonly submenu?: Menu | ReadonlyArray<MenuItemOptions>;
 };
+
+/** Electron's signature; `event` fields are omitted when unknown. */
+export type MenuItemClick = (
+  menuItem: MenuItem,
+  window: BrowserWindow | undefined,
+  event: { readonly triggeredByAccelerator?: boolean },
+) => void;
 
 /** Operated on the ACTIVATING window, not a fixed one. */
 export type MenuWindowAction = 'minimize' | 'close' | 'zoom' | 'togglefullscreen';
@@ -256,10 +263,10 @@ export class MenuItem {
   readonly type: MenuItemType;
   readonly id: string | undefined;
   readonly enabled: boolean;
-  readonly checked: boolean;
+  checked: boolean;
   readonly accelerator: string | undefined;
   readonly role: MenuRole | undefined;
-  readonly click: (() => void) | undefined;
+  readonly click: MenuItemClick | undefined;
   readonly submenu: Menu | undefined;
 
   constructor(options: MenuItemOptions) {
@@ -316,7 +323,35 @@ export const setMenuRealizerForTesting = (fake: MenuRealizer | undefined): void 
   realizer = fake;
 };
 
-const toSpec = (item: MenuItem): NativeMenuItemSpec => {
+/** Electron groups radio items by the separators around them. */
+const radioGroup = (item: MenuItem, siblings: readonly MenuItem[]): MenuItem[] => {
+  let start = siblings.indexOf(item);
+  while (start > 0 && siblings[start - 1]?.type !== 'separator') {
+    start -= 1;
+  }
+  let end = start;
+  while (end < siblings.length - 1 && siblings[end + 1]?.type !== 'separator') {
+    end += 1;
+  }
+  return siblings.slice(start, end + 1).filter((other) => other.type === 'radio');
+};
+
+/** Electron's click: a checkbox flips, a radio checks itself in its group, then `click` runs. */
+const activate = (item: MenuItem, siblings: readonly MenuItem[]): void => {
+  if (item.type === 'checkbox') {
+    item.checked = !item.checked;
+  } else if (item.type === 'radio') {
+    for (const other of radioGroup(item, siblings)) {
+      other.checked = other === item;
+    }
+  }
+  item.click?.(item, windowResolver?.focusedWindow?.(), {});
+};
+
+const toSpecs = (items: readonly MenuItem[]): NativeMenuItemSpec[] =>
+  items.map((item) => toSpec(item, items));
+
+const toSpec = (item: MenuItem, siblings: readonly MenuItem[]): NativeMenuItemSpec => {
   const keyEquivalent = acceleratorKey(item.accelerator);
   const base = {
     label: item.label,
@@ -341,13 +376,15 @@ const toSpec = (item: MenuItem): NativeMenuItemSpec => {
       : {}),
   };
   if (item.type === 'submenu' && item.submenu !== undefined) {
-    return { ...base, submenu: item.submenu.items.map(toSpec) };
+    return { ...base, submenu: toSpecs(item.submenu.items) };
   }
-  // A role provides native behavior via its selector (macOS) — no JS click is
-  // synthesized; if both a role and a click are given, the role takes precedence.
-  const clickable = item.type === 'normal' || item.type === 'checkbox' || item.type === 'radio';
-  if (item.role === undefined && clickable && item.click !== undefined) {
-    return { ...base, onClick: item.click };
+  // A role wins over a click: one native item cannot run both (D035).
+  const checkable = item.type === 'checkbox' || item.type === 'radio';
+  if (
+    item.role === undefined &&
+    (checkable || (item.type === 'normal' && item.click !== undefined))
+  ) {
+    return { ...base, onClick: () => activate(item, siblings) };
   }
   return base;
 };
@@ -376,6 +413,8 @@ export type WindowResolver = {
   mostRecent(): PopupTarget | undefined;
   /** `undefined` when `window` is not a known open window. */
   resolve(window: unknown): PopupTarget | undefined;
+  /** The window handed to `MenuItem.click`. */
+  focusedWindow?(): BrowserWindow | undefined;
 };
 
 let windowResolver: WindowResolver | undefined;
@@ -448,7 +487,7 @@ export class Menu {
 
   /** @internal */
   realize(): bigint {
-    return getRealizer().realize(this.items.map(toSpec));
+    return getRealizer().realize(toSpecs(this.items));
   }
 
   /** `null` removes the application menu everywhere, including bars already installed. */
