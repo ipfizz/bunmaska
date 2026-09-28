@@ -62,6 +62,7 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
     for (const name of [
       'gtk_box_new',
       'gtk_box_append',
+      'gtk_widget_set_vexpand',
       'gtk_popover_menu_bar_new_from_model',
       'gtk_widget_insert_action_group',
     ] as const) {

@@ -332,6 +332,8 @@ class LinuxWindow implements NativeWindow {
       throw new Error('gtk_box_new() returned NULL');
     }
     this.#box = box;
+    // A vertical box gives a non-expanding child its natural height, which is 0 for a webview.
+    menu.gtk_widget_set_vexpand(this.#webContents.view(), 1);
     menu.gtk_box_append(box, this.#webContents.view());
     gtk.symbols.gtk_window_set_child(this.#window, box);
     this.#setAppMenu(getCurrentAppMenu());

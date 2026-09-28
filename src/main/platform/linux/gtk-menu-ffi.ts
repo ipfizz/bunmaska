@@ -71,6 +71,10 @@ export const GTK_MENU_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
   },
+  gtk_widget_set_vexpand: {
+    args: [FFIType.pointer, FFIType.i32],
+    returns: FFIType.void,
+  },
   // (GtkBox*, GtkWidget* child) -> void
   gtk_box_remove: {
     args: [FFIType.pointer, FFIType.pointer],
