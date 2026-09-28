@@ -17,16 +17,21 @@ The pre-beta review: every module read line by line against Electron's contract,
 - `protocol.handle` refuses built-in schemes (`https`, `file`, ...) and malformed names up front, instead of aborting at window creation on macOS. `protocol.handlerFor` and `protocol.clearForTesting` are gone.
 - IPC arguments JSON would mangle (`Map`, `Set`, typed arrays) throw in the preload instead of arriving as `{}`, and an `invoke` whose reply cannot be serialized rejects instead of hanging. `contextBridge` calls no longer time out after 30 seconds (Electron has no timeout either), and the preload and bridge run in the top frame only.
 - Auto-updates sign `update.json` as well as the artifact, so a feed is four files. `quitAndInstall` throws for an app that is not an installed bundle instead of quietly quitting, and the helper relaunches the old app if the swap fails.
-- `bunmaska build` ships only allowlisted file types beside the executable (a signing key next to your entry now stays home), requires macOS 13, and refuses `--notarize` without `--sign`.
+- `bunmaska build` ships only allowlisted file types beside the executable (a signing key next to your entry now stays home), requires macOS 13, and refuses `--notarize` without a Developer ID `--sign`. A config `icon` a target cannot use is skipped with a warning instead of failing the build.
+- An uncaught main-process exception shows Electron's error box and the app keeps running, instead of the process exiting. Your own `uncaughtException` listener still wins.
+- `session.clearStorageData` rejects `origin` / `storages` filters rather than quietly clearing everything.
 
 **New**
 
 - `BrowserWindow.fromWebContents`, `BrowserWindow.getFocusedWindow`, `event.reply` for `ipcMain.on`, Electron's `click(menuItem, window, event)` with checkbox and radio toggling, and the optional leading window argument on `dialog` methods.
+- Electron's default application menu on macOS for apps that set none, so Cmd+Q and copy/paste work out of the box. Built apps ship a `package.json` beside the executable, so `app.getName()`, `app.getVersion()` and `autoUpdater` see your app instead of `bunmaska-app` at `0.0.0`.
+- Numpad and `Insert` global shortcuts on every platform.
 - Real display origins, work areas and cursor position on macOS; the `move` event and an enforced `setMinimumSize` on Windows; `httpOnly` cookies that persist on macOS; JPEG quality on Linux; `engine.embed: true` for Windows builds.
 
 **Fixes** (a small selection)
 
-- Closed macOS windows, menus and WebKit configurations are released, and so are Linux dialogs, tray icons and notifications.
+- Closed macOS windows, menus and WebKit configurations are released, and so are Linux dialogs, tray icons and notifications. A collected `NativeImage` frees its native image on every platform.
+- Linux apps install under `usr/lib/<slug>` with a single `usr/bin` link, the `.deb` pins the GTK 4.10 and WebKitGTK 2.42 floors, and notifications, tray items and sleep inhibitors carry your app's name instead of ours.
 - Several crash classes: callbacks throwing through native frames, an X error on a shortcut another app holds, by-value struct arguments on x86_64.
 - The dev loop rebuilds the renderer before every restart, restarts for `.js` main modules, tells you to restart after a config edit, and force-kills an app that ignores `SIGTERM`.
 
