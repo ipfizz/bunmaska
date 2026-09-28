@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import {
   type BunmaskaConfig,
-  type BunmaskaRendererConfig,
   CONFIG_FILE_NAMES,
   configChannel,
   rendererOutDir,
@@ -23,7 +22,14 @@ import {
 } from './build-macos';
 import { buildWindowsApp } from './build-windows';
 import { loadConfig } from './config';
-import { type ChangeAction, classifyChange, defaultDevDeps, resolveDevEntry, runDev } from './dev';
+import {
+  type ChangeAction,
+  classifyChange,
+  defaultDevDeps,
+  devClassifier as projectClassifier,
+  resolveDevEntry,
+  runDev,
+} from './dev';
 import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
 import { engineDir, enginesPath, isInstalled } from './engine-store';
@@ -416,32 +422,35 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
     process.once('SIGTERM', onSignal);
   });
 
-/** {@link classifyChange} with the renderer's entry and outDir resolved against `dir`. */
-const rendererClassifier = (
-  dir: string,
-  renderer: BunmaskaRendererConfig,
-): ((relPath: string) => ChangeAction) => {
-  const root = relative(dir, dirname(resolve(dir, renderer.entry)));
-  const outDir = resolve(dir, rendererOutDir(renderer)) + sep;
-  // Output writes must reload, not rebuild again: an outDir may sit inside the root.
-  return (relPath) =>
-    classifyChange(relPath, resolve(dir, relPath).startsWith(outDir) ? undefined : root);
-};
-
-/** The dev loop's classifier; the supervisor holds the config it started with. */
+/**
+ * The dev loop's classifier: the project graph (renderer.copy sources, the entry's
+ * imports), renderer output reloads, and a config edit asks for a dev restart.
+ */
 export const devClassifier = (
   dir: string,
   config: BunmaskaConfig,
+  entry: string,
   log: (message: string) => void,
 ): ((relPath: string) => ChangeAction) => {
-  const classify =
-    config.renderer === undefined ? classifyChange : rendererClassifier(dir, config.renderer);
+  const renderer = config.renderer;
+  const project = projectClassifier(
+    dir,
+    entry,
+    renderer === undefined
+      ? undefined
+      : { ...renderer, entry: relative(dir, resolve(dir, renderer.entry)) },
+  );
+  const outDir = renderer === undefined ? undefined : resolve(dir, rendererOutDir(renderer)) + sep;
   return (relPath) => {
     if (CONFIG_FILE_NAMES.includes(relPath)) {
       log(`${relPath} changed; restart bunmaska dev to apply it.`);
       return 'ignore';
     }
-    return classify(relPath);
+    // Output writes must reload, not rebuild again: an outDir may sit inside the renderer dir.
+    if (outDir !== undefined && resolve(dir, relPath).startsWith(outDir)) {
+      return classifyChange(relPath);
+    }
+    return project(relPath);
   };
 };
 
@@ -453,7 +462,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
   const log = (message: string): void => out(message);
   const baseDeps = {
     ...defaultDevDeps(dir, log, launchEngineEnv(config, 'dev')),
-    classify: devClassifier(dir, config, log),
+    classify: devClassifier(dir, config, entry, log),
   };
   let deps = baseDeps;
   if (renderer !== undefined) {

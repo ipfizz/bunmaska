@@ -5,6 +5,8 @@ import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 import { DEV_RELOAD_COMMAND } from '../main/dev-reload';
 import { type ChangeAction, devClassifier } from './dev-classify';
+
+export type { ChangeAction } from './dev-classify';
 import { DEV_STATE_FILE, watchTree } from './dev-watch';
 
 export { classifyChange, devClassifier } from './dev-classify';
