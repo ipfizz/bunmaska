@@ -28,6 +28,28 @@ const packageJson = (vars: TemplateVars): string =>
       dependencies: {
         bunmaska: `^${BUNMASKA_VERSION}`,
       },
+      devDependencies: {
+        '@types/bun': 'latest',
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+const tsconfigJson = (): string =>
+  `${JSON.stringify(
+    {
+      compilerOptions: {
+        target: 'ESNext',
+        module: 'Preserve',
+        moduleResolution: 'bundler',
+        lib: ['ESNext', 'DOM'],
+        types: ['bun'],
+        strict: true,
+        skipLibCheck: true,
+        noEmit: true,
+      },
+      include: ['src', 'bunmaska.config.ts'],
     },
     null,
     2,
@@ -177,6 +199,7 @@ The app's name, bundle id and entry are declared in \`bunmaska.config.ts\`.
 
 export const initTemplateFiles = (vars: TemplateVars): readonly ScaffoldFile[] => [
   { path: 'package.json', contents: packageJson(vars) },
+  { path: 'tsconfig.json', contents: tsconfigJson() },
   { path: 'bunmaska.config.ts', contents: configTs(vars) },
   { path: 'src/main.ts', contents: mainTs(vars) },
   { path: 'src/preload.js', contents: preloadJs() },
