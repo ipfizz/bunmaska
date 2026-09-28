@@ -1,8 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
 
@@ -65,6 +73,15 @@ if (currentPlatform() === 'macos') {
       const result = spawnSync(exe, [], { encoding: 'utf8' });
       expect(result.status).toBe(0);
       expect(result.stdout).toContain('hi');
+    }, 30000);
+
+    test('replaces an earlier bundle instead of merging into it', async () => {
+      const out = join(workDir, 'rebuild');
+      const stale = join(out, 'Re App.app', 'Contents', 'MacOS', 'stale.html');
+      mkdirSync(dirname(stale), { recursive: true });
+      writeFileSync(stale, 'old');
+      await buildMacApp({ entry, name: 'Re App', out });
+      expect(existsSync(stale)).toBe(false);
     }, 30000);
 
     test('defaults the bundle id from the name when --id is omitted', async () => {

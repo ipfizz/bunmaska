@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildLinuxApp } from '../../../src/cli/build-linux';
@@ -126,6 +134,13 @@ if (currentPlatform() === 'macos') {
       expect(listing.stdout).toContain('data.tar.gz');
       expect(readdirSync(outDir).filter((name) => name.startsWith('.'))).toEqual([]);
     });
+
+    test('a rebuild drops files the previous build shipped', async () => {
+      const stale = join(result.appDir, 'usr', 'bin', 'stale.html');
+      writeFileSync(stale, 'old');
+      await buildLinuxApp({ arch: 'x64', entry: join(workDir, 'entry.ts'), name, out: outDir });
+      expect(existsSync(stale)).toBe(false);
+    }, 30000);
 
     test('archives carry no AppleDouble files, xattrs or builder ownership', () => {
       const deb = readFileSync(result.deb as string);

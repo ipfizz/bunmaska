@@ -6,7 +6,15 @@
  * `engine.id`) or `BUNMASKA_WEBKIT_PATH`.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -163,6 +171,11 @@ export const buildWindowsApp = async (
     );
   }
 
+  // Start clean, but only over our own earlier output (it always holds engine.id):
+  // cpSync merges, so a stale webkit/ or asset would ship again.
+  if (existsSync(layout.engineIdPath)) {
+    rmSync(layout.appDir, { recursive: true, force: true });
+  }
   mkdirSync(layout.appDir, { recursive: true });
 
   if (currentPlatform() !== 'windows') {

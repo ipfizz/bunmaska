@@ -368,6 +368,8 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   const version = opts.version ?? BUNMASKA_VERSION;
   const layout = appBundleLayout(out, opts.name);
 
+  // Start clean: cpSync merges, so files an earlier build shipped would ship again.
+  rmSync(layout.appDir, { recursive: true, force: true });
   mkdirSync(layout.macosDir, { recursive: true });
   mkdirSync(layout.resourcesDir, { recursive: true });
 

@@ -228,6 +228,8 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   const maintainer = `${opts.id ?? `com.bunmaska.${layout.slug}`} <noreply@bunmaska.dev>`;
   const description = `${opts.name} built with Bunmaska`;
 
+  // Start clean (everything the build writes is under usr/): cpSync merges into stale trees.
+  rmSync(join(layout.appDir, 'usr'), { recursive: true, force: true });
   mkdirSync(dirname(layout.binPath), { recursive: true });
   mkdirSync(dirname(layout.desktopPath), { recursive: true });
 

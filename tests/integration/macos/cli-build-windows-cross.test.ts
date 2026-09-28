@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildWindowsApp } from '../../../src/cli/build-windows';
@@ -20,15 +20,19 @@ describe('buildWindowsApp cross-compiled from macOS (integration)', () => {
   });
 
   test.skipIf(currentPlatform() !== 'macos')(
-    'produces a GUI-subsystem .exe and its zip',
+    'produces a GUI-subsystem .exe and its zip, replacing an earlier build',
     async () => {
       const entry = join(workDir, 'entry.ts');
       writeFileSync(entry, "console.log('hi');\n");
+      const staleEngine = join(workDir, 'out', 'Cross App', 'webkit');
+      mkdirSync(staleEngine, { recursive: true });
+      writeFileSync(join(staleEngine, '..', 'engine.id'), 'system\n');
 
       const result = await buildWindowsApp({ entry, name: 'Cross App', out: join(workDir, 'out') });
 
       expect(peSubsystem(readFileSync(result.exePath))).toBe(2);
       expect(readFileSync(result.zip).subarray(0, 2).toString()).toBe('PK');
+      expect(existsSync(staleEngine)).toBe(false);
     },
     120000,
   );
