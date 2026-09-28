@@ -120,6 +120,21 @@ describe.skipIf(!isLinux)('Linux window lifecycle events end-to-end', () => {
     app.quit();
   });
 
+  test('getBounds of a hidden window reports the size last set', () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const app = createLinuxApplication();
+    app.start();
+    const window = app.createWindow({ width: 800, height: 600, title: 'Hidden', show: false });
+
+    window.setSize(1024, 768);
+
+    expect(window.getBounds()).toEqual({ x: 0, y: 0, width: 1024, height: 768 });
+    window.close();
+    app.quit();
+  });
+
   test('calls after close never touch the freed window or view', () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return;

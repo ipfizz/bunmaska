@@ -322,8 +322,8 @@ class LinuxWindow implements NativeWindow {
   #minimized = false;
   #active = false;
   #maximized = false;
-  readonly #defaultWidth: number;
-  readonly #defaultHeight: number;
+  #defaultWidth: number;
+  #defaultHeight: number;
   #closed = false;
   #activePopover: Pointer | null = null;
   readonly #closedCallbacks: Array<() => void> = [];
@@ -549,6 +549,8 @@ class LinuxWindow implements NativeWindow {
   }
 
   setSize(width: number, height: number): void {
+    this.#defaultWidth = width;
+    this.#defaultHeight = height;
     this.#gtk()?.gtk_window_set_default_size(this.#window, width, height);
   }
 
