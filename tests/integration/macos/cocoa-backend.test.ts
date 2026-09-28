@@ -10,10 +10,12 @@ import {
   msgSendI64,
   msgSendPtr,
   msgSendPtrI64,
+  msgSendPtrReturnsU8,
   msgSendReturnsI64,
   msgSendReturnsU8,
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
+import { loadWebKit } from '../../../src/main/platform/macos/cocoa-webkit';
 import { LIBOBJC_PATH } from '../../../src/main/platform/macos/objc';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
@@ -501,20 +503,31 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
     }
   });
 
-  test('a WebKit-native or malformed protocol.handle scheme does not abort window creation', () => {
-    const app = createMacOSApplication();
-    app.start();
-    const serve = () => ({ data: 'x' });
-    protocol.handle('https', serve);
-    protocol.handle('my_app', serve);
-    try {
-      const win = app.createWindow({ width: 320, height: 240, title: 't', show: false });
-      expect(win.getTitle()).toBe('t');
-      win.destroy();
-    } finally {
-      protocol.unhandle('https');
-      protocol.unhandle('my_app');
-      app.quit();
+  test('protocol.handle rejects every scheme WebKit serves natively', () => {
+    const rt = cocoa();
+    loadWebKit();
+    const candidates = [
+      'http',
+      'https',
+      'file',
+      'about',
+      'data',
+      'blob',
+      'ws',
+      'wss',
+      'javascript',
+    ];
+    const native = candidates.filter(
+      (scheme) =>
+        msgSendPtrReturnsU8(
+          rt.classes.get('WKWebView'),
+          rt.selectors.get('handlesURLScheme:'),
+          nsString(scheme),
+        ) === 1,
+    );
+    expect(native.length).toBeGreaterThan(0);
+    for (const scheme of native) {
+      expect(() => protocol.handle(scheme, () => ({ data: 'x' }))).toThrow();
     }
   });
 

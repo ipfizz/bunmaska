@@ -182,16 +182,12 @@ const registerCustomSchemes = (configuration: Handle): void => {
       log.warn(`protocol.handle('${scheme}') is ignored on macOS: WebKit cannot intercept it`);
       continue;
     }
-    try {
-      msgSendPtrPtr(
-        configuration,
-        rt.selectors.get('setURLSchemeHandler:forURLScheme:'),
-        schemeHandler,
-        nsString(scheme),
-      );
-    } catch (error) {
-      log.warn(`could not register custom scheme '${scheme}'`, error);
-    }
+    msgSendPtrPtr(
+      configuration,
+      rt.selectors.get('setURLSchemeHandler:forURLScheme:'),
+      schemeHandler,
+      nsString(scheme),
+    );
   }
 };
 

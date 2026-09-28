@@ -28,15 +28,27 @@ export const bigIntOut = (pointer: Pointer | null): Handle =>
  * (Bun then skips every later JSCallback in that native call), so it is rethrown on
  * a microtask as an ordinary uncaught exception and `fallback` goes back to native.
  */
+const rethrowLater = (error: unknown): void => {
+  queueMicrotask(() => {
+    throw error;
+  });
+};
+let reportNativeError = rethrowLater;
+
 export const callFromNative = <T>(fallback: T, run: () => T): T => {
   try {
     return run();
   } catch (error) {
-    queueMicrotask(() => {
-      throw error;
-    });
+    reportNativeError(error);
     return fallback;
   }
+};
+
+/** Capture errors {@link callFromNative} would rethrow; `undefined` restores the rethrow. Test-only. */
+export const setNativeErrorReporterForTesting = (
+  report: ((error: unknown) => void) | undefined,
+): void => {
+  reportNativeError = report ?? rethrowLater;
 };
 
 /** Memoise a macOS-only resource; throws {@link UnsupportedPlatformError} at call time elsewhere. */

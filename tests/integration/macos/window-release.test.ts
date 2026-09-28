@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
+import { setNativeErrorReporterForTesting } from '../../../src/main/platform/macos/objc';
 
 const liveWindowCount = (): bigint => {
   const rt = cocoa();
@@ -40,7 +41,14 @@ describe.skipIf(currentPlatform() !== 'macos')('closed windows are freed', () =>
       win.onClosed(() => {
         throw new Error('closed listener bug');
       });
-      expect(() => win.close()).toThrow('closed listener bug');
+      const reported: unknown[] = [];
+      setNativeErrorReporterForTesting((error) => reported.push(error));
+      try {
+        win.close();
+      } finally {
+        setNativeErrorReporterForTesting(undefined);
+      }
+      expect(String(reported[0])).toContain('closed listener bug');
       const deadline = performance.now() + 3_000;
       while (liveWindowCount() > before && performance.now() < deadline) {
         await Bun.sleep(50);
