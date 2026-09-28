@@ -23,6 +23,19 @@ describe('toCdpInput', () => {
     });
   });
 
+  test('punctuation is never sent as the key its code point aliases (Delete, Left)', () => {
+    for (const keyCode of ['.', '%', '!', '-', '(', 'é']) {
+      expect(toCdpInput({ type: 'keyDown', keyCode }).params).toEqual({
+        type: 'rawKeyDown',
+        key: keyCode,
+        windowsVirtualKeyCode: 0,
+      });
+    }
+    expect(toCdpInput({ type: 'keyDown', keyCode: '7' }).params).toMatchObject({
+      windowsVirtualKeyCode: 0x37,
+    });
+  });
+
   test('char types the character, including control keys and astral symbols', () => {
     expect(toCdpInput({ type: 'char', keyCode: 'Enter' }).params).toMatchObject({
       key: 'Enter',

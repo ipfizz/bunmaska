@@ -38,7 +38,8 @@ const resolveKey = (keyCode: string): readonly [string, number] => {
     return named;
   }
   if ([...keyCode].length === 1) {
-    return [keyCode, keyCode.toUpperCase().charCodeAt(0)];
+    // Only A-Z/0-9 share a code point with their VK: '.' as 0x2E is VK_DELETE and edits text.
+    return [keyCode, /^[A-Za-z0-9]$/.test(keyCode) ? keyCode.toUpperCase().charCodeAt(0) : 0];
   }
   throw new InvalidArgumentError(`sendInputEvent: unsupported keyCode ${JSON.stringify(keyCode)}`);
 };
