@@ -81,6 +81,18 @@ if (currentPlatform() === 'linux') {
       expect(jpeg[1]).toBe(0xd8);
     });
 
+    test('toJPEG(quality) reaches the encoder as its quantization table', () => {
+      setNativeImageBackendForTesting(undefined);
+      const image = nativeImage.createFromBuffer(makeTinyPng());
+      /** The first luminance DC quantizer after the DQT marker: 1 at quality 100, 8 at 75. */
+      const dcQuantizer = (jpeg: Uint8Array): number | undefined => {
+        const marker = jpeg.findIndex((byte, i) => byte === 0xff && jpeg[i + 1] === 0xdb);
+        return marker === -1 ? undefined : jpeg[marker + 5];
+      };
+      expect(dcQuantizer(image.toJPEG(100))).toBe(1);
+      expect(dcQuantizer(image.toJPEG(10)) ?? 0).toBeGreaterThan(8);
+    });
+
     test('a bad path decodes to an empty image (no crash)', () => {
       setNativeImageBackendForTesting(undefined);
       const image = nativeImage.createFromPath('/no/such/bunmaska/image.png');

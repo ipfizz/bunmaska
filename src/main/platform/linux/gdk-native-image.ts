@@ -74,11 +74,8 @@ const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
   return decodeFromPixbuf(pixbuf === null ? null : Number(pixbuf));
 };
 
-/**
- * Encode a pixbuf to `type` ("png"/"jpeg") via `gdk_pixbuf_save_to_bufferv` with
- * NULL option arrays (default quality), copying the out buffer then freeing it.
- */
-const encode = (handle: NativeImageHandle, type: string): Uint8Array => {
+/** Encode to `type` ("png"/"jpeg"); `quality` (0-100) applies to JPEG only. */
+const encode = (handle: NativeImageHandle, type: string, quality?: number): Uint8Array => {
   const pixbuf = handleToPtr(handle);
   if (pixbuf === null) {
     return new Uint8Array(0);
@@ -90,13 +87,22 @@ const encode = (handle: NativeImageHandle, type: string): Uint8Array => {
   // length, mirroring the BigInt64Array out-pointer pattern used elsewhere.
   const bufferOut = new BigUint64Array(1);
   const sizeOut = new BigUint64Array(1);
+  // NULL-terminated char** option lists; [NULL] alone means no options.
+  const key = cstr('quality');
+  const value = cstr(String(Math.min(100, Math.max(0, Math.round(quality ?? 0)))));
+  const optionKeys = new BigUint64Array(2);
+  const optionValues = new BigUint64Array(2);
+  if (quality !== undefined) {
+    optionKeys[0] = BigInt(ptr(key));
+    optionValues[0] = BigInt(ptr(value));
+  }
   const ok = pixbufFFI.symbols.gdk_pixbuf_save_to_bufferv(
     pixbuf as Parameters<typeof pixbufFFI.symbols.gdk_pixbuf_save_to_bufferv>[0],
     ptr(bufferOut),
     ptr(sizeOut),
     cstr(type),
-    null,
-    null,
+    ptr(optionKeys),
+    ptr(optionValues),
     null,
   );
   if (ok !== 1) {
@@ -167,9 +173,8 @@ const crop = (
 export const gdkNativeImageBackend: NativeImageBackend = {
   decode: (source) => (typeof source === 'string' ? decodePath(source) : decodeBuffer(source)),
   encodePng: (handle: NativeImageHandle): Uint8Array => encode(handle, 'png'),
-  // Linux v1 uses GdkPixbuf's default JPEG quality (the `quality` factor is
-  // honored on macOS; option-key arrays for Linux are a follow-up).
-  encodeJpeg: (handle: NativeImageHandle): Uint8Array => encode(handle, 'jpeg'),
+  encodeJpeg: (handle: NativeImageHandle, quality: number): Uint8Array =>
+    encode(handle, 'jpeg', quality),
   resize,
   crop,
 };
