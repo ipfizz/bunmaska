@@ -27,22 +27,6 @@ const evalBootstrap = (): { bridge: Bridge; posted: string[] } => {
   return { bridge: scope['__bunmaska'] as Bridge, posted };
 };
 
-describe('generatePreloadBootstrap output', () => {
-  test('returns a non-empty string', () => {
-    expect(generatePreloadBootstrap().length).toBeGreaterThan(0);
-  });
-
-  test('contains no TypeScript syntax (it ships to a raw JS engine)', () => {
-    const src = generatePreloadBootstrap();
-    expect(src).not.toMatch(/:\s*(string|number|void|unknown|boolean)\b/);
-    expect(src).not.toMatch(/\bas\s+(Record|string|number|unknown)\b/);
-  });
-
-  test('installs a __bunmaska object on the global', () => {
-    expect(evalBootstrap().bridge).toBeDefined();
-  });
-});
-
 describe('__bunmaska.send', () => {
   test('posts a send envelope through the message handler', () => {
     const { bridge, posted } = evalBootstrap();
@@ -83,11 +67,37 @@ describe('__bunmaska.invoke', () => {
     await expect(promise).rejects.toThrow('nope');
   });
 
+  test('starts each document at its own id, so a reply from before a reload cannot match', () => {
+    const first = evalBootstrap();
+    const second = evalBootstrap();
+    void first.bridge.invoke('a');
+    void second.bridge.invoke('a');
+    expect(JSON.parse(first.posted[0] ?? '').id).not.toBe(JSON.parse(second.posted[0] ?? '').id);
+  });
+
   test('assigns distinct ids to concurrent invokes', () => {
     const { bridge, posted } = evalBootstrap();
     void bridge.invoke('a');
     void bridge.invoke('b');
     expect(JSON.parse(posted[0] ?? '').id).not.toBe(JSON.parse(posted[1] ?? '').id);
+  });
+});
+
+describe('__bunmaska argument encoding', () => {
+  test('throws instead of silently mangling values JSON cannot carry', () => {
+    const { bridge, posted } = evalBootstrap();
+    expect(() => bridge.send('x', new Map([[1, 2]]))).toThrow(/cannot send a Map/);
+    expect(() => bridge.send('x', { bytes: new Uint8Array([7]) })).toThrow(
+      /cannot send a Uint8Array/,
+    );
+    expect(() => bridge.send('x', [() => 1])).toThrow(/cannot send a function/);
+    expect(posted).toEqual([]);
+  });
+
+  test('an invoke with an unsendable argument rejects without posting', async () => {
+    const { bridge, posted } = evalBootstrap();
+    await expect(bridge.invoke('x', 10n)).rejects.toThrow(/cannot send a bigint/);
+    expect(posted).toEqual([]);
   });
 });
 

@@ -11,7 +11,6 @@ export {
   type WebFrameElement,
   type WebFrameScope,
 } from './api/web-frame';
-export { generatePreloadBootstrap } from './preload-bootstrap';
 
 export const ipcRenderer = createIpcRenderer();
 

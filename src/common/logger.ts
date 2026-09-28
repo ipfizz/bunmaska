@@ -1,7 +1,6 @@
 /**
  * Minimal leveled diagnostics (Biome bans `console.*` in committed code). The
- * default sink is a no-op so a quiet library stays quiet; apps and tests opt in
- * via {@link setLogSink} / {@link setLogLevel}.
+ * default sink writes to stderr at `warn` and above; tests swap it via {@link setLogSink}.
  */
 
 export type LogLevel = 'silent' | 'error' | 'warn' | 'info' | 'debug';
@@ -31,10 +30,13 @@ const RANK: Record<LogLevel, number> = {
 };
 
 const DEFAULT_LEVEL: LogLevel = 'warn';
-const NOOP_SINK: LogSink = () => undefined;
+const STDERR_SINK: LogSink = ({ namespace, level, message, detail }) => {
+  const suffix = detail === undefined ? '' : ` ${Bun.inspect(detail)}`;
+  process.stderr.write(`[bunmaska:${namespace}] ${level}: ${message}${suffix}\n`);
+};
 
 let currentLevel: LogLevel = DEFAULT_LEVEL;
-let currentSink: LogSink = NOOP_SINK;
+let currentSink: LogSink = STDERR_SINK;
 
 /** Set the global minimum level. Records below this level are dropped. */
 export const setLogLevel = (level: LogLevel): void => {
@@ -46,10 +48,10 @@ export const setLogSink = (sink: LogSink): void => {
   currentSink = sink;
 };
 
-/** Restore the default level and no-op sink. Intended for test teardown. */
+/** Restore the default level and stderr sink. Intended for test teardown. */
 export const resetLogger = (): void => {
   currentLevel = DEFAULT_LEVEL;
-  currentSink = NOOP_SINK;
+  currentSink = STDERR_SINK;
 };
 
 const emit = (

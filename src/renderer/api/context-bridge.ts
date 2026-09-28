@@ -6,14 +6,7 @@ import {
   installCrossWorldHost,
 } from './cross-world-bridge';
 
-/**
- * Renderer-side `contextBridge`, with real context isolation. The preload runs in
- * a dedicated isolated JS world (`WKContentWorld 'BunmaskaPreload'` on macOS, the
- * `BunmaskaPreload` named world on Linux) that page scripts cannot see, so
- * `exposeInMainWorld` cannot just freeze `api` onto the isolated global — it
- * installs a cross-world host over a shared-`document` CustomEvent channel. That
- * channel's LIMITATIONS block in `cross-world-bridge.ts` is the security contract.
- */
+// The security contract is the LIMITATIONS block in cross-world-bridge.ts.
 
 export type ContextBridge = {
   exposeInMainWorld(key: string, api: Record<string, unknown>): void;
@@ -25,6 +18,18 @@ export type ContextBridgeTransport = {
   /** The shared `document` both worlds dispatch events on. */
   readonly scope: EventScope;
   readonly CustomEventImpl: CustomEventCtor;
+};
+
+type ExposeFn = (key: string, api: Record<string, unknown>) => void;
+
+/** The backend-injected host; sharing it keeps one key registry per world. */
+const injectedExpose = (): ExposeFn | undefined => {
+  const bridge = Reflect.get(globalThis, '__bunmaska') as
+    | { exposeInMainWorld?: unknown }
+    | undefined;
+  return typeof bridge?.exposeInMainWorld === 'function'
+    ? (bridge.exposeInMainWorld as ExposeFn)
+    : undefined;
 };
 
 const resolveTransport = (
@@ -42,15 +47,14 @@ const resolveTransport = (
   return { channelId, scope: doc, CustomEventImpl };
 };
 
-/**
- * Create the `contextBridge`. Without an override it resolves the channel id,
- * `document`, and `CustomEvent` from the isolated world's globals, and creates the
- * host lazily on first `exposeInMainWorld` via {@link installCrossWorldHost}.
- */
+/** Create the `contextBridge`, sharing the injected host or else installing one. */
 export const createContextBridge = (override?: ContextBridgeTransport): ContextBridge => {
-  let expose: ((key: string, api: Record<string, unknown>) => void) | undefined;
+  let expose: ExposeFn | undefined;
   return {
     exposeInMainWorld(key, api) {
+      if (expose === undefined && override === undefined) {
+        expose = injectedExpose();
+      }
       if (expose === undefined) {
         const transport = resolveTransport(override);
         if (transport === undefined) {
@@ -67,7 +71,9 @@ export const createContextBridge = (override?: ContextBridgeTransport): ContextB
       try {
         expose(key, api);
       } catch (error) {
-        throw new BunmaskaError(error instanceof Error ? error.message : String(error));
+        throw new BunmaskaError(error instanceof Error ? error.message : String(error), {
+          cause: error,
+        });
       }
     },
   };

@@ -6,6 +6,15 @@ import {
   UnsupportedPlatformError,
 } from '../../../src/common/errors';
 
+describe('BunmaskaError', () => {
+  test('is named BunmaskaError and keeps its cause', () => {
+    const cause = new Error('root');
+    const e = new BunmaskaError('wrapped', { cause });
+    expect(e.name).toBe('BunmaskaError');
+    expect(e.cause).toBe(cause);
+  });
+});
+
 describe('BunmaskaError.code', () => {
   test('is undefined by default', () => {
     expect(new BunmaskaError('x').code).toBeUndefined();
