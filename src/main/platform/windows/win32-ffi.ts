@@ -8,6 +8,8 @@ import { winLibraryAccessor } from './win32';
 const USER32_SYMBOLS = {
   // (const WNDCLASSEXW *) -> ATOM
   RegisterClassExW: { args: [FFIType.ptr], returns: FFIType.u16 },
+  // (LPCWSTR name) -> UINT message id, the same in every process for one name (0 on failure).
+  RegisterWindowMessageW: { args: [FFIType.ptr], returns: FFIType.u32 },
   // (DWORD exStyle, LPCWSTR className, LPCWSTR windowName, DWORD style,
   //  int x, int y, int w, int h, HWND parent, HMENU menu, HINSTANCE, LPVOID param) -> HWND
   CreateWindowExW: {

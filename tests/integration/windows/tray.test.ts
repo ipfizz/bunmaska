@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { ptr } from 'bun:ffi';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { currentPlatform } from '../../../src/common/platform';
 import { Tray } from '../../../src/main/api/tray';
+import { wstr } from '../../../src/main/platform/windows/win32';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import { loadTrayIcon, windowsTrayBackend } from '../../../src/main/platform/windows/windows-tray';
 
@@ -25,6 +27,10 @@ const PNG_1x1 = Buffer.from(
 if (currentPlatform() === 'windows') {
   describe('Windows tray backend', () => {
     test('create adds an icon (default-icon fallback) and destroy removes it', () => {
+      const taskbarCreated = loadUser32().symbols.RegisterWindowMessageW(
+        ptr(wstr('TaskbarCreated')),
+      );
+      expect(taskbarCreated).toBeGreaterThanOrEqual(0xc000); // registered ids live in 0xC000..0xFFFF
       const tray = windowsTrayBackend.create(BAD_ICON);
       expect(tray.isDestroyed()).toBe(false);
       tray.destroy();
