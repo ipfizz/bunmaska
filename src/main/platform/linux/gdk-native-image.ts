@@ -7,29 +7,8 @@ import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
 
-/**
- * Linux image backend for `nativeImage`, via GdkPixbuf.
- *
- * DECODE — `gdk_pixbuf_new_from_file` for a path; for a buffer the bytes are
- * copied into a refcounted `GBytes` (`g_bytes_new`), wrapped as a
- * `GMemoryInputStream` (`g_memory_input_stream_new_from_bytes`), and decoded
- * with `gdk_pixbuf_new_from_stream`. A NULL pixbuf (bad path / undecodable
- * bytes) is reported empty — no placeholder is fabricated.
- *
- * SIZE WITHOUT A STRUCT — `gdk_pixbuf_get_width` / `gdk_pixbuf_get_height` are
- * plain `int` SCALARS, so `getSize` needs no struct return (the Linux mirror of
- * the macOS `pixelsWide`/`pixelsHigh` scalar path).
- *
- * ENCODE — `gdk_pixbuf_save_to_bufferv(pixbuf, &buffer, &size, "png", NULL,
- * NULL, &error)` writes an out `guint8*` and out `gsize`; we copy the buffer out
- * with `toArrayBuffer` then `g_free` it.
- *
- * The decoded handle carries the live `GdkPixbuf*` (as a bigint). We do NOT
- * unref it here — its lifetime is the JS `NativeImage`'s, and Bunmaska has no
- * finalizer hook yet, so the pixbuf is intentionally leaked for the image's
- * lifetime (documented; matches how other Linux handles are retained). The
- * transient `GBytes` and `GInputStream` of the buffer path ARE freed.
- */
+// ponytail: decoded, resized and cropped GdkPixbufs are never unref'd (one per image for the process
+// lifetime); fix with a NativeImageBackend.release driven by a FinalizationRegistry in api/native-image.ts.
 
 const handleToPtr = (handle: NativeImageHandle) => (handle === 0n ? null : Number(handle));
 
@@ -52,7 +31,7 @@ const decodeFromPixbuf = (pixbuf: number | null): DecodedImage => {
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47];
 const JPEG_SOI = [0xff, 0xd8, 0xff];
 
-/** gdk-pixbuf sniffs and hands bytes to every installed loader (TGA, ANI, SVG, ...); only PNG/JPEG are the contract. */
+/** gdk-pixbuf sniffs bytes into every installed loader (TGA, ANI, SVG, ...); the contract is PNG/JPEG only. */
 export const isPngOrJpeg = (bytes: Uint8Array): boolean =>
   [PNG_SIGNATURE, JPEG_SOI].some((magic) => magic.every((byte, i) => bytes[i] === byte));
 
@@ -96,8 +75,6 @@ const encode = (handle: NativeImageHandle, type: string, quality?: number): Uint
   const pixbufFFI = loadGdkPixbufFFI();
   const glib = loadGlibFFI();
 
-  // Out-params: a gchar** slot for the buffer pointer and a gsize* slot for its
-  // length, mirroring the BigInt64Array out-pointer pattern used elsewhere.
   const bufferOut = new BigUint64Array(1);
   const sizeOut = new BigUint64Array(1);
   // NULL-terminated char** option lists; [NULL] alone means no options.
@@ -129,11 +106,12 @@ const encode = (handle: NativeImageHandle, type: string, quality?: number): Uint
   const copy = new Uint8Array(
     toArrayBuffer(Number(outPtr) as Parameters<typeof toArrayBuffer>[0], 0, size).slice(0),
   );
+  // The out buffer is g_malloc'd: copy, then g_free.
   glib.symbols.g_free(Number(outPtr) as Parameters<typeof glib.symbols.g_free>[0]);
   return copy;
 };
 
-/** `GdkInterpType` BILINEAR — good quality/speed balance for resampling. */
+/** `GdkInterpType` BILINEAR. */
 const GDK_INTERP_BILINEAR = 2;
 
 const resize = (handle: NativeImageHandle, width: number, height: number): DecodedImage => {
@@ -148,8 +126,6 @@ const resize = (handle: NativeImageHandle, width: number, height: number): Decod
     height,
     GDK_INTERP_BILINEAR,
   );
-  // transfer-full: the new pixbuf is the result image's handle, leaked for its lifetime
-  // exactly like a decoded pixbuf (no finalizer yet — documented above).
   return decodeFromPixbuf(out === null ? null : Number(out));
 };
 
@@ -175,14 +151,12 @@ const crop = (
   if (sub === null) {
     return EMPTY;
   }
-  // new_subpixbuf SHARES the parent's pixels + refs it; copy to a fully independent pixbuf,
-  // then unref the transient sub (which releases its parent ref).
+  // A subpixbuf shares (and refs) the parent's pixels: copy it out, then unref the sub.
   const copy = pixbufFFI.symbols.gdk_pixbuf_copy(sub);
   loadGObjectFFI().symbols.g_object_unref(sub);
   return decodeFromPixbuf(copy === null ? null : Number(copy));
 };
 
-/** Linux implementation of {@link NativeImageBackend}. */
 export const gdkNativeImageBackend: NativeImageBackend = {
   decode: (source) => (typeof source === 'string' ? decodePath(source) : decodeBuffer(source)),
   encodePng: (handle: NativeImageHandle): Uint8Array => encode(handle, 'png'),
