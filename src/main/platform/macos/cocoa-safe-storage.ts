@@ -100,12 +100,11 @@ export const makeMacosKeychainBackend = (service: string, account: string): Keyr
   };
 
   return {
-    // A non-throwing read probe: the login Keychain is reachable iff a lookup does
-    // not error (a null result — no item yet — still means "available").
+    // Never request the secret here: reading data can raise a blocking Keychain ACL prompt.
     isAvailable: () => {
       try {
-        lookupKey();
-        return true;
+        const status = loadSecurityFFI().symbols.SecItemCopyMatching(baseQuery(), null);
+        return status === ERR_SEC_SUCCESS || status === ERR_SEC_ITEM_NOT_FOUND;
       } catch {
         return false;
       }
