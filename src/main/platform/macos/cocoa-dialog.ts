@@ -1,3 +1,5 @@
+import { statSync } from 'node:fs';
+import { basename, dirname, isAbsolute } from 'node:path';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import { msgSendI64, msgSendPtr, msgSendReturnsI64, msgSendU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
@@ -50,9 +52,8 @@ export type OpenDialogSpec = {
 };
 
 export type SaveDialogSpec = {
+  /** Electron's `defaultPath`: a file name, an absolute file path, or a directory to open at. */
   readonly defaultName: string;
-  /** Directory the panel opens at; absent = system default / last location. */
-  readonly defaultDirectory?: string;
   /** Allowed file extensions (without dots); empty means any file. */
   readonly extensions: ReadonlyArray<string>;
 };
@@ -149,11 +150,14 @@ export const showOpenDialog = (spec: OpenDialogSpec): string[] => {
 export const buildSavePanel = (spec: SaveDialogSpec): Handle => {
   const rt = cocoa();
   const panel = rt.msgSend(rt.classes.get('NSSavePanel'), rt.selectors.get('savePanel'));
-  if (spec.defaultDirectory !== undefined && spec.defaultDirectory.length > 0) {
-    setDirectory(panel, spec.defaultDirectory);
-  }
-  if (spec.defaultName.length > 0) {
-    msgSendPtr(panel, rt.selectors.get('setNameFieldStringValue:'), nsString(spec.defaultName));
+  const path = spec.defaultName;
+  if (statSync(path, { throwIfNoEntry: false })?.isDirectory() === true) {
+    setDirectory(panel, path);
+  } else if (path.length > 0) {
+    if (isAbsolute(path)) {
+      setDirectory(panel, dirname(path));
+    }
+    msgSendPtr(panel, rt.selectors.get('setNameFieldStringValue:'), nsString(basename(path)));
   }
   if (spec.extensions.length > 0) {
     msgSendPtr(panel, rt.selectors.get('setAllowedFileTypes:'), nsArrayOfStrings(spec.extensions));

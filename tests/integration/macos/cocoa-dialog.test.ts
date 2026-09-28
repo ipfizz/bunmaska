@@ -10,6 +10,15 @@ import { nsStringToString } from '../../../src/main/platform/macos/cocoa-foundat
 import { msgSendReturnsI64 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
+const panelDirectory = (panel: bigint): string => {
+  const rt = cocoa();
+  const url = rt.msgSend(panel, rt.selectors.get('directoryURL'));
+  return nsStringToString(rt.msgSend(url, rt.selectors.get('path')));
+};
+
+const panelName = (panel: bigint): string =>
+  nsStringToString(cocoa().msgSend(panel, cocoa().selectors.get('nameFieldStringValue')));
+
 /**
  * Only the non-blocking *build* steps are tested. The *run* steps call
  * `runModal`, which spins a nested modal loop and cannot run on a headless CI
@@ -82,21 +91,16 @@ if (currentPlatform() === 'macos') {
       expect(buildSavePanel({ defaultName: 'untitled.txt', extensions: [] })).not.toBe(0n);
     });
 
-    test('buildSavePanel opens in defaultDirectory with defaultName in the name field', () => {
-      const rt = cocoa();
-      const panel = buildSavePanel({
-        defaultName: 'report.pdf',
-        defaultDirectory: '/Library',
-        extensions: [],
-      });
-      const directory = rt.msgSend(
-        rt.msgSend(panel, rt.selectors.get('directoryURL')),
-        rt.selectors.get('path'),
-      );
-      expect(nsStringToString(directory)).toBe('/Library');
-      expect(nsStringToString(rt.msgSend(panel, rt.selectors.get('nameFieldStringValue')))).toBe(
-        'report.pdf',
-      );
+    test('buildSavePanel splits an absolute defaultPath into directory and name, as Electron', () => {
+      const panel = buildSavePanel({ defaultName: '/Library/report.pdf', extensions: [] });
+      expect(panelDirectory(panel)).toBe('/Library');
+      expect(panelName(panel)).toBe('report.pdf');
+    });
+
+    test('buildSavePanel opens at a defaultPath that is an existing directory', () => {
+      const panel = buildSavePanel({ defaultName: '/Library', extensions: [] });
+      expect(panelDirectory(panel)).toBe('/Library');
+      expect(panelName(panel)).not.toBe('Library');
     });
 
     test('buildSavePanel tolerates an empty default name', () => {
