@@ -43,14 +43,14 @@ export class ExecResultChannel {
 
   /** Settle the exec named by a posted `{ execId, ok, result?, error? }`; malformed or unknown ids are dropped. */
   deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
+    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string } | null;
     try {
       outcome = JSON.parse(json);
     } catch (error) {
       log.warn('dropping malformed exec result', error);
       return;
     }
-    if (typeof outcome.execId !== 'number') {
+    if (typeof outcome?.execId !== 'number') {
       return;
     }
     const pending = this.#pending.get(outcome.execId);

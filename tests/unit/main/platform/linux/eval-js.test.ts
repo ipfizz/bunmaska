@@ -50,6 +50,12 @@ describe('ExecResultChannel', () => {
     expect(() => exec.deliverExecResult('{"ok":true}')).not.toThrow();
   });
 
+  test('a page posting null or a primitive is dropped without throwing', () => {
+    const { exec } = channel();
+    expect(() => exec.deliverExecResult('null')).not.toThrow();
+    expect(() => exec.deliverExecResult('7')).not.toThrow();
+  });
+
   test('destroy resolves in-flight calls to undefined and rejects later ones', async () => {
     const { exec } = channel();
     const inFlight = exec.executeJavaScript('1');
