@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { currentPlatform } from '../../src/common/platform';
 import {
   encodePayload,
   type SecondInstancePayload,
@@ -9,13 +10,7 @@ import {
 } from '../../src/main/api/single-instance';
 import { createLockBackend } from '../../src/main/api/single-instance-backend';
 
-/**
- * Exercises the REAL filesystem pidfile + Bun unix-socket backend (pure Bun, so
- * it runs on macOS, Linux AND Windows — Bun's AF_UNIX works on Win10+). The
- * decision logic itself is unit-tested with a fake backend in
- * single-instance.test.ts. NOTE: on Windows an AF_UNIX bind is not a visible
- * filesystem file, so the socket-file assertion below is guarded accordingly.
- */
+// The real pidfile + unix-socket backend; pure Bun, so it runs on every OS (AF_UNIX needs Win10+).
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -111,7 +106,6 @@ describe('createLockBackend — socket hand-off', () => {
     const backend = createLockBackend();
     const received: string[] = [];
     backend.startServer(socketPath, (json) => received.push(json));
-    await delay(50);
 
     const message = encodePayload({ argv: ['x', 'y'], cwd: '/work', additionalData: { n: 7 } });
     backend.notify(socketPath, message);
@@ -123,20 +117,21 @@ describe('createLockBackend — socket hand-off', () => {
     expect(received).toEqual([message]);
   });
 
-  test('stop() removes the socket + lock files', async () => {
+  test('stop() removes the lock file', () => {
     const backend = createLockBackend();
     backend.tryCreateLock(lockPath, process.pid);
     backend.startServer(socketPath, () => undefined);
-    await delay(50);
-    // macOS/Linux expose the AF_UNIX bind as a visible socket file; Bun's Windows
-    // AF_UNIX binding is not a filesystem entry, so only assert the socket-file
-    // lifecycle where it is observable. The lock file exists on every platform.
-    const socketIsVisibleFile = existsSync(socketPath);
     backend.stop(lockPath, socketPath);
-    if (socketIsVisibleFile) {
-      expect(existsSync(socketPath)).toBe(false);
-    }
     expect(existsSync(lockPath)).toBe(false);
+  });
+
+  // Bun's Windows AF_UNIX bind is not a filesystem entry.
+  test.skipIf(currentPlatform() === 'windows')('stop() removes the socket file', () => {
+    const backend = createLockBackend();
+    backend.startServer(socketPath, () => undefined);
+    expect(existsSync(socketPath)).toBe(true);
+    backend.stop(lockPath, socketPath);
+    expect(existsSync(socketPath)).toBe(false);
   });
 });
 
