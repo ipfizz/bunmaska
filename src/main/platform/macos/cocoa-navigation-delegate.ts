@@ -14,11 +14,22 @@ const registry = new Map<Handle, (event: NativeNavigationEvent) => void>();
 
 let delegateClass: Handle | undefined;
 
+/** NSURLErrorDomain codes Electron apps branch on, as the Chromium net errors Electron reports. */
+const NET_ERROR_BY_NSURL_CODE: ReadonlyMap<number, number> = new Map([
+  [-999, -3], // cancelled: ERR_ABORTED
+  [-1001, -7], // timed out: ERR_TIMED_OUT
+  [-1003, -105], // cannot find host: ERR_NAME_NOT_RESOLVED
+  [-1009, -106], // not connected: ERR_INTERNET_DISCONNECTED
+]);
+
 const failEvent = (error: Handle): NativeNavigationEvent => {
   const rt = cocoa();
+  const code = Number(msgSendReturnsI64(error, rt.selectors.get('code')));
+  const domain = nsStringToString(rt.msgSend(error, rt.selectors.get('domain')));
+  const netError = domain === 'NSURLErrorDomain' ? NET_ERROR_BY_NSURL_CODE.get(code) : undefined;
   return {
     type: 'did-fail-load',
-    errorCode: Number(msgSendReturnsI64(error, rt.selectors.get('code'))),
+    errorCode: netError ?? code,
     errorDescription: nsStringToString(rt.msgSend(error, rt.selectors.get('localizedDescription'))),
   };
 };
