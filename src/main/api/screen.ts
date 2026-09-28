@@ -5,16 +5,7 @@ import { cocoaScreenBackend } from '../platform/macos/cocoa-screen';
 import type { Rect } from '../platform/native';
 import { windowsScreenBackend } from '../platform/windows/windows-screen';
 
-/**
- * Display enumeration and geometry — the drop-in equivalent of Electron's
- * `screen` module.
- *
- * Coordinate origin: Electron uses top-left screen coordinates, and every backend
- * already reports top-left-origin rects (CoreGraphics global display space,
- * GdkMonitor geometry, Win32 monitor rects), so NO flip is applied here.
- */
-
-/** Top-left screen coordinates. */
+/** Top-left screen coordinates; backends already report top-left rects, so none is flipped here. */
 export type Point = {
   readonly x: number;
   readonly y: number;
@@ -26,10 +17,9 @@ export type Size = {
 };
 
 /**
- * `workArea` excludes OS chrome (menu bar / dock) where the platform reports it;
- * on Linux v1 it EQUALS `bounds` — GTK4 GdkMonitor has no work-area API.
- * `scaleFactor` is the device-pixel ratio (>= 1), `rotation` degrees clockwise
- * (0/90/180/270), `internal` true for a built-in panel.
+ * `workArea` excludes the taskbar on Windows only; macOS and Linux report `bounds`. macOS also
+ * reports every display's origin as (0, 0), since CoreGraphics has no scalar origin getter.
+ * `scaleFactor` is the device-pixel ratio, `rotation` degrees clockwise.
  */
 export type Display = {
   readonly id: number;
@@ -42,7 +32,7 @@ export type Display = {
   readonly internal: boolean;
 };
 
-/** Straight from a backend, before {@link Display}'s derived sizes are built. */
+/** A backend's display, before the derived sizes. */
 export type RawDisplay = {
   readonly id: number;
   readonly bounds: Rect;
@@ -56,7 +46,6 @@ export type RawDisplay = {
 export type ScreenBackend = {
   /** Must return at least one display on a real host. */
   getDisplays(): readonly RawDisplay[];
-  /** Top-left screen coordinates; best-effort. */
   getCursorScreenPoint(): Point;
 };
 
@@ -116,7 +105,7 @@ const nearestRaw = (point: Point): RawDisplay => {
 
 const getAllDisplays = (): Display[] => rawDisplays().map(toDisplay);
 
-/** Origin-anchored on macOS, index 0 on Linux. */
+/** The display the backend marks primary, else the first. */
 const getPrimaryDisplay = (): Display => {
   const displays = rawDisplays();
   const first = displays[0];
@@ -158,7 +147,6 @@ const getDisplayMatching = (rect: Rect): Display => {
   return toDisplay(nearestRaw(center));
 };
 
-/** The `screen` module — Electron-compatible display enumeration and geometry. */
 export const screen = {
   getAllDisplays,
   getPrimaryDisplay,

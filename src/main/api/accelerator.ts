@@ -1,21 +1,14 @@
 import type { Platform } from '../../common/platform';
 
-/**
- * Accelerator parsing: Electron's `'CmdOrCtrl+Shift+K'` — zero or more modifier
- * tokens and EXACTLY ONE final key, joined by `+`. `CmdOrCtrl` resolves to
- * Command (meta) on macOS, Control everywhere else. Empty, keyless, two-key and
- * unknown-token accelerators parse to `undefined` so callers can reject them.
- */
-
 export type ParsedAccelerator = {
   /** Normalised: single letters are upper-cased. */
   readonly key: string;
   readonly shift: boolean;
   readonly alt: boolean;
   readonly ctrl: boolean;
-  /** The Command key on macOS — from a `Cmd`/`Command` token. */
+  /** Command: a `Cmd`/`Command` token, or `CmdOrCtrl` on macOS. */
   readonly meta: boolean;
-  /** The Super/Windows key — from a `Super`/`Meta` token. */
+  /** A `Super`/`Meta` token: the Windows key, and Command on macOS (Electron). */
   readonly super: boolean;
 };
 
@@ -114,8 +107,8 @@ const applyModifier = (token: string, mods: Modifiers): boolean => {
 };
 
 /**
- * `undefined` when the accelerator cannot be parsed. `CmdOrCtrl` is preserved as
- * a flag AND resolved into the concrete `meta`/`ctrl` flag for `platform`.
+ * Electron's `'CmdOrCtrl+Shift+K'`: modifiers plus exactly one key. `CmdOrCtrl` resolves to
+ * `meta` on macOS and `ctrl` elsewhere; empty, keyless, two-key or unknown input is `undefined`.
  */
 export const parseAccelerator = (
   accelerator: string,
@@ -145,19 +138,18 @@ export const parseAccelerator = (
     }
     const candidate = normaliseKey(token);
     if (candidate === undefined) {
-      return undefined; // unknown token
+      return undefined;
     }
     if (key !== undefined) {
-      return undefined; // more than one final key
+      return undefined;
     }
     key = candidate;
   }
 
   if (key === undefined) {
-    return undefined; // modifiers but no key
+    return undefined;
   }
 
-  // Resolve CmdOrCtrl into the concrete platform modifier.
   const meta = mods.meta || (mods.cmdOrCtrl && platform === 'macos');
   const ctrl = mods.ctrl || (mods.cmdOrCtrl && platform !== 'macos');
 

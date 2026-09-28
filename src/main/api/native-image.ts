@@ -3,32 +3,16 @@ import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
 import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
 import { windowsNativeImageBackend } from '../platform/windows/windows-native-image';
 
-/**
- * Image loading, querying, and encoding — a drop-in subset of Electron's
- * `nativeImage` module.
- *
- * SIZE — bun:ffi cannot return a struct by value, so Electron's `NSImage.size`
- * (an `NSSize` struct) is unreadable across the FFI boundary. Instead each
- * backend reports `width`/`height` via SCALAR getters at decode time (macOS
- * `NSBitmapImageRep` `pixelsWide`/`pixelsHigh`, both `NSInteger`; Linux
- * `gdk_pixbuf_get_width`/`get_height`, both `int`; Windows GDI+), which `getSize`
- * returns directly. No struct ever crosses FFI.
- *
- * The template flag is plain JS metadata: the macOS `NSImage setTemplate:` is
- * applied when the image is realized for a `Tray`/menu, not on the decoded rep
- * here. `toJPEG`'s quality is honored on macOS; Linux uses GdkPixbuf's default.
- * `getScaleFactors` and `{ scaleFactor }` are deferred, not stubbed.
- */
-
 /** Opaque: an ObjC object address (macOS) or a `Pointer` (Linux), both as `bigint`. */
 export type NativeImageHandle = bigint;
 
+/** Size comes from scalar getters at decode time: bun:ffi cannot return `NSSize` by value. */
 export type DecodedImage = {
   /** `0n` when empty or the decode failed. */
   readonly handle: NativeImageHandle;
-  /** Pixel width via a SCALAR getter; `0` when empty. */
+  /** Pixels; `0` when empty. */
   readonly width: number;
-  /** Pixel height via a SCALAR getter; `0` when empty. */
+  /** Pixels; `0` when empty. */
   readonly height: number;
   /** Set for a bad path or undecodable bytes. */
   readonly empty: boolean;
@@ -36,7 +20,7 @@ export type DecodedImage = {
 
 export type NativeImageBackend = {
   /** A filesystem path or in-memory PNG/JPEG bytes. */
-  decode(source: string | Uint8Array): DecodedImage;
+  decode(source: string | Uint8Array): DecodedImage; // ponytail: no release(handle); images leak for the process life
   encodePng(handle: NativeImageHandle): Uint8Array;
   /** `quality` is 0-100. */
   encodeJpeg(handle: NativeImageHandle, quality: number): Uint8Array;
@@ -70,7 +54,7 @@ export const resolveResizeDimensions = (
   if (hasH) {
     return { width: Math.max(1, Math.round((height / srcH) * srcW)), height: Math.round(height) };
   }
-  return { width: srcW, height: srcH }; // both omitted → unchanged size
+  return { width: srcW, height: srcH };
 };
 
 /** The rect's intersection with the image; `undefined` when empty. */
@@ -132,7 +116,7 @@ export class NativeImage {
     return Buffer.from(this.#backend.encodePng(this.#handle));
   }
 
-  /** `quality` is 0-100, default 92. A zero-length `Buffer` when the image is empty. */
+  /** `quality` is 0-100, default 92, honored on macOS only. Zero-length when the image is empty. */
   toJPEG(quality = 92): Buffer {
     if (this.#empty) {
       return Buffer.alloc(0);
@@ -170,10 +154,7 @@ export class NativeImage {
     return new NativeImage(this.#backend, this.#backend.resize(this.#handle, width, height));
   }
 
-  /**
-   * `rect` is in px with a top-left origin. A rect entirely outside the image
-   * yields an empty image; a partially-overflowing one is clamped to bounds.
-   */
+  /** `rect` is in px, top-left origin, and clipped to the image; no overlap yields an empty image. */
   crop(rect: { x: number; y: number; width: number; height: number }): NativeImage {
     if (this.#empty) {
       return new NativeImage(this.#backend, EMPTY_DECODE);
@@ -188,7 +169,7 @@ export class NativeImage {
     );
   }
 
-  /** A template is a monochrome icon the OS recolors for light/dark. */
+  /** A monochrome icon the OS recolors for light/dark; applied when a Tray or menu uses it. */
   setTemplateImage(option: boolean): void {
     this.#template = option;
   }
@@ -209,7 +190,6 @@ export const setNativeImageBackendForTesting = setForTesting;
 
 const EMPTY_DECODE: DecodedImage = { handle: 0n, width: 0, height: 0, empty: true };
 
-/** The `nativeImage` module — Electron-compatible image load/query/encode. */
 export const nativeImage = {
   /** A bad or unreadable path yields an empty image, not a throw. */
   createFromPath(path: string): NativeImage {

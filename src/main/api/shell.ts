@@ -3,11 +3,6 @@ import * as gtkShell from '../platform/linux/gtk-shell';
 import * as cocoaShell from '../platform/macos/cocoa-shell';
 import { windowsShellBackend } from '../platform/windows/windows-shell';
 
-/**
- * Desktop integration — the drop-in equivalent of Electron's `shell`.
- * `openExternal` returns a Promise, matching Electron; the rest are synchronous.
- */
-
 export type ShellBackend = {
   openExternal(url: string): boolean;
   openPath(path: string): boolean;
@@ -39,7 +34,7 @@ const { get: getBackend, setForTesting } = selectBackend<ShellBackend>('shell', 
 export const setShellBackendForTesting = setForTesting;
 
 export type Shell = {
-  /** Resolves with whether the launch succeeded. */
+  /** Resolves `false` for a non-URL or a failed launch. */
   openExternal(url: string): Promise<boolean>;
   /** Resolves `''` on success, else an error string. */
   openPath(path: string): Promise<string>;

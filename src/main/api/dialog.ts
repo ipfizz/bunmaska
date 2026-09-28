@@ -5,19 +5,15 @@ import * as cocoaDialog from '../platform/macos/cocoa-dialog';
 import { windowsDialogBackend } from '../platform/windows/windows-dialog';
 import type { BrowserWindow } from './browser-window';
 
-/**
- * Native system dialogs — the drop-in equivalent of Electron's `dialog`. macOS
- * and Windows run their panels modally while Linux is truly async
- * (`GAsyncReadyCallback`), so {@link DialogBackend} may return a value OR a
- * Promise.
- */
-
 export type MessageBoxOptions = {
   readonly message: string;
   readonly detail?: string;
-  /** Defaults to `['OK']`. The FIRST is the default button. */
+  /**
+   * Defaults to `['OK']`; the first is the default. Windows ignores the labels and
+   * shows OK, OK/Cancel or Yes/No/Cancel by count.
+   */
   readonly buttons?: ReadonlyArray<string>;
-  /** Styles the `NSAlert` icon on macOS; GtkAlertDialog has no severity, so a no-op on Linux. */
+  /** The alert icon on macOS and Windows; ignored on Linux (GtkAlertDialog has no severity). */
   readonly type?: cocoaDialog.MessageBoxType;
 };
 
@@ -33,14 +29,11 @@ export type FileFilter = {
 };
 
 export type OpenDialogOptions = {
-  /**
-   * Defaults to `['openFile']`. `createDirectory` (macOS) shows the panel's
-   * "New Folder" button so the user can create a folder while picking.
-   */
+  /** Defaults to `['openFile']`. Linux v1 always picks one file; `createDirectory` is macOS only. */
   readonly properties?: ReadonlyArray<
     'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'
   >;
-  /** For a file path, the panel opens at its containing folder. */
+  /** macOS only: the folder to open in, or a file path's folder. Ignored on Linux and Windows. */
   readonly defaultPath?: string;
   /** The selectable extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;
@@ -52,6 +45,7 @@ export type OpenDialogReturnValue = {
 };
 
 export type SaveDialogOptions = {
+  /** A file name, or on Windows also a full path. */
   readonly defaultPath?: string;
   /** The allowed extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;
@@ -78,6 +72,7 @@ export type SaveDialogReturnValue = {
   readonly filePath: string;
 };
 
+/** macOS and Windows panels are modal and return a value; Linux (GTK) is async and returns a Promise. */
 export type DialogBackend = {
   showMessageBox(spec: cocoaDialog.MessageBoxSpec): number | Promise<number>;
   showOpenDialog(spec: cocoaDialog.OpenDialogSpec): string[] | Promise<string[]>;
@@ -101,7 +96,7 @@ export const setDialogBackendForTesting = setForTesting;
 
 const log = createLogger('dialog');
 
-/** Electron's optional leading window; accepted, but dialogs are not attached as sheets. */
+/** Electron's optional leading window: accepted, but the dialog is not attached as a sheet. */
 type WithWindow<T> = [window: BrowserWindow, options: T];
 
 export type Dialog = {
@@ -146,7 +141,7 @@ export const dialog: Dialog = {
   async showSaveDialog(...args) {
     const options = (args.length === 2 ? args[1] : args[0]) ?? {};
     const filePath = await getBackend().showSaveDialog({
-      defaultName: options.defaultPath ?? '',
+      defaultName: options.defaultPath ?? '', // ponytail: macOS/Linux need dir + name split in their backends
       extensions: flattenFilterExtensions(options.filters),
     });
     return { canceled: filePath.length === 0, filePath };
