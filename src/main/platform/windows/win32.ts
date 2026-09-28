@@ -7,8 +7,10 @@
  * pointers (struct buffers, wide strings) are passed with `ptr()` as usual.
  */
 
+import { type Pointer, read } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import type { Rect } from '../native';
 
 /** Opaque pointer-width Win32 handle (`HWND`/`HMENU`/`HINSTANCE`/...). */
 export type WinHandle = bigint;
@@ -33,6 +35,18 @@ export const wstr = (input: string): Uint8Array => {
     out[i * 2 + 1] = (unit >> 8) & 0xff;
   }
   return out;
+};
+
+/** Read a native `RECT` (left, top, right, bottom as LONGs) at `offset` as a {@link Rect}. */
+export const readRect = (pointer: Pointer, offset: number): Rect => {
+  const left = read.i32(pointer, offset);
+  const top = read.i32(pointer, offset + 4);
+  return {
+    x: left,
+    y: top,
+    width: read.i32(pointer, offset + 8) - left,
+    height: read.i32(pointer, offset + 12) - top,
+  };
 };
 
 /**

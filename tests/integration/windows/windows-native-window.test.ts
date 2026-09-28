@@ -11,6 +11,7 @@ const SW_MAXIMIZE = 3;
 const SW_MINIMIZE = 6;
 const SW_RESTORE = 9;
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
+const SWP_NOZORDER_NOACTIVATE = 0x0004 | 0x0010;
 
 /**
  * Windows-only. Drives REAL native-WndProc top-level windows (the kind that can
@@ -244,6 +245,18 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       expect(restores).toBe(1);
       expect(resizes).toBe(0);
       expect(hookCalls).toBe(0);
+    } finally {
+      win.destroy();
+    }
+  });
+
+  test('getBounds reports the restored rect while minimized, not the -32000 icon slot', () => {
+    const win = new NativeWin32Window({ title: 'Bounds', width: 400, height: 300, show: true });
+    try {
+      loadUser32().symbols.SetWindowPos(win.hwnd(), 0n, 120, 90, 500, 380, SWP_NOZORDER_NOACTIVATE);
+      expect(win.getBounds()).toEqual({ x: 120, y: 90, width: 500, height: 380 });
+      loadUser32().symbols.ShowWindow(win.hwnd(), SW_MINIMIZE);
+      expect(win.getBounds()).toEqual({ x: 120, y: 90, width: 500, height: 380 });
     } finally {
       win.destroy();
     }

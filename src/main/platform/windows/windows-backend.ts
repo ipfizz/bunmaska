@@ -24,7 +24,6 @@ import { WindowsWebContents } from './windows-web-contents';
 const SW_MAXIMIZE = 3;
 const SW_MINIMIZE = 6;
 const SW_RESTORE = 9;
-const RECT_SIZE = 16;
 
 const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
@@ -171,14 +170,7 @@ class WindowsWindow implements NativeWindow {
   }
 
   getBounds(): Rect {
-    const rect = new Uint8Array(RECT_SIZE);
-    loadUser32().symbols.GetWindowRect(this.#hwnd(), ptr(rect));
-    const dv = new DataView(rect.buffer);
-    const left = dv.getInt32(0, true);
-    const top = dv.getInt32(4, true);
-    const right = dv.getInt32(8, true);
-    const bottom = dv.getInt32(12, true);
-    return { x: left, y: top, width: right - left, height: bottom - top };
+    return this.#native.getBounds();
   }
 
   setResizable(resizable: boolean): void {

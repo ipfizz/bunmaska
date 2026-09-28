@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { ptr } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../../../src/common/errors';
 import { currentPlatform } from '../../../../../src/common/platform';
 import {
   NULL_HANDLE,
+  readRect,
   type WinHandle,
   winLibraryAccessor,
   wstr,
@@ -39,6 +41,13 @@ describe('wstr', () => {
 
   test('byte length is (code units + 1) * 2', () => {
     expect(wstr('abc')).toHaveLength((3 + 1) * 2);
+  });
+});
+
+describe('readRect', () => {
+  test('turns a RECT (left, top, right, bottom) at an offset into x/y/width/height', () => {
+    const buffer = new Int32Array([7, 7, -30, 110, 220, 330]);
+    expect(readRect(ptr(buffer), 8)).toEqual({ x: -30, y: 110, width: 250, height: 220 });
   });
 });
 

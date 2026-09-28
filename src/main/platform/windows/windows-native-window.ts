@@ -2,8 +2,8 @@ import { FFIType, JSCallback, ptr, read } from 'bun:ffi';
 import { isDevRestart } from '../../dev-reload';
 import { FFIError } from '../../../common/errors';
 import { cstr } from '../cstr';
-import type { WindowEventType } from '../native';
-import { wstr } from './win32';
+import type { Rect, WindowEventType } from '../native';
+import { readRect, wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
 /**
@@ -19,6 +19,9 @@ const NATIVE_WINDOW_CLASS_NAME = 'BunmaskaNativeWindow';
 const FRAME_WINDOW_CLASS_NAME = 'BunmaskaFrameWindow';
 const WNDCLASSEXW_SIZE = 80;
 const RECT_SIZE = 16;
+/** `sizeof(WINDOWPLACEMENT)`: length, flags, showCmd, two POINTs, then rcNormalPosition@28. */
+const WINDOWPLACEMENT_SIZE = 44;
+const RC_NORMAL_POSITION_OFFSET = 28;
 const IDC_ARROW = 32512;
 /** `WM_COMMAND` — a menu selection (or control/accelerator) notification. */
 const WM_COMMAND = 0x0111;
@@ -473,6 +476,23 @@ export class NativeWin32Window {
     // Native writes are only visible via read.* on the pointer, never through
     // the backing JS array (the rule windows-run-loop.ts documents).
     return { width: read.i32(rectPtr, 8), height: read.i32(rectPtr, 12) };
+  }
+
+  /** Outer bounds in screen pixels; while minimized, the restored rect (Electron on Windows). */
+  getBounds(): Rect {
+    const user32 = loadUser32().symbols;
+    if (user32.IsIconic(this.#hwnd) !== 0) {
+      const placement = new Uint8Array(WINDOWPLACEMENT_SIZE);
+      new DataView(placement.buffer).setUint32(0, WINDOWPLACEMENT_SIZE, true);
+      const placementPtr = ptr(placement);
+      user32.GetWindowPlacement(this.#hwnd, placementPtr);
+      // ponytail: workspace coords, off by a top/left-docked taskbar; upgrade = add rcWork - rcMonitor
+      return readRect(placementPtr, RC_NORMAL_POSITION_OFFSET);
+    }
+    const rect = new Uint8Array(RECT_SIZE);
+    const rectPtr = ptr(rect);
+    user32.GetWindowRect(this.#hwnd, rectPtr);
+    return readRect(rectPtr, 0);
   }
 
   show(): void {
