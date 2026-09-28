@@ -52,8 +52,9 @@ export type Command =
 
 const BUILD_STRING_FLAGS = new Map<
   string,
-  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine' | 'updateKey'
+  'name' | 'id' | 'out' | 'icon' | 'sign' | 'channel' | 'embedEngine' | 'updateKey' | 'target'
 >([
+  ['--target', 'target'],
   ['--name', 'name'],
   ['--id', 'id'],
   ['--out', 'out'],
@@ -64,10 +65,10 @@ const BUILD_STRING_FLAGS = new Map<
   ['--embed-engine', 'embedEngine'],
 ]);
 
-const BUILD_BOOLEAN_FLAGS: ReadonlySet<string> = new Set<string>([
-  '--notarize',
-  '--dmg',
-  '--update',
+const BUILD_BOOLEAN_FLAGS = new Map<string, 'notarize' | 'dmg' | 'update'>([
+  ['--notarize', 'notarize'],
+  ['--dmg', 'dmg'],
+  ['--update', 'update'],
 ]);
 
 const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', 'linux', 'windows']);
@@ -121,29 +122,9 @@ const parseBuild = (rest: readonly string[]): Command => {
       continue;
     }
     if (token.startsWith('--')) {
-      if (BUILD_BOOLEAN_FLAGS.has(token)) {
-        if (token === '--notarize') {
-          options.notarize = true;
-        } else if (token === '--dmg') {
-          options.dmg = true;
-        } else if (token === '--update') {
-          options.update = true;
-        }
-        continue;
-      }
-      if (token === '--target') {
-        const value = rest[i + 1];
-        if (value === undefined) {
-          return { kind: 'error', message: `bunmaska build: flag ${token} requires a value` };
-        }
-        if (!isBuildTarget(value)) {
-          return {
-            kind: 'error',
-            message: `bunmaska build: --target must be macos, linux or windows (got ${value})`,
-          };
-        }
-        options.target = value;
-        i += 1;
+      const flag = BUILD_BOOLEAN_FLAGS.get(token);
+      if (flag !== undefined) {
+        options[flag] = true;
         continue;
       }
       const key = BUILD_STRING_FLAGS.get(token);
@@ -154,7 +135,16 @@ const parseBuild = (rest: readonly string[]): Command => {
       if (value === undefined) {
         return { kind: 'error', message: `bunmaska build: flag ${token} requires a value` };
       }
-      options[key] = value;
+      if (key !== 'target') {
+        options[key] = value;
+      } else if (isBuildTarget(value)) {
+        options.target = value;
+      } else {
+        return {
+          kind: 'error',
+          message: `bunmaska build: --target must be macos, linux or windows (got ${value})`,
+        };
+      }
       i += 1;
       continue;
     }
