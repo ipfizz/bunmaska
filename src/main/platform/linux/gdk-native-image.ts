@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { ptr, toArrayBuffer } from 'bun:ffi';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
 import { cstr } from '../cstr';
@@ -48,13 +49,17 @@ const decodeFromPixbuf = (pixbuf: number | null): DecodedImage => {
   return { handle: BigInt(pixbuf), width, height, empty: false };
 };
 
-const decodePath = (path: string): DecodedImage => {
-  const pixbufFFI = loadGdkPixbufFFI();
-  const pixbuf = pixbufFFI.symbols.gdk_pixbuf_new_from_file(cstr(path), null);
-  return decodeFromPixbuf(pixbuf === null ? null : Number(pixbuf));
-};
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47];
+const JPEG_SOI = [0xff, 0xd8, 0xff];
+
+/** gdk-pixbuf sniffs and hands bytes to every installed loader (TGA, ANI, SVG, ...); only PNG/JPEG are the contract. */
+export const isPngOrJpeg = (bytes: Uint8Array): boolean =>
+  [PNG_SIGNATURE, JPEG_SOI].some((magic) => magic.every((byte, i) => bytes[i] === byte));
 
 const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
+  if (!isPngOrJpeg(bytes)) {
+    return EMPTY;
+  }
   const pixbufFFI = loadGdkPixbufFFI();
   const glib = loadGlibFFI();
   const gio = loadGioFFI();
@@ -72,6 +77,14 @@ const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
     gobject.symbols.g_object_unref(stream);
   }
   return decodeFromPixbuf(pixbuf === null ? null : Number(pixbuf));
+};
+
+const decodePath = (path: string): DecodedImage => {
+  try {
+    return decodeBuffer(readFileSync(path));
+  } catch {
+    return EMPTY;
+  }
 };
 
 /** Encode to `type` ("png"/"jpeg"); `quality` (0-100) applies to JPEG only. */
