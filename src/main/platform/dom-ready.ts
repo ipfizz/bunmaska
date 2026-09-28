@@ -10,6 +10,9 @@ export const DOM_READY_HANDLER_NAME = 'bunmaskaDomReady';
 /** The page-world script that fires once the document is ready. */
 export const generateDomReadyScript = (): string =>
   `(() => {
+    if (window !== window.top) {
+      return;
+    }
     const post = () => {
       try {
         window.webkit.messageHandlers.${DOM_READY_HANDLER_NAME}.postMessage('');
