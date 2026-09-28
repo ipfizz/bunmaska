@@ -256,16 +256,19 @@ const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
   }
   // Quiesce the hosted view first (the onClosed handler clears WebKit's clients
   // and detaches the view), THEN finish the window.
-  handlers.onClosed?.();
-  if (handlers.destroyOnClose) {
-    loadUser32().symbols.DestroyWindow(hwnd);
-  } else {
-    // A WebKit-hosting window: synchronously destroying it crashes WebKit's
-    // multi-process teardown through bun:ffi, so hide it and let the OS reclaim
-    // the view + its WebProcess at process exit (see `.admin/WINDOWS.md`).
-    loadUser32().symbols.ShowWindow(hwnd, SW_HIDE);
+  try {
+    handlers.onClosed?.();
+  } finally {
+    if (handlers.destroyOnClose) {
+      loadUser32().symbols.DestroyWindow(hwnd);
+    } else {
+      // A WebKit-hosting window: synchronously destroying it crashes WebKit's
+      // multi-process teardown through bun:ffi, so hide it and let the OS reclaim
+      // the view + its WebProcess at process exit (see `.admin/WINDOWS.md`).
+      loadUser32().symbols.ShowWindow(hwnd, SW_HIDE);
+    }
+    windowRegistry.delete(hwnd);
   }
-  windowRegistry.delete(hwnd);
 };
 
 /**

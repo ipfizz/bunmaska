@@ -138,6 +138,21 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     }
   });
 
+  test('a throwing onClosed still hides the window', () => {
+    const win = new NativeWin32Window({
+      title: 'Throw',
+      width: 320,
+      height: 240,
+      show: true,
+      destroyOnClose: false,
+    });
+    win.onClosed(() => {
+      throw new Error('closed listener');
+    });
+    expect(() => win.close()).toThrow('closed listener');
+    expect(win.isVisible()).toBe(false);
+  });
+
   test('programmatic close() honours the veto; destroy() forces it and is idempotent', () => {
     const win = new NativeWin32Window({ title: 'Prog', width: 320, height: 240, show: false });
     let closed = 0;

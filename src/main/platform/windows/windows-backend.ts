@@ -97,9 +97,12 @@ class WindowsWindow implements NativeWindow {
     // execs, release the view) before surfacing `closed` to the api layer.
     this.#native.onClosed(() => {
       windowsMenuRealizer.unregisterAppMenuWindow(this.#appMenuTarget);
-      this.#webContents.dispose();
-      for (const callback of this.#closedCallbacks) {
-        callback();
+      try {
+        this.#webContents.dispose();
+      } finally {
+        for (const callback of this.#closedCallbacks) {
+          callback();
+        }
       }
     });
     // `ready-to-show` fires once, when the page first reaches dom-ready.
