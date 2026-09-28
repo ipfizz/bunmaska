@@ -8,90 +8,20 @@ import {
   generatePageWorldStub,
 } from '../../../renderer/api/cross-world-bridge';
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
+import { EXEC_HANDLER_NAME, ExecResultChannel } from '../linux/eval-js';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import type { NativeInputEvent, NativeNavigationEvent, NativeWebContents } from '../native';
 import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
 
 const HANDLER_NAME = 'bunmaska';
-const EXEC_HANDLER_NAME = 'bunmaskaExec';
 
 const log = createLogger('windows-web-contents');
-
-interface PendingExec {
-  readonly resolve: (value: unknown) => void;
-  readonly reject: (reason: Error) => void;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
-/** `executeJavaScript` over the `bunmaskaExec` script message, not a native callback (D022b). */
-class WindowsExecResultChannel {
-  readonly #evalInPage: (wrapped: string) => void;
-  readonly #pending = new Map<number, PendingExec>();
-  #nextExecId = 1;
-  #destroyed = false;
-
-  constructor(evalInPage: (wrapped: string) => void) {
-    this.#evalInPage = evalInPage;
-  }
-
-  executeJavaScript(code: string): Promise<unknown> {
-    if (this.#destroyed) {
-      return Promise.reject(new Error('executeJavaScript failed: web contents destroyed'));
-    }
-    const execId = this.#nextExecId;
-    this.#nextExecId += 1;
-    return new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#pending.delete(execId);
-        reject(new Error(`executeJavaScript timed out after ${EXEC_TIMEOUT_MS}ms`));
-      }, EXEC_TIMEOUT_MS);
-      this.#pending.set(execId, { resolve, reject, timer });
-      this.#evalInPage(buildExecWrapper(execId, EXEC_HANDLER_NAME, code));
-    });
-  }
-
-  /** Settle the pending exec for the `{ execId, ok, result?, error? }` JSON. */
-  deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string } | null;
-    try {
-      outcome = JSON.parse(json);
-    } catch (error) {
-      log.warn('dropping malformed exec result', error);
-      return;
-    }
-    if (typeof outcome?.execId !== 'number') {
-      return;
-    }
-    const pending = this.#pending.get(outcome.execId);
-    if (pending === undefined) {
-      return;
-    }
-    clearTimeout(pending.timer);
-    this.#pending.delete(outcome.execId);
-    if (outcome.ok) {
-      pending.resolve(outcome.result);
-    } else {
-      pending.reject(new Error(outcome.error ?? 'executeJavaScript failed'));
-    }
-  }
-
-  /** Settle every still-pending exec to `undefined` and block new ones (teardown). */
-  rejectPending(): void {
-    this.#destroyed = true;
-    for (const [, pending] of this.#pending) {
-      clearTimeout(pending.timer);
-      pending.resolve(undefined);
-    }
-    this.#pending.clear();
-  }
-}
 
 /** Windows {@link NativeWebContents}: a WinCairo `WKView` wired for IPC + JS eval. */
 export class WindowsWebContents implements NativeWebContents {
   readonly #webView: WindowsWebView;
-  readonly #exec: WindowsExecResultChannel;
+  readonly #exec: ExecResultChannel;
   #domReady = false;
   readonly #pendingEnvelopes: string[] = [];
   readonly #rendererEnvelopeCallbacks: Array<(json: string) => void> = [];
@@ -147,9 +77,7 @@ export class WindowsWebContents implements NativeWebContents {
       ],
       onNavigationEvent: (event) => this.#dispatchNavigation(event),
     });
-    this.#exec = new WindowsExecResultChannel((wrapped) =>
-      this.#webView.evaluateJavaScript(wrapped),
-    );
+    this.#exec = new ExecResultChannel((wrapped) => this.#webView.evaluateJavaScript(wrapped));
   }
 
   /** Flush queued envelopes once the bridge is live, then surface `dom-ready`. */
@@ -316,7 +244,7 @@ export class WindowsWebContents implements NativeWebContents {
 
   /** @internal Settle pending execs and blank the view. Called on window close. */
   dispose(): void {
-    this.#exec.rejectPending();
+    this.#exec.destroy();
     this.#webView.dispose();
   }
 }

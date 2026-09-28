@@ -1,6 +1,7 @@
 import type { Pointer } from 'bun:ffi';
 import { cstr } from '../cstr';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { EXEC_HANDLER_NAME } from './eval-js';
 import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
 import { loadWebKitGtkFFI, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START } from './webkitgtk-ffi';
@@ -15,8 +16,6 @@ export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 export const HANDLER_NAME = 'bunmaska';
 export const SIGNAL = `script-message-received::${HANDLER_NAME}`;
 
-/** The page-world handler the `executeJavaScript` wrapper posts its result to. */
-export const EXEC_HANDLER_NAME = 'bunmaskaExec';
 export const EXEC_SIGNAL = `script-message-received::${EXEC_HANDLER_NAME}`;
 
 /** A web view wired for IPC, plus the manager and the signal registry to retain. */

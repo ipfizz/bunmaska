@@ -1,8 +1,10 @@
 import { createLogger } from '../../../common/logger';
 import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
-import { EXEC_HANDLER_NAME } from './webkit-ipc';
 
-const log = createLogger('linux-eval-js');
+const log = createLogger('eval-js');
+
+/** The page-world handler the `executeJavaScript` wrapper posts its result to. */
+export const EXEC_HANDLER_NAME = 'bunmaskaExec';
 
 /** Unguessable, because every frame can post to the page-world `bunmaskaExec` handler. */
 const randomExecId = (): number => {
@@ -16,7 +18,7 @@ type PendingExec = {
   readonly timer: ReturnType<typeof setTimeout>;
 };
 
-/** In-flight `executeJavaScript` calls, settled by the execId the page-world wrapper posts back. */
+/** In-flight `executeJavaScript` calls, settled by the execId the page-world wrapper posts back (Linux and Windows). */
 export class ExecResultChannel {
   readonly #evalInPage: (source: string) => void;
   readonly #pending = new Map<number, PendingExec>();
