@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { IpcMainImpl } from '../../../../src/main/api/ipc-main';
+import { type IpcMainEvent, IpcMainImpl } from '../../../../src/main/api/ipc-main';
+import type { WebContents } from '../../../../src/main/api/web-contents';
 import type { InvokeEnvelope, SendEnvelope } from '../../../../src/main/ipc/ipc-protocol';
 
 const send = (channel: string, ...args: unknown[]): SendEnvelope => ({
@@ -13,7 +14,7 @@ const invoke = (id: number, channel: string, ...args: unknown[]): InvokeEnvelope
   channel,
   args,
 });
-const event = { sender: undefined };
+const event: IpcMainEvent = { sender: {} as WebContents, reply: () => undefined };
 
 let ipc: IpcMainImpl;
 beforeEach(() => {

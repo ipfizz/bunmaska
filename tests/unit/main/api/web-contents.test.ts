@@ -376,6 +376,17 @@ describe('WebContents <-> ipcMain auto-wiring', () => {
     expect(calls[0]?.sender).toBe(wc);
   });
 
+  test('event.reply sends to the renderer the message came from', async () => {
+    const { native, sent, fireRenderer } = makeFakeNative();
+    new WebContents(native);
+    ipcMain.on('ping', (event) => event.reply('pong', 1));
+
+    fireRenderer(encodeEnvelope({ kind: 'send', channel: 'ping', args: [] }));
+    await flush();
+
+    expect(decodeEnvelope(sent[0] ?? '')).toEqual({ kind: 'send', channel: 'pong', args: [1] });
+  });
+
   test('a renderer invoke is handled and a reply is sent back', async () => {
     const { native, sent, fireRenderer } = makeFakeNative();
     new WebContents(native);

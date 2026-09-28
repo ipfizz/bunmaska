@@ -347,7 +347,10 @@ export class WebContents extends EventEmitter {
     if ((envelope.kind !== 'send' && envelope.kind !== 'invoke') || this.#destroyed) {
       return;
     }
-    const reply = await ipcMain.dispatch(envelope, { sender: this });
+    const reply = await ipcMain.dispatch(envelope, {
+      sender: this,
+      reply: (channel, ...args) => this.send(channel, ...args),
+    });
     if (reply !== undefined && !this.#destroyed) {
       this.#view.sendEnvelopeToRenderer(encodeReply(reply));
     }

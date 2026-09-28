@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { IpcMainImpl } from '../../../src/main/api/ipc-main';
+import type { WebContents } from '../../../src/main/api/web-contents';
 import { decodeEnvelope, encodeEnvelope } from '../../../src/main/ipc/ipc-protocol';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
 import type { NativeApplication, NativeWindow } from '../../../src/main/platform/native';
@@ -113,7 +114,8 @@ if (currentPlatform() === 'macos') {
         received.push(json);
         const env = decodeEnvelope(json);
         if (env.kind === 'send' || env.kind === 'invoke') {
-          const reply = await ipc.dispatch(env, { sender: win.webContents });
+          const event = { sender: {} as WebContents, reply: () => undefined };
+          const reply = await ipc.dispatch(env, event);
           if (reply !== undefined) {
             win.webContents.sendEnvelopeToRenderer(encodeEnvelope(reply));
           }

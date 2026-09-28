@@ -1,5 +1,6 @@
 import { createLogger } from '../../common/logger';
 import type { InvokeEnvelope, ReplyEnvelope, SendEnvelope } from '../ipc/ipc-protocol';
+import type { WebContents } from './web-contents';
 
 /**
  * Main-process IPC — the drop-in equivalent of Electron's `ipcMain`. At most one
@@ -7,13 +8,13 @@ import type { InvokeEnvelope, ReplyEnvelope, SendEnvelope } from '../ipc/ipc-pro
  * {@link IpcMainImpl.dispatch}.
  */
 
-/** `sender` is the originating `WebContents`. */
-export type IpcMainEvent = {
-  readonly sender: unknown;
+export type IpcMainInvokeEvent = {
+  readonly sender: WebContents;
 };
 
-export type IpcMainInvokeEvent = {
-  readonly sender: unknown;
+export type IpcMainEvent = IpcMainInvokeEvent & {
+  /** Sends to the renderer the message came from. */
+  reply(channel: string, ...args: readonly unknown[]): void;
 };
 
 const log = createLogger('ipc-main');
