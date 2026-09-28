@@ -2,13 +2,6 @@ import { type Pointer, ptr } from 'bun:ffi';
 import { isDevRestart } from '../../dev-reload';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
-import {
-  generateChannelId,
-  generateIsolatedChannelSetup,
-  generateIsolatedHostSource,
-  generatePageWorldStub,
-} from '../../../renderer/api/cross-world-bridge';
-import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { CooperativePump } from '../../run-loop';
 import { cstr } from '../cstr';
 import type { NativeMenuItemSpec } from '../services';
@@ -22,7 +15,7 @@ import type {
   Rect,
   WindowEventType,
 } from '../native';
-import { windowControlsScript } from '../window-controls';
+import { injectedScripts } from '../web-scripts';
 import { ExecResultChannel } from '../exec-result-channel';
 import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkFFI } from './gtk-ffi';
@@ -70,16 +63,12 @@ class LinuxWebContents implements NativeWebContents {
   #windowOpenCallback: ((url: string) => void) | undefined;
 
   constructor(userPreloadSource?: string, frame?: boolean, protocol?: NativeProtocol) {
-    const channelId = generateChannelId();
-    const stub = generatePageWorldStub(channelId);
     const wired = createWebViewWithIpc({
-      preloadSource: generatePreloadBootstrap(),
-      isolatedSetupSource: generateIsolatedChannelSetup(channelId),
-      isolatedHostSource: generateIsolatedHostSource(channelId),
-      // Electron ignores drag regions in a framed window, so only a frameless one pays for the scan.
-      // ponytail: --app-region mirror only; frameless window-op buttons wait on the isolated bridge (D045)
-      pageWorldSource: frame === false ? `${stub}\n${windowControlsScript()}` : stub,
-      ...(userPreloadSource !== undefined ? { userPreloadSource } : {}),
+      scripts: injectedScripts({
+        preloadScript: userPreloadSource,
+        frame,
+        domReadyWorld: 'isolated',
+      }),
       onMessage: (json: string) => {
         this.#markBridgeReady();
         for (const callback of this.#rendererEnvelopeCallbacks) {

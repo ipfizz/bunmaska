@@ -1,17 +1,10 @@
 import { FFIType, ptr } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
-import {
-  generateChannelId,
-  generateIsolatedChannelSetup,
-  generateIsolatedHostSource,
-  generatePageWorldStub,
-} from '../../../renderer/api/cross-world-bridge';
-import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { isDevRestart } from '../../dev-reload';
 import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../../ipc/exec-wrapper';
 import { AdaptiveBlockingPump } from '../../run-loop';
-import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { DOM_READY_HANDLER_NAME } from '../dom-ready';
 import type {
   NativeAppKit,
   NativeApplication,
@@ -23,7 +16,13 @@ import type {
   Rect,
   WindowEventType,
 } from '../native';
-import { windowControlsScript } from '../window-controls';
+import {
+  dispatchScript,
+  EXEC_HANDLER_NAME,
+  IPC_HANDLER_NAME,
+  injectedScripts,
+  PRELOAD_WORLD_NAME,
+} from '../web-scripts';
 import * as cocoaApp from './cocoa-app';
 import { createAppDelegate } from './cocoa-app-delegate';
 import { makeOneShotBlock } from './cocoa-block';
@@ -113,13 +112,8 @@ const NS_FLOATING_WINDOW_LEVEL = 3n;
 const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
 /** Electron runs preloads in the main frame only; an iframe must never get the bridge. */
 const FOR_MAIN_FRAME_ONLY = 1;
-const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
-/** Page-world handler name `executeJavaScript` posts its result to (D022b). */
-const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
 /** Milliseconds before a pending printToPDF/capturePage rejects. */
 const RENDER_TIMEOUT_MS = 30_000;
-/** Name of the isolated `WKContentWorld` the bridge + user preload run in. */
-export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
 
 /** A pending `executeJavaScript` awaiting its page-world result message. */
 type PendingExec = {
@@ -127,9 +121,6 @@ type PendingExec = {
   readonly reject: (reason: Error) => void;
   readonly timer: ReturnType<typeof setTimeout>;
 };
-
-const dispatchScript = (envelopeJson: string): string =>
-  `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(envelopeJson)});`;
 
 /** Enable the inspector through the undocumented `developerExtrasEnabled` KVC key; best-effort. */
 const enableDeveloperExtras = (preferences: Handle): void => {
@@ -402,7 +393,7 @@ class MacOSWebContents implements NativeWebContents {
         reject(new Error(`executeJavaScript timed out after ${EXEC_TIMEOUT_MS}ms`));
       }, EXEC_TIMEOUT_MS);
       this.#pendingExecs.set(execId, { resolve, reject, timer });
-      this.#evaluateInWorld(buildExecWrapper(execId, EXEC_RESULT_HANDLER_NAME, code), pageWorld());
+      this.#evaluateInWorld(buildExecWrapper(execId, EXEC_HANDLER_NAME, code), pageWorld());
     });
   }
 
@@ -1003,7 +994,7 @@ class MacOSApplication implements NativeApplication {
       rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
       handler.handle,
       isolatedWorld,
-      nsString(SCRIPT_MESSAGE_HANDLER_NAME),
+      nsString(IPC_HANDLER_NAME),
     );
 
     // executeJavaScript's return channel (D022b). pageWorld() is interned by WebKit,
@@ -1014,7 +1005,7 @@ class MacOSApplication implements NativeApplication {
       rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
       execHandler.handle,
       pageWorld(),
-      nsString(EXEC_RESULT_HANDLER_NAME),
+      nsString(EXEC_HANDLER_NAME),
     );
 
     // The page world's DOMContentLoaded surfaces Electron's dom-ready.
@@ -1042,22 +1033,17 @@ class MacOSApplication implements NativeApplication {
       rt.msgSend(userScript, rt.selectors.get('release'));
     };
 
-    const channelId = generateChannelId();
-    // Order matters: exposeInMainWorld must exist before the user preload runs.
-    addUserScript(generateIsolatedChannelSetup(channelId), isolatedWorld);
-    addUserScript(generatePreloadBootstrap(), isolatedWorld);
-    addUserScript(generateIsolatedHostSource(channelId), isolatedWorld);
-    if (options.preloadScript !== undefined) {
-      addUserScript(options.preloadScript, isolatedWorld);
+    const scripts = injectedScripts({
+      preloadScript: options.preloadScript,
+      frame: options.frame,
+      domReadyWorld: 'page',
+    });
+    for (const source of scripts.isolated) {
+      addUserScript(source, isolatedWorld);
     }
-    addUserScript(generatePageWorldStub(channelId), pageWorld());
-    // Never put __bunmaska in the page world: it would defeat context isolation.
-    // Electron ignores drag regions in a framed window, so only a frameless one pays for the scan.
-    // ponytail: --app-region mirror only; window-op controls wait for the isolated bridge (D045)
-    if (options.frame === false) {
-      addUserScript(windowControlsScript(), pageWorld());
+    for (const source of scripts.page) {
+      addUserScript(source, pageWorld());
     }
-    addUserScript(generateDomReadyScript(), pageWorld());
 
     const webview = msgSendInitWithFrameConfig(
       rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),
@@ -1093,14 +1079,14 @@ class MacOSApplication implements NativeApplication {
       msgSendPtrPtr(
         userContentController,
         rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(SCRIPT_MESSAGE_HANDLER_NAME),
+        nsString(IPC_HANDLER_NAME),
         isolatedWorld,
       );
       handler.dispose();
       msgSendPtrPtr(
         userContentController,
         rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(EXEC_RESULT_HANDLER_NAME),
+        nsString(EXEC_HANDLER_NAME),
         pageWorld(),
       );
       execHandler.dispose();

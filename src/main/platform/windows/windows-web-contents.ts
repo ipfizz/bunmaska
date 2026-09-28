@@ -1,24 +1,21 @@
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
-import {
-  generateChannelId,
-  generateIsolatedChannelSetup,
-  generateIsolatedHostSource,
-  generatePageWorldStub,
-} from '../../../renderer/api/cross-world-bridge';
-import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
-import { EXEC_HANDLER_NAME, ExecResultChannel } from '../exec-result-channel';
-import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
+import { DOM_READY_HANDLER_NAME } from '../dom-ready';
+import { ExecResultChannel } from '../exec-result-channel';
 import type {
   NativeInputEvent,
   NativeNavigationEvent,
   NativeProtocol,
   NativeWebContents,
 } from '../native';
-import { WINDOW_HANDLER_NAME, windowControlsScript } from '../window-controls';
+import {
+  dispatchScript,
+  EXEC_HANDLER_NAME,
+  IPC_HANDLER_NAME,
+  injectedScripts,
+} from '../web-scripts';
+import { WINDOW_HANDLER_NAME } from '../window-controls';
 import { WindowsWebView } from './windows-webkit-view';
-
-const HANDLER_NAME = 'bunmaska';
 
 const log = createLogger('windows-web-contents');
 
@@ -45,27 +42,22 @@ export class WindowsWebContents implements NativeWebContents {
       // ponytail: the WinCairo C API has no URL-scheme handler hook at wpewebkit-2.52.5.
       log.warn(`protocol.handle schemes are not served on Windows yet: ${schemes.join(', ')}`);
     }
-    const channelId = generateChannelId();
     // ponytail: no context isolation (S03), preload + window.__bunmaska share the page world;
     // isolation needs a WKBundle script world, i.e. compiled code (D011).
-    const userScripts: string[] = [
-      generateIsolatedChannelSetup(channelId),
-      generatePreloadBootstrap(),
-      generateIsolatedHostSource(channelId),
-      ...(preloadScript !== undefined ? [preloadScript] : []),
-      generatePageWorldStub(channelId),
-      // Page world = bridge world here (S03); Electron ignores drag regions when framed.
-      ...(frame === false ? [windowControlsScript({ nativeOpChannel: true })] : []),
-      generateDomReadyScript(),
-    ];
+    const scripts = injectedScripts({
+      preloadScript,
+      frame,
+      domReadyWorld: 'page',
+      nativeOpChannel: true,
+    });
     this.#webView = WindowsWebView.create({
       hwnd,
       width,
       height,
-      userScripts,
+      userScripts: [...scripts.isolated, ...scripts.page],
       messageHandlers: [
         {
-          name: HANDLER_NAME,
+          name: IPC_HANDLER_NAME,
           onMessage: (json) => {
             for (const callback of this.#rendererEnvelopeCallbacks) {
               callback(json);
@@ -130,9 +122,7 @@ export class WindowsWebContents implements NativeWebContents {
   }
 
   #dispatchToRenderer(json: string): void {
-    this.#webView.evaluateJavaScript(
-      `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(json)});`,
-    );
+    this.#webView.evaluateJavaScript(dispatchScript(json));
   }
 
   loadURL(url: string): void {

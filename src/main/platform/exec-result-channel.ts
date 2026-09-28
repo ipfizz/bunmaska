@@ -1,10 +1,8 @@
 import { createLogger } from '../../common/logger';
 import { buildExecWrapper, EXEC_TIMEOUT_MS } from '../ipc/exec-wrapper';
+import { EXEC_HANDLER_NAME } from './web-scripts';
 
 const log = createLogger('eval-js');
-
-/** The page-world handler the `executeJavaScript` wrapper posts its result to. */
-export const EXEC_HANDLER_NAME = 'bunmaskaExec';
 
 /** Unguessable, because every frame can post to the page-world `bunmaskaExec` handler. */
 const randomExecId = (): number => {

@@ -1,7 +1,12 @@
 import type { Pointer } from 'bun:ffi';
 import { cstr } from '../cstr';
-import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
-import { EXEC_HANDLER_NAME } from '../exec-result-channel';
+import { DOM_READY_HANDLER_NAME } from '../dom-ready';
+import {
+  dispatchScript,
+  EXEC_HANDLER_NAME,
+  IPC_HANDLER_NAME,
+  PRELOAD_WORLD_NAME,
+} from '../web-scripts';
 import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
 import {
@@ -10,14 +15,8 @@ import {
   WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
 } from './webkitgtk-ffi';
 
-/** The isolated world (Electron `contextIsolation`) the bridge and preloads run in. */
-export const PRELOAD_WORLD_NAME = 'BunmaskaPreload';
-
-/** The isolated-world handler the preload bridge posts envelopes to. */
-export const HANDLER_NAME = 'bunmaska';
-export const SIGNAL = `script-message-received::${HANDLER_NAME}`;
-
-export const EXEC_SIGNAL = `script-message-received::${EXEC_HANDLER_NAME}`;
+const SIGNAL = `script-message-received::${IPC_HANDLER_NAME}`;
+const EXEC_SIGNAL = `script-message-received::${EXEC_HANDLER_NAME}`;
 
 /** A web view wired for IPC, plus the manager and the signal registry to retain. */
 export type WiredWebView = {
@@ -27,11 +26,8 @@ export type WiredWebView = {
 };
 
 export type WebViewIpcOptions = {
-  readonly preloadSource: string;
-  readonly userPreloadSource?: string;
-  readonly isolatedSetupSource: string;
-  readonly isolatedHostSource: string;
-  readonly pageWorldSource: string;
+  /** In injection order, from `injectedScripts`. */
+  readonly scripts: { readonly isolated: readonly string[]; readonly page: readonly string[] };
   readonly onMessage: (json: string) => void;
   /** Receives each `{ execId, ok, result?, error? }` JSON the exec wrapper posts. */
   readonly onExecMessage: (json: string) => void;
@@ -101,7 +97,7 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   // Isolated world only: page scripts must never reach the `bunmaska` handler.
   webkit.symbols.webkit_user_content_manager_register_script_message_handler(
     ucm,
-    cstr(HANDLER_NAME),
+    cstr(IPC_HANDLER_NAME),
     cstr(PRELOAD_WORLD_NAME),
   );
 
@@ -124,16 +120,12 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
     cstr(PRELOAD_WORLD_NAME),
   );
 
-  // Order matters: channel setup, bridge, contextBridge host (installs
-  // exposeInMainWorld), then the user preload that calls it.
-  addUserScript(ucm, options.isolatedSetupSource);
-  addUserScript(ucm, options.preloadSource);
-  addUserScript(ucm, options.isolatedHostSource);
-  if (options.userPreloadSource !== undefined) {
-    addUserScript(ucm, options.userPreloadSource);
+  for (const source of options.scripts.isolated) {
+    addUserScript(ucm, source);
   }
-  addUserScript(ucm, generateDomReadyScript());
-  addPageWorldScript(ucm, options.pageWorldSource);
+  for (const source of options.scripts.page) {
+    addPageWorldScript(ucm, source);
+  }
 
   const view = requirePointer(
     gobject.symbols.g_object_new(
@@ -148,16 +140,12 @@ export const createWebViewWithIpc = (options: WebViewIpcOptions): WiredWebView =
   return { view, ucm, registry };
 };
 
-/** A no-op until the isolated-world bridge exists. */
-export const buildDispatchScript = (envelopeJson: string): string =>
-  `window.__bunmaska && window.__bunmaska._dispatch(${JSON.stringify(envelopeJson)});`;
-
 /** Fire-and-forget into the ISOLATED world, where `__bunmaska._dispatch` lives (not the page world). */
 export const sendToRenderer = (view: Pointer, envelopeJson: string): void => {
   const webkit = loadWebKitGtkFFI();
   webkit.symbols.webkit_web_view_evaluate_javascript(
     view,
-    cstr(buildDispatchScript(envelopeJson)),
+    cstr(dispatchScript(envelopeJson)),
     -1n,
     cstr(PRELOAD_WORLD_NAME),
     null,
