@@ -1,9 +1,3 @@
-/**
- * No GTK/WebKitGTK libraries are bundled: Bunmaska dlopens the SYSTEM
- * GTK/WebKitGTK at runtime via bun:ffi. The output is an AppDir-style tree
- * packaged as a `.tar.gz` plus a `.deb`.
- */
-
 import {
   chmodSync,
   copyFileSync,
@@ -33,10 +27,7 @@ export type LinuxLayout = {
   readonly engineIdPath: string;
 };
 
-/**
- * Compute every on-disk path of an `<out>/<Name>` AppDir-style tree. POSIX joins
- * keep the layout identical when computed on a cross-building host.
- */
+/** Paths of the `<out>/<Name>` AppDir tree; POSIX joins so any build host lays it out alike. */
 export const linuxLayout = (out: string, name: string): LinuxLayout => {
   const { join } = posix;
   const slug = bundleIdSlug(name);
@@ -51,11 +42,7 @@ export const linuxLayout = (out: string, name: string): LinuxLayout => {
   };
 };
 
-/**
- * A full engine id verbatim, else the `system` sentinel. A bare upstream version
- * (e.g. `2.52.4`) downgrades to `system` — this path does not consult the engine
- * catalog yet, so the caller should surface the downgrade.
- */
+/** A full engine id verbatim, else `system`; the caller warns about a downgraded pin. */
 export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
   if (webkitPin === undefined || isSystemEngine(webkitPin)) {
     return 'system';
@@ -64,7 +51,7 @@ export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
     parseEngineId(webkitPin);
     return webkitPin;
   } catch {
-    return 'system';
+    return 'system'; // ponytail: a bare version (`2.52.4`) lands here; resolve via the catalog
   }
 };
 
@@ -74,7 +61,7 @@ export const debArch = (arch: Arch): 'amd64' | 'arm64' => (arch === 'x64' ? 'amd
 export const tarballName = (name: string, arch: Arch = currentArch()): string =>
   `${name}-linux-${arch}.tar.gz`;
 
-// dpkg reads the last `-` as a revision, so `1.0.0-beta.1` would sort ABOVE `1.0.0`; `~` sorts below.
+// dpkg splits a revision at the last `-`, so `1.0.0-beta.1` sorts above `1.0.0`; `~` sorts below.
 const debVersion = (version: string): string => version.replace('-', '~');
 
 export const debFileName = (name: string, version: string, arch: Arch = currentArch()): string =>
@@ -106,15 +93,13 @@ export type ControlFileOptions = {
   readonly arch?: 'amd64' | 'arm64';
   readonly maintainer: string;
   readonly description: string;
-  /** Runtime package dependencies (`Depends:`). Omitted from the field when empty. */
+  /** `Depends:` packages; the field is omitted when empty. */
   readonly depends?: readonly string[];
 };
 
 /**
- * Runtime packages a non-embedded Bunmaska `.deb` needs: the system WebKitGTK 6.0
- * web view and its GTK 4 toolkit. Without this, an `apt install` on a minimal box
- * leaves the app to crash at the first `dlopen` (the latent bug this fixes). Debian
- * package names confirmed on sid: `libwebkitgtk-6.0-4`, `libgtk-4-1`.
+ * The system WebKitGTK 6.0 and GTK 4 the app dlopens; without them an `apt install`
+ * on a minimal box crashes at the first `dlopen`. Names confirmed on Debian sid.
  */
 export const DEFAULT_LINUX_DEPENDS: readonly string[] = ['libwebkitgtk-6.0-4', 'libgtk-4-1'];
 
@@ -133,10 +118,8 @@ export const buildControlFile = (opts: ControlFileOptions): string =>
     '',
   ].join('\n');
 
-/** Pad a field to a fixed width for a GNU `ar` member header. */
 const arField = (value: string, width: number): string => value.padEnd(width, ' ').slice(0, width);
 
-/** Encode one GNU `ar` member: header + content, padded to an even byte length. */
 const arMember = (name: string, content: Uint8Array): Uint8Array => {
   const header =
     arField(name, 16) +
@@ -161,11 +144,9 @@ export const buildArArchive = (
   ]);
 };
 
-/**
- * dpkg installs files with the archived owner and paths, so members must be
- * root-owned, xattr-free and without macOS bsdtar's AppleDouble `._*` twins
- * (which also collide across packages). The flags work in bsdtar and GNU tar.
- */
+// dpkg installs the archived owner and every path, so members must be root-owned, xattr-free
+// and without macOS bsdtar's AppleDouble `._*` twins (they collide across packages).
+// The flags work in bsdtar and GNU tar.
 const tarGz = (archive: string, dir: string, member: string): Promise<void> =>
   runTool('tar', [
     ...(currentPlatform() === 'macos' ? ['env', 'COPYFILE_DISABLE=1'] : []),
@@ -235,7 +216,6 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   await compileLinuxBinary(opts.entry, layout.binPath, arch);
   chmodSync(layout.binPath, 0o755);
 
-  // Bundle a module-using preload so it runs as a classic script in the packaged app.
   const assetsDir = dirname(layout.binPath);
   bundlePreloadAssets(opts.entry, assetsDir, copyAppAssets(opts.entry, assetsDir));
   if (opts.rendererDir !== undefined) {
@@ -255,11 +235,9 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
     copyFileSync(opts.icon, layout.iconPath);
   }
 
-  // Bake the engine-id the app pins, read at launch by the engine resolver.
   mkdirSync(dirname(layout.engineIdPath), { recursive: true });
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
 
-  // -C keeps the archived paths relative to <out>.
   const tarball = join(out, tarballName(opts.name, arch));
   await tarGz(tarball, out, opts.name);
 
@@ -276,10 +254,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   return { appDir: layout.appDir, tarball, deb };
 };
 
-/**
- * A `.deb` is an `ar` archive of `debian-binary`, `control.tar.gz`, and
- * `data.tar.gz` (the `usr/` tree under the filesystem root), in that order.
- */
+/** dpkg requires the `ar` members in order: `debian-binary`, `control.tar.gz`, `data.tar.gz`. */
 const packageDeb = async (args: {
   readonly layout: LinuxLayout;
   readonly out: string;

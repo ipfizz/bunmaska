@@ -1,8 +1,3 @@
-/**
- * No WebKit/AppKit framework is bundled: Bunmaska dlopens the SYSTEM
- * frameworks at runtime via bun:ffi.
- */
-
 import {
   cpSync,
   chmodSync,
@@ -42,9 +37,8 @@ export const bundleIdSlug = (name: string): string => {
 export const defaultBundleId = (name: string): string => `com.bunmaska.${bundleIdSlug(name)}`;
 
 /**
- * Info.plist versions and a Windows PE VERSIONINFO accept only a numeric
- * `major.minor.patch`, so `+build` and `-prerelease` are dropped, short segments
- * zero-padded, and a non-numeric segment becomes `0`. `0.1.0-alpha.2` -> `0.1.0`.
+ * Info.plist and a Windows VERSIONINFO accept only numeric `major.minor.patch`:
+ * `0.1.0-alpha.2+b5` -> `0.1.0`, `1.2` -> `1.2.0`, a non-numeric segment -> `0`.
  */
 export const numericVersion = (version: string): string => {
   const core = (version.split('+', 1)[0] ?? '').split('-', 1)[0] ?? '';
@@ -110,10 +104,6 @@ export type AppBundleLayout = {
   readonly iconPath: string;
 };
 
-/**
- * Compute every on-disk path of an `<out>/<Name>.app` bundle. POSIX joins keep
- * the layout identical when computed on a cross-building host.
- */
 export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
   const { join } = posix;
   const appDir = join(out, `${name}.app`);
@@ -134,10 +124,10 @@ export const appBundleLayout = (out: string, name: string): AppBundleLayout => {
 };
 
 /**
- * Entitlements a Bun-compiled app needs under the Hardened Runtime: JIT and
- * unsigned executable memory for JavaScriptCore and bun:ffi, and library
- * validation disabled so the app can dlopen the system WebKit/AppKit at launch.
- * Without these a hardened-runtime app traps (SIGTRAP) on its first FFI call.
+ * `allow-jit` is mandatory: without it a hardened app throws "bun:ffi requires the JIT"
+ * (Bun 1.4.2); the system WebKit/AppKit load with it alone. `disable-library-validation`
+ * lets the app dlopen dylibs its team did not sign (user native modules).
+ * ponytail: the two extra grants ship by default; make them config opt-ins
  */
 export const codesignEntitlements = (): string =>
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -154,10 +144,7 @@ export const codesignEntitlements = (): string =>
 </plist>
 `;
 
-/**
- * `--options runtime` is required for notarization. `identity` is a real
- * `Developer ID Application: …` identity, or `-` for an ad-hoc signature.
- */
+/** `--options runtime` (the hardened runtime) is required for notarization; `-` signs ad hoc. */
 export const buildCodesignArgs = (
   identity: string,
   appPath: string,
@@ -189,14 +176,7 @@ export type NotarizeOptions = {
   readonly password: string;
 };
 
-/**
- * Build the `xcrun notarytool submit …` argv. Pure.
- *
- * The default `--notarize` hook submits the ditto ZIP of the bundle (notarytool
- * refuses a bare `.app`), so `appPath` is the submit target, not always an app.
- * `password` is an app-specific password for the Apple ID. `--wait` blocks
- * until Apple finishes processing.
- */
+/** `appPath` is the zip notarize.ts submits; `password` is an app-specific password. */
 export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
   'xcrun',
   'notarytool',
@@ -211,12 +191,6 @@ export const buildNotarizeArgs = (opts: NotarizeOptions): string[] => [
   '--wait',
 ];
 
-/**
- * Build the `xcrun stapler staple …` argv for an `.app` bundle. Pure.
- *
- * Stapling attaches the notarization ticket to the bundle and is only
- * meaningful after a successful notarytool submission.
- */
 export const buildStapleArgs = (appPath: string): string[] => [
   'xcrun',
   'stapler',
@@ -385,7 +359,6 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   await compileBinary(opts.entry, layout.executablePath);
   chmodSync(layout.executablePath, 0o755);
 
-  // Bundle a module-using preload so it runs as a classic script in the packaged app.
   bundlePreloadAssets(opts.entry, layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.macosDir, 'renderer'), { recursive: true });
@@ -413,8 +386,7 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   );
   writeFileSync(layout.infoPlistPath, plist);
 
-  // Sign last, once the bundle (binary + Info.plist + resources) is fully laid
-  // out, so the signature covers the final contents.
+  // Sign last so the seal covers the final bundle.
   if (opts.sign !== undefined) {
     const signApp = opts.signApp ?? codesignApp;
     await signApp(opts.sign, layout.appDir);

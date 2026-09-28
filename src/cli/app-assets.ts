@@ -28,10 +28,8 @@ const shipsAsAsset = (path: string): boolean => {
 };
 
 /**
- * Copy the entry's sibling runtime assets (recursively, allowlisted types only)
- * into `destination`, the directory of the compiled executable. The build output
- * is skipped, so a destination nested under the entry's directory is never copied
- * into itself. Returns the top-level names copied.
+ * Copy the entry's allowlisted sibling assets (recursively) beside the executable.
+ * The build output is skipped, so a destination under the entry dir never copies into itself.
  */
 export const copyAppAssets = (entry: string, destination: string): string[] => {
   const source = dirname(entry);
@@ -57,12 +55,8 @@ export const copyAppAssets = (entry: string, destination: string): string[] => {
 const PRELOAD_ASSET = /^preload\.(?:js|mjs|cjs)$/i;
 
 /**
- * Bundle any shipped `preload.*` asset that uses `import`/`export` into a
- * self-contained classic script, in place, so a packaged app's preload runs the
- * same as it does under `bunmaska dev` — a preload is injected as a CLASSIC script
- * (no module mode), so a raw `import` would throw and silently kill `window.api`.
- * Plain preloads are left untouched. `names` is typically the {@link copyAppAssets}
- * return value. Returns the names rewritten.
+ * Bundle each shipped module-syntax `preload.*` into a classic IIFE in place
+ * (D046: a compiled app cannot bundle at runtime). Returns the names rewritten.
  */
 export const bundlePreloadAssets = (
   entry: string,
