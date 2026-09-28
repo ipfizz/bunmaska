@@ -23,7 +23,7 @@ const packageJson = (vars: TemplateVars): string =>
       scripts: {
         start: 'bunmaska run src/main.ts',
         dev: 'bunmaska dev',
-        build: 'bunmaska build',
+        build: 'bunmaska build --out dist',
       },
       dependencies: {
         bunmaska: `^${BUNMASKA_VERSION}`,
@@ -196,7 +196,7 @@ bun run dev      # bunmaska dev: runs src/main.ts and reloads on change
 ## Build a distributable
 
 \`\`\`sh
-bun run build    # bunmaska build: a macOS .app or a Linux AppDir/.deb
+bun run build    # into dist/: a .app (macOS), AppDir + .deb (Linux) or .zip (Windows)
 \`\`\`
 
 The app's name, bundle id and entry are declared in \`bunmaska.config.ts\`.
