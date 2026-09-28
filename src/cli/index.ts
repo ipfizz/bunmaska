@@ -82,25 +82,26 @@ build options:
   --out <dir>        Output directory (default: current directory)
   --icon <path>      App icon. macOS accepts a .icns (copied as-is) or a .png
                      (converted to .icns via sips/iconutil); linux takes a .png;
-                     windows takes a .ico (embedded into the .exe).
+                     windows takes a .ico (embedded into the .exe). A config
+                     icon the target cannot use is skipped with a warning.
   --sign <identity>  Code-sign the macOS .app. Use '-' for an ad-hoc signature
                      (no certificate), or a 'Developer ID Application: Name
                      (TEAMID)' identity that is present in your keychain.
   --dmg              Also build a <Name>.dmg disk image of the macOS .app
                      (macOS-only; uses hdiutil), with an /Applications symlink.
-  --notarize         Notarize the macOS .app (with --sign): zips it, submits
-                     via 'xcrun notarytool --wait', staples the ticket. Needs
-                     the env vars APPLE_ID, TEAM_ID and an app-specific
-                     password in BUNMASKA_NOTARIZE_PASSWORD, else it is skipped
-                     with guidance.
+  --notarize         Notarize the macOS .app (needs a Developer ID --sign, not
+                     '-'): zips it, submits via 'xcrun notarytool --wait',
+                     staples the ticket. Needs the env vars APPLE_ID, TEAM_ID
+                     and an app-specific password in BUNMASKA_NOTARIZE_PASSWORD,
+                     else it is skipped with guidance.
   --update           Also emit the auto-update feed beside the bundle: a
                      <name>-<channel>-<os>-<arch>.tar.zst and an update.json the
                      runtime autoUpdater reads. The arch is the host's (Windows:
                      always x64).
-  --update-key <pem> Sign the --update artifact: writes a detached .sig beside
-                     the .tar.zst with this Ed25519 private key (generate one
-                     with 'bunmaska keygen'). Without it the feed is unsigned
-                     and the runtime autoUpdater will refuse it.
+  --update-key <pem> Sign the --update feed: writes a detached .sig beside both
+                     the .tar.zst and update.json with this Ed25519 private key
+                     (generate one with 'bunmaska keygen'). Without it the feed
+                     is unsigned and the runtime autoUpdater will refuse it.
   --channel <name>   Release channel for --update (default: the config's
                      updates.channel, else stable).
   --embed-engine <dir>  Windows only: bundle a WinCairo WebKit engine directory
