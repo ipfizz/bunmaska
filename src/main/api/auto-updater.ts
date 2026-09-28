@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -86,7 +86,7 @@ export type AutoUpdaterDeps = {
   readonly currentVersion: () => string;
   readonly currentOs: () => ArtifactOs;
   readonly currentArch: () => Arch;
-  readonly decompress: (bytes: Uint8Array) => Uint8Array;
+  readonly decompress: (bytes: Uint8Array) => Promise<Uint8Array>;
   readonly stage: (tarBytes: Uint8Array, manifest: UpdateManifest) => Promise<string>;
   readonly install: (staged: StagedUpdate) => void;
 };
@@ -139,7 +139,7 @@ const markHandled = <T>(promise: Promise<T>): Promise<T> => {
 /** A fresh 0700 dir: a guessable name in a shared /tmp lets another user swap the verified tar. */
 export const stageToTmp = async (tarBytes: Uint8Array): Promise<string> => {
   const tarPath = join(mkdtempSync(join(tmpdir(), 'bunmaska-update-')), 'update.tar');
-  writeFileSync(tarPath, tarBytes);
+  await Bun.write(tarPath, tarBytes);
   return tarPath;
 };
 
@@ -149,7 +149,8 @@ const productionDeps = (): AutoUpdaterDeps => ({
   currentVersion: () => app.getVersion(),
   currentOs: currentPlatform,
   currentArch: hostArch,
-  decompress: (bytes) => new Uint8Array(Bun.zstdDecompressSync(bytes)),
+  // Async zstd runs on Bun's threadpool, so a large update never stalls the pumped main thread.
+  decompress: async (bytes) => new Uint8Array(await Bun.zstdDecompress(bytes)),
   stage: stageToTmp,
   install: defaultInstall,
 });
@@ -344,7 +345,7 @@ export class AutoUpdaterImpl extends EventEmitter {
         bytes,
         'artifact',
       );
-      const tarBytes = this.#deps.decompress(bytes);
+      const tarBytes = await this.#deps.decompress(bytes);
       assertSizeWithin(tarBytes.length, MAX_DECOMPRESSED_TAR_BYTES, 'decompressed update');
       const tarPath = await this.#deps.stage(tarBytes, manifest);
       const staged: StagedUpdate = { manifest, tarPath };

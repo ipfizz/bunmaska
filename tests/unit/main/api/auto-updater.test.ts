@@ -67,7 +67,7 @@ const makeUpdater = (overrides: Partial<AutoUpdaterDeps>, feedVersion = '2.0.0')
     currentVersion: () => '1.0.0',
     currentOs: () => 'macos',
     currentArch: () => 'arm64',
-    decompress: (bytes) => {
+    decompress: async (bytes) => {
       decompressed.push(bytes);
       return TAR;
     },
