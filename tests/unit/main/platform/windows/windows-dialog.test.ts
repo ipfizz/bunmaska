@@ -18,6 +18,7 @@ import {
  */
 const MB_OK = 0x0;
 const MB_OKCANCEL = 0x1;
+const MB_YESNO = 0x4;
 const MB_YESNOCANCEL = 0x3;
 const MB_ICONERROR = 0x10;
 const MB_ICONWARNING = 0x30;
@@ -45,11 +46,12 @@ const spec = (buttons: string[], type?: MessageBoxSpec['type']): MessageBoxSpec 
 });
 
 describe('messageBoxUType', () => {
-  test('button count picks the closest MessageBoxW set', () => {
+  test('button count and a cancel label pick the MessageBoxW set', () => {
     expect(messageBoxUType(spec(['OK']))).toBe(MB_OK);
     expect(messageBoxUType(spec(['Save', 'Cancel']))).toBe(MB_OKCANCEL);
+    expect(messageBoxUType(spec(['Save', 'Discard']))).toBe(MB_YESNO);
     expect(messageBoxUType(spec(['Yes', 'No', 'Cancel']))).toBe(MB_YESNOCANCEL);
-    expect(messageBoxUType(spec(['a', 'b', 'c', 'd']))).toBe(MB_YESNOCANCEL); // >3 → 3-set
+    expect(messageBoxUType(spec(['a', 'b', 'c', 'd']))).toBe(MB_YESNOCANCEL);
   });
 
   test('severity adds the icon flag', () => {
@@ -62,18 +64,33 @@ describe('messageBoxUType', () => {
 
 describe('messageBoxResponse', () => {
   test('single OK is always index 0', () => {
-    expect(messageBoxResponse(1, IDOK)).toBe(0);
+    expect(messageBoxResponse(['OK'], IDOK)).toBe(0);
   });
 
-  test('two buttons map OK/Yes→0 and Cancel/No→1', () => {
-    expect(messageBoxResponse(2, IDOK)).toBe(0);
-    expect(messageBoxResponse(2, IDCANCEL)).toBe(1);
+  test('native Cancel (and Esc) resolves to the cancel label, never the other button', () => {
+    expect(messageBoxResponse(['Cancel', 'Delete'], IDCANCEL)).toBe(0);
+    expect(messageBoxResponse(['Cancel', 'Delete'], IDOK)).toBe(1);
+    expect(messageBoxResponse(['OK', 'Cancel'], IDOK)).toBe(0);
+    expect(messageBoxResponse(['OK', 'Cancel'], IDCANCEL)).toBe(1);
   });
 
-  test('three buttons map Yes/No/Cancel to 0/1/2', () => {
-    expect(messageBoxResponse(3, IDYES)).toBe(0);
-    expect(messageBoxResponse(3, IDNO)).toBe(1);
-    expect(messageBoxResponse(3, IDCANCEL)).toBe(2);
+  test('two buttons without a cancel label map Yes/No to 0/1', () => {
+    expect(messageBoxResponse(['Save', 'Discard'], IDYES)).toBe(0);
+    expect(messageBoxResponse(['Save', 'Discard'], IDNO)).toBe(1);
+  });
+
+  test('three buttons map Cancel to the cancel label and Yes/No to the rest in order', () => {
+    const buttons = ['Cancel', 'Yes, please', 'No, thanks'];
+    expect(messageBoxResponse(buttons, IDCANCEL)).toBe(0);
+    expect(messageBoxResponse(buttons, IDYES)).toBe(1);
+    expect(messageBoxResponse(buttons, IDNO)).toBe(2);
+    expect(messageBoxResponse(['Save', "Don't Save", 'Cancel'], IDCANCEL)).toBe(2);
+    expect(messageBoxResponse(['Save', "Don't Save", 'Cancel'], IDNO)).toBe(1);
+  });
+
+  test('without a cancel label, Cancel resolves to 0 like Electron', () => {
+    expect(messageBoxResponse(['a', 'b', 'c'], IDCANCEL)).toBe(0);
+    expect(messageBoxResponse(['a', 'b', 'c'], IDYES)).toBe(1);
   });
 });
 

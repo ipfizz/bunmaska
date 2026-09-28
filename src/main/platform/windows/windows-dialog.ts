@@ -17,13 +17,13 @@ import { loadShell32 } from './win32-shell-ffi';
 const MB_OK = 0x0;
 const MB_OKCANCEL = 0x1;
 const MB_YESNOCANCEL = 0x3;
+const MB_YESNO = 0x4;
 const MB_ICONERROR = 0x10;
 const MB_ICONQUESTION = 0x20;
 const MB_ICONWARNING = 0x30;
 const MB_ICONINFORMATION = 0x40;
-// MessageBoxW return ids (IDOK maps to index 0 implicitly — the "not cancel" case).
+// MessageBoxW return ids; IDOK and IDYES both mean the first non-cancel button.
 const IDCANCEL = 2;
-const IDYES = 6;
 const IDNO = 7;
 
 // OPENFILENAMEW flags.
@@ -56,14 +56,19 @@ const BI_FLAGS_OFFSET = 32; // ulFlags
 const FILE_BUFFER_WCHARS = 32768;
 const MAX_PATH_WCHARS = 260;
 
+/** Electron's default `cancelId` label match: the first "cancel" or "no" button, else -1. */
+const cancelLabelIndex = (buttons: ReadonlyArray<string>): number =>
+  buttons.findIndex((label) => ['cancel', 'no'].includes(label.toLowerCase()));
+
 /**
- * Map a message-box spec to a `MessageBoxW` `uType` (button set + icon). Electron
- * allows arbitrary button labels; `MessageBoxW` only has fixed sets, so the count
- * picks the closest set (1→OK, 2→OK/Cancel, 3→Yes/No/Cancel, >3→OK). Pure.
+ * Map a message-box spec to a `MessageBoxW` `uType`. The native labels are fixed, so the
+ * set is chosen to keep Esc on the app's cancel button: 2 buttons with a cancel label get
+ * OK/Cancel, 2 without one get Yes/No (no Esc path), 3+ get Yes/No/Cancel. Pure.
  */
 export const messageBoxUType = (spec: MessageBoxSpec): number => {
   const count = spec.buttons.length;
-  const buttons = count === 2 ? MB_OKCANCEL : count >= 3 ? MB_YESNOCANCEL : MB_OK;
+  const twoButtons = cancelLabelIndex(spec.buttons) === -1 ? MB_YESNO : MB_OKCANCEL;
+  const buttons = count === 2 ? twoButtons : count >= 3 ? MB_YESNOCANCEL : MB_OK;
   const icon =
     spec.type === 'error'
       ? MB_ICONERROR
@@ -77,15 +82,23 @@ export const messageBoxUType = (spec: MessageBoxSpec): number => {
   return buttons | icon;
 };
 
-/** Map a `MessageBoxW` return id back to the clicked button index for `buttonCount`. Pure. */
-export const messageBoxResponse = (buttonCount: number, id: number): number => {
-  if (buttonCount >= 3) {
-    return id === IDYES ? 0 : id === IDNO ? 1 : 2; // Yes / No / Cancel
+/**
+ * Map a `MessageBoxW` return id to a button index: Cancel (and Esc) is Electron's default
+ * `cancelId` (the cancel label, else 0), Yes/OK and No are the remaining buttons in order.
+ * ponytail: labels stay OK/Yes/No/Cancel and a 4th+ button is unreachable; a WH_CBT hook
+ * renaming the buttons (or TaskDialogIndirect) lifts both. Pure.
+ */
+export const messageBoxResponse = (buttons: ReadonlyArray<string>, id: number): number => {
+  const cancel = cancelLabelIndex(buttons);
+  if (buttons.length === 2 && cancel === -1) {
+    return id === IDNO ? 1 : 0;
   }
-  if (buttonCount === 2) {
-    return id === IDCANCEL || id === IDNO ? 1 : 0; // OK/Yes → 0, Cancel/No → 1
+  const cancelId = Math.max(cancel, 0);
+  if (id === IDCANCEL) {
+    return cancelId;
   }
-  return 0; // single OK button
+  const others = buttons.map((_, index) => index).filter((index) => index !== cancelId);
+  return (id === IDNO ? others[1] : others[0]) ?? 0;
 };
 
 /**
@@ -221,7 +234,7 @@ export const windowsDialogBackend: DialogBackend = {
       ptr(captionBuffer),
       messageBoxUType(spec),
     );
-    return messageBoxResponse(spec.buttons.length, id);
+    return messageBoxResponse(spec.buttons, id);
   },
 
   showOpenDialog(spec: OpenDialogSpec): string[] {
