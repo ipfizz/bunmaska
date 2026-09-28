@@ -37,13 +37,11 @@ describe('dispatchPowerMessage', () => {
     expect(events).toEqual(['suspend']);
   });
 
-  test('both resume codes fire onResume', () => {
-    const a = recorder();
-    dispatchPowerMessage(a.handlers, WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC);
-    expect(a.events).toEqual(['resume']);
-    const b = recorder();
-    dispatchPowerMessage(b.handlers, WM_POWERBROADCAST, PBT_APMRESUMESUSPEND);
-    expect(b.events).toEqual(['resume']);
+  test('a user-initiated wake (automatic then user-present resume) fires onResume once', () => {
+    const { events, handlers } = recorder();
+    dispatchPowerMessage(handlers, WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC);
+    dispatchPowerMessage(handlers, WM_POWERBROADCAST, PBT_APMRESUMESUSPEND);
+    expect(events).toEqual(['resume']);
   });
 
   test('WM_WTSSESSION_CHANGE lock/unlock fire the screen handlers', () => {

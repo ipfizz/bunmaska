@@ -24,11 +24,6 @@ if (currentPlatform() === 'windows') {
       expect(windowsShellBackend.openPath(NON_EXISTENT)).toBe(false);
     });
 
-    test('exposes openExternal and showItemInFolder', () => {
-      expect(typeof windowsShellBackend.openExternal).toBe('function');
-      expect(typeof windowsShellBackend.showItemInFolder).toBe('function');
-    });
-
     test('the public shell.openPath surfaces the failure as an error string', async () => {
       const result = await shell.openPath(NON_EXISTENT);
       expect(result).toContain('Failed to open path');

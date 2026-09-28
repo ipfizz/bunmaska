@@ -1,6 +1,6 @@
 import { type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { FFIError } from '../../../common/errors';
@@ -8,16 +8,13 @@ import type { KeyringBackend } from '../../api/safe-storage';
 import { CRYPTPROTECT_UI_FORBIDDEN, loadCrypt32 } from './win32-crypt-ffi';
 import { loadKernel32 } from './win32-ffi';
 
-/**
- * Windows has no secret-service daemon, so the 32-byte AES key is sealed with DPAPI
- * (`CryptProtectData`, bound to the current Windows user) and only the sealed blob is
- * persisted under the per-user Bunmaska home; the key never touches disk in the clear.
- */
+// The AES key never touches disk in the clear: only its DPAPI seal (bound to the Windows
+// user) is stored (D036).
 
 const KEY_LENGTH = 32;
 const KEY_FILE = 'safestorage.key';
 
-/** Offsets into a `DATA_BLOB { DWORD cbData; BYTE* pbData; }` (x64: 16 bytes). */
+/** `DATA_BLOB { DWORD cbData; BYTE* pbData; }` on x64. */
 const BLOB_SIZE = 16;
 const BLOB_PBDATA_OFFSET = 8;
 
@@ -36,25 +33,20 @@ const inputBlob = (data: Uint8Array): Uint8Array => {
   return blob;
 };
 
-/**
- * Run one DPAPI transform (`CryptProtectData`/`CryptUnprotectData`, both share
- * the blob in/out shape) over `data` and copy the system-allocated output out,
- * freeing it with `LocalFree`. `read.*` reads the output blob straight from the
- * native pointer (a `DataView` over the JS buffer would not see the native write).
- */
+/** Run one DPAPI call over `data`, copying out and `LocalFree`ing the system-allocated result. */
 const dpapiTransform = (
   fn: (inPtr: ReturnType<typeof ptr>, outPtr: ReturnType<typeof ptr>) => number,
   data: Uint8Array,
   label: string,
 ): Uint8Array => {
-  const inBlob = inputBlob(data); // `data` stays referenced through the call
+  const inBlob = inputBlob(data);
   const outBlob = new Uint8Array(BLOB_SIZE);
   const outPtr = ptr(outBlob);
   if (fn(ptr(inBlob), outPtr) === 0) {
     throw new FFIError(`safeStorage: ${label} failed`);
   }
+  // Native writes land behind ptr(): read them via read.*, never the JS array (CODEMAP).
   const size = read.u32(outPtr, 0);
-  // `read.ptr` yields the raw pointer value as a number; it IS a native address.
   const dataPtr = read.ptr(outPtr, BLOB_PBDATA_OFFSET) as Pointer;
   const result = new Uint8Array(toArrayBuffer(dataPtr, 0, size)).slice();
   loadKernel32().symbols.LocalFree(BigInt(dataPtr));
@@ -95,18 +87,36 @@ export const dpapiUnprotect = (data: Uint8Array): Uint8Array =>
     'CryptUnprotectData',
   );
 
+/**
+ * Read the sealed key at `path`, creating it on first use. The key file is shared by every
+ * Bunmaska app of the user, so a first run publishes with an exclusive hard link and then
+ * reads back whichever key won (D036): overwriting would orphan the loser's ciphertexts.
+ */
+export const loadOrCreateSealedKey = (
+  path: string,
+  seal: (key: Uint8Array) => Uint8Array,
+  unseal: (sealed: Uint8Array) => Uint8Array,
+): Buffer => {
+  if (!existsSync(path)) {
+    mkdirSync(dirname(path), { recursive: true });
+    const staged = `${path}.${process.pid}.tmp`;
+    writeFileSync(staged, seal(randomBytes(KEY_LENGTH)));
+    try {
+      linkSync(staged, path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error;
+      }
+    } finally {
+      unlinkSync(staged);
+    }
+  }
+  return Buffer.from(unseal(readFileSync(path)));
+};
+
 export const windowsDpapiBackend: KeyringBackend = {
-  // DPAPI ships with every Windows install — the key can always be sealed.
+  // DPAPI ships with every Windows install.
   isAvailable: (): boolean => true,
 
-  getOrCreateKey: (): Buffer => {
-    const path = keyFilePath();
-    if (existsSync(path)) {
-      return Buffer.from(dpapiUnprotect(readFileSync(path)));
-    }
-    const key = randomBytes(KEY_LENGTH);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, dpapiProtect(key));
-    return key;
-  },
+  getOrCreateKey: (): Buffer => loadOrCreateSealedKey(keyFilePath(), dpapiProtect, dpapiUnprotect),
 };

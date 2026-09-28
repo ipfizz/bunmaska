@@ -24,9 +24,7 @@ const ADVAPI32_SYMBOLS = {
   },
 } as const;
 
-/** `HKEY_CURRENT_USER` — the predefined root, sign-extended to 64 bits. */
 export const HKEY_CURRENT_USER = 0xffffffff80000001n;
-/** `RRF_RT_REG_DWORD` — restrict `RegGetValueW` to a `REG_DWORD` value. */
 export const RRF_RT_REG_DWORD = 0x00000010;
 
 /** Open advapi32.dll and return its registry symbol table. Memoised; Windows-only. */

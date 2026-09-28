@@ -3,7 +3,9 @@ import {
   buildCfHtml,
   buildPackedDib,
   dibBitsOffset,
+  dibIsComplete,
   extractCfHtmlFragment,
+  openWithRetry,
 } from '../../../../../src/main/platform/windows/windows-clipboard';
 
 /** Construct a `BITMAPINFOHEADER` with the fields `dibBitsOffset` reads. */
@@ -130,6 +132,42 @@ describe('dibBitsOffset', () => {
   });
 });
 
+describe('dibIsComplete', () => {
+  /** A 40-byte header claiming `width`x`height` at `bitCount`, followed by `pixelBytes`. */
+  const dib = (width: number, height: number, bitCount: number, pixelBytes: number) => {
+    const bytes = new Uint8Array(40 + pixelBytes);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, 40, true);
+    view.setInt32(4, width, true);
+    view.setInt32(8, height, true);
+    view.setUint16(14, bitCount, true);
+    return bytes;
+  };
+
+  test('a DIB carrying every row its header claims is complete', () => {
+    expect(dibIsComplete(buildPackedDib(2, 2, new Uint8Array(16), 8))).toBe(true);
+    expect(dibIsComplete(dib(3, -2, 24, 2 * 12))).toBe(true); // top-down, DWORD-padded rows
+  });
+
+  test('a header claiming more pixels than were copied is rejected', () => {
+    expect(dibIsComplete(dib(8000, 8000, 32, 1024))).toBe(false);
+    expect(dibIsComplete(dib(3, 2, 24, 2 * 12 - 1))).toBe(false);
+  });
+
+  test('a palette count or header size past the buffer is rejected', () => {
+    const hugePalette = dib(1, 1, 8, 4);
+    new DataView(hugePalette.buffer).setUint32(32, 0xffffffff, true);
+    expect(dibIsComplete(hugePalette)).toBe(false);
+    const hugeHeader = dib(1, 1, 32, 4);
+    new DataView(hugeHeader.buffer).setUint32(0, 4096, true);
+    expect(dibIsComplete(hugeHeader)).toBe(false);
+  });
+
+  test('a buffer shorter than the header is rejected', () => {
+    expect(dibIsComplete(new Uint8Array(12))).toBe(false);
+  });
+});
+
 describe('buildPackedDib', () => {
   test('writes a 40-byte 32bpp BI_RGB bottom-up header', () => {
     const dib = buildPackedDib(2, 2, new Uint8Array(2 * 2 * 4), 8);
@@ -157,5 +195,30 @@ describe('buildPackedDib', () => {
     const dib = buildPackedDib(1, 2, padded, 8);
     expect([...dib.subarray(40, 44)]).toEqual([20, 21, 22, 23]); // bottom row first
     expect([...dib.subarray(44, 48)]).toEqual([10, 11, 12, 13]);
+  });
+});
+
+describe('openWithRetry', () => {
+  test('sleeps between attempts until the clipboard opens', () => {
+    const results = [false, false, true];
+    const sleeps: number[] = [];
+    expect(
+      openWithRetry(
+        () => results.shift() ?? false,
+        (ms) => sleeps.push(ms),
+      ),
+    ).toBe(true);
+    expect(sleeps).toEqual([5, 5]);
+  });
+
+  test('gives up after a bounded wait when another process keeps it', () => {
+    const sleeps: number[] = [];
+    expect(
+      openWithRetry(
+        () => false,
+        (ms) => sleeps.push(ms),
+      ),
+    ).toBe(false);
+    expect(sleeps.reduce((total, ms) => total + ms, 0)).toBeLessThanOrEqual(50);
   });
 });

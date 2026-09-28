@@ -1,5 +1,6 @@
 import { type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
+import { createLogger } from '../../../common/logger';
 import type { ClipboardBackend } from '../../api/clipboard';
 import { wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
@@ -11,23 +12,14 @@ import {
 } from './win32-gdiplus-ffi';
 import { ensureGdiplus, windowsNativeImageBackend } from './windows-native-image';
 
-/**
- * Windows clipboard backend. Text and HTML round-trip through the flat Win32 clipboard
- * API with `GlobalAlloc`-backed transfer buffers; images round-trip through the `CF_DIB`
- * format, converted to/from PNG with the GDI+ codec the `nativeImage` backend uses.
- */
+const log = createLogger('windows-clipboard');
 
-/** `CF_UNICODETEXT` — UTF-16LE text, the modern text clipboard format. */
 const CF_UNICODETEXT = 13;
-/** `CF_TEXT` — legacy ANSI text (read fallback only). */
-const CF_TEXT = 1;
-/** `CF_BITMAP`/`CF_DIB` — a device-(in)dependent bitmap is on the clipboard. */
+const CF_TEXT = 1; // legacy ANSI text, checked for availability only
 const CF_BITMAP = 2;
 const CF_DIB = 8;
-/** `GMEM_MOVEABLE` — clipboard transfer buffers must be movable global memory. */
-const GMEM_MOVEABLE = 0x0002;
+const GMEM_MOVEABLE = 0x0002; // SetClipboardData requires movable memory
 
-/** The registered "HTML Format" clipboard format id, looked up once and cached. */
 let htmlFormatId: number | undefined;
 const cfHtmlFormat = (): number => {
   if (htmlFormatId === undefined) {
@@ -39,16 +31,12 @@ const cfHtmlFormat = (): number => {
 /** Pad an offset to the fixed 10-digit width CF_HTML headers conventionally use. */
 const pad = (value: number): string => String(value).padStart(10, '0');
 
-const byteLength = (text: string): number => new TextEncoder().encode(text).length;
-
 const FRAGMENT_START = '<!--StartFragment-->';
 const FRAGMENT_END = '<!--EndFragment-->';
 
 /**
- * Wrap HTML `markup` in a Windows CF_HTML payload: a UTF-8 document whose header
- * carries BYTE offsets (`StartHTML`/`EndHTML`/`StartFragment`/`EndFragment`) into
- * itself. Fixed-width offsets keep the header length constant, so the offsets can
- * be computed in one pass. Pure.
+ * Wrap `markup` in a CF_HTML payload: UTF-8 whose header holds BYTE offsets into itself.
+ * Fixed-width offsets keep the header length constant, so one pass computes them. Pure.
  */
 export const buildCfHtml = (markup: string): string => {
   const header = (startHtml: number, endHtml: number, startFrag: number, endFrag: number): string =>
@@ -57,19 +45,15 @@ export const buildCfHtml = (markup: string): string => {
   const pre = `<html><body>\r\n${FRAGMENT_START}`;
   const post = `${FRAGMENT_END}\r\n</body></html>`;
   // The header's byte length is constant regardless of the (always 10-digit) values.
-  const headerLength = byteLength(header(0, 0, 0, 0));
+  const headerLength = Buffer.byteLength(header(0, 0, 0, 0));
   const startHtml = headerLength;
-  const startFragment = headerLength + byteLength(pre);
-  const endFragment = startFragment + byteLength(markup);
-  const endHtml = endFragment + byteLength(post);
+  const startFragment = headerLength + Buffer.byteLength(pre);
+  const endFragment = startFragment + Buffer.byteLength(markup);
+  const endHtml = endFragment + Buffer.byteLength(post);
   return `${header(startHtml, endHtml, startFragment, endFragment)}${pre}${markup}${post}`;
 };
 
-/**
- * Extract the HTML fragment from a CF_HTML payload via the standard
- * `<!--StartFragment-->`/`<!--EndFragment-->` markers (which browsers also emit),
- * falling back to the document body when they are absent. Pure.
- */
+/** The fragment between the StartFragment/EndFragment markers, else from the first tag. Pure. */
 export const extractCfHtmlFragment = (cfHtml: string): string => {
   const start = cfHtml.indexOf(FRAGMENT_START);
   const end = cfHtml.indexOf(FRAGMENT_END);
@@ -80,17 +64,31 @@ export const extractCfHtmlFragment = (cfHtml: string): string => {
   return firstTag === -1 ? '' : cfHtml.slice(firstTag);
 };
 
-/** Run `fn` while the clipboard is open, always closing it afterward. */
-const withClipboard = <T>(fn: () => T): T => {
-  const user32 = loadUser32().symbols;
-  // OpenClipboard can briefly fail while another process holds it; retry a bounded
-  // number of times rather than failing on a momentary clipboard-manager grab.
-  let opened = false;
-  for (let attempt = 0; attempt < 10 && !opened; attempt += 1) {
-    opened = user32.OpenClipboard(0n) !== 0;
+/** Try `open` up to 10 times 5 ms apart: a clipboard manager or rdpclip holds it briefly. */
+export const openWithRetry = (
+  open: () => boolean,
+  sleep: (ms: number) => void = Bun.sleepSync,
+): boolean => {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (attempt > 0) {
+      sleep(5);
+    }
+    if (open()) {
+      return true;
+    }
   }
-  if (!opened) {
-    throw new FFIError('clipboard: OpenClipboard failed (held by another process)');
+  return false;
+};
+
+/**
+ * Run `fn` while the clipboard is open, always closing it afterward. A clipboard still
+ * held by another process yields `fallback` (like macOS and Linux, never a throw).
+ */
+const withClipboard = <T>(fallback: T, fn: () => T): T => {
+  const user32 = loadUser32().symbols;
+  if (!openWithRetry(() => user32.OpenClipboard(0n) !== 0)) {
+    log.warn('clipboard is held by another process; skipping');
+    return fallback;
   }
   try {
     return fn();
@@ -150,7 +148,7 @@ const decodeUtf16 = (bytes: Uint8Array): string => {
   for (let i = 0; i + 1 < bytes.length; i += 2) {
     const unit = view.getUint16(i, true);
     if (unit === 0) {
-      break; // NUL terminator — the rest is allocation padding.
+      break; // NUL terminator; the rest is allocation padding
     }
     result += String.fromCharCode(unit);
   }
@@ -161,11 +159,11 @@ const decodeUtf16 = (bytes: Uint8Array): string => {
 const decodeUtf8 = (bytes: Uint8Array): string =>
   new TextDecoder().decode(bytes).replace(/\0[\s\S]*$/, '');
 
-/** Size of a `BITMAPINFOHEADER` (the smallest DIB header). */
 const BITMAPINFOHEADER_SIZE = 40;
-/** `biCompression` = `BI_BITFIELDS` — 3 trailing color-mask DWORDs after a v3 header. */
+const BI_RGB = 0;
+/** `biCompression`: 3 trailing color-mask DWORDs after a v3 header. */
 const BI_BITFIELDS = 3;
-/** `biCompression` = `BI_ALPHABITFIELDS` — 4 trailing color-mask DWORDs. */
+/** `biCompression`: 4 trailing color-mask DWORDs after a v3 header. */
 const BI_ALPHABITFIELDS = 6;
 
 /**
@@ -192,6 +190,32 @@ export const dibBitsOffset = (header: Uint8Array): number => {
   const paletteEntries =
     biBitCount <= 8 ? (biClrUsed !== 0 ? biClrUsed : 1 << biBitCount) : biClrUsed;
   return biSize + masks + paletteEntries * 4;
+};
+
+/**
+ * Whether a `CF_DIB` (written by any process) holds every pixel its header claims, so
+ * GDI+ never reads past the copied buffer. Uncompressed rows are DWORD-aligned;
+ * compressed pixels must fit `biSizeImage`. Pure.
+ */
+export const dibIsComplete = (dib: Uint8Array): boolean => {
+  if (dib.length < BITMAPINFOHEADER_SIZE) {
+    return false;
+  }
+  const view = new DataView(dib.buffer, dib.byteOffset, dib.byteLength);
+  const biSize = view.getUint32(0, true);
+  const width = view.getInt32(4, true);
+  const height = view.getInt32(8, true);
+  const biCompression = view.getUint32(16, true);
+  if (biSize < BITMAPINFOHEADER_SIZE || biSize > dib.length || width <= 0 || height === 0) {
+    return false;
+  }
+  const uncompressed =
+    biCompression === BI_RGB ||
+    biCompression === BI_BITFIELDS ||
+    biCompression === BI_ALPHABITFIELDS;
+  const stride = Math.floor((width * view.getUint16(14, true) + 31) / 32) * 4;
+  const pixelBytes = uncompressed ? stride * Math.abs(height) : view.getUint32(20, true);
+  return pixelBytes > 0 && dibBitsOffset(dib) + pixelBytes <= dib.length;
 };
 
 /**
@@ -223,7 +247,6 @@ export const buildPackedDib = (
   return dib;
 };
 
-/** Lock a GDI+ bitmap's pixels as 32bpp BGRA and pack them into a `CF_DIB` payload. */
 const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8Array => {
   const gdip = loadGdiplus().symbols;
   const rect = new Uint8Array(16); // GpRect { INT X, Y, Width, Height }
@@ -243,7 +266,7 @@ const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8
   ) {
     throw new FFIError('clipboard: GdipBitmapLockBits failed');
   }
-  // Native WROTE these fields — read them back through the pointer, not the array (D020).
+  // Native writes land behind ptr(): read them via read.*, never the JS array (CODEMAP).
   const stride = Math.abs(read.i32(dataPtr, 8));
   const scan0 = read.u64(dataPtr, 16);
   const pixels = new Uint8Array(
@@ -253,70 +276,78 @@ const bitmapToPackedDib = (handle: bigint, width: number, height: number): Uint8
   return buildPackedDib(width, height, pixels, stride);
 };
 
+/**
+ * DIBs a live GDI+ bitmap reads in place (GdipCreateBitmapFromGdiDib does not copy the
+ * pixels). A local's last use is the create call, so an optimised frame could let GC free
+ * it mid-encode; membership here keeps it reachable until GdipDisposeImage.
+ */
+const pinnedDibs = new Set<Uint8Array>();
+
 export const windowsClipboardBackend: ClipboardBackend = {
   readText(): string {
-    return withClipboard(() => {
+    return withClipboard('', () => {
       const bytes = getClipboardBytes(CF_UNICODETEXT);
       return bytes === undefined ? '' : decodeUtf16(bytes);
     });
   },
 
   writeText(text: string): void {
-    withClipboard(() => {
+    withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
       setClipboardBytes(CF_UNICODETEXT, wstr(text));
     });
   },
 
   readHTML(): string {
-    return withClipboard(() => {
+    return withClipboard('', () => {
       const bytes = getClipboardBytes(cfHtmlFormat());
       return bytes === undefined ? '' : extractCfHtmlFragment(decodeUtf8(bytes));
     });
   },
 
   writeHTML(markup: string): void {
-    withClipboard(() => {
+    withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
-      setClipboardBytes(cfHtmlFormat(), new TextEncoder().encode(buildCfHtml(markup)));
+      // NUL-terminated for readers that treat the block as a C string; EndHTML precedes it.
+      setClipboardBytes(cfHtmlFormat(), new TextEncoder().encode(`${buildCfHtml(markup)}\0`));
     });
   },
 
   readImage(): Uint8Array {
-    const dib = withClipboard(() => getClipboardBytes(CF_DIB));
-    if (dib === undefined || dib.length < BITMAPINFOHEADER_SIZE) {
+    const dib = withClipboard(undefined, () => getClipboardBytes(CF_DIB));
+    if (dib === undefined || !dibIsComplete(dib)) {
       return new Uint8Array(0);
     }
     ensureGdiplus();
     const gdip = loadGdiplus().symbols;
     const out = new Uint8Array(8);
     const outPtr = ptr(out);
-    // GdiplusCreateBitmapFromGdiDib may reference (not copy) the pixels, so `dib`
-    // must stay live until encodePng — it does, being referenced through the call.
+    pinnedDibs.add(dib);
     const status = gdip.GdipCreateBitmapFromGdiDib(
       ptr(dib),
       ptr(dib.subarray(dibBitsOffset(dib))),
       outPtr,
     );
-    if (status !== GDIP_OK) {
-      return new Uint8Array(0);
-    }
-    const handle = read.u64(outPtr, 0);
+    const handle = status === GDIP_OK ? read.u64(outPtr, 0) : 0n;
     try {
       return windowsNativeImageBackend.encodePng(handle);
     } finally {
-      gdip.GdipDisposeImage(handle);
+      if (handle !== 0n) {
+        gdip.GdipDisposeImage(handle);
+      }
+      pinnedDibs.delete(dib);
     }
   },
 
   writeImage(bytes: Uint8Array): void {
     const decoded = windowsNativeImageBackend.decode(bytes);
     if (decoded.empty) {
-      throw new FFIError('clipboard: could not decode the image to write');
+      log.warn('clipboard: writeImage got undecodable bytes; nothing written');
+      return;
     }
     try {
       const dib = bitmapToPackedDib(decoded.handle, decoded.width, decoded.height);
-      withClipboard(() => {
+      withClipboard(undefined, () => {
         loadUser32().symbols.EmptyClipboard();
         setClipboardBytes(CF_DIB, dib);
       });
@@ -326,7 +357,7 @@ export const windowsClipboardBackend: ClipboardBackend = {
   },
 
   availableFormats(): string[] {
-    return withClipboard(() => {
+    return withClipboard<string[]>([], () => {
       const user32 = loadUser32().symbols;
       const has = (format: number): boolean => user32.IsClipboardFormatAvailable(format) !== 0;
       const formats: string[] = [];
@@ -344,7 +375,7 @@ export const windowsClipboardBackend: ClipboardBackend = {
   },
 
   clear(): void {
-    withClipboard(() => {
+    withClipboard(undefined, () => {
       loadUser32().symbols.EmptyClipboard();
     });
   },

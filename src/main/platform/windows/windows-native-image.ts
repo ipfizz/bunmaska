@@ -1,6 +1,7 @@
 import { CFunction, FFIType, type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
+import { readFileSync } from 'node:fs';
+import { FFIError } from '../../../common/errors';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
-import { wstr } from './win32';
 import { loadKernel32, loadOle32 } from './win32-ffi';
 import {
   GDIP_OK,
@@ -12,21 +13,18 @@ import {
   PNG_ENCODER_CLSID,
 } from './win32-gdiplus-ffi';
 
-/**
- * Windows `nativeImage` backend via GDI+. Encoding writes to an HGLOBAL-backed stream and
- * reads the bytes out via `GlobalLock`, avoiding `IStream::Read`. JPEG quality is GDI+'s
- * default in v1 (an `EncoderParameters` follow-up).
- */
-
 const HANDLE_SIZE = 8;
 const DWORD_SIZE = 4;
 /** `IUnknown` vtable slot of `Release` (QueryInterface=0, AddRef=1, Release=2). */
 const IUNKNOWN_RELEASE_SLOT = 2;
+/** `IStream::Seek` follows IUnknown (0-2) and ISequentialStream Read/Write (3-4). */
+const ISTREAM_SEEK_SLOT = 5;
+const STREAM_SEEK_END = 2;
 const POINTER_SIZE = 8;
 
 let gdiplusStarted = false;
 
-/** Initialise GDI+ once for the process (never shut down — it lives until exit). */
+/** Start GDI+ once; it is never shut down, so it lives until process exit. */
 export const ensureGdiplus = (): void => {
   if (gdiplusStarted) {
     return;
@@ -34,25 +32,49 @@ export const ensureGdiplus = (): void => {
   const token = new Uint8Array(HANDLE_SIZE);
   const input = new Uint8Array(24); // GdiplusStartupInput
   new DataView(input.buffer).setUint32(0, 1, true); // GdiplusVersion = 1
-  loadGdiplus().symbols.GdiplusStartup(ptr(token), ptr(input), null);
+  const status = loadGdiplus().symbols.GdiplusStartup(ptr(token), ptr(input), null);
+  if (status !== GDIP_OK) {
+    throw new FFIError(`nativeImage: GdiplusStartup failed (status ${status})`);
+  }
   gdiplusStarted = true;
 };
 
-/**
- * Release one COM object (an `IStream`) by walking its vtable to `IUnknown::Release`
- * and calling it. The single COM vtable call in the codebase — every other Windows
- * surface is flat-C. `read.u64` reads the object's vtable pointer and the function
- * pointer at the Release slot; `CFunction` makes that address callable.
- */
-const releaseStream = (object: bigint): void => {
+const comMethods = new Map<bigint, ReturnType<typeof CFunction>>();
+
+/** Vtable `slot` of COM `object` as a callable, compiled once per method address. */
+const comMethod = (
+  object: bigint,
+  slot: number,
+  args: readonly FFIType[],
+  returns: FFIType,
+): ReturnType<typeof CFunction> => {
   const vtable = read.u64(Number(object) as Pointer, 0);
-  const releaseFn = read.u64(Number(vtable) as Pointer, IUNKNOWN_RELEASE_SLOT * POINTER_SIZE);
-  const release = CFunction({
-    ptr: Number(releaseFn) as Pointer,
-    args: [FFIType.u64],
-    returns: FFIType.u32,
-  });
-  release(object);
+  const address = read.u64(Number(vtable) as Pointer, slot * POINTER_SIZE);
+  let method = comMethods.get(address);
+  if (method === undefined) {
+    method = CFunction({ ptr: Number(address) as Pointer, args, returns });
+    comMethods.set(address, method);
+  }
+  return method;
+};
+
+/** Drop our reference to an `IStream`. */
+const releaseStream = (stream: bigint): void => {
+  comMethod(stream, IUNKNOWN_RELEASE_SLOT, [FFIType.u64], FFIType.u32)(stream);
+};
+
+/** The stream's logical length (a seek to its end), or `undefined` if the seek fails. */
+const streamLength = (stream: bigint): number | undefined => {
+  const end = handleOut();
+  const seek = comMethod(
+    stream,
+    ISTREAM_SEEK_SLOT,
+    [FFIType.u64, FFIType.i64, FFIType.u32, FFIType.ptr],
+    FFIType.i32,
+  );
+  return seek(stream, 0n, STREAM_SEEK_END, end.pointer) === 0
+    ? Number(read.u64(end.pointer, 0))
+    : undefined;
 };
 
 /** Read a GDI+ image's pixel dimensions via the scalar `GdipGetImage{Width,Height}` getters. */
@@ -76,26 +98,28 @@ const toDecoded = (handle: bigint): DecodedImage => {
   return { handle, width, height, empty: false };
 };
 
-/** Read one out-pointer (`GpImage*`/`GpBitmap*`/`GpGraphics*`) the GDI+ call wrote. */
+/** An 8-byte out-parameter slot for a handle a native call writes. */
 const handleOut = (): { buffer: Uint8Array; pointer: ReturnType<typeof ptr> } => {
   const buffer = new Uint8Array(HANDLE_SIZE);
   return { buffer, pointer: ptr(buffer) };
 };
 
 const decode = (source: string | Uint8Array): DecodedImage => {
+  if (typeof source === 'string') {
+    // GdipLoadImageFromFile would share-lock the file for the image's lifetime.
+    let bytes: Uint8Array;
+    try {
+      bytes = readFileSync(source);
+    } catch {
+      return toDecoded(0n);
+    }
+    return decode(bytes);
+  }
   ensureGdiplus();
   const gdip = loadGdiplus().symbols;
   const out = handleOut();
-  if (typeof source === 'string') {
-    const nameBuffer = wstr(source);
-    if (gdip.GdipLoadImageFromFile(ptr(nameBuffer), out.pointer) !== GDIP_OK) {
-      return toDecoded(0n);
-    }
-    return toDecoded(read.u64(out.pointer, 0));
-  }
   if (source.length === 0) {
-    // An empty buffer is an empty image — `ptr()` rejects zero-length views, so
-    // short-circuit rather than fault (Electron's createFromBuffer([]) is empty).
+    // Empty in, empty out (as Electron); ptr() also rejects a zero-length view.
     return toDecoded(0n);
   }
   const stream = loadShlwapi().symbols.SHCreateMemStream(ptr(source), source.length);
@@ -107,7 +131,7 @@ const decode = (source: string | Uint8Array): DecodedImage => {
     return toDecoded(0n);
   }
   const image = read.u64(out.pointer, 0);
-  // Clone so the result owns no reference to the soon-to-be-released stream.
+  // Keep only a clone: the stream-loaded image is tied to the stream released below.
   const clone = handleOut();
   gdip.GdipCloneImage(image, clone.pointer);
   gdip.GdipDisposeImage(image);
@@ -123,7 +147,10 @@ const encode = (handle: NativeImageHandle, encoderClsid: Uint8Array): Uint8Array
   const ole32 = loadOle32().symbols;
   const kernel32 = loadKernel32().symbols;
   const streamOut = handleOut();
-  ole32.CreateStreamOnHGlobal(0n, 1, streamOut.pointer); // fDeleteOnRelease = TRUE
+  // fDeleteOnRelease = TRUE: releasing the stream frees its HGLOBAL.
+  if (ole32.CreateStreamOnHGlobal(0n, 1, streamOut.pointer) !== 0) {
+    return new Uint8Array(0);
+  }
   const stream = read.u64(streamOut.pointer, 0);
   if (gdip.GdipSaveImageToStream(handle, stream, ptr(encoderClsid), null) !== GDIP_OK) {
     releaseStream(stream);
@@ -133,7 +160,9 @@ const encode = (handle: NativeImageHandle, encoderClsid: Uint8Array): Uint8Array
   ole32.GetHGlobalFromStream(stream, hglobalOut.pointer);
   const hglobal = read.u64(hglobalOut.pointer, 0);
   const dataPtr = kernel32.GlobalLock(hglobal);
-  const size = Number(kernel32.GlobalSize(hglobal));
+  // GlobalSize can exceed the bytes written; the stream tracks its own length.
+  const allocated = Number(kernel32.GlobalSize(hglobal));
+  const size = Math.min(allocated, streamLength(stream) ?? allocated);
   const bytes =
     dataPtr === null ? new Uint8Array(0) : new Uint8Array(toArrayBuffer(dataPtr, 0, size)).slice();
   kernel32.GlobalUnlock(hglobal);
@@ -148,6 +177,7 @@ export const windowsNativeImageBackend: NativeImageBackend = {
     return encode(handle, PNG_ENCODER_CLSID);
   },
 
+  // ponytail: GDI+'s default JPEG quality; honour `quality` via EncoderParameters
   encodeJpeg(handle: NativeImageHandle, _quality: number): Uint8Array {
     return encode(handle, JPEG_ENCODER_CLSID);
   },

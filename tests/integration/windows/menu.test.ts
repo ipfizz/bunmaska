@@ -50,10 +50,9 @@ if (currentPlatform() === 'windows') {
       loadUser32().symbols.DestroyMenu(handle);
     });
 
-    test('a role item is native (no JS click stored), so its id dispatches to nothing', () => {
+    test('a role item stores no JS click, so its id dispatches to nothing', () => {
       const realizer = createWindowsMenuRealizer();
       let clicks = 0;
-      // A role item with a stray onClick must NOT be wired (role behavior is native).
       const handle = realizer.realize([
         item({ label: 'Copy', role: 'copy', onClick: () => clicks++ }),
       ]);
@@ -62,11 +61,11 @@ if (currentPlatform() === 'windows') {
       loadUser32().symbols.DestroyMenu(handle);
     });
 
-    test('setApplicationMenu is a no-op (per-window menu bar is deferred)', () => {
+    test('setApplicationMenu destroys the realized popup tree it read the items from', () => {
       const realizer = createWindowsMenuRealizer();
       const handle = realizer.realize([item({ label: 'File' })]);
-      expect(() => realizer.setApplicationMenu(handle)).not.toThrow();
-      loadUser32().symbols.DestroyMenu(handle);
+      realizer.setApplicationMenu(handle);
+      expect(loadUser32().symbols.GetMenuItemCount(handle)).toBe(-1);
     });
   });
 }
