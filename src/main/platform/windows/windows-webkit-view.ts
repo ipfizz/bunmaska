@@ -63,6 +63,9 @@ const sharedWebKitContext = (): Pointer => {
   }
   const s = loadWebKit2().symbols;
   const contextConfig = s.WKContextConfigurationCreate();
+  if (contextConfig === null) {
+    throw new FFIError('WKContextConfigurationCreate returned NULL');
+  }
   const context = s.WKContextCreateWithConfiguration(contextConfig);
   wkRelease(contextConfig);
   if (context === null) {
@@ -279,6 +282,9 @@ export class WindowsWebView {
     }
 
     const pageConfig = s.WKPageConfigurationCreate();
+    if (pageConfig === null) {
+      throw new FFIError('WKPageConfigurationCreate returned NULL');
+    }
     s.WKPageConfigurationSetContext(pageConfig, context);
     s.WKPageConfigurationSetUserContentController(pageConfig, controller);
     const preferences = s.WKPageConfigurationGetPreferences(pageConfig);
