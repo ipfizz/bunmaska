@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { selectBackend } from '../platform/index';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { linuxTrayBackend } from '../platform/linux/sni-tray';
@@ -124,6 +124,9 @@ export class Tray extends EventEmitter {
     }
     this.#destroyed = true;
     this.#instance.destroy();
+    if (this.#iconDir !== undefined) {
+      rmSync(this.#iconDir, { recursive: true, force: true });
+    }
   }
 
   isDestroyed(): boolean {
