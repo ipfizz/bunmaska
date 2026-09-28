@@ -84,6 +84,20 @@ if (currentPlatform() === 'macos') {
       expect(existsSync(stale)).toBe(false);
     }, 30000);
 
+    test('compiles with the running Bun, not whichever bun is on PATH', () => {
+      const builder = join(import.meta.dir, '../../../src/cli/build-macos.ts');
+      const script = `const { buildMacApp } = await import(${JSON.stringify(builder)});
+        await buildMacApp({ entry: ${JSON.stringify(entry)}, name: 'No Path', out: ${JSON.stringify(join(workDir, 'nopath'))} });`;
+      const run = spawnSync(process.execPath, ['-e', script], {
+        encoding: 'utf8',
+        env: { PATH: '/usr/bin:/bin' },
+      });
+      expect(run.stderr).toBe('');
+      expect(
+        existsSync(join(workDir, 'nopath', 'No Path.app', 'Contents', 'MacOS', 'No Path')),
+      ).toBe(true);
+    }, 30000);
+
     test('defaults the bundle id from the name when --id is omitted', async () => {
       const appPath = await buildMacApp({
         entry,

@@ -183,7 +183,7 @@ const tarGz = (archive: string, dir: string, member: string): Promise<void> =>
 
 const compileLinuxBinary = async (entry: string, outfile: string, arch: Arch): Promise<void> => {
   await runTool('bun build --compile', [
-    'bun',
+    process.execPath,
     'build',
     entry,
     '--compile',

@@ -360,7 +360,14 @@ export type BuildMacAppOptions = {
 };
 
 const compileBinary = (entry: string, outfile: string): Promise<void> =>
-  runTool('bun build --compile', ['bun', 'build', entry, '--compile', '--outfile', outfile]);
+  runTool('bun build --compile', [
+    process.execPath,
+    'build',
+    entry,
+    '--compile',
+    '--outfile',
+    outfile,
+  ]);
 
 export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => {
   const out = opts.out ?? process.cwd();
