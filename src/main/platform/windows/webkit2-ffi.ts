@@ -7,11 +7,8 @@ import { type ResolveDeps, resolveEngineWith } from '../../engine/resolve';
 import { winLibraryAccessor, wstr } from './win32';
 import { loadKernel32 } from './win32-ffi';
 
-/**
- * WinCairo WebKit2 C API FFI. Opaque `WK*Ref` handles are plain pointers (`ptr`) and
- * `size_t` is `u64` on x64. Unlike Linux there is NO system-WebKit fallback — Windows
- * ships none — so any `system` resolution outcome means "no engine" here.
- */
+// Opaque `WK*Ref` handles bind as `ptr`; `size_t` is `u64` on x64. Windows ships no system
+// WebKit, so a `system` resolution means "no engine" here.
 
 const WEBKIT2_SYMBOLS = {
   // ── Context + configuration ──────────────────────────────────────────────
@@ -23,8 +20,6 @@ const WEBKIT2_SYMBOLS = {
     args: [FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
   },
-  WKPageConfigurationGetPreferences: { args: [FFIType.ptr], returns: FFIType.ptr },
-  WKPreferencesSetJavaScriptEnabled: { args: [FFIType.ptr, FFIType.u8], returns: FFIType.void },
 
   // ── View (hosted in an HWND) ─────────────────────────────────────────────
   // WKViewCreate(RECT rect, WKPageConfigurationRef, HWND parent): RECT is 16
@@ -33,7 +28,6 @@ const WEBKIT2_SYMBOLS = {
   WKViewGetPage: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKViewGetWindow: { args: [FFIType.ptr], returns: FFIType.u64 },
   WKViewSetIsInWindow: { args: [FFIType.ptr, FFIType.u8], returns: FFIType.void },
-  WKViewSetParentWindow: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
 
   // ── Navigation + history ─────────────────────────────────────────────────
   WKPageLoadURL: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
@@ -47,15 +41,15 @@ const WEBKIT2_SYMBOLS = {
   WKPageCanGoForward: { args: [FFIType.ptr], returns: FFIType.bool },
   WKPageCopyActiveURL: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKPageCopyTitle: { args: [FFIType.ptr], returns: FFIType.ptr },
-  // (page, script, void* context, completion) — context+completion passed NULL for
-  // fire-and-forget eval; executeJavaScript results return out-of-band (D022).
+  // (page, script, void* context, completion): both NULL; executeJavaScript results
+  // return out-of-band over a script message (D022b).
   WKPageEvaluateJavaScriptInMainFrame: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
   },
   WKPageSetPageZoomFactor: { args: [FFIType.ptr, FFIType.f64], returns: FFIType.void },
   WKPageSetCustomUserAgent: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
-  // (page, const WKPageNavigationClientBase*) — register navigation lifecycle callbacks.
+  // (page, const WKPageNavigationClientBase*); NULL clears it.
   WKPageSetPageNavigationClient: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
 
   // ── Errors (for did-fail-load) ───────────────────────────────────────────
@@ -69,7 +63,8 @@ const WEBKIT2_SYMBOLS = {
     returns: FFIType.void,
   },
   WKUserContentControllerRemoveAllUserScripts: { args: [FFIType.ptr], returns: FFIType.void },
-  // (ucc, WKStringRef name, WKScriptMessageHandlerCallback, const void* context)
+  // (ucc, WKStringRef name, callback, const void* context); the callback is
+  // (WKScriptMessageRef, WKCompletionListenerRef reply, const void* context).
   WKUserContentControllerAddScriptMessageHandler: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
@@ -84,49 +79,52 @@ const WEBKIT2_SYMBOLS = {
     returns: FFIType.ptr,
   },
   WKScriptMessageGetBody: { args: [FFIType.ptr], returns: FFIType.ptr },
+  WKScriptMessageGetFrameInfo: { args: [FFIType.ptr], returns: FFIType.ptr },
+  WKFrameInfoGetIsMainFrame: { args: [FFIType.ptr], returns: FFIType.bool },
+  // (WKCompletionListenerRef, WKTypeRef reply): NULL resolves the page's postMessage promise.
+  WKCompletionListenerComplete: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
 
   // ── Strings / URLs ───────────────────────────────────────────────────────
+  // WKTypeID is uint32_t.
+  WKGetTypeID: { args: [FFIType.ptr], returns: FFIType.u32 },
+  WKStringGetTypeID: { args: [], returns: FFIType.u32 },
   WKStringCreateWithUTF8CString: { args: [FFIType.cstring], returns: FFIType.ptr },
   WKStringGetMaximumUTF8CStringSize: { args: [FFIType.ptr], returns: FFIType.u64 },
-  WKStringGetUTF8CString: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+  // NonStrict replaces a lone surrogate; the strict variant returns 0 and drops the whole string.
+  WKStringGetUTF8CStringNonStrict: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.u64],
+    returns: FFIType.u64,
+  },
   WKURLCreateWithUTF8CString: { args: [FFIType.cstring], returns: FFIType.ptr },
   WKURLCopyString: { args: [FFIType.ptr], returns: FFIType.ptr },
 
   // ── Website data (used by the session backend) ───────────────────────────
-  // () -> WKWebsiteDataStoreRef — the process-wide default store.
+  // () -> WKWebsiteDataStoreRef, the process-wide default store.
   WKWebsiteDataStoreGetDefaultDataStore: { args: [], returns: FFIType.ptr },
   // (WKWebsiteDataStoreRef) -> WKHTTPCookieStoreRef
   WKWebsiteDataStoreGetHTTPCookieStore: { args: [FFIType.ptr], returns: FFIType.ptr },
-  // (WKHTTPCookieStoreRef, void* context, callback(void* context)) -> void — async.
+  // (WKHTTPCookieStoreRef, void* context, callback(void* context)) -> void, async.
   WKHTTPCookieStoreDeleteAllCookies: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
   },
-  // (WKWebsiteDataStoreRef, void* context, callback(void* context)) -> void — async.
+  // (WKWebsiteDataStoreRef, void* context, callback(void* context)) -> void, async.
   WKWebsiteDataStoreRemoveAllFetchCaches: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.void,
   },
 
   // ── Reference counting ───────────────────────────────────────────────────
-  WKRetain: { args: [FFIType.ptr], returns: FFIType.ptr },
   WKRelease: { args: [FFIType.ptr], returns: FFIType.void },
 } as const;
 
 /** `_WKUserScriptInjectionTime`: inject before the page's own scripts run. */
 export const WK_INJECT_AT_DOCUMENT_START = 0;
-/** `_WKUserScriptInjectionTime`: inject after the document has parsed. */
-export const WK_INJECT_AT_DOCUMENT_END = 1;
 
 /** The subdir an embedded engine is bundled into (must match `build-windows.ts`). */
 const BUNDLED_ENGINE_DIRNAME = 'webkit';
 
-/**
- * A WinCairo engine bundled next to the executable — `<exeDir>/webkit/` with a
- * `WebKit2.dll` (what `bunmaska build --embed-engine` produces) — or `undefined`.
- * This is what lets a packaged `.exe` run with no environment variables. Pure;
- * `exists` is a test seam.
- */
+/** `<exeDir>/webkit/` if it holds `WebKit2.dll` (from `build --embed-engine`), else `undefined`. */
 export const bundledEngineDir = (
   execPath: string,
   exists: (path: string) => boolean,
@@ -135,30 +133,20 @@ export const bundledEngineDir = (
   return exists(join(dir, 'WebKit2.dll')) ? dir : undefined;
 };
 
-/**
- * The directory of the WinCairo WebKit engine this process loads, or `undefined`
- * when none is available (there is no system WebKit to fall back to on Windows).
- * Precedence: an explicit/store pin via {@link resolveEngineWith} (the engine's
- * `lib/`, or the verbatim `BUNMASKA_WEBKIT_PATH`), then a {@link bundledEngineDir}
- * shipped next to the executable. `deps` is a test seam.
- */
-export const resolveWindowsEngineDir = (deps: ResolveDeps = {}): string | undefined => {
+/** The engine dir to load: a pin beats a {@link bundledEngineDir}; `undefined` if neither. */
+export const resolveWindowsEngineDir = (
+  deps: ResolveDeps & { readonly execPath?: string } = {},
+): string | undefined => {
   const resolution = resolveEngineWith(deps);
   if (resolution.mode === 'pinned') {
     return resolution.libDir;
   }
-  return bundledEngineDir(process.execPath, existsSync);
+  return bundledEngineDir(deps.execPath ?? process.execPath, deps.exists ?? existsSync);
 };
 
-/**
- * Open the engine's `WebKit2.dll` and return its symbol table. Memoised;
- * import-safe (throws on non-Windows via the accessor). Puts the engine dir on
- * the DLL search path first so the bundled closure resolves beside `WebKit2.dll`.
- * A pinned-but-uninstalled engine surfaces the resolver's warning in the error.
- */
+/** Memoised `WebKit2.dll` symbols; the engine dir goes on the DLL search path for its closure. */
 export const loadWebKit2 = winLibraryAccessor('WebKit2', () => {
-  // Use the full resolution (store/explicit pin AND an engine bundled next to the
-  // executable) — NOT resolveEngineWith alone, which misses the bundled fallback.
+  // Never resolveEngineWith alone: it misses the engine bundled next to the executable.
   const dir = resolveWindowsEngineDir();
   if (dir === undefined) {
     const detail = resolveEngineWith().warnings.join('; ');

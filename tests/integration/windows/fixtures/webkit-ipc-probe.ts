@@ -4,7 +4,7 @@
  * main process through the cooperative pump. Prints `IPC_OK <body>` on success.
  *
  * Run in a fresh Bun process (not under bun:test) because WebKit's multi-process
- * IPC + thread affinity are incompatible with the test-runner host — the Linux
+ * IPC + thread affinity are incompatible with the test-runner host; the Linux
  * engine-pinned-load test uses the same spawned-subprocess pattern. Requires
  * BUNMASKA_WEBKIT_PATH to point at a WinCairo engine directory.
  */
@@ -24,6 +24,8 @@ const view = WindowsWebView.create({
   width: 800,
   height: 600,
   userScripts: [
+    // Non-string bodies first: each must be dropped, not read as a WKString.
+    'const h = window.webkit.messageHandlers.bunmaska; h.postMessage(1); h.postMessage(true); h.postMessage({});',
     'window.webkit.messageHandlers.bunmaska.postMessage(JSON.stringify({ ping: "pong" }));',
   ],
   messageHandlers: [

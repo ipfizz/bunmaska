@@ -11,7 +11,7 @@ import { resolveWindowsEngineDir } from '../../../src/main/platform/windows/webk
 const hasEngine = currentPlatform() === 'windows' && resolveWindowsEngineDir() !== undefined;
 
 describe.skipIf(!hasEngine)('Windows window close', () => {
-  test('closing a BrowserWindow does not crash', async () => {
+  test('closing a BrowserWindow does not crash and blanks its page', async () => {
     const fixture = `${import.meta.dir}/fixtures/window-close-probe.ts`;
     const proc = Bun.spawn([process.execPath, 'run', fixture], {
       env: { ...process.env },
@@ -20,7 +20,7 @@ describe.skipIf(!hasEngine)('Windows window close', () => {
     });
     const stdout = await new Response(proc.stdout).text();
     await proc.exited;
-    expect(stdout).toContain('CLOSE_OK');
+    expect(stdout).toContain('CLOSE_OK url=about:blank');
   }, 30000);
 
   test('app quit with a live engine exits cleanly (no teardown crash)', async () => {

@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { inputEventToMessage } from '../../../../../src/main/platform/windows/windows-input';
+import {
+  heldButtonsAfter,
+  inputEventToMessage,
+} from '../../../../../src/main/platform/windows/windows-input';
 
 // Win32 message constants mirrored here for readable assertions.
 const WM_MOUSEMOVE = 0x0200;
@@ -43,17 +46,38 @@ describe('inputEventToMessage', () => {
     expect(msg?.wParam).toBe(0n);
   });
 
-  test('a named key maps to its virtual-key code (Escape)', () => {
+  test('a mouse message carries every button still held (so a move after mouseDown drags)', () => {
+    const left = 0x0001;
+    const right = 0x0002;
+    expect(inputEventToMessage({ type: 'mouseMove', x: 1, y: 1 }, left)?.wParam).toBe(1n);
+    expect(
+      inputEventToMessage({ type: 'mouseDown', x: 1, y: 1, button: 'right' }, left)?.wParam,
+    ).toBe(3n);
+    expect(inputEventToMessage({ type: 'mouseUp', x: 1, y: 1 }, left | right)?.wParam).toBe(2n);
+  });
+
+  test('a named key maps to its virtual-key code and scan code (Escape)', () => {
     expect(inputEventToMessage({ type: 'keyDown', keyCode: 'Escape' })).toEqual({
       message: WM_KEYDOWN,
       wParam: 0x1bn,
-      lParam: 0x1n,
+      lParam: 0x00010001n,
     });
     expect(inputEventToMessage({ type: 'keyUp', keyCode: 'Escape' })).toEqual({
       message: WM_KEYUP,
       wParam: 0x1bn,
-      lParam: 0xc0000001n,
+      lParam: 0xc0010001n,
     });
+  });
+
+  test('a key carries its US-layout scan code in lParam bits 16-23 (so event.code is set)', () => {
+    expect(inputEventToMessage({ type: 'keyDown', keyCode: 'a' })?.lParam).toBe(0x001e0001n);
+    expect(inputEventToMessage({ type: 'keyDown', keyCode: '1' })?.lParam).toBe(0x00020001n);
+    expect(inputEventToMessage({ type: 'char', keyCode: 'x' })?.lParam).toBe(0x002d0001n);
+  });
+
+  test('a navigation-cluster key sets the extended bit (not a numpad key)', () => {
+    expect(inputEventToMessage({ type: 'keyDown', keyCode: 'Left' })?.lParam).toBe(0x014b0001n);
+    expect(inputEventToMessage({ type: 'keyUp', keyCode: 'Delete' })?.lParam).toBe(0xc1530001n);
   });
 
   test('a single letter maps to its VK code, case-insensitively', () => {
@@ -86,5 +110,18 @@ describe('inputEventToMessage', () => {
 
   test('an unmapped key is a no-op (undefined)', () => {
     expect(inputEventToMessage({ type: 'keyDown', keyCode: 'F13' })).toBeUndefined();
+  });
+});
+
+describe('heldButtonsAfter', () => {
+  test('mouseDown adds its button, mouseUp clears it, anything else keeps the set', () => {
+    const afterLeft = heldButtonsAfter({ type: 'mouseDown', x: 0, y: 0 }, 0);
+    const afterRight = heldButtonsAfter(
+      { type: 'mouseDown', x: 0, y: 0, button: 'right' },
+      afterLeft,
+    );
+    expect([afterLeft, afterRight]).toEqual([0x0001, 0x0003]);
+    expect(heldButtonsAfter({ type: 'mouseMove', x: 0, y: 0 }, afterRight)).toBe(0x0003);
+    expect(heldButtonsAfter({ type: 'mouseUp', x: 0, y: 0 }, afterRight)).toBe(0x0002);
   });
 });

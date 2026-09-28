@@ -6,23 +6,17 @@ import {
   resolveWindowsEngineDir,
 } from '../../../../../src/main/platform/windows/webkit2-ffi';
 
-/**
- * `resolveWindowsEngineDir` decides which WinCairo WebKit directory THIS Windows
- * process loads. Windows ships no system WebKit, so — unlike Linux, where the
- * resolver can fall back to the OS WebKitGTK — every "system" outcome here means
- * "no engine" (`undefined`). It delegates to the cross-platform `resolveEngineWith`,
- * so the precedence (BUNMASKA_WEBKIT_PATH > BUNMASKA_WEBKIT_ID > baked engine.id)
- * and the store layout (`<root>/<id>/lib`) are inherited; these tests pin down the
- * Windows-specific mapping of that resolution to a directory.
- */
+// Windows ships no system WebKit, so every "system" resolution means "no engine" (`undefined`).
 const ID = 'webkit-2-2.52.4-bunmaska1-windows-x64';
 const ROOT = 'C:\\store\\webkit';
+const APP_DIR = 'C:\\Program Files\\My App';
 
-/** Inject deterministic seams (no ambient env / fs) into the resolver. */
-const dir = (deps: ResolveDeps): string | undefined =>
+/** Inject deterministic seams (no ambient env / fs); only a bundled WebKit2.dll is absent. */
+const dir = (deps: ResolveDeps & { readonly execPath?: string }): string | undefined =>
   resolveWindowsEngineDir({
     enginesRoot: ROOT,
-    exists: () => true,
+    execPath: join(APP_DIR, 'My App.exe'),
+    exists: (path) => !path.endsWith('WebKit2.dll'),
     readBakedId: () => null,
     ...deps,
   });
@@ -59,6 +53,14 @@ describe('resolveWindowsEngineDir', () => {
 
   test('a malformed pin -> undefined', () => {
     expect(dir({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } })).toBeUndefined();
+  });
+
+  test('no pin -> the engine bundled next to the executable', () => {
+    expect(dir({ env: {}, exists: () => true })).toBe(join(APP_DIR, 'webkit'));
+  });
+
+  test('a pin wins over a bundled engine', () => {
+    expect(dir({ env: {}, readBakedId: () => ID, exists: () => true })).toBe(join(ROOT, ID, 'lib'));
   });
 });
 

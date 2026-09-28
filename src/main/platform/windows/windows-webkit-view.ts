@@ -4,42 +4,26 @@ import type { NativeInputEvent, NativeNavigationEvent } from '../native';
 import { wkRelease, wkString, wkStringToJs, wkUrl, wkUrlToJs } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
 import { loadKernel32, loadUser32 } from './win32-ffi';
-import { postWindowsInputEvent } from './windows-input';
+import { heldButtonsAfter, postWindowsInputEvent } from './windows-input';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
-/**
- * The view is parented into a dedicated NATIVE-WndProc child window
- * ({@link createNativeChildHost}); WebKit floods its host with re-entrant messages during
- * a load, which a `bun:ffi` `JSCallback` WndProc cannot survive. The public WebKit2 C API
- * exposes no named content world, so the injected scripts and the
- * `window.webkit.messageHandlers.<name>` bridge run in the PAGE world.
- */
+// D043: the view's host must be a native-WndProc child; WebKit's re-entrant message flood
+// kills a JSCallback WndProc. The C API has no named content world, so every injected script
+// and message handler lives in the PAGE world.
 
-/** `SetWindowPos` flags for an in-place resize (keep position, z-order, focus). */
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 
-/**
- * Trampolines kept alive for the process lifetime. WebKit's multi-process engine
- * tears down asynchronously and may still call a view's script-message/navigation
- * callbacks after `dispose`, so they are retained here rather than closed (a small,
- * bounded per-window retention — closing them mid-teardown is a use-after-free).
- */
+/** Never closed (D043: closing one mid-teardown is a use-after-free); dispose empties its sinks. */
 const retainedTrampolines: JSCallback[] = [];
 const retainTrampolines = (callbacks: readonly JSCallback[]): void => {
   retainedTrampolines.push(...callbacks);
 };
 
-/** `(HANDLE)-1` — the pseudo-handle for the current process. */
+/** `(HANDLE)-1`, the current-process pseudo-handle. */
 const CURRENT_PROCESS = 0xffffffffffffffffn;
 let cleanExitInstalled = false;
 
-/**
- * Install a one-shot `exit` handler that HARD-terminates the process. WinCairo
- * WebKit crashes in its static / DLL-detach teardown when a process with a live
- * engine exits normally; terminating from the `exit` handler — after the app's
- * quit events have already run — bypasses that teardown for a clean exit code.
- * Installed lazily on first view creation (i.e. only once the engine is loaded).
- */
+/** D043: WinCairo crashes in DLL-detach teardown on a normal exit, so hard-terminate on `exit`. */
 const installCleanExit = (): void => {
   if (cleanExitInstalled) {
     return;
@@ -50,12 +34,7 @@ const installCleanExit = (): void => {
   });
 };
 
-/**
- * A single `WKContext` — WebKit's process pool + default website data store (cookies, localStorage)
- * — shared by EVERY view, so all windows see ONE session, matching Electron's default-session
- * semantics (a per-view context would start each new window logged out). Created lazily and retained
- * for the process lifetime (it outlives individual views — never freed).
- */
+/** One process pool for every view, never freed. Cookies live in the default WebsiteDataStore. */
 let sharedContext: Pointer | null = null;
 const sharedWebKitContext = (): Pointer => {
   if (sharedContext !== null) {
@@ -63,6 +42,9 @@ const sharedWebKitContext = (): Pointer => {
   }
   const s = loadWebKit2().symbols;
   const contextConfig = s.WKContextConfigurationCreate();
+  if (contextConfig === null) {
+    throw new FFIError('WKContextConfigurationCreate returned NULL');
+  }
   const context = s.WKContextCreateWithConfiguration(contextConfig);
   wkRelease(contextConfig);
   if (context === null) {
@@ -94,12 +76,7 @@ const readWkError = (errorRef: Pointer | null): { code: number; description: str
   return { code, description };
 };
 
-/**
- * Register the page navigation client (the WinCairo peer of the macOS/Linux
- * navigation delegates) and return the retained trampolines. Each callback fires
- * during WebKit's message processing — the same controlled context as the
- * script-message handlers — and is closed only on view teardown.
- */
+/** Register the page navigation client; returns its trampolines for D043 retention. */
 const setupNavigationClient = (
   page: Pointer,
   onEvent: (event: NativeNavigationEvent) => void,
@@ -155,6 +132,42 @@ const setupNavigationClient = (
   return callbacks;
 };
 
+type ScriptMessageApi = Pick<
+  ReturnType<typeof loadWebKit2>['symbols'],
+  | 'WKScriptMessageGetBody'
+  | 'WKScriptMessageGetFrameInfo'
+  | 'WKFrameInfoGetIsMainFrame'
+  | 'WKGetTypeID'
+  | 'WKStringGetTypeID'
+  | 'WKCompletionListenerComplete'
+>;
+
+/** Forward a main-frame script message's string body to `onMessage`, then complete its reply. */
+export const deliverScriptMessage = (
+  message: Pointer,
+  listener: Pointer | null,
+  onMessage: (body: string) => void,
+  wk: ScriptMessageApi = loadWebKit2().symbols,
+  readString: (ref: Pointer) => string = wkStringToJs,
+): void => {
+  try {
+    // The handlers live in the page world, so any iframe could post to the bridge.
+    if (!wk.WKFrameInfoGetIsMainFrame(wk.WKScriptMessageGetFrameInfo(message))) {
+      return;
+    }
+    const body = wk.WKScriptMessageGetBody(message);
+    // Any page script can post a number/bool/object; reading that as a WKString faults the process.
+    if (body !== null && wk.WKGetTypeID(body) === wk.WKStringGetTypeID()) {
+      onMessage(readString(body));
+    }
+  } finally {
+    // An unanswered reply pins the posting document's global object in the WebContent process.
+    if (listener !== null) {
+      wk.WKCompletionListenerComplete(listener, null);
+    }
+  }
+};
+
 export interface ScriptMessageHandler {
   readonly name: string;
   readonly onMessage: (body: string) => void;
@@ -165,13 +178,19 @@ export interface WebViewOptions {
   readonly hwnd: bigint;
   readonly width: number;
   readonly height: number;
-  /** Sources injected at document-start, in order, in all frames. */
+  /** Sources injected at document-start, in order, in the main frame only. */
   readonly userScripts: readonly string[];
   /** Renderer->main message handlers, keyed by their `messageHandlers` name. */
   readonly messageHandlers: readonly ScriptMessageHandler[];
-  /** Navigation lifecycle sink (did-start/commit/finish/fail). Optional. */
+  /** Navigation lifecycle sink (did-start/commit/finish/fail). */
   readonly onNavigationEvent?: (event: NativeNavigationEvent) => void;
 }
+
+/** What the process-lifetime trampolines call; dispose empties it so they pin no closed window. */
+type TrampolineSinks = {
+  readonly messages: Map<string, (body: string) => void>;
+  navigation: ((event: NativeNavigationEvent) => void) | undefined;
+};
 
 /** A live WebKit view + its retained FFI resources. */
 export class WindowsWebView {
@@ -180,7 +199,9 @@ export class WindowsWebView {
   readonly #hostWindow: bigint;
   readonly #retainedController: Pointer;
   readonly #callbacks: JSCallback[];
+  readonly #sinks: TrampolineSinks;
   #disposed = false;
+  #heldButtons = 0;
 
   private constructor(
     view: Pointer,
@@ -188,12 +209,14 @@ export class WindowsWebView {
     hostWindow: bigint,
     controller: Pointer,
     callbacks: JSCallback[],
+    sinks: TrampolineSinks,
   ) {
     this.#view = view;
     this.#page = page;
     this.#hostWindow = hostWindow;
     this.#retainedController = controller;
     this.#callbacks = callbacks;
+    this.#sinks = sinks;
   }
 
   /** Build a wired WebKit view hosted in a native child of `options.hwnd`. */
@@ -202,9 +225,6 @@ export class WindowsWebView {
     installCleanExit();
     const wk = loadWebKit2();
     const s = wk.symbols;
-
-    // Shared session (Electron parity): every view uses ONE context, so a window opened after login
-    // sees the logged-in session — the SSO bridge windows (AIS/TRACES) depend on this.
     const context = sharedWebKitContext();
 
     const controller = s.WKUserContentControllerCreate();
@@ -212,32 +232,31 @@ export class WindowsWebView {
       throw new FFIError('WKUserContentControllerCreate returned NULL');
     }
 
-    // Register the renderer->main message handlers. Each callback is retained for
-    // the view's lifetime; the OS invokes it synchronously during the message pump.
+    const sinks: TrampolineSinks = {
+      messages: new Map(options.messageHandlers.map(({ name, onMessage }) => [name, onMessage])),
+      navigation: options.onNavigationEvent,
+    };
     const callbacks: JSCallback[] = [];
-    for (const handler of options.messageHandlers) {
+    for (const { name } of options.messageHandlers) {
+      const onMessage = (body: string): void => sinks.messages.get(name)?.(body);
       const callback = new JSCallback(
-        (messageRef: Pointer) => {
-          const bodyRef = s.WKScriptMessageGetBody(messageRef);
-          if (bodyRef !== null) {
-            handler.onMessage(wkStringToJs(bodyRef));
-          }
-        },
+        (messageRef: Pointer, listenerRef: Pointer | null) =>
+          deliverScriptMessage(messageRef, listenerRef, onMessage, s),
         { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.void },
       );
       if (callback.ptr === null) {
-        throw new FFIError(`failed to allocate the '${handler.name}' message-handler trampoline`);
+        throw new FFIError(`failed to allocate the '${name}' message-handler trampoline`);
       }
-      const nameRef = wkString(handler.name);
+      const nameRef = wkString(name);
       s.WKUserContentControllerAddScriptMessageHandler(controller, nameRef, callback.ptr, null);
       wkRelease(nameRef);
       callbacks.push(callback);
     }
 
-    // Inject the preload/bridge sources at document-start, in order.
+    // Main frame only: with no isolated world, an iframe must never get the bridge.
     for (const source of options.userScripts) {
       const sourceRef = wkString(source);
-      const userScript = s.WKUserScriptCreateWithSource(sourceRef, WK_INJECT_AT_DOCUMENT_START, 0);
+      const userScript = s.WKUserScriptCreateWithSource(sourceRef, WK_INJECT_AT_DOCUMENT_START, 1);
       wkRelease(sourceRef);
       if (userScript !== null) {
         s.WKUserContentControllerAddUserScript(controller, userScript);
@@ -246,17 +265,15 @@ export class WindowsWebView {
     }
 
     const pageConfig = s.WKPageConfigurationCreate();
+    if (pageConfig === null) {
+      throw new FFIError('WKPageConfigurationCreate returned NULL');
+    }
     s.WKPageConfigurationSetContext(pageConfig, context);
     s.WKPageConfigurationSetUserContentController(pageConfig, controller);
-    const preferences = s.WKPageConfigurationGetPreferences(pageConfig);
-    if (preferences !== null) {
-      s.WKPreferencesSetJavaScriptEnabled(preferences, 1);
-    }
 
     const hostWindow = createNativeChildHost(options.hwnd, options.width, options.height);
 
-    // RECT{left,top,right,bottom}: fill the host child. Win64 passes the 16-byte
-    // struct by hidden pointer, so we hand WKViewCreate the RECT buffer.
+    // RECT{left,top,right,bottom}, passed by hidden pointer (see WKViewCreate in webkit2-ffi.ts).
     const rect = new Int32Array([0, 0, options.width, options.height]);
     const view = s.WKViewCreate(ptr(rect), pageConfig, hostWindow);
     wkRelease(pageConfig);
@@ -270,20 +287,10 @@ export class WindowsWebView {
     }
 
     if (options.onNavigationEvent !== undefined) {
-      callbacks.push(...setupNavigationClient(page, options.onNavigationEvent));
+      callbacks.push(...setupNavigationClient(page, (event) => sinks.navigation?.(event)));
     }
 
-    return new WindowsWebView(view, page, hostWindow, controller, callbacks);
-  }
-
-  /** The underlying `WKPageRef`. */
-  page(): Pointer {
-    return this.#page;
-  }
-
-  /** The underlying `WKViewRef`. */
-  view(): Pointer {
-    return this.#view;
+    return new WindowsWebView(view, page, hostWindow, controller, callbacks, sinks);
   }
 
   /** Navigate to a URL (http/https/file/about). */
@@ -384,34 +391,31 @@ export class WindowsWebView {
   sendInputEvent(event: NativeInputEvent): void {
     const hwnd = loadWebKit2().symbols.WKViewGetWindow(this.#view);
     if (hwnd !== 0n) {
-      postWindowsInputEvent(hwnd, event);
+      postWindowsInputEvent(hwnd, event, this.#heldButtons);
     }
+    this.#heldButtons = heldButtonsAfter(event, this.#heldButtons);
   }
 
-  /** Idempotent. */
+  /**
+   * Idempotent. The WKView is never released (D043: that re-enters a JSCallback mid-teardown),
+   * so blank the page to stop its scripts, media and sockets until process exit.
+   */
   dispose(): void {
     if (this.#disposed) {
       return;
     }
     this.#disposed = true;
-    const wk = loadWebKit2();
-    // The owning window is hidden, not destroyed (see `commitClose`), so the view
-    // persists until process exit. Silence it: stop loading and clear its clients
-    // so a closed webContents emits nothing further, and drop our controller ref
-    // (the shared WKContext is process-lifetime). The live WKView itself is NOT released — doing so through
-    // raw FFI re-enters a bun:ffi JSCallback during WebKit's multi-process
-    // teardown and crashes — so it and its WebProcess are reclaimed by the OS at
-    // exit. A clean async teardown is a documented follow-up (`.admin/WINDOWS.md`).
-    // Clear WebKit's clients FIRST — before any other WebKit or window operation.
-    // Once the window is hidden/torn down, WebKit synchronously processes those
-    // messages and would call our nav/message trampolines in a context that
-    // crashes bun:ffi; with the clients cleared it has nothing to call. (Doing any
-    // other WebKit call first — e.g. stop-loading — re-fires a nav callback before
-    // the clear and crashes.)
-    wk.symbols.WKPageSetPageNavigationClient(this.#page, null);
-    wk.symbols.WKUserContentControllerRemoveAllUserMessageHandlers(this.#retainedController);
+    const wk = loadWebKit2().symbols;
+    // Clear WebKit's clients FIRST: any earlier WebKit call (even stop-loading) re-fires a
+    // nav callback into a trampoline mid-teardown and crashes bun:ffi.
+    wk.WKPageSetPageNavigationClient(this.#page, null);
+    wk.WKUserContentControllerRemoveAllUserMessageHandlers(this.#retainedController);
+    // So the blank page runs no preload.
+    wk.WKUserContentControllerRemoveAllUserScripts(this.#retainedController);
+    this.loadURL('about:blank');
     wkRelease(this.#retainedController);
-    // The shared WKContext is process-lifetime — never released here (it outlives this view).
+    this.#sinks.messages.clear();
+    this.#sinks.navigation = undefined;
     retainTrampolines(this.#callbacks);
   }
 }
