@@ -126,7 +126,16 @@ const graphs = [website, ...(isHome ? [organization, softwareApp, sourceCode] : 
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    {graphs.map((g) => <script is:inline type="application/ld+json" set:html={JSON.stringify(g)} />)}
+    {/* Escape "<" so a "</script>" inside any string cannot end the block early. */}
+    {
+      graphs.map((g) => (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={JSON.stringify(g).replace(/</g, "\\u003c")}
+        />
+      ))
+    }
     {/* No-flash theme bootstrap - runs before paint. Dark is the default; the
         system preference only matters once the visitor has picked light. */}
     <script is:inline>
