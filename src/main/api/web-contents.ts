@@ -246,7 +246,7 @@ export class WebContents extends EventEmitter {
     return this.#userAgent;
   }
 
-  /** Delivers an `isTrusted` event through the engine; Windows only, macOS and Linux throw. */
+  /** An `isTrusted` event via the engine: Windows and Blink; WebKit on macOS and Linux throws. */
   sendInputEvent(event: NativeInputEvent): void {
     // Validate at the boundary (Electron throws on a bad event): an unknown type
     // must not silently no-op, and non-finite coordinates must not coerce to a

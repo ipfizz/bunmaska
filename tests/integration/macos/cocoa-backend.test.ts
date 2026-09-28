@@ -3,7 +3,10 @@ import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
 import { protocol } from '../../../src/main/api/protocol';
 import { decodeEnvelope, encodeEnvelope } from '../../../src/main/ipc/ipc-protocol';
-import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
+import {
+  createMacOSApplication,
+  createMacOSWindow,
+} from '../../../src/main/platform/macos/cocoa-backend';
 import { retainedBlockCount } from '../../../src/main/platform/macos/cocoa-block';
 import { nsString, nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
 import {
@@ -20,7 +23,11 @@ import {
   LIBOBJC_PATH,
   setNativeErrorReporterForTesting,
 } from '../../../src/main/platform/macos/objc';
-import type { NativeWindow } from '../../../src/main/platform/native';
+import type {
+  NativeWebContents,
+  NativeWindow,
+  WindowEventType,
+} from '../../../src/main/platform/native';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -115,6 +122,55 @@ onMac('MacOSApplication', () => {
     app.start();
     try {
       expect(() => app.start()).not.toThrow();
+    } finally {
+      app.quit();
+    }
+  });
+
+  test('an engine drain hook runs on the pump', async () => {
+    let ticks = 0;
+    const app = createMacOSApplication(() => {
+      ticks += 1;
+    });
+    app.start();
+    try {
+      await delay(100);
+      expect(ticks).toBeGreaterThan(0);
+    } finally {
+      app.quit();
+    }
+  });
+});
+
+onMac('createMacOSWindow with a hosted view', () => {
+  test('the view gets the new window, its events and a teardown before its release', async () => {
+    const app = createMacOSApplication();
+    app.start();
+    try {
+      const calls: string[] = [];
+      const contents = {} as NativeWebContents;
+      let hostWindow = 0n;
+      let emit: (type: WindowEventType) => void = () => undefined;
+      const win = createMacOSWindow(
+        { width: 320, height: 240, title: 'hosted', show: false },
+        (window, _options, emitEvent) => {
+          hostWindow = window;
+          emit = emitEvent;
+          return {
+            contents,
+            teardown: () => calls.push('teardown'),
+            release: () => calls.push('release'),
+          };
+        },
+      );
+      expect(win.webContents).toBe(contents);
+      expect(nsWindowTitled('hosted')).toBe(hostWindow);
+      win.onWindowEvent('ready-to-show', () => calls.push('ready-to-show'));
+      emit('ready-to-show');
+      win.onClosed(() => calls.push('closed'));
+      win.close();
+      await delay(50);
+      expect(calls).toEqual(['ready-to-show', 'teardown', 'closed', 'release']);
     } finally {
       app.quit();
     }

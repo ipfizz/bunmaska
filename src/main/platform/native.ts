@@ -113,7 +113,7 @@ export interface NativeWebContents {
   setUserAgent(userAgent: string): void;
   /**
    * Delivered through the engine's input path, so the page sees `isTrusted === true`, which a
-   * script-dispatched event cannot fake. Windows only; macOS and Linux throw.
+   * script-dispatched event cannot fake. Windows and Blink; WebKit on macOS and Linux throws.
    */
   sendInputEvent(event: NativeInputEvent): void;
   /** Delivers a raw JSON envelope to the renderer's bridge. */
@@ -230,4 +230,6 @@ export interface NativeApplication {
   readonly appKit?: NativeAppKit;
   /** macOS and Linux. */
   showAboutPanel?(): void;
+  /** Blink keeps its profile here (`app.getPath('userData')`); set before {@link start}. */
+  setUserDataPath?(path: string): void;
 }
