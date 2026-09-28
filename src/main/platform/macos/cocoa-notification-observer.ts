@@ -15,7 +15,6 @@ import type { Handle } from './objc';
  */
 
 const registry = new Map<Handle, () => void>();
-const retainedObservers: Handle[] = [];
 let observerClass: Handle | undefined;
 
 const ensureObserverClass = (): Handle => {
@@ -60,7 +59,6 @@ export const observeNotification = (center: Handle, name: string, onPost: () => 
   const cls = ensureObserverClass();
   const observer = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
   registry.set(observer, onPost);
-  retainedObservers.push(observer);
   msgSendPtr4(
     center,
     rt.selectors.get('addObserver:selector:name:object:'),

@@ -51,17 +51,3 @@ export const pageWorld = (): Handle => {
   const rt = cocoa();
   return rt.msgSend(rt.classes.get('WKContentWorld'), rt.selectors.get('pageWorld'));
 };
-
-/**
- * Return `+[WKContentWorld defaultClientWorld]` (WebKit's default client world).
- * Used immediately; do NOT cache without sending `-retain` first.
- */
-export const defaultClientWorld = (): Handle => {
-  const rt = cocoa();
-  return rt.msgSend(rt.classes.get('WKContentWorld'), rt.selectors.get('defaultClientWorld'));
-};
-
-/** Clear the memoised world handles. Test-only. */
-export const resetContentWorldCacheForTesting = (): void => {
-  worldCache.clear();
-};
