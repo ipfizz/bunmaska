@@ -122,6 +122,11 @@ describe('mergeEngineIndex', () => {
     expect(JSON.parse(json).engines.map((e: { id: string }) => e.id)).toEqual([CEF_ID, ID].sort());
   });
 
+  test('refuses to republish an id already in the index (ids are immutable)', () => {
+    const existing = buildEngineIndex([{ id: ID, hash: 'old' }]);
+    expect(() => mergeEngineIndex(existing, { id: ID, hash: 'new' })).toThrow(/already published/);
+  });
+
   test('rejects a malformed engine id before it enters the index', () => {
     expect(() => mergeEngineIndex(undefined, { id: '../evil', hash: 'x' })).toThrow();
   });

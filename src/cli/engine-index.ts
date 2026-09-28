@@ -88,17 +88,21 @@ export const fetchEngineIndex = async (
   parseEngineIndex(new TextDecoder().decode(await fetch(engineFeedIndexUrl(feedBase))));
 
 /**
- * Same-id entry replaced, everything else kept, output sorted by id.
- * `indexText` undefined means "no index published yet" and starts one.
+ * Add one engine, keep every other entry, sort by id. `indexText` undefined means
+ * no index is published yet. Throws on a malformed id or an id already published:
+ * clients cache and pin by id, so an id's bytes never change (bump the rev instead).
  */
 export const mergeEngineIndex = (
   indexText: string | undefined,
   manifest: RemoteManifest,
 ): string => {
   const existing = indexText === undefined ? [] : readStoredEntries(indexText);
-  parseEngineId(manifest.id); // reject a malformed id before it enters the index
+  parseEngineId(manifest.id);
+  if (existing.some((e) => e.id === manifest.id)) {
+    return err(`engine index: ${manifest.id} is already published; bump the rev to republish`);
+  }
   const entries = [
-    ...existing.filter((e) => e.id !== manifest.id),
+    ...existing,
     {
       id: manifest.id,
       ...(manifest.size !== undefined ? { size: manifest.size } : {}),
