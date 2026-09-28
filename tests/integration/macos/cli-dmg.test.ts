@@ -6,13 +6,7 @@ import { join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * Integration test for the `.dmg` path of the macOS bundler. It builds a real
- * `.app` from a trivial entry with `--dmg`, then asserts a non-empty
- * `<Name>.dmg` is produced and that the REAL `hdiutil verify` passes
- * (exitCode 0) — a genuine on-host disk-image checksum verification. No volume
- * is mounted: `hdiutil create` + `verify` need none.
- */
+// `hdiutil verify` checksums the real image; no volume is mounted.
 if (currentPlatform() === 'macos') {
   describe('buildMacApp dmg creation (integration)', () => {
     let workDir: string;

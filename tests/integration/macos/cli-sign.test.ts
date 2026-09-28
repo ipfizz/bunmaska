@@ -6,13 +6,7 @@ import { join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * Integration test for macOS code-signing. It builds a real `.app` from a
- * trivial entry, then signs it AD-HOC (`--sign -`), which needs NO certificate
- * and works on any Mac. It asserts the produced bundle passes the real
- * `codesign --verify --strict` and that `codesign --display` reports it signed.
- * This proves the signing path genuinely works on-host without a cert.
- */
+// Ad-hoc signing (`--sign -`) needs no certificate, so this runs on any Mac.
 if (currentPlatform() === 'macos') {
   describe('buildMacApp ad-hoc code-signing (integration)', () => {
     let workDir: string;

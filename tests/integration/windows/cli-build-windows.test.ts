@@ -14,14 +14,7 @@ import { buildWindowsApp } from '../../../src/cli/build-windows';
 import { currentPlatform } from '../../../src/common/platform';
 import { bundledEngineDir } from '../../../src/main/platform/windows/webkit2-ffi';
 
-/**
- * Integration test for the Windows distributable builder, guarded to a Windows
- * host so the produced `.exe` can actually be executed. It writes a trivial entry
- * (no WebKit — just print + exit), native-compiles it with Bun's
- * `--target=bun-windows-x64`, lays out the portable dir, and asserts the binary
- * is a real PE that runs, the engine-id is baked beside it, and the `.zip` is a
- * non-empty PKZIP archive. No engine is needed: the entry never loads WebKit.
- */
+// The entry never loads WebKit, so a stand-in engine dir exercises the embed path.
 if (currentPlatform() === 'windows') {
   describe('buildWindowsApp (integration)', () => {
     let workDir: string;

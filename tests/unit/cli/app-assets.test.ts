@@ -139,7 +139,7 @@ describe('bundlePreloadAssets', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bunmaska-prebundle-'));
     const plain = "contextBridge.exposeInMainWorld('api', {});\n";
     writeFileSync(join(dir, 'preload.js'), plain);
-    // A page script that uses import is NOT a preload — it must not be rewritten.
+    // A page script that uses import is not a preload, so it is left alone.
     writeFileSync(join(dir, 'app.js'), "import './x.js';\n");
 
     const rewritten = bundlePreloadAssets(

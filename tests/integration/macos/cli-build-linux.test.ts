@@ -48,13 +48,7 @@ const arMember = (ar: Uint8Array, wanted: string): Uint8Array => {
   throw new Error(`no ${wanted} in the ar archive`);
 };
 
-/**
- * Integration test for the Linux distributable builder, guarded to macOS so it
- * exercises Bun's `--target=bun-linux-x64` CROSS-compilation. It writes a
- * trivial entry, cross-compiles it, lays out the AppDir, and asserts the
- * compiled binary is a real Linux ELF (not a host Mach-O), the .desktop file is
- * correct, and the .tar.gz / .deb archives exist and list the expected members.
- */
+// Cross-compiles for Linux from macOS, so the binary must be an ELF, not a host Mach-O.
 if (currentPlatform() === 'macos') {
   describe('buildLinuxApp cross-compile (integration)', () => {
     let workDir: string;

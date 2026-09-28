@@ -14,12 +14,7 @@ import { dirname, join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * Integration test for the macOS `.app` bundler. It writes a trivial entry
- * (not a real Bunmaska app — the bundler only packages it), compiles it with
- * `bun build --compile`, lays out the `.app`, then asserts the on-disk
- * structure. The produced binary is exec'd to confirm it actually runs.
- */
+// Compiles a trivial entry into a real .app and runs the binary.
 if (currentPlatform() === 'macos') {
   describe('buildMacApp (integration)', () => {
     let workDir: string;
