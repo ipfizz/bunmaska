@@ -4,10 +4,10 @@
  * live-reloads the open windows in place.
  */
 
-import { type Dirent, readdirSync, readFileSync, statSync, watch as fsWatch } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
+import { isIgnoredPath, pathParts, watchTree } from './dev-watch';
 
 export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 
@@ -20,27 +20,6 @@ export const DEV_DEBOUNCE_MS = 120;
  */
 export const resolveDevEntry = (config: BunmaskaConfig, explicit?: string): string =>
   explicit ?? config.entry ?? DEV_DEFAULT_ENTRY;
-
-/**
- * Dependency, VCS and OUR-OWN-BUILD-OUTPUT directories. `dist` is deliberately NOT
- * here: an app's renderer bundle lives there, and ignoring it meant a rebuilt
- * bundle could never trigger a reload. The app bundles `bunmaska build` writes are
- * ignored by suffix instead, because it defaults its output to the project root.
- */
-const IGNORED_SEGMENTS: ReadonlySet<string> = new Set([
-  'node_modules',
-  '.git',
-  'build',
-  'out',
-  'coverage',
-]);
-
-/**
- * Directory suffixes `bunmaska build` produces inside the watched root.
- * ponytail: the Linux AppDir is a bare `<Name>/` with no suffix to match, so a
- * Linux build during `dev` still churns; `--out` outside the root avoids it.
- */
-const IGNORED_SEGMENT_SUFFIXES: readonly string[] = ['.app', '.AppDir'];
 
 /** TypeScript is compiled into the main process, so a change there restarts it. */
 const MAIN_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.mts', '.cts']);
@@ -62,21 +41,16 @@ export type ChangeAction = 'restart' | 'rebuild' | 'reload' | 'ignore';
  * React component edit no longer restarts the whole app.
  */
 export const classifyChange = (relPath: string, rendererRoot?: string): ChangeAction => {
-  const parts = relPath.split(/[\\/]/).filter((p) => p.length > 0);
-  const ignored = (p: string): boolean =>
-    IGNORED_SEGMENTS.has(p) || IGNORED_SEGMENT_SUFFIXES.some((suffix) => p.endsWith(suffix));
-  if (parts.some(ignored)) {
+  if (isIgnoredPath(relPath)) {
     return 'ignore';
   }
+  const parts = pathParts(relPath);
   const base = parts[parts.length - 1] ?? '';
-  if (base.length === 0 || base.startsWith('.')) {
-    return 'ignore';
-  }
   if (PRELOAD_BASENAME.test(base)) {
     return 'restart';
   }
   if (rendererRoot !== undefined) {
-    const rootParts = rendererRoot.split(/[\\/]/).filter((p) => p.length > 0);
+    const rootParts = pathParts(rendererRoot);
     const underRoot =
       rootParts.length > 0 &&
       rootParts.length < parts.length &&
@@ -93,126 +67,6 @@ const ACTION_RANK: Record<Exclude<ChangeAction, 'ignore'>, number> = {
   restart: 3,
   rebuild: 2,
   reload: 1,
-};
-
-/** The two content-comparison modes the watcher needs. Same seen-map underneath. */
-export type ContentFilter = {
-  /**
-   * First sight passes (a newly created file is a real change); thereafter only
-   * a byte change passes. A vanished file always passes (a deletion is real).
-   */
-  changed(relPath: string): boolean;
-  /**
-   * Strict: passes only for a path already seen whose bytes changed; an unseen
-   * path is silently seeded. Used when rescanning a directory on an editor
-   * temp-file event, where first-sight-passes would fire every untouched
-   * sibling.
-   */
-  changedIfSeen(relPath: string): boolean;
-};
-
-/**
- * Drop events whose file content did not actually change. `fs.watch` fires on a
- * metadata-only touch, and a formatter that rewrites identical bytes fires too;
- * both would otherwise restart the app. `readFile` is a seam so this tests
- * without the filesystem.
- */
-export const makeContentFilter = (
-  readFile: (relPath: string) => string | undefined,
-): ContentFilter => {
-  const seen = new Map<string, string>();
-  const hashOf = (relPath: string): string | undefined => {
-    const contents = readFile(relPath);
-    return contents === undefined ? undefined : String(Bun.hash(contents));
-  };
-  return {
-    changed(relPath) {
-      const hash = hashOf(relPath);
-      if (hash === undefined) {
-        seen.delete(relPath);
-        return true;
-      }
-      if (seen.get(relPath) === hash) {
-        return false;
-      }
-      seen.set(relPath, hash);
-      return true;
-    },
-    changedIfSeen(relPath) {
-      const hash = hashOf(relPath);
-      if (hash === undefined) {
-        seen.delete(relPath);
-        return false;
-      }
-      const previous = seen.get(relPath);
-      seen.set(relPath, hash);
-      return previous !== undefined && previous !== hash;
-    },
-  };
-};
-
-/**
- * The parent directory of an editor temp-file event, or `undefined` when the
- * event is not one. An atomic save (write temp + rename) can coalesce under
- * FSEvents into a SINGLE event for the dot-named temp file (`.!1234!main.ts`
- * from BSD sed, swap files, etc.), so ignoring dot basenames outright loses the
- * save; the caller rescans this directory instead. Pure.
- */
-export const editorTempDir = (relPath: string): string | undefined => {
-  const parts = relPath.split(/[\\/]/).filter((p) => p.length > 0);
-  const ignored = (p: string): boolean =>
-    IGNORED_SEGMENTS.has(p) || IGNORED_SEGMENT_SUFFIXES.some((suffix) => p.endsWith(suffix));
-  if (parts.length === 0 || parts.some(ignored)) {
-    return undefined;
-  }
-  const base = parts[parts.length - 1] ?? '';
-  if (!base.startsWith('.')) {
-    return undefined;
-  }
-  return parts.slice(0, -1).join('/');
-};
-
-/** Files bigger than this are not hashed at seed time (first-sight then applies). */
-const SEED_MAX_BYTES = 5_000_000;
-
-/**
- * Hash every watchable file up front so the strict rescan mode has a baseline
- * from the first save of the session, not the second.
- */
-const seedContentFilter = (root: string, filter: ContentFilter, relDir = ''): void => {
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(resolve(root, relDir), { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const name = entry.name;
-    if (name.startsWith('.')) {
-      continue;
-    }
-    const rel = relDir === '' ? name : `${relDir}/${name}`;
-    if (entry.isDirectory()) {
-      if (
-        !IGNORED_SEGMENTS.has(name) &&
-        !IGNORED_SEGMENT_SUFFIXES.some((suffix) => name.endsWith(suffix))
-      ) {
-        seedContentFilter(root, filter, rel);
-      }
-      continue;
-    }
-    if (!entry.isFile()) {
-      continue;
-    }
-    try {
-      if (statSync(resolve(root, rel)).size > SEED_MAX_BYTES) {
-        continue;
-      }
-    } catch {
-      continue;
-    }
-    filter.changedIfSeen(rel);
-  }
 };
 
 export type DevChild = {
@@ -415,56 +269,7 @@ export const defaultDevDeps = (
       },
     };
   },
-  watch: (dir, onChange) => {
-    const filter = makeContentFilter((relPath) => {
-      try {
-        return readFileSync(resolve(dir, relPath), 'utf8');
-      } catch {
-        return undefined;
-      }
-    });
-    seedContentFilter(dir, filter);
-    // An atomic save may surface only as its temp-file event; find what really
-    // changed in that directory instead of dropping the save.
-    const rescan = (relDir: string): void => {
-      let entries: Dirent[];
-      try {
-        entries = readdirSync(resolve(dir, relDir), { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (!entry.isFile() || entry.name.startsWith('.')) {
-          continue;
-        }
-        const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
-        if (classifyChange(rel) !== 'ignore' && filter.changedIfSeen(rel)) {
-          onChange(rel);
-        }
-      }
-    };
-    const watcher = fsWatch(dir, { recursive: true }, (_event, filename) => {
-      if (filename === null) {
-        return;
-      }
-      const relPath = filename.toString();
-      const tempDir = editorTempDir(relPath);
-      if (tempDir !== undefined) {
-        rescan(tempDir);
-        return;
-      }
-      // Classify before hashing so node_modules churn never costs a file read.
-      if (classifyChange(relPath) === 'ignore' || !filter.changed(relPath)) {
-        return;
-      }
-      onChange(relPath);
-    });
-    return {
-      close: () => {
-        watcher.close();
-      },
-    };
-  },
+  watch: watchTree,
   timers: defaultTimers,
   log,
 });
