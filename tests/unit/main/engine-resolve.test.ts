@@ -111,6 +111,11 @@ describe('bakedIdCandidates', () => {
     expect(slash(c[1] ?? '')).toBe('/opt/app/usr/bin/engine.id');
   });
 
+  test('outside a usr/bin layout, reads only the sibling engine.id', () => {
+    const c = bakedIdCandidates('/home/u/Downloads/MyApp/MyApp', {});
+    expect(c.map(slash)).toEqual(['/home/u/Downloads/MyApp/engine.id']);
+  });
+
   test('an explicit BUNMASKA_ENGINE_ID_FILE wins outright', () => {
     expect(
       bakedIdCandidates('/opt/app/usr/bin/my-app', { BUNMASKA_ENGINE_ID_FILE: '/x/id' }),

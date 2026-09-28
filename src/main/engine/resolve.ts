@@ -57,9 +57,10 @@ export const bakedIdCandidates = (execPath: string, env: StoreEnv): string[] => 
   if (explicit !== undefined && explicit.length > 0) {
     return [explicit];
   }
-  const dir = dirname(execPath); // .../usr/bin
-  const slug = basename(execPath);
-  return [join(dir, '..', 'share', slug, 'engine.id'), join(dir, 'engine.id')];
+  const dir = dirname(execPath);
+  const sibling = join(dir, 'engine.id');
+  const usrBin = basename(dir) === 'bin' && basename(dirname(dir)) === 'usr';
+  return usrBin ? [join(dir, '..', 'share', basename(execPath), 'engine.id'), sibling] : [sibling];
 };
 
 /** Default reader for the baked `engine.id`: env override, else beside the executable. */
