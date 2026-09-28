@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InvalidArgumentError } from '../../../../src/common/errors';
 import { app } from '../../../../src/main/api/app';
-import { Menu, setMenuRealizerForTesting } from '../../../../src/main/api/menu';
+import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../../src/main/api/menu';
 import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
 import {
   BrowserWindow,
@@ -22,7 +26,7 @@ import type {
   Rect,
   WindowEventType,
 } from '../../../../src/main/platform/native';
-import { armInertObservers } from '../../../helpers/inert-observers';
+import { armInertObservers, inertMenuRealizer } from '../../../helpers/inert-observers';
 import { appExitCodes, installSafeAppExit } from '../../../helpers/safe-app-exit';
 
 type FakeWindow = NativeWindow & {
@@ -230,6 +234,7 @@ let windows: FakeWindow[];
 
 beforeEach(() => {
   armInertObservers();
+  setMenuRealizerForTesting(inertMenuRealizer);
   resetWindowRegistryForTesting();
   resetWebContentsIdsForTesting();
   resetBootstrapForTesting();
@@ -242,6 +247,8 @@ beforeEach(() => {
 
 afterEach(() => {
   setNativeAppForTesting(undefined);
+  setMenuRealizerForTesting(undefined);
+  resetApplicationMenuForTesting();
   app.resetForTesting();
   session.defaultSession.resetForTesting();
 });

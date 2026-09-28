@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { currentPlatform } from '../../../src/common/platform';
 import { app } from '../../../src/main/api/app';
+import {
+  Menu,
+  resetApplicationMenuForTesting,
+  setMenuRealizerForTesting,
+} from '../../../src/main/api/menu';
 import { resetNativeThemeObservingForTesting } from '../../../src/main/api/native-theme';
 import { resetPowerMonitorObservingForTesting } from '../../../src/main/api/power-monitor';
 import { ensureNativeStarted, resetBootstrapForTesting } from '../../../src/main/bootstrap';
 import { setNativeAppForTesting } from '../../../src/main/native-app';
 import type { NativeApplication } from '../../../src/main/platform/native';
-import { armInertObservers } from '../../helpers/inert-observers';
+import { armInertObservers, inertMenuRealizer } from '../../helpers/inert-observers';
 import { installSafeAppExit } from '../../helpers/safe-app-exit';
 
 type NativeTriggers = {
@@ -52,9 +58,14 @@ const makeNative = (): NativeTriggers => {
 };
 
 describe('bootstrap native wiring', () => {
-  beforeEach(armInertObservers);
+  beforeEach(() => {
+    armInertObservers();
+    setMenuRealizerForTesting(inertMenuRealizer);
+  });
 
   afterEach(() => {
+    setMenuRealizerForTesting(undefined);
+    resetApplicationMenuForTesting();
     setNativeAppForTesting(undefined);
     app.resetForTesting();
     resetBootstrapForTesting();
@@ -109,6 +120,17 @@ describe('bootstrap native wiring', () => {
     ensureNativeStarted();
     expect(app.isReady()).toBe(true);
   });
+
+  test.skipIf(currentPlatform() !== 'macos')(
+    'installs the default application menu once the native app is ready on macOS',
+    () => {
+      installSafeAppExit();
+      resetBootstrapForTesting();
+      setNativeAppForTesting(makeNative().native);
+      ensureNativeStarted();
+      expect(Menu.getApplicationMenu()?.items[0]?.label).toBe(app.name);
+    },
+  );
 
   test('retries the native start after a failed one', () => {
     const { native } = makeNative();

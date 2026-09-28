@@ -1,5 +1,7 @@
 import { makeCancelableEvent } from '../common/cancelable-event';
+import { currentPlatform } from '../common/platform';
 import { app } from './api/app';
+import { installDefaultApplicationMenu } from './api/menu';
 import { startNativeThemeObserving } from './api/native-theme';
 import { startPowerMonitorObserving } from './api/power-monitor';
 import { nativeApp } from './native-app';
@@ -15,6 +17,10 @@ export const ensureNativeStarted = (): void => {
   started = true;
   const native = nativeApp();
   native.onReady(() => {
+    // Cmd+C/V/X/A/Z reach the web view only through the app menu's Edit items.
+    if (currentPlatform() === 'macos') {
+      installDefaultApplicationMenu(app.name);
+    }
     app.markReady();
     // Observers attach native hooks, which need NSApp / GTK initialised first.
     startNativeThemeObserving();

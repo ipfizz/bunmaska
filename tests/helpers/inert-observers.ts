@@ -1,3 +1,4 @@
+import type { MenuRealizer } from '../../src/main/api/menu';
 import { startNativeThemeObserving } from '../../src/main/api/native-theme';
 import { startPowerMonitorObserving } from '../../src/main/api/power-monitor';
 
@@ -5,4 +6,10 @@ import { startPowerMonitorObserving } from '../../src/main/api/power-monitor';
 export const armInertObservers = (): void => {
   startNativeThemeObserving(() => undefined);
   startPowerMonitorObserving(() => undefined);
+};
+
+/** Touches no native menu: install it wherever a fake `onReady` runs on macOS. */
+export const inertMenuRealizer: MenuRealizer = {
+  realize: () => 1n,
+  setApplicationMenu: () => undefined,
 };
