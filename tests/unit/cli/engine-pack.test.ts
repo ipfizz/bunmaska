@@ -6,7 +6,7 @@ import { generateSigningKeyPair } from '../../../src/common/signature';
 import { packEngineDir } from '../../../src/cli/engine-pack';
 import { installFromUrl, type RemoteFetch, zstdTarExtract } from '../../../src/cli/engine-remote';
 import { contentHash } from '../../../src/common/manifest';
-import { engineDir, isInstalled } from '../../../src/cli/engine-store';
+import { engineDir, isInstalled } from '../../../src/common/engine-store';
 
 const ID = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
 

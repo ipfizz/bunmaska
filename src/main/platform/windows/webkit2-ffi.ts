@@ -2,6 +2,7 @@ import { FFIType, ptr } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { BUNDLED_ENGINE_DIRNAME } from '../../../common/engine-store';
 import { FFIError } from '../../../common/errors';
 import {
   prepareEngineForLoad,
@@ -125,9 +126,6 @@ const WEBKIT2_SYMBOLS = {
 
 /** `_WKUserScriptInjectionTime`: inject before the page's own scripts run. */
 export const WK_INJECT_AT_DOCUMENT_START = 0;
-
-/** The subdir an embedded engine is bundled into (must match `build-windows.ts`). */
-const BUNDLED_ENGINE_DIRNAME = 'webkit';
 
 /** `<exeDir>/webkit/` if it holds `WebKit2.dll` (from `build --embed-engine`), else `undefined`. */
 export const bundledEngineDir = (

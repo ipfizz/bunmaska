@@ -11,7 +11,7 @@ import {
   INSTALLATION_COMPLETE,
   linkApp,
   type StoreEnv,
-} from '../../cli/engine-store';
+} from '../../common/engine-store';
 
 /** The resolved engine decision for the current process. */
 export type EngineResolution = {

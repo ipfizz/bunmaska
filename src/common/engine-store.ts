@@ -17,11 +17,13 @@ import {
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve, sep } from 'node:path';
-import { parseEngineId } from '../common/engine-id';
-import { BunmaskaError } from '../common/errors';
-import { contentHash } from '../common/manifest';
+import { parseEngineId } from './engine-id';
+import { BunmaskaError } from './errors';
+import { contentHash } from './manifest';
 
 export const INSTALLATION_COMPLETE = 'INSTALLATION_COMPLETE';
+/** The dir beside the executable that `build --embed-engine` copies an engine into. */
+export const BUNDLED_ENGINE_DIRNAME = 'webkit';
 const LINKS_DIR = '.links';
 const LOCK_FILE = '__dirlock';
 const STALE_LOCK_MS = 30_000;

@@ -5,7 +5,7 @@ import { BunmaskaError } from '../common/errors';
 import { contentHash } from '../common/manifest';
 import { signArtifact } from '../common/signature';
 import { type RemoteManifest, zstdTarExtract } from './engine-remote';
-import { readEngineManifest } from './engine-store';
+import { readEngineManifest } from '../common/engine-store';
 
 /** The inverse of {@link zstdTarExtract}. */
 export const zstdTarCompress = async (srcDir: string): Promise<Uint8Array> => {

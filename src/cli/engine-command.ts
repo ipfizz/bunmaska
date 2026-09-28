@@ -24,7 +24,7 @@ import {
   listInstalled,
   readLinks,
   verifyEngine,
-} from './engine-store';
+} from '../common/engine-store';
 
 export type EngineCommandDeps = {
   /** The engine store root (the `webkit/` dir). */

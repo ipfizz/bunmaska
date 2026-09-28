@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BunmaskaConfig } from '../../../src/common/config-schema';
 import { runDoctor, runEngine } from '../../../src/cli/engine-command';
-import { installFromDir, linkApp } from '../../../src/cli/engine-store';
+import { installFromDir, linkApp } from '../../../src/common/engine-store';
 import { currentArch, currentPlatform } from '../../../src/common/platform';
 
 const HOST = `${currentPlatform()}-${currentArch()}`;

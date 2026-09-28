@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BuildWindowsAppOptions } from '../../../src/cli/build-windows';
-import { INSTALLATION_COMPLETE } from '../../../src/cli/engine-store';
+import { INSTALLATION_COMPLETE } from '../../../src/common/engine-store';
 import { dispatch } from '../../../src/cli/index';
 import { captureStdio } from '../../helpers/capture-stdio';
 

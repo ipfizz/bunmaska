@@ -32,7 +32,7 @@ import {
 } from './dev';
 import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
-import { engineDir, enginesPath, isInstalled } from './engine-store';
+import { engineDir, enginesPath, isInstalled } from '../common/engine-store';
 import { runInit } from './init';
 import { runKeygen } from './keygen';
 import { notarizeApp } from './notarize';

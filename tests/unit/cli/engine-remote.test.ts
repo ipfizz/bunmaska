@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contentHash } from '../../../src/common/manifest';
 import { generateSigningKeyPair, signArtifact } from '../../../src/common/signature';
-import { engineDir, isInstalled } from '../../../src/cli/engine-store';
+import { engineDir, isInstalled } from '../../../src/common/engine-store';
 import {
   DEFAULT_ENGINE_FEED_URL,
   engineFeedArtifactUrl,

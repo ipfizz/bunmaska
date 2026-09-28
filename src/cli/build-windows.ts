@@ -11,14 +11,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { BUNDLED_ENGINE_DIRNAME } from '../common/engine-store';
 import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
 import { bundleIdSlug, numericVersion } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
-
-export const BUNDLED_ENGINE_DIRNAME = 'webkit'; // ponytail: copied in webkit2-ffi.ts; share it
 
 export type WindowsLayout = {
   readonly appDir: string;

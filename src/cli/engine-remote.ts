@@ -6,7 +6,7 @@
 import { BunmaskaError } from '../common/errors';
 import { fetchCapped } from '../common/feed-fetch';
 import { verifyArtifact } from '../common/signature';
-import { installFromSource, type InstallResult } from './engine-store';
+import { installFromSource, type InstallResult } from '../common/engine-store';
 
 /**
  * The official feed. A self-hosted mirror overrides it via `bunmaska.config`

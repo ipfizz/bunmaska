@@ -28,7 +28,7 @@ import {
   unlinkApp,
   verifyEngine,
   withLock,
-} from '../../../src/cli/engine-store';
+} from '../../../src/common/engine-store';
 
 /** Host paths use the OS separator; normalize to '/' so assertions are host-agnostic. */
 const slash = (s: string): string => s.replaceAll('\\', '/');
@@ -438,7 +438,7 @@ describe('withLock', () => {
 
   test('concurrent processes never error or overlap in the critical section', async () => {
     const root = makeTmpDir();
-    const store = join(import.meta.dir, '../../../src/cli/engine-store.ts');
+    const store = join(import.meta.dir, '../../../src/common/engine-store.ts');
     const inside = join(root, 'inside');
     const worker = `
       import { rmSync, writeFileSync } from 'node:fs';
