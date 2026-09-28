@@ -119,6 +119,8 @@ type NotarizeHook = (appPath: string) => Promise<void>;
 
 export type DispatchDeps = {
   readonly buildMac?: (opts: BuildMacAppOptions) => Promise<string>;
+  readonly buildLinux?: typeof buildLinuxApp;
+  readonly buildWindows?: typeof buildWindowsApp;
   readonly signApp?: SignApp;
   readonly notarize?: NotarizeHook;
   readonly convertIcon?: ConvertIcon;
@@ -270,7 +272,7 @@ const runBuild = async (
       err('bunmaska build: engine.embed is not supported on Linux yet; remove it or set it false.');
       return 1;
     }
-    const result = await buildLinuxApp({
+    const result = await (deps.buildLinux ?? buildLinuxApp)({
       entry,
       name,
       engineId,
@@ -289,7 +291,7 @@ const runBuild = async (
 
   if (target === 'windows') {
     const { engineId } = await resolveProjectEngine();
-    const result = await buildWindowsApp({
+    const result = await (deps.buildWindows ?? buildWindowsApp)({
       entry,
       name,
       engineId,

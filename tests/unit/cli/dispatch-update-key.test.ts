@@ -4,16 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dispatch } from '../../../src/cli/index';
 import { runKeygen } from '../../../src/cli/keygen';
+import { currentArch } from '../../../src/common/platform';
 import { verifyArtifact } from '../../../src/common/signature';
-import { currentPlatform } from '../../../src/common/platform';
 
-/**
- * `--update` routing through dispatch with the macOS builder stubbed to a REAL
- * mini bundle, so emitUpdateArtifact runs its real tar+zstd path and the .sig
- * decision (warn vs sign) is exercised end to end. macOS-host-only like the
- * other dispatch build tests.
- */
-const onlyMac = currentPlatform() === 'macos';
+/** The builder is stubbed to a real mini bundle so emitUpdateArtifact runs for real. */
+const ARTIFACT = `demo-stable-linux-${currentArch()}.tar.zst`;
 
 const originalCwd = process.cwd();
 let dir: string | undefined;
@@ -55,7 +50,7 @@ const setupProject = (): { root: string; bundle: string } => {
   dir = root;
   writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '1.2.3' }));
   writeFileSync(join(root, 'app.ts'), '');
-  const bundle = join(root, 'Demo.app');
+  const bundle = join(root, 'Demo');
   mkdirSync(bundle);
   writeFileSync(join(bundle, 'payload.txt'), 'update me');
   process.chdir(root);
@@ -64,9 +59,6 @@ const setupProject = (): { root: string; bundle: string } => {
 
 describe('dispatch build --update signing', () => {
   test('without --update-key it loudly warns the feed is unsigned', async () => {
-    if (!onlyMac) {
-      return;
-    }
     const { root, bundle } = setupProject();
     let code = -1;
     const streams = await captured(async () => {
@@ -74,22 +66,19 @@ describe('dispatch build --update signing', () => {
         {
           kind: 'build',
           entry: 'app.ts',
-          options: { target: 'macos', name: 'Demo', update: true },
+          options: { target: 'linux', name: 'Demo', update: true },
         },
-        { buildMac: async () => bundle },
+        { buildLinux: async () => ({ appDir: bundle, tarball: '', deb: '' }) },
       );
     });
     expect(code).toBe(0);
     const stderr = streams.err.join('');
     expect(stderr).toContain('UNSIGNED');
     expect(stderr).toContain('--update-key');
-    expect(existsSync(join(root, 'demo-stable-macos-arm64.tar.zst.sig'))).toBe(false);
+    expect(existsSync(join(root, `${ARTIFACT}.sig`))).toBe(false);
   });
 
   test('with --update-key it writes a .sig the public key verifies and prints its path', async () => {
-    if (!onlyMac) {
-      return;
-    }
     const { root, bundle } = setupProject();
     const keysDir = join(root, 'keys');
     mkdirSync(keysDir);
@@ -101,20 +90,20 @@ describe('dispatch build --update signing', () => {
           kind: 'build',
           entry: 'app.ts',
           options: {
-            target: 'macos',
+            target: 'linux',
             name: 'Demo',
             update: true,
             updateKey: join(keysDir, 'update-signing-key.pem'),
           },
         },
-        { buildMac: async () => bundle },
+        { buildLinux: async () => ({ appDir: bundle, tarball: '', deb: '' }) },
       );
     });
     expect(code).toBe(0);
-    const sigPath = join(root, 'demo-stable-macos-arm64.tar.zst.sig');
+    const sigPath = join(root, `${ARTIFACT}.sig`);
     expect(streams.out.join('')).toContain(sigPath);
     expect(streams.err.join('')).not.toContain('UNSIGNED');
-    const artifact = readFileSync(join(root, 'demo-stable-macos-arm64.tar.zst'));
+    const artifact = readFileSync(join(root, ARTIFACT));
     const publicPem = readFileSync(join(keysDir, 'update-public-key.pem'), 'utf8');
     const sig = readFileSync(sigPath, 'utf8').trim();
     expect(verifyArtifact(publicPem, artifact, sig)).toBe(true);
