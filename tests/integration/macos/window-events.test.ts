@@ -58,7 +58,7 @@ if (currentPlatform() === 'macos') {
       // `resize` proves the NSWindowDelegate notifications are delivered on the
       // real backend (windowDidResize:). `focus`/`blur` map to
       // windowDidBecomeKey:/windowDidResignKey:, which a headless test process
-      // never receives because it cannot acquire keyboard focus — those are
+      // never receives because it cannot acquire keyboard focus; those are
       // covered by the unit suite's fake instead. (Documented platform limit.)
       const win = new BrowserWindow({ width: 360, height: 240, title: 'resize', show: true });
       try {
@@ -122,15 +122,14 @@ if (currentPlatform() === 'macos') {
       expect(win.isDestroyed()).toBe(true);
 
       // CRUCIAL use-after-free check: a post-close exec must NOT touch the freed
-      // WKWebView — the #destroyed guard set by the close-path teardown rejects
+      // WKWebView: the #destroyed guard set by the close-path teardown rejects
       // it cleanly instead of crashing.
       await expect(win.webContents.executeJavaScript('1 + 1')).rejects.toThrow(/destroyed/);
     });
 
     test('closing via the native delegate path (-close) still runs teardown', async () => {
-      // BrowserWindow.close() sends -close to the NSWindow, which is exactly the
-      // path the title-bar red button takes (windowShouldClose: → windowWillClose:).
-      // Proves teardown is NOT tied to a JS-only code path.
+      // close() sends performClose:, the title-bar button's path
+      // (windowShouldClose: then windowWillClose:), so teardown is not JS-only.
       const win = new BrowserWindow({ width: 360, height: 240, title: 'native-close', show: true });
       win.loadURL('about:blank');
       await delay(200);
