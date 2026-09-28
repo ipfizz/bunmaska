@@ -52,7 +52,7 @@ export const buildButtonsArray = (labels: ReadonlyArray<string>): ButtonsArray =
  * A valid (`>= 0`) index is returned as-is; the dismissal sentinel (`-1`) and
  * any error index fall back to `cancelId` (Electron semantics).
  */
-export const mapChooseResult = (index: number, _defaultId: number, cancelId: number): number =>
+export const mapChooseResult = (index: number, cancelId: number): number =>
   index >= 0 ? index : cancelId;
 
 /** Electron's default cancelId: the first "cancel" or "no" button (case-insensitive), else 0. */
@@ -64,7 +64,6 @@ export const cancelIdForButtons = (buttons: ReadonlyArray<string>): number => {
 /** Settle inputs for `gtk_alert_dialog_choose`, with the finish step injectable. */
 export type SettleChooseArgs = {
   readonly result: Pointer;
-  readonly defaultId: number;
   readonly cancelId: number;
   /** Calls `gtk_alert_dialog_choose_finish`; may throw on the GError path. */
   readonly finish: (result: Pointer) => number;
@@ -81,7 +80,7 @@ export const settleChoose = (args: SettleChooseArgs): number => {
   } catch {
     index = -1;
   }
-  return mapChooseResult(index, args.defaultId, args.cancelId);
+  return mapChooseResult(index, args.cancelId);
 };
 
 /** Settle inputs for `gtk_file_dialog_open/save`, with finish + reader injectable. */
@@ -147,7 +146,6 @@ const showMessageBox = (spec: {
     (result) =>
       settleChoose({
         result,
-        defaultId: 0,
         cancelId,
         finish: (r) => gtk.symbols.gtk_alert_dialog_choose_finish(dialog, r, null),
       }),

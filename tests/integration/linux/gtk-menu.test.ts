@@ -7,7 +7,6 @@ import {
   linuxMenuRealizer,
   resetCurrentAppMenuForTesting,
   setBindingsForTesting,
-  setCurrentAppMenu,
 } from '../../../src/main/platform/linux/gtk-menu';
 import { loadGMenuFFI, loadGtkMenuFFI } from '../../../src/main/platform/linux/gtk-menu-ffi';
 import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
@@ -185,7 +184,7 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return;
     }
-    setCurrentAppMenu(undefined);
+    resetCurrentAppMenuForTesting();
     const app = createLinuxApplication();
     app.start();
     let window: NativeWindow | undefined;

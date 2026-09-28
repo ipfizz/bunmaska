@@ -336,7 +336,7 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
       { label: 'A', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
       { label: 'B', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
     ]);
-    expect(getMenuEntry(handle)?.retainedCount).toBe(2);
+    expect(getMenuEntry(handle)?.retained).toHaveLength(2);
   });
 });
 

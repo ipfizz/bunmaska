@@ -72,8 +72,6 @@ export type MenuEntry = {
   readonly actionNames: string[];
   /** Retained activate thunks — kept alive for the menu's lifetime. */
   readonly retained: unknown[];
-  /** Count of retained thunks (one per clickable item). */
-  readonly retainedCount: number;
   /** The spec tree this entry was realized from (so a window can re-realize it with role wiring). */
   readonly specs: ReadonlyArray<NativeMenuItemSpec>;
 };
@@ -267,7 +265,6 @@ const realizeCore = (
     group,
     actionNames: ctx.actionNames,
     retained: ctx.retained,
-    retainedCount: ctx.retained.length,
     specs: items,
   };
   menuEntries.set(model, entry);
@@ -313,11 +310,6 @@ export const getMenuEntry = (handle: bigint): MenuEntry | undefined => menuEntri
  * none is set. Read by {@link LinuxWindow} construction to attach a menu bar.
  */
 export const getCurrentAppMenu = (): CurrentAppMenu | undefined => currentAppMenu;
-
-/** Replace the current application menu state directly. @internal */
-export const setCurrentAppMenu = (menu: CurrentAppMenu | undefined): void => {
-  currentAppMenu = menu;
-};
 
 /** Clear the stored application menu. Test-only. */
 export const resetCurrentAppMenuForTesting = (): void => {

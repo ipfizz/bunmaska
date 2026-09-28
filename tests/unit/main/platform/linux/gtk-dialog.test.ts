@@ -58,16 +58,16 @@ describe('buildButtonsArray', () => {
 
 describe('mapChooseResult', () => {
   it('returns the clicked button index when finish yields a valid index', () => {
-    expect(mapChooseResult(0, 0, 1)).toBe(0);
-    expect(mapChooseResult(2, 0, 1)).toBe(2);
+    expect(mapChooseResult(0, 1)).toBe(0);
+    expect(mapChooseResult(2, 1)).toBe(2);
   });
 
   it('maps the dismissal sentinel (-1) to the cancelId', () => {
-    expect(mapChooseResult(-1, 0, 3)).toBe(3);
+    expect(mapChooseResult(-1, 3)).toBe(3);
   });
 
   it('falls back to the cancelId on any negative (error) index', () => {
-    expect(mapChooseResult(-5, 1, 7)).toBe(7);
+    expect(mapChooseResult(-5, 7)).toBe(7);
   });
 });
 
@@ -95,7 +95,6 @@ describe('settleChoose (injected finish-fn, no real dialog)', () => {
     const fakeResult = 123 as unknown as Pointer;
     const value = settleChoose({
       result: fakeResult,
-      defaultId: 0,
       cancelId: 1,
       finish: (r) => {
         expect(r).toBe(fakeResult);
@@ -108,7 +107,6 @@ describe('settleChoose (injected finish-fn, no real dialog)', () => {
   it('maps a -1 dismissal from the injected finish-fn to the cancelId', () => {
     const value = settleChoose({
       result: 0 as unknown as Pointer,
-      defaultId: 0,
       cancelId: 5,
       finish: () => -1,
     });
@@ -118,7 +116,6 @@ describe('settleChoose (injected finish-fn, no real dialog)', () => {
   it('maps a thrown finish (GError path) to the cancelId', () => {
     const value = settleChoose({
       result: 0 as unknown as Pointer,
-      defaultId: 0,
       cancelId: 9,
       finish: () => {
         throw new Error('GTK_DIALOG_ERROR_DISMISSED');
