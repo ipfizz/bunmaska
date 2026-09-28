@@ -25,7 +25,13 @@ import { windowControlsScript } from '../window-controls';
 import { ExecResultChannel } from './eval-js';
 import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkFFI } from './gtk-ffi';
-import { getCurrentAppMenu, getMenuEntry, realizeForWindow, onAppMenuCleared } from './gtk-menu';
+import {
+  ACTION_GROUP_PREFIX,
+  getCurrentAppMenu,
+  onAppMenuCleared,
+  realizeForWindow,
+  rewireForWindow,
+} from './gtk-menu';
 import { loadGtkMenuFFI } from './gtk-menu-ffi';
 import { createLinuxDrain } from './gtk-run-loop';
 import {
@@ -323,37 +329,7 @@ class LinuxWindow implements NativeWindow {
       // Per-window model + group, so role items act on THIS window's own view (D039).
       const menu = loadGtkMenuFFI();
       const view = this.#webContents.view();
-      const win = this.#window;
-      const dispatchRole = (spec: NativeMenuItemSpec): void => {
-        if (this.#closed) {
-          return; // the view and window may be freed (use-after-free guard, D039).
-        }
-        if (spec.editingCommand !== undefined) {
-          loadWebKitGtkFFI().symbols.webkit_web_view_execute_editing_command(
-            view,
-            cstr(spec.editingCommand),
-          );
-          return;
-        }
-        if (spec.windowAction === 'minimize') {
-          gtk.symbols.gtk_window_minimize(win);
-        } else if (spec.windowAction === 'close') {
-          this.close();
-        } else if (spec.windowAction === 'zoom') {
-          if (gtk.symbols.gtk_window_is_maximized(win) !== 0) {
-            gtk.symbols.gtk_window_unmaximize(win);
-          } else {
-            gtk.symbols.gtk_window_maximize(win);
-          }
-        } else if (spec.windowAction === 'togglefullscreen') {
-          if (gtk.symbols.gtk_window_is_fullscreen(win) !== 0) {
-            gtk.symbols.gtk_window_unfullscreen(win);
-          } else {
-            gtk.symbols.gtk_window_fullscreen(win);
-          }
-        }
-      }; // ponytail: appAction roles (quit/about) are inert on a Linux click; their shortcuts work (D039)
-      const entry = realizeForWindow(appMenu.specs, dispatchRole);
+      const entry = realizeForWindow(appMenu.specs, (spec) => this.#dispatchRole(spec));
       const model = Number(entry.model) as unknown as Pointer;
       const group = Number(entry.group) as unknown as Pointer;
       const box = menu.symbols.gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -365,7 +341,7 @@ class LinuxWindow implements NativeWindow {
           menu.symbols.gtk_box_remove(box, bar);
         }
       });
-      menu.symbols.gtk_widget_insert_action_group(this.#window, cstr('bunmaska'), group);
+      menu.symbols.gtk_widget_insert_action_group(this.#window, cstr(ACTION_GROUP_PREFIX), group);
       gtk.symbols.gtk_window_set_child(this.#window, box);
     }
 
@@ -435,6 +411,37 @@ class LinuxWindow implements NativeWindow {
 
   get webContents(): NativeWebContents {
     return this.#webContents;
+  }
+
+  /** Run a menu role on this window and its view (D039). */
+  #dispatchRole(spec: NativeMenuItemSpec): void {
+    const gtk = this.#gtk(); // undefined once closed: the view and window may be freed.
+    if (gtk === undefined) {
+      return;
+    }
+    const win = this.#window;
+    if (spec.editingCommand !== undefined) {
+      loadWebKitGtkFFI().symbols.webkit_web_view_execute_editing_command(
+        this.#webContents.view(),
+        cstr(spec.editingCommand),
+      );
+    } else if (spec.windowAction === 'minimize') {
+      gtk.gtk_window_minimize(win);
+    } else if (spec.windowAction === 'close') {
+      this.close();
+    } else if (spec.windowAction === 'zoom') {
+      if (gtk.gtk_window_is_maximized(win) !== 0) {
+        gtk.gtk_window_unmaximize(win);
+      } else {
+        gtk.gtk_window_maximize(win);
+      }
+    } else if (spec.windowAction === 'togglefullscreen') {
+      if (gtk.gtk_window_is_fullscreen(win) !== 0) {
+        gtk.gtk_window_unfullscreen(win);
+      } else {
+        gtk.gtk_window_fullscreen(win);
+      }
+    } // ponytail: appAction roles (quit/about) are inert on a Linux click; their shortcuts work (D039)
   }
 
   /** Native close: true vetoes; otherwise tear down and let GTK destroy the window. */
@@ -645,7 +652,8 @@ class LinuxWindow implements NativeWindow {
     if (this.#closed) {
       return;
     }
-    const entry = getMenuEntry(menuHandle);
+    // ponytail: each popup's wired realization stays retained; release it once its popover is finalized.
+    const entry = rewireForWindow(menuHandle, (spec) => this.#dispatchRole(spec));
     if (entry === undefined) {
       return; // unknown handle
     }
@@ -661,7 +669,7 @@ class LinuxWindow implements NativeWindow {
     // Without its action group the items render but stay inert.
     menu.symbols.gtk_widget_insert_action_group(
       popover,
-      cstr('bunmaska'),
+      cstr(ACTION_GROUP_PREFIX),
       Number(entry.group) as unknown as Pointer,
     );
     // A 1x1 GdkRectangle { x, y, width, height } is a point, window-relative.

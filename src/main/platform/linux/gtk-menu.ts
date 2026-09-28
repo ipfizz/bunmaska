@@ -5,6 +5,7 @@ import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
 import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadGMenuFFI } from './gtk-menu-ffi';
+import { deferCallbackClose } from './gtk-signals';
 
 /**
  * GMenu models plus one GSimpleActionGroup per realization, inserted as `bunmaska` (D039).
@@ -15,7 +16,8 @@ import { loadGMenuFFI } from './gtk-menu-ffi';
 /** `GSimpleAction::activate(action, parameter, user_data)`. */
 const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
-const ACTION_GROUP_PREFIX = 'bunmaska';
+/** The prefix every realization's action group is inserted under. */
+export const ACTION_GROUP_PREFIX = 'bunmaska';
 
 let actionCounter = 0;
 
@@ -24,6 +26,8 @@ export const actionName = (): string => `menu-${actionCounter++}`;
 
 /** The `detailed_action` a GMenu item references, e.g. `bunmaska.menu-0`. */
 export const detailedAction = (name: string): string => `${ACTION_GROUP_PREFIX}.${name}`;
+
+type Closable = { close(): void };
 
 export type Bindings = {
   gMenuNew(): bigint;
@@ -37,7 +41,9 @@ export type Bindings = {
   gSimpleActionSetEnabled(action: bigint, enabled: number): void;
   gActionMapAddAction(group: bigint, action: bigint): void;
   /** Returns the thunk, which the caller must retain. */
-  connectActivate(action: bigint, thunk: () => void): unknown;
+  connectActivate(action: bigint, thunk: () => void): Closable;
+  /** `g_object_unref` a model or group handle. */
+  unref(handle: bigint): void;
   /** Fire `detailed` on `group` without a click (tests). */
   activateAction(group: bigint, detailed: string, parameter: bigint | null): void;
 };
@@ -50,7 +56,7 @@ export type MenuEntry = {
   /** In realization order. */
   readonly actionNames: string[];
   /** Activate thunks; must outlive the menu. */
-  readonly retained: unknown[];
+  readonly retained: Closable[];
   /** Kept so a window can re-realize the tree with role wiring. */
   readonly specs: ReadonlyArray<NativeMenuItemSpec>;
 };
@@ -121,6 +127,7 @@ const realBindings = (): Bindings => {
       );
       return callback;
     },
+    unref: (handle) => gobject.symbols.g_object_unref(asPtr(handle)),
     activateAction: (group, detailed, parameter) =>
       gio.symbols.g_action_group_activate_action(
         asPtr(group),
@@ -141,7 +148,7 @@ type WalkContext = {
   readonly b: Bindings;
   readonly group: bigint;
   readonly actionNames: string[];
-  readonly retained: unknown[];
+  readonly retained: Closable[];
   /** Per-window role handler; when set, a role item is wired live to it instead of being inert. */
   readonly dispatchRole?: ((spec: NativeMenuItemSpec) => void) | undefined;
 };
@@ -256,6 +263,27 @@ export const realizeForWindow = (
   items: ReadonlyArray<NativeMenuItemSpec>,
   dispatchRole: (spec: NativeMenuItemSpec) => void,
 ): MenuEntry => realizeCore(items, dispatchRole);
+
+/**
+ * Re-realize `handle` with its role items dispatching to one window, and release the original.
+ * Only for a handle no widget ever showed: its actions are unreachable, so closing its thunks
+ * cannot race a click.
+ */
+export const rewireForWindow = (
+  handle: bigint,
+  dispatchRole: (spec: NativeMenuItemSpec) => void,
+): MenuEntry | undefined => {
+  const original = menuEntries.get(handle);
+  if (original === undefined) {
+    return undefined;
+  }
+  menuEntries.delete(handle);
+  const b = bindings();
+  b.unref(original.model);
+  b.unref(original.group);
+  deferCallbackClose(original.retained);
+  return realizeCore(original.specs, dispatchRole);
+};
 
 /** `null` also removes the bars of live windows. */
 const setApplicationMenu = (menuHandle: bigint | null): void => {
