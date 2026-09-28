@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { ptr, toArrayBuffer } from 'bun:ffi';
+import { ptr } from 'bun:ffi';
 import type { KeyringBackend } from '../../api/safe-storage';
 import { nsString } from './cocoa-foundation';
-import { msgSendPtrI64, msgSendPtrPtr } from './cocoa-msgsend-variants';
+import { msgSendPtrPtr } from './cocoa-msgsend-variants';
+import { nsDataFromBytes, nsDataToBytes } from './cocoa-native-image';
 import { cocoa } from './cocoa-runtime';
-import { type Handle, ptrIn } from './objc';
+import type { Handle } from './objc';
 import { loadSecurityFFI, secConstants } from './security-ffi';
 
 /**
@@ -22,43 +23,31 @@ const ERR_SEC_SUCCESS = 0;
 const ERR_SEC_ITEM_NOT_FOUND = -25300;
 const ERR_SEC_DUPLICATE_ITEM = -25299;
 
-/** `[[NSData alloc] initWithBytes:length:]` from a Buffer (copies the bytes). */
-const nsDataFromBytes = (bytes: Buffer): Handle => {
-  const rt = cocoa();
-  const alloc = rt.msgSend(rt.classes.get('NSData'), rt.selectors.get('alloc'));
-  const dataPtr = bytes.length === 0 ? 0n : BigInt(ptr(bytes));
-  return msgSendPtrI64(
-    alloc,
-    rt.selectors.get('initWithBytes:length:'),
-    dataPtr,
-    BigInt(bytes.length),
-  );
-};
-
 /** `[dict setObject:value forKey:key]`. */
 const dictSet = (dict: Handle, value: Handle, key: Handle): void => {
   const rt = cocoa();
   msgSendPtrPtr(dict, rt.selectors.get('setObject:forKey:'), value, key);
 };
 
+/** The {class, service, account} identity dictionary every Keychain op starts from. */
+const identityQuery = (service: string, account: string): Handle => {
+  const k = secConstants();
+  const rt = cocoa();
+  const dict = rt.msgSend(rt.classes.get('NSMutableDictionary'), rt.selectors.get('dictionary'));
+  dictSet(dict, k.kSecClassGenericPassword, k.kSecClass);
+  dictSet(dict, nsString(service), k.kSecAttrService);
+  dictSet(dict, nsString(account), k.kSecAttrAccount);
+  return dict;
+};
+
 /** Build a macOS Keychain backend bound to a specific service + account. */
 export const makeMacosKeychainBackend = (service: string, account: string): KeyringBackend => {
-  /** The {class, service, account} identity dictionary shared by every op. */
-  const baseQuery = (): Handle => {
-    const k = secConstants();
-    const rt = cocoa();
-    const dict = rt.msgSend(rt.classes.get('NSMutableDictionary'), rt.selectors.get('dictionary'));
-    dictSet(dict, k.kSecClassGenericPassword, k.kSecClass);
-    dictSet(dict, nsString(service), k.kSecAttrService);
-    dictSet(dict, nsString(account), k.kSecAttrAccount);
-    return dict;
-  };
+  const baseQuery = (): Handle => identityQuery(service, account);
 
   /** Read the stored key, or null if the item does not exist. Throws on real errors. */
   const lookupKey = (): Buffer | null => {
     const sec = loadSecurityFFI();
     const k = secConstants();
-    const rt = cocoa();
     const query = baseQuery();
     dictSet(query, k.kCFBooleanTrue, k.kSecReturnData);
     dictSet(query, k.kSecMatchLimitOne, k.kSecMatchLimit);
@@ -71,12 +60,7 @@ export const makeMacosKeychainBackend = (service: string, account: string): Keyr
       throw new Error(`safeStorage: SecItemCopyMatching failed (OSStatus ${status})`);
     }
     const cfData = out[0] ?? 0n;
-    const len = Number(rt.msgSend(cfData, rt.selectors.get('length')));
-    const bytesPtr = rt.msgSend(cfData, rt.selectors.get('bytes'));
-    const copy =
-      len > 0 && bytesPtr !== 0n
-        ? Buffer.from(toArrayBuffer(ptrIn(bytesPtr), 0, len).slice(0))
-        : Buffer.alloc(0);
+    const copy = Buffer.from(nsDataToBytes(cfData));
     sec.symbols.CFRelease(cfData); // Copy ownership rule: the caller releases.
     return copy;
   };
@@ -130,14 +114,7 @@ export const makeMacosKeychainBackend = (service: string, account: string): Keyr
 
 /** Delete the Keychain item for `service`/`account` (test cleanup). Best-effort. */
 export const deleteMacosKeychainItem = (service: string, account: string): void => {
-  const sec = loadSecurityFFI();
-  const k = secConstants();
-  const rt = cocoa();
-  const query = rt.msgSend(rt.classes.get('NSMutableDictionary'), rt.selectors.get('dictionary'));
-  dictSet(query, k.kSecClassGenericPassword, k.kSecClass);
-  dictSet(query, nsString(service), k.kSecAttrService);
-  dictSet(query, nsString(account), k.kSecAttrAccount);
-  sec.symbols.SecItemDelete(query);
+  loadSecurityFFI().symbols.SecItemDelete(identityQuery(service, account));
 };
 
 /** The production macOS Keychain backend. */
