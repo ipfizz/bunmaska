@@ -218,22 +218,19 @@ const runBuild = async (
     );
     return 1;
   }
-  if (command.options.sign !== undefined && (target !== 'macos' || currentPlatform() !== 'macos')) {
-    err('bunmaska build: --sign is macOS-only (codesign), with a macOS target on a macOS host.');
-    return 1;
-  }
-  if (command.options.notarize === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
-    err(
-      'bunmaska build: --notarize is macOS-only (notarytool), with a macOS target on a macOS host.',
-    );
-    return 1;
+  const macOnly: readonly [string, boolean, string][] = [
+    ['--sign', command.options.sign !== undefined, 'codesign'],
+    ['--notarize', command.options.notarize === true, 'notarytool'],
+    ['--dmg', command.options.dmg === true, 'hdiutil'],
+  ];
+  for (const [flag, given, tool] of macOnly) {
+    if (given && target !== 'macos') {
+      err(`bunmaska build: ${flag} is macOS-only (${tool}), with a macOS target on a macOS host.`);
+      return 1;
+    }
   }
   if (command.options.notarize === true && command.options.sign === undefined) {
     err('bunmaska build: --notarize requires --sign (Apple rejects an unsigned app).');
-    return 1;
-  }
-  if (command.options.dmg === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
-    err('bunmaska build: --dmg is macOS-only (hdiutil), with a macOS target on a macOS host.');
     return 1;
   }
 
