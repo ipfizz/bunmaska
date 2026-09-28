@@ -72,6 +72,7 @@ export const SNI_XML = `<node>
   <signal name="NewIcon"/>
   <signal name="NewToolTip"/>
   <signal name="NewTitle"/>
+  <signal name="NewStatus"><arg name="status" type="s"/></signal>
  </interface>
 </node>`;
 
@@ -207,6 +208,15 @@ const buildToolTip = (title: string, text: string): Pointer | null => {
   return value;
 };
 
+/** A floating one-string tuple `(s)`, or null. */
+const stringTuple = (value: string): Pointer | null => {
+  const g = loadGlibFFI().symbols;
+  const child = g.g_variant_new_string(cstr(value));
+  return child === null
+    ? null
+    : g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(child)])), 1n);
+};
+
 /** A fully-inert no-op tray (gate off / no bus / export failed) — never touches the bus. */
 const inertInstance = (): TrayInstance => {
   let destroyed = false;
@@ -224,6 +234,7 @@ const inertInstance = (): TrayInstance => {
 };
 
 type State = {
+  status: 'Active' | 'Passive';
   title: string;
   toolTip: string;
   icon: Icon | null;
@@ -241,7 +252,7 @@ const getPropertyValue = (state: State, name: string): Pointer | null => {
     case 'Title':
       return g.g_variant_new_string(cstr(state.title));
     case 'Status':
-      return g.g_variant_new_string(cstr('Active'));
+      return g.g_variant_new_string(cstr(state.status));
     case 'IconName':
       return g.g_variant_new_string(cstr(''));
     case 'IconPixmap':
@@ -274,6 +285,7 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   }
 
   const state: State = {
+    status: 'Active',
     title: 'Bunmaska',
     toolTip: '',
     icon: decodeIcon(initialImage),
@@ -328,12 +340,10 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
   // Registered by object path: the watcher pairs it with our sender's unique name (the
   // libappindicator form). Absent watcher => fast null => the icon simply doesn't appear.
   const registerWithWatcher = (): void => {
-    const g = loadGlibFFI().symbols;
-    const pathVariant = g.g_variant_new_string(cstr(objectPath));
-    if (pathVariant === null) {
+    const args = stringTuple(objectPath);
+    if (args === null) {
       return;
     }
-    const args = g.g_variant_new_tuple(ptr(new BigUint64Array([BigInt(pathVariant)])), 1n);
     const reply = callMethodSync(
       conn,
       WATCHER_NAME,
@@ -343,7 +353,7 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
       args,
     );
     if (reply !== null) {
-      g.g_variant_unref(reply);
+      loadGlibFFI().symbols.g_variant_unref(reply);
     }
   };
   registerWithWatcher();
@@ -386,6 +396,12 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
         return;
       }
       destroyed = true;
+      // Hosts keep an item until our connection closes; Passive hides it (as libappindicator does).
+      state.status = 'Passive';
+      const passive = stringTuple('Passive');
+      if (passive !== null) {
+        emitSignal(conn, objectPath, SNI_IFACE, 'NewStatus', passive);
+      }
       unregisterObject(conn, regId); // do NOT close the callbacks (retained forever).
     },
     isDestroyed: () => destroyed,
