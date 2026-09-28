@@ -15,12 +15,6 @@ import { ensureOleInitialized, NativeWin32Window, pollWindows } from './windows-
 import { createWindowsDrain } from './windows-run-loop';
 import { WindowsWebContents } from './windows-web-contents';
 
-/**
- * Windows {@link NativeApplication} backend on Win32 + WinCairo WebKit (D024). The pump
- * drains the message queue non-blocking (`PeekMessage`, never `GetMessage`); the window
- * that hosts WebKit has no JSCallback WndProc, which its re-entrant flood would crash.
- */
-
 const SW_MAXIMIZE = 3;
 const SW_MINIMIZE = 6;
 const SW_RESTORE = 9;
@@ -45,8 +39,6 @@ const STYLE_RESIZABLE = 0x00050000n; // WS_THICKFRAME | WS_MAXIMIZEBOX
 const SM_CXSCREEN = 0;
 const SM_CYSCREEN = 1;
 
-// TrackPopupMenu flags: return the chosen command id, anchor top-left, honor the
-// right mouse button.
 const TPM_RETURNCMD = 0x0100;
 const TPM_RIGHTBUTTON = 0x0002;
 
@@ -73,16 +65,13 @@ class WindowsWindow implements NativeWindow {
       width: options.width,
       height: options.height,
       show: false,
-      // Hosts a WebKit view: hide on close rather than destroy (see commitClose).
+      // A WebKit host hides on close, never destroys (D043).
       destroyOnClose: false,
       ...(options.resizable !== undefined ? { resizable: options.resizable } : {}),
       ...(options.frame !== undefined ? { frame: options.frame } : {}),
     });
-    // Size the web view to the CLIENT area, not the window size: `options.width`/
-    // `height` are the outer window size (Electron semantics, incl. the title bar +
-    // borders), so the hosted view must fit the smaller client rect or its right/
-    // bottom edge is clipped by the frame. The resize poll only fires on a delta, so
-    // the initial size has to be the client size up front.
+    // options.width/height are the OUTER size (Electron); a view that size is clipped by
+    // the frame, and the poll only refits on a change, so start at the client size.
     const client = this.#native.getClientSize();
     this.#webContents = new WindowsWebContents(
       this.#native.hwnd(),
@@ -91,14 +80,10 @@ class WindowsWindow implements NativeWindow {
       options.preloadScript,
     );
     this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
-    // Mirror the application menu bar onto this window, and route its WM_COMMAND
-    // (dispatched by the frame proc) to the realizer's stored onClick handlers.
     this.#appMenuTarget = { setMenuBar: (bar) => this.#native.setMenuBar(bar) };
     this.#native.onMenuCommand((commandId) => windowsMenuRealizer.dispatchMenuCommand(commandId));
     windowsMenuRealizer.registerAppMenuWindow(this.#appMenuTarget);
     this.#webContents.onWindowOp((op) => this.#handleWindowOp(op));
-    // On the committed-close path, tear down the web contents (reject pending
-    // execs, release the view) before surfacing `closed` to the api layer.
     this.#native.onClosed(() => {
       windowsMenuRealizer.unregisterAppMenuWindow(this.#appMenuTarget);
       try {
@@ -347,9 +332,6 @@ class WindowsWindow implements NativeWindow {
   }
 
   onWindowEvent(type: WindowEventType, callback: () => void): void {
-    // focus/blur/move/resize/maximize/minimize/restore are surfaced by the pump poll
-    // (pollWindows); show/hide fire from the window directly; ready-to-show fires
-    // on the first did-finish-load. The close/closed pair flows through onClose/onClosed.
     this.#native.onWindowEvent(type, callback);
   }
 
@@ -363,8 +345,8 @@ class WindowsWindow implements NativeWindow {
     dv.setInt32(4, y, true);
     const pointPtr = ptr(point);
     user32.ClientToScreen(hwnd, pointPtr);
-    // Modal (a nested menu-tracking loop, like macOS); returns the chosen command
-    // id, or 0 when dismissed. The realized HMENU is ours to destroy afterward.
+    // Modal: Bun stalls until the menu closes. Returns the command id (0 = dismissed);
+    // the realized HMENU is ours to destroy.
     const command = user32.TrackPopupMenu(
       menuHandle,
       TPM_RETURNCMD | TPM_RIGHTBUTTON,
@@ -381,15 +363,12 @@ class WindowsWindow implements NativeWindow {
   }
 
   closePopupMenu(): void {
-    // Ends the active menu — meaningful re-entrantly (e.g. from an item's click).
+    // Only reachable from a native callback while a menu tracks: its modal loop stalls Bun timers.
     loadUser32().symbols.EndMenu();
   }
 }
 
-/**
- * Windows {@link NativeApplication}: initializes COM, drives the cooperative pump,
- * and owns the set of live windows.
- */
+/** Windows {@link NativeApplication}: owns the live windows and drives the cooperative pump. */
 export class WindowsApplication implements NativeApplication {
   #pump: CooperativePump | undefined;
   #started = false;
@@ -407,6 +386,7 @@ export class WindowsApplication implements NativeApplication {
     const drainMessages = createWindowsDrain((_hwnd, message, wParam) =>
       windowsGlobalShortcutBackend.dispatchHotkeyMessage(message, wParam),
     );
+    // ponytail: fixed 16ms poll wakes an idle app ~60x/s; upgrade = MsgWaitForMultipleObjectsEx with AdaptiveBlockingPump backoff (D047)
     this.#pump = new CooperativePump(() => {
       drainMessages();
       pollWindows();

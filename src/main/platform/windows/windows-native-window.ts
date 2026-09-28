@@ -6,14 +6,9 @@ import type { Rect, WindowEventType } from '../native';
 import { readRect, registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
-/**
- * The window that DIRECTLY hosts the WebKit view MUST use a native window procedure:
- * WebKit floods its immediate host with re-entrant messages during a load, which a
- * `bun:ffi` `JSCallback` WndProc cannot survive. So the WebKit view lives in a
- * native-`DefWindowProcW` CHILD ({@link createNativeChildHost}), while the TOP-LEVEL
- * frame uses a JSCallback proc — safe because the flood stops at the immediate child host
- * and does not propagate up to the parent (see `menu-frame-spike.ts`).
- */
+// The WKView's direct host must keep the native DefWindowProcW: WebKit's re-entrant
+// flood during a load crashes a JSCallback WndProc (D043). Only the top-level frame,
+// above that native child, runs a JSCallback proc.
 
 const NATIVE_WINDOW_CLASS_NAME = 'BunmaskaNativeWindow';
 const FRAME_WINDOW_CLASS_NAME = 'BunmaskaFrameWindow';
@@ -22,7 +17,6 @@ const RECT_SIZE = 16;
 const WINDOWPLACEMENT_SIZE = 44;
 const RC_NORMAL_POSITION_OFFSET = 28;
 const IDC_ARROW = 32512;
-/** `WM_COMMAND` — a menu selection (or control/accelerator) notification. */
 const WM_COMMAND = 0x0111;
 const WM_CLOSE = 0x0010;
 const WM_GETMINMAXINFO = 0x0024;
@@ -42,15 +36,13 @@ const SW_HIDE = 0;
 const SW_SHOWNOACTIVATE = 4;
 const SW_SHOW = 5;
 
-/** `WM_NCLBUTTONDOWN` + `HTCAPTION`: tell the system to start moving the window
- *  (used to drag a frameless window from a custom `-webkit-app-region`-style bar). */
 const WM_NCLBUTTONDOWN = 0x00a1;
 const HTCAPTION = 2;
 
 let oleInitialized = false;
 let classRegistered = false;
 
-/** Initialise COM on this thread once — WinCairo WebKit requires it. */
+/** Initialise OLE on this thread once; WinCairo WebKit requires it. */
 export const ensureOleInitialized = (): void => {
   if (oleInitialized) {
     return;
@@ -69,7 +61,7 @@ const ensureNativeWindowClass = (): bigint => {
   if (classRegistered) {
     return hInstance;
   }
-  // Use the system DefWindowProcW directly as the class window procedure.
+  // The class proc IS the native DefWindowProcW, never a JSCallback (D043).
   const user32Module = kernel32.symbols.GetModuleHandleW(ptr(wstr('user32.dll')));
   const defWindowProc = kernel32.symbols.GetProcAddress(user32Module, cstr('DefWindowProcW'));
   if (defWindowProc === 0n) {
@@ -82,17 +74,11 @@ const ensureNativeWindowClass = (): bigint => {
   return hInstance;
 };
 
-// Frame-class shared state: the registered class + its retained JSCallback proc.
 let frameClassRegistered = false;
+// Retained for the process: the registered class calls this proc until exit.
 let frameWndProc: JSCallback | undefined;
 
-/**
- * Register the top-level FRAME window class once, wiring a shared JSCallback
- * WndProc. The proc dispatches a menu `WM_COMMAND` (a SENT message the pump can't
- * see) to the owning window's `menuCommand` handler and forwards everything else
- * to `DefWindowProcW`. Safe despite hosting WebKit (in a native child) — see the
- * module header. Returns the `HINSTANCE`.
- */
+/** Register the top-level frame class and its JSCallback proc once; returns the `HINSTANCE`. */
 const ensureFrameWindowClass = (): bigint => {
   const kernel32 = loadKernel32();
   const hInstance = kernel32.symbols.GetModuleHandleW(null);
@@ -161,10 +147,10 @@ interface NativeWindowHandlers {
   closed: boolean;
   /** Preventable close: return `true` to veto (the window stays open). */
   onClose?: () => boolean;
-  /** Fired once after the window is destroyed. */
+  /** Fired once, before the window is hidden or destroyed. */
   onClosed?: () => void;
   readonly events: Map<WindowEventType, () => void>;
-  /** Internal resize sink (resizes the hosted view) — fired before the `resize` event. */
+  /** Refits the hosted view; runs before the `resize` event. */
   resizeHook?: (width: number, height: number) => void;
   /** Minimum outer size in pixels; 0 leaves the system default. */
   minWidth: number;
@@ -248,44 +234,34 @@ const requestClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
   commitClose(hwnd, handlers);
 };
 
-/** Run the committed-close path once: tear down the view, then destroy the window. */
+/** Run the committed close once: onClosed quiesces the view, then the window hides or goes. */
 const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
   if (handlers.closed) {
     return;
   }
   handlers.closed = true;
-  // Detach + free any menu bar this window owns before tearing the window down.
   if (handlers.menuBar !== undefined && handlers.menuBar !== 0n) {
     const user32 = loadUser32().symbols;
     user32.SetMenu(hwnd, 0n);
     user32.DestroyMenu(handlers.menuBar);
     delete handlers.menuBar;
   }
-  // Quiesce the hosted view first (the onClosed handler clears WebKit's clients
-  // and detaches the view), THEN finish the window.
   try {
     handlers.onClosed?.();
   } finally {
     if (handlers.destroyOnClose) {
       loadUser32().symbols.DestroyWindow(hwnd);
     } else {
-      // A WebKit-hosting window: synchronously destroying it crashes WebKit's
-      // multi-process teardown through bun:ffi, so hide it and let the OS reclaim
-      // the view + its WebProcess at process exit (see `.admin/WINDOWS.md`).
+      // Never DestroyWindow a live WebKit host: its teardown crashes through bun:ffi (D043).
       loadUser32().symbols.ShowWindow(hwnd, SW_HIDE);
     }
     windowRegistry.delete(hwnd);
   }
 };
 
-/**
- * Poll every live window and fire the changed non-preventable lifecycle events
- * (move / resize / maximize / unmaximize / minimize / restore / focus / blur). Called
- * each pump tick: WebKit's host uses a native WndProc, so these SENT-only state
- * changes never reach the message queue and must be observed by polling. `show`
- * and `hide` are fired directly from {@link NativeWin32Window.show}/`hide`.
- */
+/** Fire the changed lifecycle events of every live window; `show`/`hide` fire from the window. */
 export const pollWindows = (): void => {
+  // ponytail: polled per tick, so modal move/size loops defer events to mouse-up; upgrade = WM_SIZE/WM_MOVE in the frame proc, after an engine run
   if (windowRegistry.size === 0) {
     return;
   }
@@ -355,11 +331,11 @@ export interface NativeWin32WindowOptions {
   readonly show: boolean;
   readonly resizable?: boolean;
   readonly frame?: boolean;
-  /** `false` hides on close instead of DestroyWindow (required for a WebKit host, D043). Default true. */
+  /** Default true; `false` hides on close instead, as a WebKit host requires (D043). */
   readonly destroyOnClose?: boolean;
 }
 
-/** A live top-level native-WndProc window that can host a WebKit view. */
+/** A top-level frame window; a WebKit view goes in its {@link createNativeChildHost} child. */
 export class NativeWin32Window {
   readonly #hwnd: bigint;
   readonly #handlers: NativeWindowHandlers;
@@ -367,8 +343,6 @@ export class NativeWin32Window {
   constructor(options: NativeWin32WindowOptions) {
     this.#handlers = newHandlers(options.destroyOnClose ?? true);
     ensureOleInitialized();
-    // The TOP-LEVEL frame uses the JSCallback frame class (so a menu bar's
-    // WM_COMMAND is dispatchable); the WebKit view lives in a native child.
     const hInstance = ensureFrameWindowClass();
     const hwnd = loadUser32().symbols.CreateWindowExW(
       0,
@@ -427,7 +401,7 @@ export class NativeWin32Window {
     this.#handlers.events.set(type, callback);
   }
 
-  /** Fire a lifecycle event to its handler (for events not surfaced by polling). */
+  /** Fire a lifecycle event the poll does not observe. */
   emit(type: WindowEventType): void {
     this.#handlers.events.get(type)?.();
   }
@@ -447,24 +421,14 @@ export class NativeWin32Window {
     this.#handlers.menuCommand = handler;
   }
 
-  /**
-   * Begin an interactive window move — the equivalent of dragging the title bar,
-   * for frameless windows with a custom (`-webkit-app-region: drag`-style) bar.
-   * Releases mouse capture (the web view's child window holds it after mousedown)
-   * and hands off to the system's move loop, so dragging feels native (edge snap,
-   * Aero shake, etc.). Called from the renderer over the window-op message channel.
-   */
+  /** Hand a frameless title-bar drag to the system move loop (D045); the view holds the capture. */
   startWindowDrag(): void {
     const user32 = loadUser32().symbols;
     user32.ReleaseCapture();
     user32.SendMessageW(this.#hwnd, WM_NCLBUTTONDOWN, BigInt(HTCAPTION), 0n);
   }
 
-  /**
-   * Attach `menuBar` (an HMENU) as this window's menu bar, or remove it with
-   * `null`. Takes ownership: the previous bar is destroyed, and so is this one when
-   * the window closes.
-   */
+  /** Attach an HMENU bar, or `null` to remove it; owned from here, destroyed when replaced or closed. */
   setMenuBar(menuBar: bigint | null): void {
     const user32 = loadUser32().symbols;
     const previous = this.#handlers.menuBar;
@@ -496,8 +460,6 @@ export class NativeWin32Window {
     const rect = new Uint8Array(RECT_SIZE);
     const rectPtr = ptr(rect);
     loadUser32().symbols.GetClientRect(this.#hwnd, rectPtr);
-    // Native writes are only visible via read.* on the pointer, never through
-    // the backing JS array (the rule windows-run-loop.ts documents).
     return { width: read.i32(rectPtr, 8), height: read.i32(rectPtr, 12) };
   }
 

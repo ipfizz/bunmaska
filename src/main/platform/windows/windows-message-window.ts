@@ -3,14 +3,10 @@ import { FFIError } from '../../../common/errors';
 import { registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
 
-/**
- * A hidden, non-WebKit Win32 window that receives system notifications
- * (`WM_POWERBROADCAST`, `WM_WTSSESSION_CHANGE`, a tray icon's callback). It hosts no
- * WebKit, so a JSCallback WndProc is safe here (unlike `windows-native-window.ts`).
- */
+// Hidden windows for system notifications (power, session, tray). They host no WebKit,
+// so a JSCallback WndProc is safe here (D043).
 
 const CLASS_NAME = 'BunmaskaMessageWindow';
-/** `WS_EX_TOOLWINDOW` — keep the (never-shown) window out of the taskbar/alt-tab. */
 const WS_EX_TOOLWINDOW = 0x00000080;
 const WS_OVERLAPPED = 0x00000000;
 const WM_CLOSE = 0x0010;
@@ -26,7 +22,7 @@ export type MessageWindow = {
 
 const handlersByHwnd = new Map<bigint, MessageHandler>();
 
-/** Lazily-created shared state: the registered class + the retained WndProc. */
+// Retained for the process: the registered class calls this proc until exit.
 let registered: { readonly wndProc: JSCallback } | undefined;
 
 /** Register the window class once, wiring the shared dispatching WndProc. */
@@ -42,7 +38,7 @@ const ensureClassRegistered = (): void => {
         try {
           handler(message, wParam, lParam);
         } catch {
-          // A throwing JS handler must never propagate into the native WndProc.
+          // Same rule as the frame proc: never propagate into native code.
         }
       }
       // An external WM_CLOSE must not destroy it; only destroy() does.
@@ -57,16 +53,10 @@ const ensureClassRegistered = (): void => {
 
   const hInstance = loadKernel32().symbols.GetModuleHandleW(null);
   registerWindowClass(user32, CLASS_NAME, BigInt(wndProcPtr), hInstance);
-  // Retain the JSCallback for the whole process (the class references it forever).
   registered = { wndProc };
 };
 
-/**
- * Create a hidden top-level window whose messages are delivered to `handler`.
- * Top-level (not message-only) so it receives broadcast `WM_POWERBROADCAST`; the
- * `WS_EX_TOOLWINDOW` style keeps it invisible to the user. The window is never
- * shown.
- */
+/** A never-shown top-level window feeding `handler`; not message-only, so it gets broadcasts. */
 export const createMessageWindow = (handler: MessageHandler): MessageWindow => {
   ensureClassRegistered();
   const user32 = loadUser32().symbols;
@@ -80,7 +70,7 @@ export const createMessageWindow = (handler: MessageHandler): MessageWindow => {
     0,
     0,
     0,
-    0n, // no parent — a (hidden) top-level window receives WM_POWERBROADCAST
+    0n,
     0n,
     hInstance,
     null,
