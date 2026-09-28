@@ -1,7 +1,6 @@
 import { FFIType, read } from 'bun:ffi';
 import { dlopen } from '../dlopen';
-import { cstr } from '../cstr';
-import { macOSLibraryAccessor } from './objc';
+import { dataSymbolAddress, macOSLibraryAccessor } from './objc';
 
 /**
  * Security.framework + CoreFoundation symbols behind the macOS Keychain backend
@@ -19,17 +18,8 @@ import { macOSLibraryAccessor } from './objc';
  * `BigInt(read.ptr(...))`, which round-trips through a lossy JS number — D029).
  */
 
-const LIBSYSTEM_PATH = '/usr/lib/libSystem.B.dylib';
 const SECURITY_PATH = '/System/Library/Frameworks/Security.framework/Security';
 const CORE_FOUNDATION_PATH = '/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation';
-const RTLD_NOW = 2;
-
-const loadDl = macOSLibraryAccessor('libSystem dlsym', () =>
-  dlopen(LIBSYSTEM_PATH, {
-    dlopen: { args: [FFIType.cstring, FFIType.i32], returns: FFIType.pointer },
-    dlsym: { args: [FFIType.pointer, FFIType.cstring], returns: FFIType.pointer },
-  }),
-);
 
 export const loadSecurityFFI = macOSLibraryAccessor('Security.framework safeStorage', () =>
   dlopen(SECURITY_PATH, {
@@ -40,16 +30,6 @@ export const loadSecurityFFI = macOSLibraryAccessor('Security.framework safeStor
     CFRelease: { args: [FFIType.u64], returns: FFIType.void },
   }),
 );
-
-/** Resolve a data symbol (a `CFTypeRef` global) to its value, pointer-precisely. */
-const dataSymbol = (handle: number, name: string): bigint => {
-  const dl = loadDl();
-  const addr = dl.symbols.dlsym(handle as never, cstr(name));
-  if (addr === null) {
-    throw new Error(`safeStorage: dlsym('${name}') returned null`);
-  }
-  return read.u64(addr, 0);
-};
 
 /** The `kSec*` / `kCF*` constants the Keychain query dictionary needs (as `CFTypeRef` handles). */
 export type SecConstants = {
@@ -72,10 +52,7 @@ export const secConstants = (): SecConstants => {
   if (cached !== undefined) {
     return cached;
   }
-  const dl = loadDl();
-  const secH = dl.symbols.dlopen(cstr(SECURITY_PATH), RTLD_NOW) as unknown as number;
-  const cfH = dl.symbols.dlopen(cstr(CORE_FOUNDATION_PATH), RTLD_NOW) as unknown as number;
-  const s = (n: string): bigint => dataSymbol(secH, n);
+  const s = (name: string): bigint => read.u64(dataSymbolAddress(SECURITY_PATH, name), 0);
   cached = {
     kSecClass: s('kSecClass'),
     kSecClassGenericPassword: s('kSecClassGenericPassword'),
@@ -87,7 +64,7 @@ export const secConstants = (): SecConstants => {
     kSecMatchLimitOne: s('kSecMatchLimitOne'),
     kSecAttrAccessible: s('kSecAttrAccessible'),
     kSecAttrAccessibleWhenUnlockedThisDeviceOnly: s('kSecAttrAccessibleWhenUnlockedThisDeviceOnly'),
-    kCFBooleanTrue: dataSymbol(cfH, 'kCFBooleanTrue'),
+    kCFBooleanTrue: read.u64(dataSymbolAddress(CORE_FOUNDATION_PATH, 'kCFBooleanTrue'), 0),
   };
   return cached;
 };

@@ -1,6 +1,8 @@
-import type { Pointer } from 'bun:ffi';
+import { FFIType, type Pointer } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { cstr } from '../cstr';
+import { dlopen } from '../dlopen';
 
 /**
  * Shared Objective-C FFI primitives for the macOS backend.
@@ -54,4 +56,23 @@ export const macOSLibraryAccessor = <T>(name: string, open: () => T): (() => T) 
     }
     return cached;
   };
+};
+
+const RTLD_NOW = 2;
+
+const loadDl = macOSLibraryAccessor('libSystem dlsym', () =>
+  dlopen('/usr/lib/libSystem.B.dylib', {
+    dlopen: { args: [FFIType.cstring, FFIType.i32], returns: FFIType.pointer },
+    dlsym: { args: [FFIType.pointer, FFIType.cstring], returns: FFIType.pointer },
+  }),
+);
+
+/** The address of data symbol `name` in the image at `path`: bun's dlopen binds only functions. */
+export const dataSymbolAddress = (path: string, name: string): Pointer => {
+  const dl = loadDl().symbols;
+  const address = dl.dlsym(dl.dlopen(cstr(path), RTLD_NOW), cstr(name));
+  if (address === null) {
+    throw new Error(`dlsym('${name}') in ${path} returned null`);
+  }
+  return address;
 };

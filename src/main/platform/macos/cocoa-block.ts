@@ -1,7 +1,5 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
-import { dlopen } from '../dlopen';
-import { cstr } from '../cstr';
-import { callFromNative, type Handle } from './objc';
+import { callFromNative, dataSymbolAddress, type Handle } from './objc';
 
 /**
  * Hand-built ObjC **Blocks** for bun:ffi — the primitive that unblocks every
@@ -35,22 +33,10 @@ const BLOCK_IS_GLOBAL = 1 << 28;
 const BLOCK_LITERAL_SIZE = 32;
 
 let cachedIsa: Pointer | undefined;
-/** Resolve `&_NSConcreteGlobalBlock` (the isa every global block points at), once. */
+/** `&_NSConcreteGlobalBlock`, the isa every global block points at. */
 const globalBlockIsa = (): Pointer => {
-  if (cachedIsa !== undefined) {
-    return cachedIsa;
-  }
-  const libc = dlopen('/usr/lib/libSystem.B.dylib', {
-    dlopen: { args: [FFIType.cstring, FFIType.i32], returns: FFIType.ptr },
-    dlsym: { args: [FFIType.ptr, FFIType.cstring], returns: FFIType.ptr },
-  });
-  const handle = libc.symbols.dlopen(cstr('/usr/lib/libSystem.B.dylib'), 2);
-  const isa = libc.symbols.dlsym(handle, cstr('_NSConcreteGlobalBlock'));
-  if (isa === null) {
-    throw new Error('cocoa-block: could not resolve _NSConcreteGlobalBlock');
-  }
-  cachedIsa = isa;
-  return isa;
+  cachedIsa ??= dataSymbolAddress('/usr/lib/libSystem.B.dylib', '_NSConcreteGlobalBlock');
+  return cachedIsa;
 };
 
 let sharedDescriptor: BigUint64Array | undefined;
