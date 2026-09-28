@@ -4,6 +4,12 @@ import { EXEC_HANDLER_NAME } from './webkit-ipc';
 
 const log = createLogger('linux-eval-js');
 
+/** Unguessable, because every frame can post to the page-world `bunmaskaExec` handler. */
+const randomExecId = (): number => {
+  const [high = 0, low = 0] = crypto.getRandomValues(new Uint32Array(2));
+  return (high >>> 11) * 2 ** 32 + low;
+};
+
 type PendingExec = {
   readonly resolve: (value: unknown) => void;
   readonly reject: (reason: Error) => void;
@@ -14,7 +20,6 @@ type PendingExec = {
 export class ExecResultChannel {
   readonly #evalInPage: (source: string) => void;
   readonly #pending = new Map<number, PendingExec>();
-  #nextExecId = 1;
   #destroyed = false;
 
   constructor(evalInPage: (source: string) => void) {
@@ -25,8 +30,7 @@ export class ExecResultChannel {
     if (this.#destroyed) {
       return Promise.reject(new Error('executeJavaScript failed: web contents destroyed'));
     }
-    const execId = this.#nextExecId;
-    this.#nextExecId += 1;
+    const execId = randomExecId();
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(execId);
