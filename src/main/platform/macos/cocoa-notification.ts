@@ -6,6 +6,7 @@ import type {
 import { nsString } from './cocoa-foundation';
 import { msgSendPtr } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
+import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
 /**
@@ -41,6 +42,28 @@ const defaultCenter = (): Handle => {
   );
 };
 
+let delegate: Handle | undefined;
+
+/** The center holds its delegate weakly, so this one lives for the process. */
+export const notificationDelegate = (): Handle => {
+  if (delegate !== undefined) {
+    return delegate;
+  }
+  const rt = cocoa();
+  const cls = defineObjcClass('BunmaskaNotificationDelegate', 'NSObject', [
+    {
+      // Without a YES here AppKit skips the banner while the app is frontmost.
+      selector: 'userNotificationCenter:shouldPresentNotification:',
+      typeEncoding: 'c@:@@',
+      args: ['object', 'object'],
+      returns: 'bool',
+      impl: () => 1,
+    },
+  ]);
+  delegate = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
+  return delegate;
+};
+
 const buildNotification = (spec: NotificationSpec): Handle => {
   const rt = cocoa();
   const notification = rt.msgSend(
@@ -74,6 +97,7 @@ const present = (spec: NotificationSpec): NotificationHandle => {
   const notification = buildNotification(spec);
   const center = defaultCenter();
   if (center !== 0n) {
+    msgSendPtr(center, rt.selectors.get('setDelegate:'), notificationDelegate());
     msgSendPtr(center, rt.selectors.get('deliverNotification:'), notification);
   }
   return {
