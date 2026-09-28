@@ -10,6 +10,7 @@ import {
 } from '../../../src/cli/engine-index';
 
 const ID = 'webkit-2-2.53.3-bunmaska1-windows-x64';
+const CEF_ID = 'cef-154-154.0.8037.58-bunmaska1-macos-arm64';
 
 describe('engineFeedIndexUrl', () => {
   test('maps a feed base to <base>/index.json (official by default, trailing slash ok)', () => {
@@ -47,10 +48,17 @@ describe('parseEngineIndex', () => {
     expect(() => parseEngineIndex('not json')).toThrow(BunmaskaError);
   });
 
-  test('rejects an entry whose id is not a valid engine-id', () => {
-    expect(() =>
-      parseEngineIndex(JSON.stringify({ version: 1, engines: [{ id: 'nope' }] })),
-    ).toThrow(BunmaskaError);
+  test('skips entries this client cannot parse, so a newer engine family never breaks it', () => {
+    const entries = parseEngineIndex(
+      JSON.stringify({ version: 1, engines: [{ id: CEF_ID }, { id: ID }, { id: 'nope' }] }),
+    );
+    expect(entries.map((e) => e.id)).toEqual([ID]);
+  });
+
+  test('rejects an entry without a string id', () => {
+    expect(() => parseEngineIndex(JSON.stringify({ version: 1, engines: [{ id: 7 }] }))).toThrow(
+      BunmaskaError,
+    );
   });
 
   test('rejects a non-object / missing engines array', () => {
@@ -97,17 +105,21 @@ describe('mergeEngineIndex', () => {
     expect(parsed[0]).toMatchObject({ id: ID, hash: 'abc', size: 10 });
   });
 
-  test('replaces the same-id entry and keeps the others, sorted by id', () => {
+  test('adds the entry and keeps the others, sorted by id', () => {
     const existing = buildEngineIndex([
-      { id: ID, size: 1, hash: 'old', soname: 'WebKit2.dll' },
       { id: LINUX_ID, size: 2, hash: 'keep', soname: 'libwebkitgtk-6.0.so.4' },
     ]);
     const json = mergeEngineIndex(existing, { id: ID, hash: 'new', size: 99 });
     const parsed = parseEngineIndex(json);
-    expect(parsed).toHaveLength(2);
     expect(parsed.map((e) => e.id)).toEqual([ID, LINUX_ID].sort());
     expect(parsed.find((e) => e.id === ID)).toMatchObject({ hash: 'new', size: 99 });
     expect(parsed.find((e) => e.id === LINUX_ID)).toMatchObject({ hash: 'keep' });
+  });
+
+  test('keeps entries this client cannot parse', () => {
+    const existing = buildEngineIndex([{ id: CEF_ID, hash: 'blink' }]);
+    const json = mergeEngineIndex(existing, { id: ID, hash: 'new' });
+    expect(JSON.parse(json).engines.map((e: { id: string }) => e.id)).toEqual([CEF_ID, ID].sort());
   });
 
   test('rejects a malformed engine id before it enters the index', () => {

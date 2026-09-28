@@ -31,7 +31,8 @@ const err = (message: string): never => {
   throw new BunmaskaError(message, { code: 'ERR_ENGINE_INDEX' });
 };
 
-export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
+/** The index's stored entries, structurally checked; ids are kept verbatim. */
+const readStoredEntries = (text: string): StoredEntry[] => {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -50,9 +51,7 @@ export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
     if (typeof record['id'] !== 'string') {
       return err('engine index: every entry needs a string "id"');
     }
-    const ref = parseEngineId(record['id']); // throws on a malformed id
     return {
-      ...ref,
       id: record['id'],
       ...(typeof record['size'] === 'number' ? { size: record['size'] } : {}),
       ...(typeof record['hash'] === 'string' ? { hash: record['hash'] } : {}),
@@ -60,6 +59,16 @@ export const parseEngineIndex = (text: string): EngineIndexEntry[] => {
     };
   });
 };
+
+/** The entries this client understands; an id it cannot parse (newer family, os, arch) is skipped. */
+export const parseEngineIndex = (text: string): EngineIndexEntry[] =>
+  readStoredEntries(text).flatMap((entry) => {
+    try {
+      return [{ ...parseEngineId(entry.id), ...entry }];
+    } catch {
+      return [];
+    }
+  });
 
 /** Serialize entries to the pretty, newline-terminated `index.json` a feed serves. */
 export const buildEngineIndex = (entries: readonly StoredEntry[]): string => {
@@ -86,7 +95,7 @@ export const mergeEngineIndex = (
   indexText: string | undefined,
   manifest: RemoteManifest,
 ): string => {
-  const existing = indexText === undefined ? [] : parseEngineIndex(indexText);
+  const existing = indexText === undefined ? [] : readStoredEntries(indexText);
   parseEngineId(manifest.id); // reject a malformed id before it enters the index
   const entries = [
     ...existing.filter((e) => e.id !== manifest.id),
