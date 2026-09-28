@@ -3,11 +3,10 @@ import { cstr } from '../cstr';
 import { DOM_READY_HANDLER_NAME, generateDomReadyScript } from '../dom-ready';
 import { loadGObjectFFI } from './gobject-ffi';
 import { makeScriptMessageCallback, SignalRegistry } from './gtk-signals';
-import {
-  loadWebKitGtkFFI,
-  WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-  WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-} from './webkitgtk-ffi';
+import { loadWebKitGtkFFI, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START } from './webkitgtk-ffi';
+
+/** `WebKitUserContentInjectedFrames`: never inject into subframes, or a third-party iframe gets the bridge and every exposed API. */
+const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME = 1;
 
 /**
  * Name of the isolated JS world the bridge + user preload run in (Electron
@@ -73,7 +72,7 @@ const addUserScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
   const script = webkit.symbols.webkit_user_script_new_for_world(
     cstr(source),
-    WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+    WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
     WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
     cstr(PRELOAD_WORLD_NAME),
     null,
@@ -86,7 +85,7 @@ const addPageWorldScript = (ucm: Pointer, source: string): void => {
   const webkit = loadWebKitGtkFFI();
   const script = webkit.symbols.webkit_user_script_new(
     cstr(source),
-    WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+    WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
     WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
     null,
     null,
