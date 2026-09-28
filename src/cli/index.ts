@@ -93,7 +93,8 @@ build options:
                      with guidance.
   --update           Also emit the auto-update feed beside the bundle: a
                      <name>-<channel>-<os>-<arch>.tar.zst and an update.json the
-                     runtime autoUpdater reads. The artifact arch is the host's.
+                     runtime autoUpdater reads. The arch is the host's (Windows:
+                     always x64).
   --update-key <pem> Sign the --update artifact: writes a detached .sig beside
                      the .tar.zst with this Ed25519 private key (generate one
                      with 'bunmaska keygen'). Without it the feed is unsigned
@@ -166,7 +167,8 @@ const maybeEmitUpdate = async (
     version: readAppVersion(),
     channel: options.channel ?? DEFAULT_CHANNEL,
     os: target,
-    arch: currentArch(),
+    // buildWindowsApp always compiles bun-windows-x64, whatever the host.
+    arch: target === 'windows' ? 'x64' : currentArch(),
     ...(signingKeyPem === undefined ? {} : { signingKeyPem }),
   });
   out(result.artifactPath);

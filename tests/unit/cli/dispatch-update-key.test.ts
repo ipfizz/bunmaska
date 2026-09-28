@@ -109,3 +109,24 @@ describe('dispatch build --update signing', () => {
     expect(verifyArtifact(publicPem, artifact, sig)).toBe(true);
   });
 });
+
+describe('dispatch build --update manifest', () => {
+  test('a Windows feed is labelled x64 whatever the host arch', async () => {
+    const { root, bundle } = setupProject();
+    let code = -1;
+    await captured(async () => {
+      code = await dispatch(
+        {
+          kind: 'build',
+          entry: 'app.ts',
+          options: { target: 'windows', name: 'Demo', update: true },
+        },
+        { buildWindows: async () => ({ appDir: bundle, exePath: '', zip: '' }) },
+      );
+    });
+    expect(code).toBe(0);
+    const manifest = JSON.parse(readFileSync(join(root, 'update.json'), 'utf8'));
+    expect(manifest.arch).toBe('x64');
+    expect(existsSync(join(root, 'demo-stable-windows-x64.tar.zst'))).toBe(true);
+  });
+});
