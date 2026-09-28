@@ -5,6 +5,7 @@ import {
   cancelIdForButtons,
   extensionPattern,
   mapChooseResult,
+  openDialogMethod,
   settleChoose,
   settleFilePath,
 } from '../../../../../src/main/platform/linux/gtk-dialog';
@@ -151,5 +152,19 @@ describe('settleFilePath (injected finish + reader, no real dialog)', () => {
       readPath: () => '/should/not/return',
     });
     expect(path).toBe('');
+  });
+});
+
+describe('openDialogMethod', () => {
+  test('maps openDirectory and multiSelections to the GtkFileDialog entry point', () => {
+    const spec = (canChooseDirectories: boolean, allowsMultipleSelection: boolean) => ({
+      canChooseFiles: true,
+      canChooseDirectories,
+      allowsMultipleSelection,
+    });
+    expect(openDialogMethod(spec(false, false))).toBe('open');
+    expect(openDialogMethod(spec(false, true))).toBe('open_multiple');
+    expect(openDialogMethod(spec(true, false))).toBe('select_folder');
+    expect(openDialogMethod(spec(true, true))).toBe('select_multiple_folders');
   });
 });

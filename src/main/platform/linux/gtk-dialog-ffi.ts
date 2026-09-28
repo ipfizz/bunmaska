@@ -64,6 +64,44 @@ export const GTK_DIALOG_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (self, parent, cancellable, cb, user_data), like gtk_file_dialog_open.
+  gtk_file_dialog_open_multiple: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, result, error /*null*/) -> GListModel* of GFile (transfer-full; NULL on cancel)
+  gtk_file_dialog_open_multiple_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  gtk_file_dialog_select_folder: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, result, error /*null*/) -> GFile* (NULL on cancel)
+  gtk_file_dialog_select_folder_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  gtk_file_dialog_select_multiple_folders: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, result, error /*null*/) -> GListModel* of GFile (transfer-full; NULL on cancel)
+  gtk_file_dialog_select_multiple_folders_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (self, GFile*) -> void. The dialog takes its own ref; the caller still unrefs its GFile.
+  gtk_file_dialog_set_initial_folder: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, GFile*) -> void. Sets the initial folder AND name from the file's parent and basename.
+  gtk_file_dialog_set_initial_file: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
   gtk_file_dialog_save: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,

@@ -4,6 +4,7 @@ import { currentPlatform } from '../../../src/common/platform';
 import { cstr } from '../../../src/main/platform/cstr';
 import { buildButtonsArray } from '../../../src/main/platform/linux/gtk-dialog';
 import { loadGtkDialogFFI } from '../../../src/main/platform/linux/gtk-dialog-ffi';
+import { loadGioFFI } from '../../../src/main/platform/linux/gio-ffi';
 import { loadGObjectFFI } from '../../../src/main/platform/linux/gobject-ffi';
 import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
 
@@ -36,6 +37,14 @@ describe.skipIf(!isLinux)('GTK dialog FFI + construction (Linux)', () => {
       'gtk_file_dialog_set_initial_name',
       'gtk_file_dialog_open',
       'gtk_file_dialog_open_finish',
+      'gtk_file_dialog_open_multiple',
+      'gtk_file_dialog_open_multiple_finish',
+      'gtk_file_dialog_select_folder',
+      'gtk_file_dialog_select_folder_finish',
+      'gtk_file_dialog_select_multiple_folders',
+      'gtk_file_dialog_select_multiple_folders_finish',
+      'gtk_file_dialog_set_initial_folder',
+      'gtk_file_dialog_set_initial_file',
       'gtk_file_dialog_save',
       'gtk_file_dialog_save_finish',
     ] as const) {
@@ -73,4 +82,19 @@ describe.skipIf(!isLinux)('GTK dialog FFI + construction (Linux)', () => {
       dialogLib.symbols.gtk_file_dialog_set_initial_name(fileDialog, cstr('untitled.txt'));
     },
   );
+
+  test.skipIf(!hasDisplay)('points a GtkFileDialog at an initial folder and file', () => {
+    const dialogLib = loadGtkDialogFFI();
+    const gio = loadGioFFI().symbols;
+    const fileDialog = dialogLib.symbols.gtk_file_dialog_new();
+    const folder = gio.g_file_new_for_path(cstr('/tmp'));
+    const file = gio.g_file_new_for_path(cstr('/tmp/bunmaska-missing.txt'));
+    expect(folder).not.toBeNull();
+    dialogLib.symbols.gtk_file_dialog_set_initial_folder(fileDialog, folder);
+    dialogLib.symbols.gtk_file_dialog_set_initial_file(fileDialog, file);
+    const gobject = loadGObjectFFI().symbols;
+    for (const object of [folder, file, fileDialog]) {
+      gobject.g_object_unref(object);
+    }
+  });
 });
