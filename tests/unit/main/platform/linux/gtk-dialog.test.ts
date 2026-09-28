@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { GASYNC_READY_CB_DEF } from '../../../../../src/main/platform/linux/gasync';
 import {
   buildButtonsArray,
+  cancelIdForButtons,
   mapChooseResult,
   settleChoose,
   settleFilePath,
@@ -66,6 +67,17 @@ describe('mapChooseResult', () => {
 
   it('falls back to the cancelId on any negative (error) index', () => {
     expect(mapChooseResult(-5, 1, 7)).toBe(7);
+  });
+});
+
+describe('cancelIdForButtons', () => {
+  it('picks the first button labelled cancel or no, case-insensitively (Electron default)', () => {
+    expect(cancelIdForButtons(['Yes', 'No'])).toBe(1);
+    expect(cancelIdForButtons(['Save', 'CANCEL', 'No'])).toBe(1);
+  });
+
+  it('falls back to 0 when no button is a cancel label', () => {
+    expect(cancelIdForButtons(['OK', 'Retry'])).toBe(0);
   });
 });
 

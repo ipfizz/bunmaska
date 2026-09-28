@@ -54,14 +54,9 @@ export const buildButtonsArray = (labels: ReadonlyArray<string>): ButtonsArray =
 export const mapChooseResult = (index: number, _defaultId: number, cancelId: number): number =>
   index >= 0 ? index : cancelId;
 
-/**
- * Compute the cancel index for a message box: the index of a button labelled
- * "Cancel" (case-insensitive), else `0`. The {@link MessageBoxSpec} carries no
- * explicit cancelId, so this mirrors Electron's default of treating a Cancel
- * button (or the first button) as the dismissal response.
- */
-const cancelIdForButtons = (buttons: ReadonlyArray<string>): number => {
-  const idx = buttons.findIndex((label) => label.toLowerCase() === 'cancel');
+/** Electron's default cancelId: the first "cancel" or "no" button (case-insensitive), else 0. */
+export const cancelIdForButtons = (buttons: ReadonlyArray<string>): number => {
+  const idx = buttons.findIndex((label) => ['cancel', 'no'].includes(label.toLowerCase()));
   return idx >= 0 ? idx : 0;
 };
 
