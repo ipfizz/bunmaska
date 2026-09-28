@@ -6,12 +6,11 @@ import { type AppEnvironment, defaultAppEnvironment } from './app-environment';
 import { localeCountryCode } from './app-locale';
 import { resolveAppName, resolveAppVersion } from './app-metadata';
 import { type AppPathName, isAppPathName, resolveAppPath } from './app-paths';
-import * as desktop from './app-desktop';
+import { type Dock, displayBadgeCount, getDock } from './app-desktop';
 import { Menu } from './menu';
+import { nativeApp } from '../native-app';
 import { createLockBackend } from './single-instance-backend';
 import { SingleInstanceManager } from './single-instance';
-
-export type { Dock } from './app-desktop';
 
 /**
  * Application lifecycle controller — the drop-in equivalent of Electron's `app`.
@@ -218,39 +217,39 @@ export class App extends EventEmitter {
     Menu.setApplicationMenu(menu);
   }
 
-  /** Set the macOS activation policy (no-op off macOS). */
+  /** No-op off macOS. */
   setActivationPolicy(policy: 'regular' | 'accessory' | 'prohibited'): void {
-    desktop.setActivationPolicy(policy);
+    nativeApp().appKit?.setActivationPolicy(policy);
   }
 
-  /** Hide all application windows — macOS (no-op off macOS). */
+  /** No-op off macOS. */
   hide(): void {
-    desktop.hideApp();
+    nativeApp().appKit?.hide();
   }
 
-  /** Show application windows after {@link hide} — macOS (no-op off macOS). */
+  /** No-op off macOS. */
   show(): void {
-    desktop.showApp();
+    nativeApp().appKit?.show();
   }
 
-  /** Whether the application is hidden (macOS); `false` off macOS. */
+  /** `false` off macOS. */
   isHidden(): boolean {
-    return desktop.isAppHidden();
+    return nativeApp().appKit?.isHidden() ?? false;
   }
 
-  /** Whether the application is the active app (macOS); `false` off macOS. */
+  /** `false` off macOS. */
   isActive(): boolean {
-    return desktop.isAppActive();
+    return nativeApp().appKit?.isActive() ?? false;
   }
 
-  /** Show the platform's standard about panel (no-op where unsupported). */
+  /** No-op where the platform has no standard about panel. */
   showAboutPanel(): void {
-    desktop.showAboutPanel();
+    nativeApp().showAboutPanel?.();
   }
 
-  /** The macOS dock object, or `undefined` on other platforms. */
-  get dock(): desktop.Dock | undefined {
-    return desktop.getDock();
+  /** `undefined` off macOS. */
+  get dock(): Dock | undefined {
+    return getDock();
   }
 
   /**
@@ -259,7 +258,7 @@ export class App extends EventEmitter {
    */
   setBadgeCount(count = 0): boolean {
     this.#badgeCount = count;
-    return desktop.displayBadgeCount(count);
+    return displayBadgeCount(count);
   }
 
   getBadgeCount(): number {

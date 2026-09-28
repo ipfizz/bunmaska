@@ -1,6 +1,7 @@
 import './bootstrap';
 
 export { App, app } from './api/app';
+export type { Dock } from './api/app-desktop';
 export {
   type AutoUpdater,
   type AutoUpdaterDeps,
