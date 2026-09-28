@@ -274,171 +274,152 @@ const PixelBlast: FC<PixelBlastProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const visibilityRef = useRef(true);
-  const speedRef = useRef(speed);
   const threeRef = useRef<ThreeState | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    speedRef.current = speed;
 
-    if (!threeRef.current) {
-      const canvas = document.createElement('canvas');
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias, alpha: true });
-      renderer.domElement.style.width = '100%';
-      renderer.domElement.style.height = '100%';
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      container.appendChild(renderer.domElement);
-      if (transparent) renderer.setClearAlpha(0);
-      else renderer.setClearColor(0x000000, 1);
+    const canvas = document.createElement('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias, alpha: true });
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(renderer.domElement);
+    if (transparent) renderer.setClearAlpha(0);
+    else renderer.setClearColor(0x000000, 1);
 
-      const uniforms: ThreeState['uniforms'] = {
-        uResolution: { value: new THREE.Vector2(0, 0) },
-        uTime: { value: 0 },
-        uColor: { value: new THREE.Color(color) },
-        uClickPos: {
-          value: Array.from({ length: MAX_CLICKS }, () => new THREE.Vector2(-1, -1)),
-        },
-        uClickTimes: { value: new Float32Array(MAX_CLICKS) },
-        uClickStrength: { value: new Float32Array(MAX_CLICKS) },
-        uShapeType: { value: SHAPE_MAP[variant] },
-        uPixelSize: { value: pixelSize * renderer.getPixelRatio() },
-        uScale: { value: patternScale },
-        uDensity: { value: patternDensity },
-        uPixelJitter: { value: pixelSizeJitter },
-        uEnableRipples: { value: enableRipples ? 1 : 0 },
-        uRippleSpeed: { value: rippleSpeed },
-        uRippleThickness: { value: rippleThickness },
-        uRippleIntensity: { value: rippleIntensityScale },
-        uEdgeFade: { value: edgeFade },
-      };
+    const uniforms: ThreeState['uniforms'] = {
+      uResolution: { value: new THREE.Vector2(0, 0) },
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color() },
+      uClickPos: {
+        value: Array.from({ length: MAX_CLICKS }, () => new THREE.Vector2(-1, -1)),
+      },
+      uClickTimes: { value: new Float32Array(MAX_CLICKS) },
+      uClickStrength: { value: new Float32Array(MAX_CLICKS) },
+      uShapeType: { value: SHAPE_MAP[variant] },
+      uPixelSize: { value: pixelSize * renderer.getPixelRatio() },
+      uScale: { value: patternScale },
+      uDensity: { value: patternDensity },
+      uPixelJitter: { value: pixelSizeJitter },
+      uEnableRipples: { value: enableRipples ? 1 : 0 },
+      uRippleSpeed: { value: rippleSpeed },
+      uRippleThickness: { value: rippleThickness },
+      uRippleIntensity: { value: rippleIntensityScale },
+      uEdgeFade: { value: edgeFade },
+    };
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-      const material = new THREE.ShaderMaterial({
-        vertexShader: VERTEX_SRC,
-        fragmentShader: FRAGMENT_SRC,
-        uniforms,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false,
-        glslVersion: THREE.GLSL3,
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const material = new THREE.ShaderMaterial({
+      vertexShader: VERTEX_SRC,
+      fragmentShader: FRAGMENT_SRC,
+      uniforms,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      glslVersion: THREE.GLSL3,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    scene.add(quad);
+    const clock = new THREE.Clock();
+
+    const setSize = () => {
+      const w = container.clientWidth || 1;
+      const h = container.clientHeight || 1;
+      renderer.setSize(w, h, false);
+      uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
+      uniforms.uPixelSize.value = pixelSize * renderer.getPixelRatio();
+    };
+    setSize();
+    const resizeObserver = new ResizeObserver(setSize);
+    resizeObserver.observe(container);
+
+    let intersectionObserver: IntersectionObserver | undefined;
+    if (autoPauseOffscreen && 'IntersectionObserver' in window) {
+      intersectionObserver = new IntersectionObserver(([entry]) => {
+        visibilityRef.current = entry?.isIntersecting ?? true;
       });
-      const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
-      scene.add(quad);
-      const clock = new THREE.Clock();
-
-      const setSize = () => {
-        const w = container.clientWidth || 1;
-        const h = container.clientHeight || 1;
-        renderer.setSize(w, h, false);
-        uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
-        uniforms.uPixelSize.value = pixelSize * renderer.getPixelRatio();
-      };
-      setSize();
-      const resizeObserver = new ResizeObserver(setSize);
-      resizeObserver.observe(container);
-
-      let intersectionObserver: IntersectionObserver | undefined;
-      if (autoPauseOffscreen && 'IntersectionObserver' in window) {
-        intersectionObserver = new IntersectionObserver(([entry]) => {
-          visibilityRef.current = entry?.isIntersecting ?? true;
-        });
-        intersectionObserver.observe(container);
-      }
-
-      const timeOffset = randomFloat() * 1000;
-
-      const spawnRipple = (clientX: number, clientY: number, strength: number) => {
-        const t = threeRef.current;
-        if (!t) return;
-        const rect = renderer.domElement.getBoundingClientRect();
-        if (
-          clientX < rect.left ||
-          clientX > rect.right ||
-          clientY < rect.top ||
-          clientY > rect.bottom
-        ) {
-          return;
-        }
-        const scaleX = renderer.domElement.width / rect.width;
-        const scaleY = renderer.domElement.height / rect.height;
-        const slot = uniforms.uClickPos.value[t.clickIx];
-        if (!slot) return;
-        slot.set((clientX - rect.left) * scaleX, (rect.height - (clientY - rect.top)) * scaleY);
-        uniforms.uClickTimes.value[t.clickIx] = uniforms.uTime.value;
-        uniforms.uClickStrength.value[t.clickIx] = strength;
-        t.clickIx = (t.clickIx + 1) % MAX_CLICKS;
-      };
-      // Document-level so ripples fire even when content sits above the canvas.
-      const onPointerDown = (e: PointerEvent) => {
-        spawnRipple(e.clientX, e.clientY, 1);
-      };
-      // Hover: soft micro-ripples, throttled by distance traveled.
-      let lastHover: { x: number; y: number } | null = null;
-      const onPointerMove = (e: PointerEvent) => {
-        if (e.pointerType !== 'mouse') return;
-        const last = lastHover;
-        lastHover = { x: e.clientX, y: e.clientY };
-        if (last) {
-          const dx = e.clientX - last.x;
-          const dy = e.clientY - last.y;
-          if (dx * dx + dy * dy < 76 * 76) {
-            lastHover = last;
-            return;
-          }
-        }
-        spawnRipple(e.clientX, e.clientY, 0.18);
-      };
-      document.addEventListener('pointerdown', onPointerDown, { passive: true });
-      document.addEventListener('pointermove', onPointerMove, { passive: true });
-
-      const animate = () => {
-        const t = threeRef.current;
-        if (!t) return;
-        if (autoPauseOffscreen && !visibilityRef.current) {
-          t.raf = requestAnimationFrame(animate);
-          return;
-        }
-        uniforms.uTime.value = timeOffset + clock.getElapsedTime() * speedRef.current;
-        renderer.render(scene, camera);
-        t.raf = requestAnimationFrame(animate);
-      };
-
-      threeRef.current = {
-        renderer,
-        scene,
-        camera,
-        material,
-        quad,
-        clock,
-        clickIx: 0,
-        uniforms,
-        resizeObserver,
-        intersectionObserver,
-        removeListeners: () => {
-          document.removeEventListener('pointerdown', onPointerDown);
-          document.removeEventListener('pointermove', onPointerMove);
-        },
-        raf: requestAnimationFrame(animate),
-      };
-    } else {
-      const t = threeRef.current;
-      t.uniforms.uShapeType.value = SHAPE_MAP[variant];
-      t.uniforms.uPixelSize.value = pixelSize * t.renderer.getPixelRatio();
-      t.uniforms.uColor.value.set(color);
-      t.uniforms.uScale.value = patternScale;
-      t.uniforms.uDensity.value = patternDensity;
-      t.uniforms.uPixelJitter.value = pixelSizeJitter;
-      t.uniforms.uEnableRipples.value = enableRipples ? 1 : 0;
-      t.uniforms.uRippleIntensity.value = rippleIntensityScale;
-      t.uniforms.uRippleThickness.value = rippleThickness;
-      t.uniforms.uRippleSpeed.value = rippleSpeed;
-      t.uniforms.uEdgeFade.value = edgeFade;
-      if (transparent) t.renderer.setClearAlpha(0);
-      else t.renderer.setClearColor(0x000000, 1);
+      intersectionObserver.observe(container);
     }
+
+    const timeOffset = randomFloat() * 1000;
+
+    const spawnRipple = (clientX: number, clientY: number, strength: number) => {
+      const t = threeRef.current;
+      if (!t) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (
+        clientX < rect.left ||
+        clientX > rect.right ||
+        clientY < rect.top ||
+        clientY > rect.bottom
+      ) {
+        return;
+      }
+      const scaleX = renderer.domElement.width / rect.width;
+      const scaleY = renderer.domElement.height / rect.height;
+      const slot = uniforms.uClickPos.value[t.clickIx];
+      if (!slot) return;
+      slot.set((clientX - rect.left) * scaleX, (rect.height - (clientY - rect.top)) * scaleY);
+      uniforms.uClickTimes.value[t.clickIx] = uniforms.uTime.value;
+      uniforms.uClickStrength.value[t.clickIx] = strength;
+      t.clickIx = (t.clickIx + 1) % MAX_CLICKS;
+    };
+    // Document-level so ripples fire even when content sits above the canvas.
+    const onPointerDown = (e: PointerEvent) => {
+      spawnRipple(e.clientX, e.clientY, 1);
+    };
+    // Hover: soft micro-ripples, throttled by distance traveled.
+    let lastHover: { x: number; y: number } | null = null;
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return;
+      const last = lastHover;
+      lastHover = { x: e.clientX, y: e.clientY };
+      if (last) {
+        const dx = e.clientX - last.x;
+        const dy = e.clientY - last.y;
+        if (dx * dx + dy * dy < 76 * 76) {
+          lastHover = last;
+          return;
+        }
+      }
+      spawnRipple(e.clientX, e.clientY, 0.18);
+    };
+    document.addEventListener('pointerdown', onPointerDown, { passive: true });
+    document.addEventListener('pointermove', onPointerMove, { passive: true });
+
+    const animate = () => {
+      const t = threeRef.current;
+      if (!t) return;
+      if (autoPauseOffscreen && !visibilityRef.current) {
+        t.raf = requestAnimationFrame(animate);
+        return;
+      }
+      uniforms.uTime.value = timeOffset + clock.getElapsedTime() * speed;
+      renderer.render(scene, camera);
+      t.raf = requestAnimationFrame(animate);
+    };
+
+    threeRef.current = {
+      renderer,
+      scene,
+      camera,
+      material,
+      quad,
+      clock,
+      clickIx: 0,
+      uniforms,
+      resizeObserver,
+      intersectionObserver,
+      removeListeners: () => {
+        document.removeEventListener('pointerdown', onPointerDown);
+        document.removeEventListener('pointermove', onPointerMove);
+      },
+      raf: requestAnimationFrame(animate),
+    };
 
     return () => {
       const t = threeRef.current;
@@ -470,9 +451,13 @@ const PixelBlast: FC<PixelBlastProps> = ({
     transparent,
     autoPauseOffscreen,
     variant,
-    color,
     speed,
   ]);
+
+  // After the setup effect, so the first frame is coloured too; a theme flip sets only this uniform.
+  useEffect(() => {
+    threeRef.current?.uniforms.uColor.value.set(color);
+  }, [color]);
 
   return (
     <div
