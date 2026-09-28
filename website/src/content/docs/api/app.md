@@ -151,7 +151,7 @@ app.setAppLogsPath('/var/log/my-app')
 
 Returns `string` - the application name: the `setName` override if set, otherwise `productName` (falling back to `name`) from the app's `package.json`, otherwise `bunmaska-app`.
 
-Which `package.json`: under the dev runner, the nearest one above the entry script; in a packaged app, the one beside the executable. `bunmaska build` does not copy your project's `package.json` there yet, so a packaged app reports the fallbacks unless one ships beside the executable.
+Which `package.json`: under the dev runner, the nearest one above the entry script; in a packaged app, the one beside the executable. `bunmaska build` writes that one with your project's `name`, `productName` and `version` (the build name stands in if your project names nothing), so a packaged app answers with the same name as in dev, and its `userData` folder stays where dev put it.
 
 ```ts
 import { app } from 'bunmaska'

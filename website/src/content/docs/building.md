@@ -22,6 +22,8 @@ The entry comes from your `bunmaska.config.ts` (pass it explicitly - `bunmaska b
 
 A `preload.js` / `.mjs` / `.cjs` among those files is bundled into a classic script on the way (a compiled app cannot bundle at runtime), so it may `import` freely. A `.ts` preload does not ship - name it `preload.js`.
 
+Every build also writes a small `package.json` there with your project's name and version, which is where [`app.getName()`](/docs/api/app) and `app.getVersion()` look in a packaged app.
+
 ## macOS
 
 ```sh
