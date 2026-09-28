@@ -98,7 +98,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
-    "@types/bun": "latest",
+    "@types/bun": "1.4.2",
     "typescript": "6.0.3"
   }
 }
