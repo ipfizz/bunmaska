@@ -1,17 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
-  classifyChange,
   DEV_DEFAULT_ENTRY,
-  type ChangeAction,
   type DevDeps,
   DevSupervisor,
   defaultDevDeps,
-  devClassifier,
   resolveDevEntry,
 } from '../../../src/cli/dev';
+import { type ChangeAction, classifyChange } from '../../../src/cli/dev-classify';
+import { tempProject } from '../../helpers/temp-project';
 
 describe('resolveDevEntry', () => {
   test('prefers the explicit entry', () => {
@@ -21,144 +19,6 @@ describe('resolveDevEntry', () => {
   test('falls back to the config entry, then the default', () => {
     expect(resolveDevEntry({ entry: 'a.ts' })).toBe('a.ts');
     expect(resolveDevEntry({})).toBe(DEV_DEFAULT_ENTRY);
-  });
-});
-
-describe('classifyChange', () => {
-  test('restarts on a TypeScript (main-process) change', () => {
-    expect(classifyChange('src/main.ts')).toBe('restart');
-    expect(classifyChange('src/window.tsx')).toBe('restart');
-    expect(classifyChange('bunmaska.config.ts')).toBe('restart');
-  });
-
-  test('live-reloads on a renderer asset change', () => {
-    expect(classifyChange('src/index.html')).toBe('reload');
-    expect(classifyChange('src/styles.css')).toBe('reload');
-  });
-
-  test('restarts on a preload change, which a reload cannot pick up', () => {
-    // The preload is bundled once in the BrowserWindow constructor, so reloading
-    // re-injects the stale script.
-    expect(classifyChange('src/preload.js')).toBe('restart');
-    expect(classifyChange('app/preload.cjs')).toBe('restart');
-  });
-
-  test('reloads on a renderer bundle under dist', () => {
-    // Ignoring dist meant a rebuilt renderer could never reach the window.
-    expect(classifyChange('dist/renderer/assets/app.js')).toBe('reload');
-    expect(classifyChange('dist/renderer/index.html')).toBe('reload');
-  });
-
-  test('ignores dependency/VCS dirs and dotfiles', () => {
-    expect(classifyChange('node_modules/x/index.js')).toBe('ignore');
-    expect(classifyChange('.git/HEAD')).toBe('ignore');
-    expect(classifyChange('src/.main.ts.swp')).toBe('ignore');
-    expect(classifyChange('')).toBe('ignore');
-  });
-
-  test('ignores the app bundles bunmaska build writes into the project root', () => {
-    expect(classifyChange('MyApp.app/Contents/MacOS/index.html')).toBe('ignore');
-    expect(classifyChange('build/x.js')).toBe('ignore');
-    expect(classifyChange('out/x.js')).toBe('ignore');
-  });
-
-  test('watches source folders that merely share a build-output name', () => {
-    expect(classifyChange('src/build/config.ts')).toBe('restart');
-    expect(classifyChange('src/renderer/out/x.tsx', 'src/renderer')).toBe('rebuild');
-  });
-
-  test('ignores tool state in dot directories', () => {
-    // JetBrains rewrites .idea/workspace.xml on focus changes.
-    expect(classifyChange('.idea/workspace.xml')).toBe('ignore');
-    expect(classifyChange('.vscode/generated.ts')).toBe('ignore');
-  });
-});
-
-describe('classifyChange with a renderer root', () => {
-  test('a source change under the renderer root rebuilds instead of restarting', () => {
-    // This is the React fix: a component edit re-bundles and reloads, it no
-    // longer tears the window down.
-    expect(classifyChange('src/renderer/App.tsx', 'src/renderer')).toBe('rebuild');
-    expect(classifyChange('src/renderer/styles.css', 'src/renderer')).toBe('rebuild');
-  });
-
-  test('a main-process source outside the renderer root still restarts', () => {
-    expect(classifyChange('src/main.ts', 'src/renderer')).toBe('restart');
-    expect(classifyChange('bunmaska.config.ts', 'src/renderer')).toBe('restart');
-  });
-
-  test('the renderer output under dist still plain-reloads', () => {
-    expect(classifyChange('dist/renderer/main.js', 'src/renderer')).toBe('reload');
-  });
-
-  test('a ./-prefixed renderer root matches like a bare one', () => {
-    expect(classifyChange('src/renderer/App.tsx', './src/renderer')).toBe('rebuild');
-  });
-
-  test('a preload under the renderer root still restarts', () => {
-    expect(classifyChange('src/renderer/preload.js', 'src/renderer')).toBe('restart');
-  });
-});
-
-/** A temp project with `files` written; disposing it deletes the tree. */
-const tempProject = (files: Record<string, string>) => {
-  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-dev-'));
-  const write = (rel: string, contents: string): void => {
-    mkdirSync(join(dir, rel, '..'), { recursive: true });
-    writeFileSync(join(dir, rel), contents);
-  };
-  for (const [rel, contents] of Object.entries(files)) {
-    write(rel, contents);
-  }
-  return { dir, write, [Symbol.dispose]: () => rmSync(dir, { recursive: true }) };
-};
-
-describe('devClassifier', () => {
-  test('a renderer.copy source rebuilds so dist gets the new copy', () => {
-    // Its dist copy then reloads the window, or restarts the app for a preload.
-    const classify = devClassifier('/proj', 'src/main.ts', {
-      entry: 'src/renderer/main.ts',
-      copy: ['src/index.html', 'src/preload.js', 'assets'],
-    });
-    expect(classify('src/index.html')).toBe('rebuild');
-    expect(classify('src/preload.js')).toBe('rebuild');
-    expect(classify('assets/sfx/jump.ogg')).toBe('rebuild');
-    expect(classify('dist/renderer/preload.js')).toBe('restart');
-    expect(classify('src/main.ts')).toBe('restart');
-  });
-
-  test('a JavaScript module the entry imports restarts; other scripts reload', () => {
-    using p = tempProject({
-      'main.js': "const ipc = require('./ipc.js');",
-      'ipc.js': 'module.exports = {};',
-      'renderer.js': 'document.title = "x";',
-    });
-    const classify = devClassifier(p.dir, 'main.js');
-    expect(classify('main.js')).toBe('restart');
-    expect(classify('ipc.js')).toBe('restart');
-    expect(classify('renderer.js')).toBe('reload');
-  });
-
-  test('in a flat layout a main module under the renderer root restarts', () => {
-    using p = tempProject({
-      'src/main.ts': "import { load } from './state';\nload();",
-      'src/state.ts': 'export const load = () => 1;',
-      'src/index.tsx': "import { App } from './App';\nApp();",
-      'src/App.tsx': 'export const App = () => null;',
-    });
-    const classify = devClassifier(p.dir, 'src/main.ts', { entry: 'src/index.tsx' });
-    expect(classify('src/main.ts')).toBe('restart');
-    expect(classify('src/state.ts')).toBe('restart');
-    expect(classify('src/App.tsx')).toBe('rebuild');
-  });
-
-  test('an import added to a main module is tracked from its next edit', () => {
-    using p = tempProject({ 'main.js': '', 'late.js': '' });
-    const classify = devClassifier(p.dir, 'main.js');
-    expect(classify('late.js')).toBe('reload');
-    p.write('main.js', "require('./late.js');");
-    expect(classify('main.js')).toBe('restart');
-    expect(classify('late.js')).toBe('restart');
   });
 });
 
@@ -524,11 +384,9 @@ describe('DevSupervisor child lifecycle', () => {
 
 describe('defaultDevDeps', () => {
   test('the child runs on this bun without one on PATH and receives reload commands', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-dev-'));
     const devReload = resolve(import.meta.dir, '../../../src/main/dev-reload.ts');
-    writeFileSync(
-      join(dir, 'app.ts'),
-      [
+    using p = tempProject({
+      'app.ts': [
         "import { writeFileSync } from 'node:fs';",
         `import { startDevReload } from ${JSON.stringify(devReload)};`,
         'const deadline = setTimeout(() => process.exit(2), 5000);',
@@ -538,14 +396,10 @@ describe('defaultDevDeps', () => {
         '  process.exit(0);',
         '});',
       ].join('\n'),
-    );
-    try {
-      const child = defaultDevDeps(dir, () => undefined, { PATH: '' }).spawn('app.ts');
-      child.reload();
-      expect(await child.exited).toBe(0);
-      expect(readFileSync(join(dir, 'reloaded.txt'), 'utf8')).toBe('1');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    });
+    const child = defaultDevDeps(p.dir, () => undefined, { PATH: '' }).spawn('app.ts');
+    child.reload();
+    expect(await child.exited).toBe(0);
+    expect(readFileSync(join(p.dir, 'reloaded.txt'), 'utf8')).toBe('1');
   });
 });

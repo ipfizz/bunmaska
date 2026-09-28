@@ -1,13 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
   DEV_STATE_FILE,
   editorTempDir,
   makeContentFilter,
   makeWatchHandler,
 } from '../../../src/cli/dev-watch';
+import { tempProject } from '../../helpers/temp-project';
 
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
@@ -80,21 +78,14 @@ describe('editorTempDir', () => {
 });
 
 describe('makeWatchHandler', () => {
-  /** A temp project with `files` written, plus a handler over it recording what fired. */
+  /** A temp project plus a watch handler over it recording what fired. */
   const project = (files: Record<string, string | Uint8Array>) => {
-    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-watch-'));
-    const write = (rel: string, contents: string | Uint8Array): void => {
-      mkdirSync(join(dir, rel, '..'), { recursive: true });
-      writeFileSync(join(dir, rel), contents);
-    };
-    for (const [rel, contents] of Object.entries(files)) {
-      write(rel, contents);
-    }
+    const p = tempProject(files);
     const fired: string[] = [];
-    const handle = makeWatchHandler(dir, (rel) => {
+    const handle = makeWatchHandler(p.dir, (rel) => {
       fired.push(rel);
     });
-    return { fired, handle, write, [Symbol.dispose]: () => rmSync(dir, { recursive: true }) };
+    return { ...p, fired, handle };
   };
 
   test('drops a save that rewrote identical bytes', () => {

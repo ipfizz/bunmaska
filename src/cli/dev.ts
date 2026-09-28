@@ -4,11 +4,14 @@
  * live-reloads the open windows in place.
  */
 
-import { dirname, extname, resolve } from 'node:path';
-import type { BunmaskaConfig, BunmaskaRendererConfig } from '../common/config-schema';
+import { resolve } from 'node:path';
+import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 import { DEV_RELOAD_COMMAND } from '../main/dev-reload';
-import { DEV_STATE_FILE, isIgnoredPath, mainModules, pathParts, watchTree } from './dev-watch';
+import { type ChangeAction, devClassifier } from './dev-classify';
+import { DEV_STATE_FILE, watchTree } from './dev-watch';
+
+export { classifyChange, devClassifier } from './dev-classify';
 
 export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 
@@ -34,77 +37,6 @@ const settlesWithin = (promise: Promise<unknown> | undefined, ms: number): Promi
  */
 export const resolveDevEntry = (config: BunmaskaConfig, explicit?: string): string =>
   explicit ?? config.entry ?? DEV_DEFAULT_ENTRY;
-
-/** TypeScript is compiled into the main process, so a change there restarts it. */
-const MAIN_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.mts', '.cts']);
-
-/**
- * The preload is read and bundled once, when the window is constructed, so a
- * reload would re-inject the STALE script. Restarting is the honest action.
- * Matches the shipped-asset convention in {@link ../cli/app-assets}.
- */
-const PRELOAD_BASENAME = /^preload\.(?:js|mjs|cjs|ts)$/i;
-
-export type ChangeAction = 'restart' | 'rebuild' | 'reload' | 'ignore';
-
-/**
- * Classify a changed path, relative to the watched root. Dotfiles are ignored
- * because they catch editor swap files. With `rendererRoot` set (the directory
- * of `config.renderer.entry`), a change under it is `rebuild`: the renderer is
- * re-bundled and the resulting output writes live-reload the window, so a
- * React component edit no longer restarts the whole app.
- */
-export const classifyChange = (relPath: string, rendererRoot?: string): ChangeAction => {
-  if (isIgnoredPath(relPath)) {
-    return 'ignore';
-  }
-  const parts = pathParts(relPath);
-  const base = parts[parts.length - 1] ?? '';
-  if (PRELOAD_BASENAME.test(base)) {
-    return 'restart';
-  }
-  if (rendererRoot !== undefined && isWithin(parts, pathParts(rendererRoot))) {
-    return 'rebuild';
-  }
-  return MAIN_SOURCE_EXTENSIONS.has(extname(base).toLowerCase()) ? 'restart' : 'reload';
-};
-
-/** True when `parts` lies strictly under `root` (or is it, with `orSelf`). */
-const isWithin = (parts: readonly string[], root: readonly string[], orSelf = false): boolean =>
-  root.length > 0 &&
-  root.length <= parts.length - (orSelf ? 0 : 1) &&
-  root.every((part, i) => parts[i] === part);
-
-/**
- * {@link classifyChange} for a project: a `renderer.copy` source rebuilds (its
- * dist copy then reloads, or restarts for a preload), and a module the entry
- * imports restarts wherever it lives.
- */
-export const devClassifier = (
-  dir: string,
-  entry: string,
-  renderer?: BunmaskaRendererConfig,
-): ((relPath: string) => ChangeAction) => {
-  const rendererRoot = renderer === undefined ? undefined : dirname(renderer.entry);
-  const copies = (renderer?.copy ?? []).map(pathParts);
-  let main = mainModules(dir, entry);
-  return (relPath) => {
-    const action = classifyChange(relPath, rendererRoot);
-    const parts = pathParts(relPath);
-    if (action === 'ignore') {
-      return action;
-    }
-    if (copies.some((source) => isWithin(parts, source, true))) {
-      return 'rebuild';
-    }
-    if (main.has(parts.join('/'))) {
-      // The edit may add an import.
-      main = mainModules(dir, entry);
-      return 'restart';
-    }
-    return action;
-  };
-};
 
 /** Debounce-window precedence: a restart beats a rebuild beats a reload. */
 const ACTION_RANK: Record<Exclude<ChangeAction, 'ignore'>, number> = {
