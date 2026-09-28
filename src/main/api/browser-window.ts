@@ -10,7 +10,7 @@ import { app } from './app';
 import { installWindowResolver, type PopupTarget } from './menu';
 import { loadPreloadScript } from './preload';
 import { session } from './session';
-import { type LoadFileOptions, WebContents } from './web-contents';
+import { type LoadFileOptions, objectDestroyedError, WebContents } from './web-contents';
 
 /**
  * A top-level application window — the drop-in equivalent of Electron's
@@ -104,7 +104,7 @@ export class BrowserWindow extends EventEmitter {
   /** Process-unique and never reused within a run. */
   readonly id: number;
   readonly webContents: WebContents;
-  readonly #native: NativeWindow;
+  readonly #window: NativeWindow;
   #destroyed = false;
   #resizable: boolean;
   #opacity = 1;
@@ -136,7 +136,7 @@ export class BrowserWindow extends EventEmitter {
       options = { ...options, width: devBounds.width, height: devBounds.height };
     }
     const preloadScript = loadPreloadScript(options.webPreferences?.preload);
-    this.#native = nativeApp().createWindow({
+    this.#window = nativeApp().createWindow({
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,
       title: options.title ?? DEFAULT_TITLE,
@@ -175,6 +175,9 @@ export class BrowserWindow extends EventEmitter {
     });
     for (const type of WINDOW_EVENT_TYPES) {
       this.#native.onWindowEvent(type, () => {
+        if (this.#destroyed) {
+          return;
+        }
         this.emit(type);
         if (type === 'focus') {
           app.emit('browser-window-focus', makeCancelableEvent(), this);
@@ -193,6 +196,13 @@ export class BrowserWindow extends EventEmitter {
     }
     registry.set(this.id, this);
     app.emit('browser-window-created', makeCancelableEvent(), this);
+  }
+
+  get #native(): NativeWindow {
+    if (this.#destroyed) {
+      throw objectDestroyedError();
+    }
+    return this.#window;
   }
 
   /**

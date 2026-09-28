@@ -141,8 +141,8 @@ if (currentPlatform() === 'macos') {
       win.close();
       await delay(50);
       expect(closed).toBe(1);
-      // Idempotent: a second close does not re-fire closed or crash.
-      win.close();
+      // A second close throws (Electron parity) instead of reaching the freed NSWindow.
+      expect(() => win.close()).toThrow('Object has been destroyed');
       await delay(20);
       expect(closed).toBe(1);
     });

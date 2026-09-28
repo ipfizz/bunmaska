@@ -555,12 +555,40 @@ describe('BrowserWindow lifecycle events', () => {
     expect(win.isDestroyed()).toBe(false);
   });
 
-  test('teardown runs exactly once across repeated close attempts (idempotent)', () => {
-    const win = new BrowserWindow();
+  test('teardown runs exactly once across repeated native close requests', () => {
+    new BrowserWindow();
     windows[0]?.fireCloseRequest();
-    win.close();
     windows[0]?.fireCloseRequest();
     expect(windows[0]?.teardownCount()).toBe(1);
+  });
+});
+
+describe('BrowserWindow after closed', () => {
+  test('methods throw Electron TypeError without reaching the native window', () => {
+    const win = new BrowserWindow({ title: 'before' });
+    win.close();
+    expect(() => win.setTitle('after')).toThrow(new TypeError('Object has been destroyed'));
+    expect(() => win.close()).toThrow(TypeError);
+    expect(windows[0]?.getTitle()).toBe('before');
+    expect(windows[0]?.teardownCount()).toBe(1);
+  });
+
+  test('isDestroyed keeps answering', () => {
+    const win = new BrowserWindow();
+    win.destroy();
+    expect(win.isDestroyed()).toBe(true);
+    expect(win.webContents.isDestroyed()).toBe(true);
+  });
+
+  test('native window events after closed are not re-emitted', () => {
+    const win = new BrowserWindow();
+    let moved = 0;
+    win.on('move', () => {
+      moved += 1;
+    });
+    win.close();
+    windows[0]?.fireEvent('move');
+    expect(moved).toBe(0);
   });
 });
 

@@ -29,6 +29,9 @@ export type LoadFileOptions = {
   readonly search?: string;
 };
 
+/** Electron's error for a call on a destroyed window or web contents. */
+export const objectDestroyedError = (): TypeError => new TypeError('Object has been destroyed');
+
 let nextId = 1;
 
 /** @internal */
@@ -56,7 +59,7 @@ const buildRemoveCssScript = (key: string): string =>
 export class WebContents extends EventEmitter {
   /** Process-unique and never reused within a run. */
   readonly id: number;
-  readonly #native: NativeWebContents;
+  readonly #view: NativeWebContents;
   #cssCounter = 0;
   #zoomFactor = 1;
   #userAgent = '';
@@ -68,11 +71,14 @@ export class WebContents extends EventEmitter {
     super();
     this.id = nextId;
     nextId += 1;
-    this.#native = native;
-    this.#native.onRendererEnvelope((json) => {
+    this.#view = native;
+    native.onRendererEnvelope((json) => {
       void this.#handleRendererEnvelope(json);
     });
-    this.#native.onNavigation((event) => {
+    native.onNavigation((event) => {
+      if (this.#destroyed) {
+        return;
+      }
       if (event.type === 'did-start-loading') {
         this.#isLoading = true;
       } else if (
@@ -90,6 +96,13 @@ export class WebContents extends EventEmitter {
         this.emit(event.type);
       }
     });
+  }
+
+  get #native(): NativeWebContents {
+    if (this.#destroyed) {
+      throw objectDestroyedError();
+    }
+    return this.#view;
   }
 
   loadURL(url: string): void {
@@ -165,7 +178,7 @@ export class WebContents extends EventEmitter {
    * Resolves to the script's COMPLETION value; a returned Promise is awaited.
    * Only JSON-serializable results survive (`JSON.stringify` semantics).
    */
-  executeJavaScript(code: string): Promise<unknown> {
+  async executeJavaScript(code: string): Promise<unknown> {
     return this.#native.executeJavaScript(code);
   }
 
@@ -310,12 +323,12 @@ export class WebContents extends EventEmitter {
       log.warn('dropping malformed renderer envelope', error);
       return;
     }
-    if (envelope.kind !== 'send' && envelope.kind !== 'invoke') {
+    if ((envelope.kind !== 'send' && envelope.kind !== 'invoke') || this.#destroyed) {
       return;
     }
     const reply = await ipcMain.dispatch(envelope, { sender: this });
-    if (reply !== undefined) {
-      this.#native.sendEnvelopeToRenderer(encodeEnvelope(reply));
+    if (reply !== undefined && !this.#destroyed) {
+      this.#view.sendEnvelopeToRenderer(encodeEnvelope(reply));
     }
   }
 }

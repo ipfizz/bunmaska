@@ -266,6 +266,63 @@ describe('WebContents.devtools + isDestroyed', () => {
   });
 });
 
+describe('WebContents after destroy', () => {
+  test('methods throw Electron TypeError without reaching the native view', () => {
+    const { native, sent } = makeFakeNative();
+    const loaded: string[] = [];
+    const wc = new WebContents({ ...native, loadURL: (url: string) => loaded.push(url) });
+    wc.markDestroyed();
+    expect(() => wc.send('tick')).toThrow(new TypeError('Object has been destroyed'));
+    expect(() => wc.loadURL('https://x.test/')).toThrow(TypeError);
+    expect(sent).toEqual([]);
+    expect(loaded).toEqual([]);
+  });
+
+  test('executeJavaScript rejects instead of throwing synchronously', async () => {
+    const wc = new WebContents(makeFakeNative().native);
+    wc.markDestroyed();
+    await expect(wc.executeJavaScript('1')).rejects.toThrow('Object has been destroyed');
+  });
+
+  test('an invoke reply that settles after destroy is dropped', async () => {
+    const { native, sent, fireRenderer } = makeFakeNative();
+    const wc = new WebContents(native);
+    let finish: (value: number) => void = () => undefined;
+    ipcMain.handle('add', () => new Promise<number>((resolve) => (finish = resolve)));
+    fireRenderer(encodeEnvelope({ kind: 'invoke', id: 7, channel: 'add', args: [] }));
+    await flush();
+    wc.markDestroyed();
+    finish(1);
+    await flush();
+    expect(sent).toEqual([]);
+  });
+
+  test('a renderer envelope arriving after destroy is not dispatched', async () => {
+    const { native, fireRenderer } = makeFakeNative();
+    const wc = new WebContents(native);
+    let calls = 0;
+    ipcMain.on('late', () => {
+      calls += 1;
+    });
+    wc.markDestroyed();
+    fireRenderer(encodeEnvelope({ kind: 'send', channel: 'late', args: [] }));
+    await flush();
+    expect(calls).toBe(0);
+  });
+
+  test('navigation events after destroy are not re-emitted', () => {
+    const { native, fireNavigation } = makeFakeNative();
+    const wc = new WebContents(native);
+    let fired = 0;
+    wc.on('did-navigate', () => {
+      fired += 1;
+    });
+    wc.markDestroyed();
+    fireNavigation({ type: 'did-navigate' });
+    expect(fired).toBe(0);
+  });
+});
+
 describe('WebContents.setUserAgent / getUserAgent', () => {
   test('defaults to an empty override', () => {
     expect(new WebContents(makeFakeNative().native).getUserAgent()).toBe('');
