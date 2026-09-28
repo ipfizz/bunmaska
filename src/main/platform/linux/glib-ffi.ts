@@ -1,5 +1,6 @@
 import { type FFIFunction, FFIType } from 'bun:ffi';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import {
@@ -32,9 +33,19 @@ export const linuxLibPath = (
   engine: EngineResolution,
   soname: string,
   exists: (path: string) => boolean = existsSync,
+  cwd: string = process.cwd(),
 ): string => {
   const bundled = engineLibPath(engine, soname);
-  return bundled !== soname && exists(bundled) ? bundled : soname;
+  if (bundled !== soname && exists(bundled)) {
+    return bundled;
+  }
+  // Bun retries a failed bare-name dlopen as <cwd>/<name>, which would run a planted library.
+  if (exists(join(cwd, soname))) {
+    throw new Error(
+      `refusing to dlopen ${soname}: a file of that name is in the working directory`,
+    );
+  }
+  return soname;
 };
 
 /**
