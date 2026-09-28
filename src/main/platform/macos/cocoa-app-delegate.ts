@@ -37,10 +37,11 @@ const ensureDelegateClass = (): Handle => {
       typeEncoding: 'c@:@c',
       args: ['object', 'object'],
       returns: 'bool',
-      impl: (_self, _cmd, _sender, hasVisibleWindows) => {
-        current?.activate(hasVisibleWindows === 1n);
-        // Return YES so AppKit performs its default reopen behavior.
-        return 1;
+      impl: (_self, _cmd, _sender, flag) => {
+        // Only the low byte of a BOOL register is defined by the ABI.
+        const hasVisibleWindows = (flag & 0xffn) !== 0n;
+        current?.activate(hasVisibleWindows);
+        return hasVisibleWindows ? 1 : 0;
       },
     },
     {

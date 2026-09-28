@@ -1,3 +1,4 @@
+import { dlopen, FFIType } from 'bun:ffi';
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import {
@@ -10,15 +11,30 @@ import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 /** Drives the runtime `BunmaskaAppDelegate` by sending its selectors directly. */
 
+/** `objc_msgSend(id, SEL, id, u64) -> BOOL`; the u64 lets a test put junk above the BOOL byte. */
+const sendReopen = (delegate: bigint, flag: bigint): number => {
+  const lib = dlopen('libobjc.A.dylib', {
+    objc_msgSend: {
+      args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u64],
+      returns: FFIType.u8,
+    },
+  });
+  try {
+    const sel = cocoa().selectors.get('applicationShouldHandleReopen:hasVisibleWindows:');
+    return lib.symbols.objc_msgSend(delegate, sel, 0n, flag);
+  } finally {
+    lib.close();
+  }
+};
+
 const NOOP_HANDLERS: AppDelegateHandlers = {
   activate: () => undefined,
   openUrl: () => undefined,
   openFile: () => undefined,
 };
 
-describe.skipIf(currentPlatform() !== 'macos')(
-  'BunmaskaAppDelegate on the real macOS runtime',
-  () => {
+if (currentPlatform() === 'macos') {
+  describe('BunmaskaAppDelegate on the real macOS runtime', () => {
     test('installs on NSApp and reads back via -delegate', () => {
       const rt = cocoa();
       const nsApp = rt.msgSend(
@@ -28,6 +44,14 @@ describe.skipIf(currentPlatform() !== 'macos')(
       const delegate = createAppDelegate(NOOP_HANDLERS);
       msgSendPtr(nsApp, rt.selectors.get('setDelegate:'), delegate.handle);
       expect(rt.msgSend(nsApp, rt.selectors.get('delegate'))).toBe(delegate.handle);
+    });
+
+    test('Dock reopen reports the BOOL flag and returns it, as Electron does', () => {
+      const seen: boolean[] = [];
+      const delegate = createAppDelegate({ ...NOOP_HANDLERS, activate: (v) => seen.push(v) });
+      expect(sendReopen(delegate.handle, 0n)).toBe(0);
+      expect(sendReopen(delegate.handle, 0x1_0000_0001n)).toBe(1);
+      expect(seen).toEqual([false, true]);
     });
 
     test('application:openURLs: routes each URL to the openUrl handler', () => {
@@ -79,5 +103,5 @@ describe.skipIf(currentPlatform() !== 'macos')(
       expect(files).toEqual(['/tmp/bunmaska open.txt']);
       expect(urls).toEqual([]);
     });
-  },
-);
+  });
+}
