@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { ptr } from 'bun:ffi';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MessageBoxSpec } from '../../../../../src/main/platform/macos/cocoa-dialog';
 import {
   buildFileFilter,
+  initialDirectory,
   messageBoxResponse,
   messageBoxUType,
   parseSelectedPaths,
@@ -143,5 +146,20 @@ describe('readFileDialogResult', () => {
       join('C:\\docs', 'a.txt'),
       join('C:\\docs', 'b.png'),
     ]);
+  });
+});
+
+describe('initialDirectory', () => {
+  test('a folder opens as itself, a file at its parent, and no path at the system default', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-dialog-'));
+    try {
+      const file = join(dir, 'notes.txt');
+      writeFileSync(file, '');
+      expect(initialDirectory(dir)).toBe(dir);
+      expect(initialDirectory(file)).toBe(dir);
+      expect(initialDirectory('')).toBe('');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

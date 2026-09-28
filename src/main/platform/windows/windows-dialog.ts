@@ -1,5 +1,6 @@
 import { type Pointer, ptr, read } from 'bun:ffi';
-import { join } from 'node:path';
+import { statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { DialogBackend } from '../../api/dialog';
 import type { MessageBoxSpec, OpenDialogSpec, SaveDialogSpec } from '../macos/cocoa-dialog';
 import { wstr } from './win32';
@@ -45,6 +46,7 @@ const OFN_FILTER_OFFSET = 24; // lpstrFilter
 const OFN_FILTER_INDEX_OFFSET = 44; // nFilterIndex
 const OFN_FILE_OFFSET = 48; // lpstrFile (output buffer)
 const OFN_MAX_FILE_OFFSET = 56; // nMaxFile (in WCHARs)
+const OFN_INITIAL_DIR_OFFSET = 80; // lpstrInitialDir
 const OFN_FLAGS_OFFSET = 96; // Flags
 /** `sizeof(BROWSEINFOW)` (x64) and the field offsets used below. */
 const BI_SIZE = 64;
@@ -128,6 +130,12 @@ export const parseSelectedPaths = (decoded: string): string[] => {
   return names.map((name) => join(directory ?? '', name));
 };
 
+/** The folder an open dialog starts in: `defaultPath` itself, or its parent for a file. */
+export const initialDirectory = (defaultPath: string): string =>
+  defaultPath.length === 0 || statSync(defaultPath, { throwIfNoEntry: false })?.isDirectory()
+    ? defaultPath
+    : dirname(defaultPath);
+
 /** Read a NUL-separated wide-string list from native memory up to its double-NUL. */
 const readResultString = (bufferPtr: ReturnType<typeof ptr>, maxWchars: number): string => {
   const units: number[] = [];
@@ -176,8 +184,10 @@ const runFileDialog = (
   extensions: ReadonlyArray<string>,
   flags: number,
   defaultName: string,
+  initialDir: string,
 ): string[] => {
   const filterBuffer = wstr(buildFileFilter(extensions));
+  const initialDirBuffer = wstr(initialDir);
   const fileBuffer = new Uint8Array(FILE_BUFFER_WCHARS * 2);
   if (defaultName.length > 0) {
     const name = wstr(defaultName);
@@ -192,6 +202,9 @@ const runFileDialog = (
   view.setBigUint64(OFN_FILE_OFFSET, BigInt(fileBufferPtr), true);
   view.setUint32(OFN_MAX_FILE_OFFSET, FILE_BUFFER_WCHARS, true);
   view.setUint32(OFN_FLAGS_OFFSET, flags, true);
+  if (initialDir.length > 0) {
+    view.setBigUint64(OFN_INITIAL_DIR_OFFSET, BigInt(ptr(initialDirBuffer)), true);
+  }
   if (call(ptr(ofn)) === 0) {
     return []; // the user cancelled
   }
@@ -238,8 +251,9 @@ export const windowsDialogBackend: DialogBackend = {
   },
 
   showOpenDialog(spec: OpenDialogSpec): string[] {
-    if (spec.canChooseDirectories && !spec.canChooseFiles) {
-      return runFolderDialog();
+    // Electron: an open dialog cannot pick both on Windows, so openDirectory wins.
+    if (spec.canChooseDirectories) {
+      return runFolderDialog(); // ponytail: ignores defaultPath (needs a BFFM_SETSELECTION callback)
     }
     const flags =
       OFN_EXPLORER |
@@ -253,6 +267,7 @@ export const windowsDialogBackend: DialogBackend = {
       spec.extensions,
       flags,
       '',
+      initialDirectory(spec.defaultPath),
     );
   },
 
@@ -264,6 +279,7 @@ export const windowsDialogBackend: DialogBackend = {
       spec.extensions,
       flags,
       spec.defaultName,
+      '',
     );
     return path ?? '';
   },
