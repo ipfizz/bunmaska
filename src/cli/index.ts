@@ -5,6 +5,7 @@
  * `process.stdout`/`process.stderr` because Biome bans `console.*`.
  */
 
+import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { type BunmaskaRendererConfig, rendererOutDir } from '../common/config-schema';
@@ -29,13 +30,7 @@ import { engineDir, enginesPath, isInstalled } from './engine-store';
 import { runInit } from './init';
 import { runKeygen } from './keygen';
 import { notarizeApp } from './notarize';
-import {
-  type BuildOptions,
-  type BuildTarget,
-  type Command,
-  parseArgs,
-  resolveTarget,
-} from './parse-args';
+import { type BuildTarget, type Command, parseArgs, resolveTarget } from './parse-args';
 import { runApp } from './run';
 import { emitUpdateArtifact } from './update-artifact';
 
@@ -141,20 +136,21 @@ const readAppVersion = (): string => {
   }
 };
 
-/** When `--update` was given, emit the `.tar.zst` + `update.json` (+ `.sig`) feed. */
+/** The `--update` feed to emit beside the bundle. */
+type UpdateFeed = { readonly channel: string; readonly signingKeyPem: string | undefined };
+
+/** Emit the `.tar.zst` + `update.json` (+ `.sig`) feed when there is one. */
 const maybeEmitUpdate = async (
+  feed: UpdateFeed | undefined,
   bundlePath: string,
   name: string,
   target: BuildTarget,
-  options: BuildOptions,
 ): Promise<void> => {
-  if (options.update !== true) {
+  if (feed === undefined) {
     return;
   }
-  let signingKeyPem: string | undefined;
-  if (options.updateKey !== undefined) {
-    signingKeyPem = readFileSync(options.updateKey, 'utf8');
-  } else {
+  const { signingKeyPem } = feed;
+  if (signingKeyPem === undefined) {
     err(
       'bunmaska build: WARNING: the update feed is UNSIGNED (no --update-key). ' +
         'The runtime autoUpdater refuses unsigned updates; sign with ' +
@@ -166,7 +162,7 @@ const maybeEmitUpdate = async (
     outDir: dirname(bundlePath),
     name,
     version: readAppVersion(),
-    channel: options.channel ?? DEFAULT_CHANNEL,
+    channel: feed.channel,
     os: target,
     // buildWindowsApp always compiles bun-windows-x64, whatever the host.
     arch: target === 'windows' ? 'x64' : currentArch(),
@@ -246,16 +242,26 @@ const runBuild = async (
   const id = command.options.id ?? config.id;
   const icon = command.options.icon ?? config.icon;
 
-  // Fail fast on an unreadable signing key: discovering it after a full build
-  // wastes the build and surfaced as a raw stack.
-  if (command.options.updateKey !== undefined) {
+  const { update, updateKey, channel } = command.options;
+  if (update !== true && (updateKey !== undefined || channel !== undefined)) {
+    err('bunmaska build: --update-key and --channel need --update.');
+    return 1;
+  }
+  // Fail fast on an unusable signing key rather than after the full build.
+  let signingKeyPem: string | undefined;
+  if (updateKey !== undefined) {
     try {
-      readFileSync(command.options.updateKey, 'utf8');
+      signingKeyPem = readFileSync(updateKey, 'utf8');
+      createPrivateKey(signingKeyPem);
     } catch {
-      err(`bunmaska build: cannot read --update-key ${command.options.updateKey}`);
+      err(
+        `bunmaska build: --update-key ${updateKey} is not a readable private key ` +
+          '(bunmaska keygen writes it as update-signing-key.pem).',
+      );
       return 1;
     }
   }
+  const feed = update === true ? { channel: channel ?? DEFAULT_CHANNEL, signingKeyPem } : undefined;
 
   // A configured renderer builds first and ships as `renderer/` beside the
   // executable; nothing else in the build copies it (assets are entry siblings).
@@ -288,7 +294,7 @@ const runBuild = async (
     out(result.appDir);
     out(result.tarball);
     out(result.deb);
-    await maybeEmitUpdate(result.appDir, name, 'linux', command.options);
+    await maybeEmitUpdate(feed, result.appDir, name, 'linux');
     return 0;
   }
 
@@ -318,7 +324,7 @@ const runBuild = async (
     out(result.appDir);
     out(result.exePath);
     out(result.zip);
-    await maybeEmitUpdate(result.appDir, name, 'windows', command.options);
+    await maybeEmitUpdate(feed, result.appDir, name, 'windows');
     return 0;
   }
 
@@ -358,7 +364,7 @@ const runBuild = async (
     const outDmg = join(dirname(appPath), `${name}.dmg`);
     await (deps.buildDmg ?? buildDmg)({ appDir: appPath, name, outDmg });
   }
-  await maybeEmitUpdate(appPath, name, 'macos', command.options);
+  await maybeEmitUpdate(feed, appPath, name, 'macos');
   return 0;
 };
 

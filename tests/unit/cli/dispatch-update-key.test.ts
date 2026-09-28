@@ -86,6 +86,32 @@ describe('dispatch build --update signing', () => {
   });
 });
 
+describe('dispatch build rejects unusable update options before building', () => {
+  test.each([
+    ['--update-key without --update', { updateKey: 'update-signing-key.pem' }],
+    ['--channel without --update', { channel: 'beta' }],
+    ['a public key as --update-key', { update: true, updateKey: 'update-public-key.pem' }],
+  ])('%s', async (_label, options) => {
+    const { root } = setupProject();
+    runKeygen(root, { out: () => undefined, err: () => undefined });
+    let built = false;
+    let code = -1;
+    await captureStdio(async () => {
+      code = await dispatch(
+        { kind: 'build', entry: 'app.ts', options: { target: 'linux', name: 'Demo', ...options } },
+        {
+          buildLinux: async () => {
+            built = true;
+            return { appDir: root, tarball: '', deb: '' };
+          },
+        },
+      );
+    });
+    expect(code).toBe(1);
+    expect(built).toBe(false);
+  });
+});
+
 describe('dispatch build --update manifest', () => {
   test('a Windows feed is labelled x64 whatever the host arch', async () => {
     const { root, bundle } = setupProject();
