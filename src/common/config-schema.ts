@@ -4,6 +4,7 @@
  * `node:fs` code into the app's runtime bundle.
  */
 
+import { isSystemEngine, parseEngineId } from './engine-id';
 import { InvalidArgumentError } from './errors';
 import { type Channel, DEFAULT_CHANNEL } from './manifest';
 
@@ -117,16 +118,53 @@ const assertOptionalBoolean = (
   return value;
 };
 
+/** An object with only `known` keys, so a typo fails instead of being ignored. */
+const assertObject = (
+  value: unknown,
+  field: string,
+  known: readonly string[],
+  source: string,
+): Record<string, unknown> => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidArgumentError(
+      `${source}: ${field === '' ? 'config' : `"${field}"`} must be an object`,
+    );
+  }
+  for (const key of Object.keys(value)) {
+    if (!known.includes(key)) {
+      const path = field === '' ? key : `${field}.${key}`;
+      throw new InvalidArgumentError(
+        `${source}: unknown key "${path}" (known: ${known.join(', ')})`,
+      );
+    }
+  }
+  return value as Record<string, unknown>;
+};
+
+const isEnginePin = (pin: string): boolean => {
+  if (isSystemEngine(pin) || /^\d+(?:\.\d+)+$/.test(pin)) {
+    return true;
+  }
+  try {
+    parseEngineId(pin);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Validate an untrusted, freshly-imported config value. Throws
  * {@link InvalidArgumentError} naming the bad field; `source` labels the file in
  * that message.
  */
 export const validateConfig = (raw: unknown, source = 'bunmaska.config'): BunmaskaConfig => {
-  if (raw === null || typeof raw !== 'object') {
-    throw new InvalidArgumentError(`${source}: config must be an object`);
-  }
-  const record = raw as Record<string, unknown>;
+  const record = assertObject(
+    raw,
+    '',
+    ['name', 'id', 'entry', 'icon', 'updates', 'engine', 'renderer'],
+    source,
+  );
   const config: { -readonly [K in keyof BunmaskaConfig]: BunmaskaConfig[K] } = {};
 
   const name = assertOptionalString(record['name'], 'name', source);
@@ -148,10 +186,7 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
 
   const updates = record['updates'];
   if (updates !== undefined) {
-    if (updates === null || typeof updates !== 'object') {
-      throw new InvalidArgumentError(`${source}: "updates" must be an object`);
-    }
-    const updatesRecord = updates as Record<string, unknown>;
+    const updatesRecord = assertObject(updates, 'updates', ['url', 'channel'], source);
     const url = assertOptionalString(updatesRecord['url'], 'updates.url', source);
     const channel = assertOptionalString(updatesRecord['channel'], 'updates.channel', source);
     config.updates = {
@@ -162,20 +197,19 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
 
   const engine = record['engine'];
   if (engine !== undefined) {
-    if (engine === null || typeof engine !== 'object') {
-      throw new InvalidArgumentError(`${source}: "engine" must be an object`);
-    }
-    const engineRecord = engine as Record<string, unknown>;
+    const engineRecord = assertObject(engine, 'engine', ['webkit', 'embed', 'feed'], source);
     const webkit = assertOptionalString(engineRecord['webkit'], 'engine.webkit', source);
+    if (webkit !== undefined && !isEnginePin(webkit)) {
+      throw new InvalidArgumentError(
+        `${source}: "engine.webkit" must be "system", an upstream version (2.52.4) or a full engine id (webkitgtk-6.0-2.52.4-bunmaska1-linux-x64), got ${JSON.stringify(webkit)}`,
+      );
+    }
     const embed = assertOptionalBoolean(engineRecord['embed'], 'engine.embed', source);
 
     const feedRaw = engineRecord['feed'];
     let feed: BunmaskaEngineFeedConfig | undefined;
     if (feedRaw !== undefined) {
-      if (feedRaw === null || typeof feedRaw !== 'object') {
-        throw new InvalidArgumentError(`${source}: "engine.feed" must be an object`);
-      }
-      const feedRecord = feedRaw as Record<string, unknown>;
+      const feedRecord = assertObject(feedRaw, 'engine.feed', ['url', 'publicKey'], source);
       const url = assertOptionalString(feedRecord['url'], 'engine.feed.url', source);
       const publicKey = assertOptionalString(
         feedRecord['publicKey'],
@@ -197,10 +231,7 @@ export const validateConfig = (raw: unknown, source = 'bunmaska.config'): Bunmas
 
   const renderer = record['renderer'];
   if (renderer !== undefined) {
-    if (renderer === null || typeof renderer !== 'object') {
-      throw new InvalidArgumentError(`${source}: "renderer" must be an object`);
-    }
-    const rendererRecord = renderer as Record<string, unknown>;
+    const rendererRecord = assertObject(renderer, 'renderer', ['entry', 'outDir', 'copy'], source);
     const entry = assertOptionalString(rendererRecord['entry'], 'renderer.entry', source);
     if (entry === undefined) {
       throw new InvalidArgumentError(

@@ -66,3 +66,48 @@ describe('validateConfig — engine field', () => {
     expect(() => validateConfig({ engine: { feed: { url: 5 } } })).toThrow(InvalidArgumentError);
   });
 });
+
+describe('validateConfig strictness', () => {
+  test('rejects an unknown key at any level, naming its path', () => {
+    expect(() => validateConfig({ engin: {} })).toThrow(/unknown key "engin"/);
+    expect(() => validateConfig({ engine: { webKit: 'system' } })).toThrow(
+      /unknown key "engine.webKit"/,
+    );
+    expect(() => validateConfig({ engine: { feed: { key: 'k' } } })).toThrow(
+      /unknown key "engine.feed.key"/,
+    );
+    expect(() => validateConfig({ updates: { chanel: 'beta' } })).toThrow(
+      /unknown key "updates.chanel"/,
+    );
+    expect(() => validateConfig({ renderer: { entry: 'a.tsx', outdir: 'build' } })).toThrow(
+      /unknown key "renderer.outdir"/,
+    );
+  });
+
+  test('rejects an array where an object is expected', () => {
+    expect(() => validateConfig([])).toThrow(/config must be an object/);
+    expect(() => validateConfig({ engine: [] })).toThrow(/"engine" must be an object/);
+    expect(() => validateConfig({ renderer: ['a.tsx'] })).toThrow(/"renderer" must be an object/);
+  });
+
+  test('rejects an engine.webkit pin that is not system, a version, or a full id', () => {
+    expect(() => validateConfig({ engine: { webkit: 'webkit-typo' } })).toThrow(
+      /"engine.webkit".*webkit-typo/,
+    );
+    expect(() => validateConfig({ engine: { webkit: 'latest' } })).toThrow(/"engine.webkit"/);
+  });
+});
+
+describe('validateConfig renderer field', () => {
+  test('accepts entry, outDir and copy', () => {
+    const renderer = { entry: 'src/main.tsx', outDir: 'out', copy: ['index.html'] };
+    expect(validateConfig({ renderer })).toEqual({ renderer });
+  });
+
+  test('requires renderer.entry and a string array for renderer.copy', () => {
+    expect(() => validateConfig({ renderer: {} })).toThrow(/"renderer.entry" is required/);
+    expect(() => validateConfig({ renderer: { entry: 'a', copy: [1] } })).toThrow(
+      /"renderer.copy" must be an array of strings/,
+    );
+  });
+});
