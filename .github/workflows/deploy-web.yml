@@ -27,13 +27,13 @@ jobs:
       run:
         working-directory: website
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The IndexNow step diffs against the previous push; a shallow clone
           # would silently see no changes on a multi-commit push.
           fetch-depth: 0
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
@@ -59,13 +59,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: bun run build
 
-      # Run wrangler via bunx (the wrangler-action's npm install is flaky on Bun).
+      # Run wrangler via bunx (the wrangler-action's npm install is flaky on Bun),
+      # pinned exactly because the deploy token is in its env.
       - name: Deploy to Cloudflare Pages
         if: github.event_name != 'pull_request'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler@4 pages deploy dist --project-name=bunmaska --branch=main
+        run: bunx wrangler@4.143.0 pages deploy dist --project-name=bunmaska --branch=main
 
       # Only URLs whose source changed: pinging the whole sitemap on every deploy
       # is IndexNow's documented anti-pattern. The key file lives in public/.
