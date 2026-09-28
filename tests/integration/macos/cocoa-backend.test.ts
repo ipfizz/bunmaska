@@ -222,6 +222,19 @@ if (currentPlatform() === 'macos') {
       }
     });
 
+    test('focus leaves a hidden window hidden, like Electron', () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({ width: 320, height: 240, title: 't', show: false });
+        win.focus();
+        expect(win.isVisible()).toBe(false);
+        win.destroy();
+      } finally {
+        app.quit();
+      }
+    });
+
     test('hide makes the window not visible', () => {
       const app = createMacOSApplication();
       app.start();

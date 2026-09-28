@@ -794,7 +794,14 @@ class MacOSWindow implements NativeWindow {
   }
 
   focus(): void {
-    msgSendPtr(this.#window, cocoa().selectors.get('makeKeyAndOrderFront:'), 0n);
+    // Electron: a no-op while hidden, and activates the app only when none is active.
+    if (!this.isVisible()) {
+      return;
+    }
+    const rt = cocoa();
+    const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
+    msgSendU8(app, rt.selectors.get('activateIgnoringOtherApps:'), 0);
+    msgSendPtr(this.#window, rt.selectors.get('makeKeyAndOrderFront:'), 0n);
   }
 
   minimize(): void {
