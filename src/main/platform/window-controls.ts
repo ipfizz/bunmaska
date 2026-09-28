@@ -50,12 +50,19 @@ export function windowControlsScript(options: { nativeOpChannel?: boolean } = {}
 `
     : '';
   return `(function(){
-${ops}  var mirror = function(){
+${ops}  var mirrored = new WeakSet();
+  var mirror = function(){
     try {
       var els = document.querySelectorAll('*');
       for (var i = 0; i < els.length; i++) {
         var v = getComputedStyle(els[i]).getPropertyValue('--app-region').trim();
-        if (v === 'drag' || v === 'no-drag') els[i].style.setProperty('-webkit-app-region', v);
+        if (v === 'drag' || v === 'no-drag') {
+          els[i].style.setProperty('-webkit-app-region', v);
+          mirrored.add(els[i]);
+        } else if (mirrored.has(els[i])) {
+          els[i].style.removeProperty('-webkit-app-region');
+          mirrored.delete(els[i]);
+        }
       }
     } catch (e) {}
   };
@@ -68,7 +75,12 @@ ${ops}  var mirror = function(){
   if (document.readyState !== 'loading') schedule();
   document.addEventListener('DOMContentLoaded', schedule);
   try {
-    new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(schedule).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
   } catch (e) {}
 })();`;
 }
