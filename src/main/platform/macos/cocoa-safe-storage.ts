@@ -70,7 +70,9 @@ export const makeMacosKeychainBackend = (service: string, account: string): Keyr
     const sec = loadSecurityFFI();
     const k = secConstants();
     const query = baseQuery();
-    dictSet(query, nsDataFromBytes(key), k.kSecValueData);
+    const data = nsDataFromBytes(key);
+    dictSet(query, data, k.kSecValueData);
+    cocoa().msgSend(data, cocoa().selectors.get('release')); // the dictionary retains it
     // Device-bound, non-syncing accessibility.
     dictSet(query, k.kSecAttrAccessibleWhenUnlockedThisDeviceOnly, k.kSecAttrAccessible);
     const status = sec.symbols.SecItemAdd(query, null);

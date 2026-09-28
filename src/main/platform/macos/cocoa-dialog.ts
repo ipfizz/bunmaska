@@ -99,6 +99,7 @@ export const buildAlert = (spec: MessageBoxSpec): Handle => {
 export const showMessageBox = (spec: MessageBoxSpec): number => {
   const alert = buildAlert(spec);
   const response = msgSendReturnsI64(alert, cocoa().selectors.get('runModal'));
+  cocoa().msgSend(alert, cocoa().selectors.get('release'));
   return Number(response - NS_ALERT_FIRST_BUTTON_RETURN);
 };
 

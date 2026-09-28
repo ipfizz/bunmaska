@@ -105,12 +105,14 @@ export const writeImage = (png: Uint8Array): void => {
   const rt = cocoa();
   const pasteboard = generalPasteboard();
   rt.msgSend(pasteboard, rt.selectors.get('clearContents'));
+  const data = nsDataFromBytes(png);
   msgSendPtrPtr(
     pasteboard,
     rt.selectors.get('setData:forType:'),
-    nsDataFromBytes(png),
+    data,
     nsString(NS_PASTEBOARD_TYPE_PNG),
   );
+  rt.msgSend(data, rt.selectors.get('release')); // the pasteboard keeps its own reference
 };
 
 /** The format names currently on the clipboard (Electron's `availableFormats`). */

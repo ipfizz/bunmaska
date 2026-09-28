@@ -94,6 +94,7 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
       // A template image lets the menu bar recolor it for light/dark.
       msgSendU8(img, rt.selectors.get('setTemplate:'), template ? 1 : 0);
       msgSendPtr(btn, rt.selectors.get('setImage:'), img);
+      rt.msgSend(img, rt.selectors.get('release')); // the button retains it
     }
   };
   applyImage(image, options?.template === true);

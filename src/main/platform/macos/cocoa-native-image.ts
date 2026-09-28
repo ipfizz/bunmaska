@@ -106,8 +106,12 @@ const decodePath = (path: string): DecodedImage => {
   return decodeFromRep(bitmapRepFromData(data));
 };
 
-const decodeBuffer = (bytes: Uint8Array): DecodedImage =>
-  decodeFromRep(bitmapRepFromData(nsDataFromBytes(bytes)));
+const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
+  const data = nsDataFromBytes(bytes);
+  const rep = bitmapRepFromData(data);
+  cocoa().msgSend(data, cocoa().selectors.get('release')); // the rep keeps what it needs
+  return decodeFromRep(rep);
+};
 
 /**
  * Redraw a rep's `CGImage` into a NEW `width`×`height` offscreen bitmap, placing the source
