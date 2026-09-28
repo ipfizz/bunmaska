@@ -8,31 +8,11 @@ import type {
 import { nsString } from './cocoa-foundation';
 import { macOSLibraryAccessor } from './objc';
 
-/**
- * macOS power-save blocker via IOKit power-management assertions.
- *
- * `IOPMAssertionCreateWithName(assertionType, level, name, &id)` creates a named assertion
- * held by `powerd`; `IOPMAssertionRelease(id)` drops it. Both are SYNCHRONOUS C calls (a
- * Mach round-trip to powerd) that need NO CFRunLoop and no window, so they are safe on
- * Bunmaska's pumped main thread with nothing running.
- *
- * Type → assertion (verified against IOKit's IOPMLib.h):
- *  - 'prevent-app-suspension' → kIOPMAssertPreventUserIdleSystemSleep  ("PreventUserIdleSystemSleep")
- *  - 'prevent-display-sleep'  → kIOPMAssertPreventUserIdleDisplaySleep ("PreventUserIdleDisplaySleep")
- * (display-sleep prevention also keeps the system awake, matching Electron's precedence.)
- *
- * `IOPMAssertionID`/`IOPMAssertionLevel` are `uint32_t`; `kIOPMAssertionLevelOn = 255`;
- * success is `kIOReturnSuccess = 0`. The assertion type/name are `CFStringRef`; an NSString
- * is toll-free bridged to CFStringRef, so {@link nsString} yields one directly (carried as
- * a u64 handle, the codebase's CF/ObjC-handle convention). The out-param `IOPMAssertionID*`
- * is a one-element `Uint32Array`.
- */
+// IOPMAssertion calls are synchronous Mach round-trips to powerd; no run loop needed (D038).
 
 const IOKIT_PATH = '/System/Library/Frameworks/IOKit.framework/IOKit';
 
-/** kIOPMAssertionLevelOn — assertion active (IOPMLib.h: 255). */
 const K_IOPM_ASSERTION_LEVEL_ON = 255;
-/** kIOReturnSuccess. */
 const K_IO_RETURN_SUCCESS = 0;
 
 const ASSERTION_TYPE: Record<PowerSaveBlockerType, string> = {
@@ -61,7 +41,7 @@ const loadIOKitFFI = macOSLibraryAccessor('IOKit powerSaveBlocker', () =>
   dlopen(IOKIT_PATH, IOKIT_SYMBOLS),
 );
 
-/** Create a power assertion and return its `IOPMAssertionID`, or null on failure. */
+/** The new assertion's `IOPMAssertionID`, or null on failure. */
 const acquire = (type: PowerSaveBlockerType): NativeBlocker | null => {
   const iokit = loadIOKitFFI();
   const outId = new Uint32Array(1);
@@ -82,5 +62,4 @@ const release = (handle: NativeBlocker): void => {
   loadIOKitFFI().symbols.IOPMAssertionRelease(handle as number);
 };
 
-/** The macOS power-save-blocker backend (IOKit assertions). */
 export const cocoaPowerSaveBlockerBackend: PowerSaveBlockerBackend = { acquire, release };

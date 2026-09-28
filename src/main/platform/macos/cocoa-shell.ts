@@ -6,11 +6,6 @@ import { cocoa } from './cocoa-runtime';
 import { macOSLibraryAccessor } from './objc';
 import type { Handle } from './objc';
 
-/**
- * Desktop integration via `NSWorkspace` and `NSBeep` — the macOS half of
- * Electron's `shell`.
- */
-
 const APPKIT_PATH = '/System/Library/Frameworks/AppKit.framework/AppKit';
 
 const getNSBeep = macOSLibraryAccessor('NSBeep', () =>
@@ -52,6 +47,10 @@ export const showItemInFolder = (path: string): void => {
     rt.selectors.get('fileURLWithPath:'),
     nsString(path),
   );
+  // arrayWithObject:nil raises and aborts the process; an empty path yields a nil URL.
+  if (fileUrl === 0n) {
+    return;
+  }
   const urls = msgSendPtr(rt.classes.get('NSArray'), rt.selectors.get('arrayWithObject:'), fileUrl);
   msgSendPtr(sharedWorkspace(), rt.selectors.get('activateFileViewerSelectingURLs:'), urls);
 };

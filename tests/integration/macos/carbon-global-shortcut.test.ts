@@ -1,22 +1,71 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
-import { macosGlobalShortcutBackend } from '../../../src/main/platform/macos/carbon-global-shortcut';
+import {
+  macosGlobalShortcutBackend,
+  registeredHotKeyId,
+} from '../../../src/main/platform/macos/carbon-global-shortcut';
+import { loadCarbonFFI } from '../../../src/main/platform/macos/carbon-ffi';
 
-/**
- * macOS-only. Exercises the REAL Carbon `RegisterEventHotKey` path on the host.
- *
- * Triggering a genuine system hot-key press headlessly is not reliably possible,
- * so — like the dialog/notification construction tests — this asserts the
- * register/unregister LIFECYCLE runs cleanly with no crash (no SIGSEGV from the
- * retained handler JSCallback or the packed-u64 EventHotKeyID), and that state is
- * tracked correctly. The packed-u64 struct-by-value workaround returning `noErr`
- * is what makes `register` return `true` here.
- */
+const SIGNATURE = 0x53414d42; // 'SAMB'
+const HOT_KEY_ID = 0x686b6964; // 'hkid': both the parameter name and its type
+
+/** Synthesize a kEventHotKeyPressed carrying `{signature, id}` and send it to the app target. */
+const pressHotKey = (signature: number, id: number): number => {
+  const carbon = dlopen('/System/Library/Frameworks/Carbon.framework/Carbon', {
+    CreateEvent: {
+      args: [FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.f64, FFIType.u32, FFIType.ptr],
+      returns: FFIType.i32,
+    },
+    SetEventParameter: {
+      args: [FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.u64, FFIType.ptr],
+      returns: FFIType.i32,
+    },
+    SendEventToEventTarget: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+    ReleaseEvent: { args: [FFIType.ptr], returns: FFIType.void },
+  });
+  const KEYBOARD_EVENT_CLASS = 0x6b657962; // 'keyb'
+  const K_EVENT_HOT_KEY_PRESSED = 6;
+  const out = new BigUint64Array(1);
+  carbon.symbols.CreateEvent(null, KEYBOARD_EVENT_CLASS, K_EVENT_HOT_KEY_PRESSED, 0, 0, ptr(out));
+  const event = out[0] ?? 0n;
+  const hotKeyId = new Uint32Array([signature, id]);
+  carbon.symbols.SetEventParameter(event, HOT_KEY_ID, HOT_KEY_ID, 8n, ptr(hotKeyId));
+  const status = carbon.symbols.SendEventToEventTarget(
+    event,
+    loadCarbonFFI().symbols.GetApplicationEventTarget(),
+  );
+  carbon.symbols.ReleaseEvent(event);
+  carbon.close();
+  return status;
+};
+
+// A real key press cannot be injected headlessly, so hot-key events are synthesized and sent
+// straight to the application event target, which runs the same handler.
 const isMac = currentPlatform() === 'macos';
 
 describe.skipIf(!isMac)('carbon-global-shortcut (macOS)', () => {
   afterEach(() => {
     macosGlobalShortcutBackend.unregisterAll();
+  });
+
+  test('a hot-key press with our signature fires only that shortcut', () => {
+    const fired: string[] = [];
+    macosGlobalShortcutBackend.register('CmdOrCtrl+Shift+K', () => fired.push('K'));
+    macosGlobalShortcutBackend.register('CmdOrCtrl+Shift+L', () => fired.push('L'));
+    pressHotKey(SIGNATURE, registeredHotKeyId('CmdOrCtrl+Shift+L') ?? 0);
+    expect(fired).toEqual(['L']);
+  });
+
+  test('a hot-key press with a foreign signature is left to other handlers', () => {
+    let fired = false;
+    macosGlobalShortcutBackend.register('CmdOrCtrl+Shift+K', () => {
+      fired = true;
+    });
+    const EVENT_NOT_HANDLED_ERR = -9874;
+    const status = pressHotKey(0x4f544852, registeredHotKeyId('CmdOrCtrl+Shift+K') ?? 0); // 'OTHR'
+    expect(fired).toBe(false);
+    expect(status).toBe(EVENT_NOT_HANDLED_ERR);
   });
 
   test('isSupported() is true on macOS', () => {
@@ -28,7 +77,11 @@ describe.skipIf(!isMac)('carbon-global-shortcut (macOS)', () => {
   });
 
   test('register() returns false for a key with no virtual-key mapping', () => {
-    expect(macosGlobalShortcutBackend.register('CmdOrCtrl+Plus', () => undefined)).toBe(false);
+    expect(macosGlobalShortcutBackend.register('CmdOrCtrl+F21', () => undefined)).toBe(false);
+  });
+
+  test('register() accepts Plus', () => {
+    expect(macosGlobalShortcutBackend.register('CmdOrCtrl+Plus', () => undefined)).toBe(true);
   });
 
   test('unregister() of a live shortcut runs clean', () => {

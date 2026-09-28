@@ -4,6 +4,18 @@ import { Menu } from '../../../src/main/api/menu';
 import { Tray } from '../../../src/main/api/tray';
 import { resetBootstrapForTesting } from '../../../src/main/bootstrap';
 import { nativeApp, setNativeAppForTesting } from '../../../src/main/native-app';
+import { clickRegistrySize, realizeMenu } from '../../../src/main/platform/macos/cocoa-menu';
+import { macosTrayBackend } from '../../../src/main/platform/macos/cocoa-tray';
+
+/** A Menu whose realize() yields a pre-built NSMenu, so the test can watch that handle. */
+const menuRealizingTo = (handle: bigint): Menu => ({ realize: () => handle }) as unknown as Menu;
+
+const nextTick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+const realizeClickableMenu = (): bigint =>
+  realizeMenu([
+    { label: 'A', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
+  ]);
 
 /**
  * Real NSStatusItem lifecycle on a macOS host. A status-bar click cannot be
@@ -67,6 +79,31 @@ if (currentPlatform() === 'macos') {
         tray.destroy();
       }
       expect(tray.isDestroyed()).toBe(true);
+    });
+
+    // AppKit may hold a status item's menu past a tick, so these check our side only.
+    test('replacing the context menu disposes the previous one', async () => {
+      const tray = macosTrayBackend.create('/tmp/icon.png');
+      try {
+        await nextTick();
+        const registered = clickRegistrySize();
+        tray.setContextMenu(menuRealizingTo(realizeClickableMenu()));
+        tray.setContextMenu(null);
+        await nextTick();
+        expect(clickRegistrySize()).toBe(registered);
+      } finally {
+        tray.destroy();
+      }
+    });
+
+    test('destroy disposes the context menu', async () => {
+      const tray = macosTrayBackend.create('/tmp/icon.png');
+      await nextTick();
+      const registered = clickRegistrySize();
+      tray.setContextMenu(menuRealizingTo(realizeClickableMenu()));
+      tray.destroy();
+      await nextTick();
+      expect(clickRegistrySize()).toBe(registered);
     });
 
     test('destroy is idempotent on the real backend', () => {

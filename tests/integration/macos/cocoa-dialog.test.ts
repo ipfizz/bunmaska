@@ -6,6 +6,7 @@ import {
   buildOpenPanel,
   buildSavePanel,
 } from '../../../src/main/platform/macos/cocoa-dialog';
+import { nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
 import { msgSendReturnsI64 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
@@ -79,6 +80,23 @@ if (currentPlatform() === 'macos') {
 
     test('buildSavePanel returns a non-null NSSavePanel', () => {
       expect(buildSavePanel({ defaultName: 'untitled.txt', extensions: [] })).not.toBe(0n);
+    });
+
+    test('buildSavePanel opens in defaultDirectory with defaultName in the name field', () => {
+      const rt = cocoa();
+      const panel = buildSavePanel({
+        defaultName: 'report.pdf',
+        defaultDirectory: '/Library',
+        extensions: [],
+      });
+      const directory = rt.msgSend(
+        rt.msgSend(panel, rt.selectors.get('directoryURL')),
+        rt.selectors.get('path'),
+      );
+      expect(nsStringToString(directory)).toBe('/Library');
+      expect(nsStringToString(rt.msgSend(panel, rt.selectors.get('nameFieldStringValue')))).toBe(
+        'report.pdf',
+      );
     });
 
     test('buildSavePanel tolerates an empty default name', () => {

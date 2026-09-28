@@ -3,13 +3,7 @@ import { msgSendI64, msgSendPtr, msgSendReturnsI64, msgSendU8 } from './cocoa-ms
 import { cocoa } from './cocoa-runtime';
 import type { Handle } from './objc';
 
-/**
- * Native modal dialogs via `NSAlert`, `NSOpenPanel`, and `NSSavePanel`.
- *
- * Each dialog is split into a non-blocking *build* step and a *run* step that
- * calls the blocking `runModal`, which spins a nested AppKit modal loop and
- * cannot run on a headless CI display.
- */
+// build* is split from show* because runModal blocks in a nested modal loop that CI cannot dismiss.
 
 /** `NSModalResponseOK` for save/open panels. */
 const NS_MODAL_RESPONSE_OK = 1n;
@@ -28,11 +22,7 @@ export type MessageBoxSpec = {
   readonly type?: MessageBoxType;
 };
 
-/**
- * Map an Electron message-box `type` to an `NSAlertStyle` value
- * (warning = 0, informational = 1, critical = 2), or `undefined` to leave the
- * `NSAlert` default.
- */
+/** The `NSAlertStyle` for an Electron message-box `type`; `undefined` keeps the NSAlert default. */
 export const alertStyleForType = (type: MessageBoxType | undefined): bigint | undefined => {
   switch (type) {
     case 'info':
@@ -61,6 +51,8 @@ export type OpenDialogSpec = {
 
 export type SaveDialogSpec = {
   readonly defaultName: string;
+  /** Directory the panel opens at; absent = system default / last location. */
+  readonly defaultDirectory?: string;
   /** Allowed file extensions (without dots); empty means any file. */
   readonly extensions: ReadonlyArray<string>;
 };
@@ -73,6 +65,16 @@ const nsArrayOfStrings = (strings: ReadonlyArray<string>): Handle => {
     msgSendPtr(array, rt.selectors.get('addObject:'), nsString(s));
   }
   return array;
+};
+
+const setDirectory = (panel: Handle, path: string): void => {
+  const rt = cocoa();
+  const url = msgSendPtr(
+    rt.classes.get('NSURL'),
+    rt.selectors.get('fileURLWithPath:'),
+    nsString(path),
+  );
+  msgSendPtr(panel, rt.selectors.get('setDirectoryURL:'), url);
 };
 
 /** Build (but do not run) an `NSAlert` for a message box. Returns its handle. */
@@ -99,6 +101,7 @@ export const buildAlert = (spec: MessageBoxSpec): Handle => {
 export const showMessageBox = (spec: MessageBoxSpec): number => {
   const alert = buildAlert(spec);
   const response = msgSendReturnsI64(alert, cocoa().selectors.get('runModal'));
+  cocoa().msgSend(alert, cocoa().selectors.get('release'));
   return Number(response - NS_ALERT_FIRST_BUTTON_RETURN);
 };
 
@@ -115,12 +118,7 @@ export const buildOpenPanel = (spec: OpenDialogSpec): Handle => {
   );
   msgSendU8(panel, rt.selectors.get('setCanCreateDirectories:'), spec.canCreateDirectories ? 1 : 0);
   if (spec.defaultPath.length > 0) {
-    const url = msgSendPtr(
-      rt.classes.get('NSURL'),
-      rt.selectors.get('fileURLWithPath:'),
-      nsString(spec.defaultPath),
-    );
-    msgSendPtr(panel, rt.selectors.get('setDirectoryURL:'), url);
+    setDirectory(panel, spec.defaultPath);
   }
   if (spec.extensions.length > 0) {
     msgSendPtr(panel, rt.selectors.get('setAllowedFileTypes:'), nsArrayOfStrings(spec.extensions));
@@ -151,6 +149,9 @@ export const showOpenDialog = (spec: OpenDialogSpec): string[] => {
 export const buildSavePanel = (spec: SaveDialogSpec): Handle => {
   const rt = cocoa();
   const panel = rt.msgSend(rt.classes.get('NSSavePanel'), rt.selectors.get('savePanel'));
+  if (spec.defaultDirectory !== undefined && spec.defaultDirectory.length > 0) {
+    setDirectory(panel, spec.defaultDirectory);
+  }
   if (spec.defaultName.length > 0) {
     msgSendPtr(panel, rt.selectors.get('setNameFieldStringValue:'), nsString(spec.defaultName));
   }

@@ -26,6 +26,13 @@ if (currentPlatform() === 'macos') {
       expect(new Set(values).size).toBe(values.length);
     });
 
+    test('isAvailable is true before and after the key item exists', () => {
+      const backend = makeMacosKeychainBackend(PROBE_SERVICE, PROBE_ACCOUNT);
+      expect(backend.isAvailable()).toBe(true);
+      backend.getOrCreateKey();
+      expect(backend.isAvailable()).toBe(true);
+    });
+
     test('getOrCreateKey creates then returns the SAME 32-byte key', () => {
       const backend = makeMacosKeychainBackend(PROBE_SERVICE, PROBE_ACCOUNT);
       expect(backend.isAvailable()).toBe(true);
