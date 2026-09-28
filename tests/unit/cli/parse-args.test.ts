@@ -113,5 +113,14 @@ describe('parseArgs --help under a command', () => {
   test('prints usage instead of rejecting the flag', () => {
     expect(parseArgs(['build', '--help'])).toEqual({ kind: 'help' });
     expect(parseArgs(['engine', 'install', '-h'])).toEqual({ kind: 'help' });
+    expect(parseArgs(['run', '--help'])).toEqual({ kind: 'help' });
+  });
+
+  test('forwards --help and -h after a run entry to the app', () => {
+    expect(parseArgs(['run', 'app.ts', '--help', '-h'])).toEqual({
+      kind: 'run',
+      entry: 'app.ts',
+      args: ['--help', '-h'],
+    });
   });
 });
