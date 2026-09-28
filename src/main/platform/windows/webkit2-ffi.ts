@@ -86,6 +86,9 @@ const WEBKIT2_SYMBOLS = {
   WKScriptMessageGetBody: { args: [FFIType.ptr], returns: FFIType.ptr },
 
   // ── Strings / URLs ───────────────────────────────────────────────────────
+  // WKTypeID is uint32_t.
+  WKGetTypeID: { args: [FFIType.ptr], returns: FFIType.u32 },
+  WKStringGetTypeID: { args: [], returns: FFIType.u32 },
   WKStringCreateWithUTF8CString: { args: [FFIType.cstring], returns: FFIType.ptr },
   WKStringGetMaximumUTF8CStringSize: { args: [FFIType.ptr], returns: FFIType.u64 },
   WKStringGetUTF8CString: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },

@@ -155,6 +155,25 @@ const setupNavigationClient = (
   return callbacks;
 };
 
+type ScriptMessageApi = Pick<
+  ReturnType<typeof loadWebKit2>['symbols'],
+  'WKScriptMessageGetBody' | 'WKGetTypeID' | 'WKStringGetTypeID'
+>;
+
+/** Forward a page-posted script message's string body to `onMessage`. */
+export const deliverScriptMessage = (
+  message: Pointer,
+  onMessage: (body: string) => void,
+  wk: ScriptMessageApi = loadWebKit2().symbols,
+  readString: (ref: Pointer) => string = wkStringToJs,
+): void => {
+  const body = wk.WKScriptMessageGetBody(message);
+  // Any page script can post a number/bool/object; reading that as a WKString faults the process.
+  if (body !== null && wk.WKGetTypeID(body) === wk.WKStringGetTypeID()) {
+    onMessage(readString(body));
+  }
+};
+
 export interface ScriptMessageHandler {
   readonly name: string;
   readonly onMessage: (body: string) => void;
@@ -217,12 +236,7 @@ export class WindowsWebView {
     const callbacks: JSCallback[] = [];
     for (const handler of options.messageHandlers) {
       const callback = new JSCallback(
-        (messageRef: Pointer) => {
-          const bodyRef = s.WKScriptMessageGetBody(messageRef);
-          if (bodyRef !== null) {
-            handler.onMessage(wkStringToJs(bodyRef));
-          }
-        },
+        (messageRef: Pointer) => deliverScriptMessage(messageRef, handler.onMessage, s),
         { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.void },
       );
       if (callback.ptr === null) {
