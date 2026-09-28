@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { InvalidArgumentError } from '../../../../src/common/errors';
 import {
   buildProtocolResponse,
   normalizeScheme,
@@ -93,6 +94,24 @@ describe('protocol registry', () => {
     protocol.handle('APP://', () => ({ data: 'x' }));
     expect(protocol.isProtocolHandled('app')).toBe(true);
     expect(protocol.getRegisteredSchemes()).toContain('app');
+  });
+
+  test('handle rejects schemes WebKit serves natively, before registering', () => {
+    for (const scheme of ['https', 'HTTP://', 'file', 'about', 'data', 'blob', 'wss', 'ftp']) {
+      expect(() => protocol.handle(scheme, () => undefined)).toThrow(InvalidArgumentError);
+    }
+    expect(protocol.getRegisteredSchemes()).toEqual([]);
+  });
+
+  test('handle rejects names that are not valid URL schemes', () => {
+    for (const scheme of ['my_app', '1app', '', 'a b', 'app/x']) {
+      expect(() => protocol.handle(scheme, () => undefined)).toThrow(InvalidArgumentError);
+    }
+  });
+
+  test('handle accepts a custom scheme using + - and .', () => {
+    protocol.handle('my-app+v1.x', () => undefined);
+    expect(protocol.isProtocolHandled('my-app+v1.x')).toBe(true);
   });
 
   test('unhandle removes the scheme', () => {

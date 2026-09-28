@@ -1,3 +1,5 @@
+import { InvalidArgumentError } from '../../common/errors';
+
 /**
  * Custom URL-scheme registration — the drop-in equivalent of Electron's
  * `protocol` module (v1). Custom schemes MUST be registered on the web-view
@@ -67,6 +69,22 @@ export const buildProtocolResponse = (
 
 const registry = new Map<string, ProtocolHandler>();
 
+/** WKWebView raises an uncatchable NSInvalidArgumentException for these (`+handlesURLScheme:`). */
+const ENGINE_SCHEMES: ReadonlySet<string> = new Set([
+  'http',
+  'https',
+  'file',
+  'about',
+  'data',
+  'blob',
+  'ws',
+  'wss',
+  'javascript',
+  'ftp',
+  'applewebdata',
+  'webkit-fake-url',
+]);
+
 /**
  * Register `handler` to serve requests for `scheme`; re-registering replaces it.
  *
@@ -74,7 +92,16 @@ const registry = new Map<string, ProtocolHandler>();
  * created — the backends read {@link getRegisteredSchemes} at view creation.
  */
 const handle = (scheme: string, handler: ProtocolHandler): void => {
-  registry.set(normalizeScheme(scheme), handler);
+  const normalized = normalizeScheme(scheme);
+  if (!/^[a-z][a-z0-9+.-]*$/.test(normalized)) {
+    throw new InvalidArgumentError(`protocol.handle: '${scheme}' is not a valid URL scheme`);
+  }
+  if (ENGINE_SCHEMES.has(normalized)) {
+    throw new InvalidArgumentError(
+      `protocol.handle: WebKit serves '${normalized}' itself and cannot intercept it; use a custom scheme`,
+    );
+  }
+  registry.set(normalized, handler);
 };
 
 /** Remove the handler for `scheme`. No-op if it was not registered. */
