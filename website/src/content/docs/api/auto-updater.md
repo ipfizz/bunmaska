@@ -4,12 +4,12 @@ description: "Application self-update for Bunmaska on macOS, Linux, and Windows:
 order: 23
 ---
 
-Enables Bunmaska apps to update themselves from a channel feed that `bunmaska build --update` produces. It is a drop-in subset of Electron's `autoUpdater`, but built on plain Bun rather than Squirrel: it reads an `update.json` manifest, compares versions, downloads the artifact, verifies its **Ed25519 signature** plus size and content hash, decompresses (zstd) and stages a `.tar`, then swaps the installed bundle and relaunches via a detached helper.
+Enables Bunmaska apps to update themselves from a channel feed that `bunmaska build --update` produces. It is a drop-in subset of Electron's `autoUpdater`, but built on plain Bun rather than Squirrel: it reads an `update.json` manifest, compares versions, verifies the manifest's **Ed25519 signature**, downloads the artifact, verifies its own signature plus size and content hash, decompresses (zstd, off the main thread) and stages a `.tar`, then swaps the installed bundle and relaunches via a detached helper.
 
 Process: Main. The `autoUpdater` singleton is a Node.js [`EventEmitter`](https://nodejs.org/api/events.html). Two things that differ from Electron up front, so you don't get surprised:
 
 - The flow is **electron-updater style**, not Electron-core style. `checkForUpdates()` does *not* download automatically - you call `downloadUpdate()` yourself once an update is available.
-- **Updates must be signed.** `downloadUpdate()` refuses to install anything without a valid detached `.sig` matching the `publicKey` you pass to `setFeedURL`. Generate the key pair with [`bunmaska keygen`](/docs/cli), sign releases with `bunmaska build --update --update-key`, and bake the public key into your app. An integrity hash alone is not trust - a compromised feed controls the manifest, so only the signature proves the bytes came from you.
+- **Updates must be signed.** `downloadUpdate()` refuses to install anything unless both `update.json.sig` and the artifact's `.sig` verify against the `publicKey` you pass to `setFeedURL`. Generate the key pair with [`bunmaska keygen`](/docs/cli), sign releases with `bunmaska build --update --update-key`, and bake the public key into your app. An integrity hash alone is not trust - a compromised feed controls the manifest, so only the signature proves the bytes came from you.
 
 ```ts
 import { autoUpdater } from 'bunmaska';
@@ -34,11 +34,11 @@ The end-to-end publishing flow (keygen, build flags, hosting the feed) is walked
 
 `setFeedURL(options: { url: string; publicKey?: string; channel?: string } | string): void`
 
-Sets the base URL of the channel feed - the directory where `update.json`, the artifact, and its `.sig` live. Accepts either an options object or a bare string. Throws if the URL is missing, empty, or unparseable.
+Sets the base URL of the channel feed - the directory where `update.json`, `update.json.sig`, the artifact and its `.sig` live. Accepts either an options object or a bare string. Throws if the URL is missing, empty, or unparseable, or if `publicKey` is not a PEM Ed25519 public key.
 
 The URL must be **https**; a plaintext feed is refused at set time (`http` is allowed only for `localhost`/`127.0.0.1`/`[::1]`, so you can test against a local server).
 
-- `publicKey` - the PEM Ed25519 public key every downloaded artifact's `.sig` must verify against. This is *your* release key from `bunmaska keygen`, baked into your app - not a Bunmaska key. Without it, `downloadUpdate()` refuses to download anything.
+- `publicKey` - the PEM Ed25519 public key that `update.json.sig` and every downloaded artifact's `.sig` must verify against. This is *your* release key from `bunmaska keygen`, baked into your app - not a Bunmaska key. Without it, `downloadUpdate()` refuses to download anything.
 - `channel` - if set, a manifest whose `channel` differs is rejected (guards against channel confusion, e.g. a canary build being offered to stable users).
 
 Electron's `headers`, `serverType`, and `allowAnyVersion` options are not implemented (the feed is a static directory + JSON, so there's nothing to authenticate or negotiate).
@@ -77,7 +77,9 @@ console.log(autoUpdater.getFeedURL()); // "https://updates.example.com/myapp/sta
 
 Fetches `<feedURL>/update.json` and compares its `version` against the running app's version. Emits `checking-for-update`, then either `update-available` or `update-not-available`.
 
-Resolves to `{ updateInfo, manifest }` when a newer version exists, or `null` when the app is up to date. Rejects (and emits `error`) on a network or manifest-parse failure, when the manifest targets a different OS/architecture than the running build, or when its `channel` differs from the one you configured. You must call `setFeedURL` first, or it throws.
+Resolves to `{ updateInfo, manifest }` when a newer version exists, or `null` when the app is up to date. Rejects (and emits `error`) on a network or manifest-parse failure, when the manifest targets a different OS/architecture than the running build, when its `channel` differs from the one you configured, or when its `name` holds a character the install helper cannot quote safely (`"`, `%`, `/`, `\` or a control character). It also rejects before `setFeedURL`, and while the app's own version is unknown (`0.0.0`, see [`app.getVersion`](/docs/api/app#appgetversion)): an app that cannot tell its version would reinstall the same update forever.
+
+The manifest is not verified yet at this point, so treat `update-available` as a hint: `downloadUpdate()` checks `update.json.sig` before it fetches anything else.
 
 Unlike Electron, this does **not** trigger a download - it only tells you whether one is available.
 
@@ -100,11 +102,12 @@ if (result) {
 
 Downloads the artifact for the update found by the most recent `checkForUpdates()` and runs the full verification chain:
 
-1. **Size caps** - the declared compressed size must be within 512 MB *before* any bytes are fetched, and the decompressed tar within 2 GB (a zip-bomb guard).
-2. **Byte length + wyhash** - the downloaded bytes must match the manifest's `size` and `hash`.
-3. **Ed25519 signature** - `<artifact>.sig` is fetched from the feed and verified against the `publicKey` from `setFeedURL`. No key configured, or a bad signature, and the whole download rejects - **unsigned updates are refused**.
+1. **Manifest signature** - `update.json.sig` is verified over the exact `update.json` that `checkForUpdates()` acted on, before any artifact byte is fetched. That authenticates the version, OS/arch, channel, name, size and hash.
+2. **Size caps** - the declared compressed size must be within 512 MB *before* any bytes are fetched; the download is streamed and cut off at the signed size, and a redirect off https is refused. The decompressed tar must stay within 2 GB (a zip-bomb guard).
+3. **Byte length + wyhash** - the downloaded bytes must match the manifest's `size` and `hash`.
+4. **Artifact signature** - `<artifact>.sig` is fetched from the feed and verified against the `publicKey` from `setFeedURL`. No key configured, or a bad signature on either file, and the whole download rejects - **unsigned updates are refused**.
 
-Only then is the artifact decompressed (zstd) and the resulting `.tar` staged on disk. Emits `update-downloaded` on success. Rejects (and emits `error`) if no update is pending - call `checkForUpdates()` first - or if any step above fails. Resolves to a `StagedUpdate` (`{ manifest, tarPath }`).
+Only then is the artifact decompressed (zstd) and the resulting `.tar` staged in a fresh private temp directory. Emits `update-downloaded` on success. Rejects (and emits `error`) if no update is pending - call `checkForUpdates()` first - or if any step above fails. Resolves to a `StagedUpdate` (`{ manifest, tarPath }`).
 
 This explicit step has no equivalent in Electron's core `autoUpdater` (where download is implicit); it mirrors `electron-updater`.
 
@@ -123,11 +126,13 @@ autoUpdater.on('update-available', async () => {
 
 Installs the staged update and relaunches. Throws if nothing has been downloaded - call `downloadUpdate()` first. Should only be called after `update-downloaded` has been emitted.
 
-The default installer is a real swap, not a stub: it writes a small detached helper (a `/bin/sh` script on macOS/Linux, a `cmd` script on Windows), quits the app, and the helper then waits for the process to exit, extracts the staged tar into a **temp sibling** of the install root, rename-swaps it into place (so a half-finished extract can never brick the installed app - the second rename rolls back the first on failure), relaunches the new build, and deletes itself.
+The default installer is a real swap, not a stub: it writes a small detached helper (a `/bin/sh` script on macOS/Linux, a `cmd` script on Windows), calls `app.quit()`, and the helper then waits for the process to exit, extracts the staged tar into a **temp sibling** of the install root, rename-swaps it into place (so a half-finished extract can never brick the installed app - the second rename rolls back the first on failure), relaunches the new build, and deletes itself. If any helper step fails, it relaunches the old app instead, so a failed update never leaves the user with nothing to open.
+
+Because it goes through `app.quit()`, a `before-quit`, window `close` or `will-quit` veto keeps the app running; the helper keeps waiting and installs once the app does exit.
 
 Two honest caveats:
 
-- It refuses to swap when the running process is not an installed bundle (e.g. `bun main.ts` in dev, or a bare binary outside the `.app`/AppDir/portable-dir layout `bunmaska build` produces) - it logs a warning and just quits, leaving the staged tar in place.
+- It refuses to swap when the running process is not an installed bundle: `bun main.ts` in dev, or a binary outside the layout `bunmaska build` produces (`<Name>.app/Contents/MacOS/<Name>`, an AppDir's `usr/bin/<slug>`, or `<Name>/<Name>.exe` on Windows). It then **throws** without quitting, leaving the staged tar in place.
 - The helper-script *generators* are unit-tested on all three platforms; the live swap itself is the one step the test suite does not exercise end to end. If you need a different install strategy, the installer is injectable (see _Replacing the installer_ below).
 
 ```ts
@@ -208,7 +213,7 @@ Returns:
 
 - `error` Error
 
-Emitted when a check, download, verification, or install fails. As in Electron, attach a listener - an unhandled `error` event on an `EventEmitter` will throw. (Internally, the updater only emits `error` when a listener is attached, but the promise still rejects either way, so always handle one or the other.)
+Emitted when a check, download or verification fails. The updater emits `error` only when a listener is attached, so an unhandled `error` event can never throw. The promises from `checkForUpdates()` and `downloadUpdate()` still reject for anyone who awaits them, but they are marked handled, so Electron's fire-and-forget pattern (call without awaiting, listen for `error`) never trips an unhandled-rejection crash.
 
 ```ts
 import { autoUpdater } from 'bunmaska';
@@ -225,7 +230,7 @@ type UpdateInfo = { version: string; releaseName: string };
 
 type StagedUpdate = {
   manifest: UpdateManifest; // parsed update.json
-  tarPath: string;          // decompressed .tar staged on disk
+  tarPath: string;          // decompressed .tar, alone in a private temp dir
 };
 
 type UpdateCheckResult = { updateInfo: UpdateInfo; manifest: UpdateManifest };
@@ -246,15 +251,13 @@ const updater = new AutoUpdaterImpl({
 });
 ```
 
-`setDepsForTesting()` exists too, but as the name says, it is for tests - don't reach for it in app code.
-
 ## Not in Bunmaska (yet)
 
 Compared to Electron's `autoUpdater`, the following are intentionally absent:
 
 - **Squirrel.Windows / MSIX** - Bunmaska runs the same plain tar + zstd pipeline on Windows as elsewhere, so there is no Squirrel.Windows, no MSIX detection, no `allowAnyVersion` downgrade option, and no `--squirrel-firstrun` handling.
 - **Squirrel.Mac** - even on macOS there is no Squirrel. Trust comes from the Ed25519 signature on the artifact; code-signing the swapped bundle for Gatekeeper is still on you (sign what you feed to `bunmaska build --update`).
-- **Event: `before-quit-for-update`** - not emitted. `quitAndInstall()` goes straight through the installer seam (the default calls `app.quit()` after spawning the helper).
+- **Event: `before-quit-for-update`** - not emitted, and `before-quit` fires before the windows close rather than after (Electron reverses that order for `quitAndInstall`). `quitAndInstall()` goes straight through the installer seam (the default calls `app.quit()` after spawning the helper).
 - **Automatic download** - Electron downloads as soon as an update is available; Bunmaska makes it an explicit `downloadUpdate()` call (electron-updater style). This is a deliberate behavioral difference, not a missing feature.
 - **`setFeedURL` options `headers`, `serverType`, `allowAnyVersion`** - the accepted options are `url`, `publicKey`, and `channel`. The feed is a static directory, so there's nothing to send headers to or negotiate a server type with.
 - **Rich `update-downloaded` payload** - `releaseNotes`, `releaseName` as a standalone arg, `releaseDate`, and `updateURL` are not provided. You get a single `UpdateInfo` (`version`, `releaseName`); the `update.json` manifest carries nothing more.

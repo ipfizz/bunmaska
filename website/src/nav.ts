@@ -62,6 +62,9 @@ export const sidebar: NavGroup[] = [
       { slug: 'api/menu', label: 'Menu' },
       { slug: 'api/menu-item', label: 'MenuItem' },
       { slug: 'api/dialog', label: 'dialog' },
+      { slug: 'api/clipboard', label: 'clipboard' },
+      { slug: 'api/native-image', label: 'nativeImage' },
+      { slug: 'api/shell', label: 'shell' },
       { slug: 'api/tray', label: 'Tray' },
       { slug: 'api/notification', label: 'Notification' },
       { slug: 'api/global-shortcut', label: 'globalShortcut' },
@@ -82,14 +85,6 @@ export const sidebar: NavGroup[] = [
       { slug: 'api/ipc-renderer', label: 'ipcRenderer' },
       { slug: 'api/context-bridge', label: 'contextBridge' },
       { slug: 'api/web-frame', label: 'webFrame' },
-    ],
-  },
-  {
-    title: 'API - Both Processes',
-    items: [
-      { slug: 'api/clipboard', label: 'clipboard' },
-      { slug: 'api/native-image', label: 'nativeImage' },
-      { slug: 'api/shell', label: 'shell' },
     ],
   },
   {

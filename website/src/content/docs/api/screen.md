@@ -1,6 +1,6 @@
 ---
 title: "screen"
-description: "Enumerate displays and read screen geometry in the Bunmaska main process - the drop-in equivalent of Electron's screen module, minus the DIP conversions and change events."
+description: "Enumerate displays and read screen geometry and the cursor position in the Bunmaska main process - the drop-in equivalent of Electron's screen module, minus the DIP conversions and change events."
 order: 18
 ---
 
@@ -8,7 +8,7 @@ Retrieve information about connected displays and their geometry. `screen` is th
 
 Process: Main
 
-Unlike Electron, Bunmaska's `screen` is **not** an `EventEmitter` and emits no events - it is a plain object with methods. Display geometry comes from CoreGraphics scalar getters on macOS, GTK4's `GdkMonitor` model on Linux, and `EnumDisplayMonitors` + `GetMonitorInfoW` + `GetDpiForMonitor` on Windows (displays, bounds, work area, and scale factor).
+Unlike Electron, Bunmaska's `screen` is **not** an `EventEmitter` and emits no events - it is a plain object with methods. Display geometry comes from AppKit's `NSScreen` (plus CoreGraphics for rotation and the built-in flag) on macOS, GTK4's `GdkMonitor` model on Linux, and `EnumDisplayMonitors` + `GetMonitorInfoW` + `GetDpiForMonitor` on Windows (displays, bounds, work area, and scale factor).
 
 ```ts
 import { app, BrowserWindow, screen } from 'bunmaska';
@@ -21,7 +21,7 @@ app.whenReady().then(() => {
 });
 ```
 
-> Coordinates are top-left-origin screen points (matching Electron). Both backends report top-left-origin rects, so no Y-flip is applied.
+> Coordinates are top-left-origin screen points (matching Electron), with the primary display at `(0, 0)`. AppKit counts from the bottom-left, so the macOS backend flips its rects for you.
 
 ## Methods
 
@@ -39,7 +39,7 @@ for (const display of screen.getAllDisplays()) {
 
 ### `screen.getPrimaryDisplay()`
 
-Returns `Display` - the OS's primary display. On macOS this is the origin-anchored main display (`CGDisplayIsMain`); on Linux, GTK4 removed the primary-monitor concept, so the first enumerated monitor (index 0) is treated as primary.
+Returns `Display` - the OS's primary display. On macOS this is the display with the menu bar (`CGDisplayIsMain`); on Linux, GTK4 removed the primary-monitor concept, so the first enumerated monitor (index 0) is treated as primary.
 
 ```ts
 import { screen } from 'bunmaska';
@@ -61,7 +61,7 @@ const display = screen.getDisplayNearestPoint({ x: 1920, y: 200 });
 console.log('nearest display id:', display.id);
 ```
 
-> _macOS caveat:_ CoreGraphics has no scalar getter for a secondary display's global origin, so secondary displays report `bounds.x`/`bounds.y` as `(0,0)`. This makes nearest-point resolution across multiple monitors approximate on macOS until struct-return support lands. On Linux, `GdkMonitor` geometry is a true OUT-param struct, so multi-monitor origins (and therefore this method) are exact.
+Multi-monitor origins are real on all three platforms, so this is exact across monitors.
 
 ### `screen.getDisplayMatching(rect)`
 
@@ -80,12 +80,12 @@ console.log('window will live on display:', display.id);
 
 Returns `Point` - the current cursor position in top-left screen coordinates.
 
-> **Real on Windows, stub on macOS and Linux (v1).** Windows reads the live cursor; macOS and Linux return `{ x: 0, y: 0 }`. On macOS, `NSEvent.mouseLocation` returns an `NSPoint` struct, which hits the same bun:ffi struct-return wall that blocks display origins (and would also need a bottom-left-origin flip). On Linux, the GTK4 pointer position requires a surface + seat + device that this read-only enumeration backend does not hold. Don't rely on this value yet.
+> **Real on macOS and Windows, a stub on Linux.** macOS reads `NSEvent.mouseLocation`, Windows the live cursor. Linux returns `{ x: 0, y: 0 }`: the GTK4 pointer position requires a surface + seat + device that this read-only enumeration backend does not hold (and Wayland does not hand out a global position at all).
 
 ```ts
 import { screen } from 'bunmaska';
 
-const point = screen.getCursorScreenPoint(); // real on Windows; { x: 0, y: 0 } on macOS and Linux
+const point = screen.getCursorScreenPoint(); // real on macOS and Windows; { x: 0, y: 0 } on Linux
 ```
 
 ## Structures
@@ -96,10 +96,10 @@ A connected display. Mirrors a subset of Electron's `Display`:
 
 * `id` number - `CGDirectDisplayID` on macOS; the list index on Linux (`GdkMonitor` has no stable numeric id).
 * `bounds` `Rectangle` - display position and size in top-left screen coordinates.
-* `workArea` `Rectangle` - the usable area excluding OS chrome. Real on Windows (`rcWork`). **On macOS and Linux `workArea` equals `bounds`** - the macOS menu-bar/dock inset needs `NSScreen.visibleFrame` (a struct return), and GTK4's `GdkMonitor` has no work-area/strut API.
+* `workArea` `Rectangle` - the usable area excluding OS chrome: the menu bar and Dock on macOS (`NSScreen.visibleFrame`), the taskbar on Windows (`rcWork`). **On Linux `workArea` equals `bounds`** - GTK4's `GdkMonitor` has no work-area/strut API.
 * `size` `Size` - `{ width, height }` derived from `bounds`.
-* `workAreaSize` `Size` - `{ width, height }` derived from `workArea` (so identical to `size` on macOS and Linux).
-* `scaleFactor` number - device-pixel ratio (≥ 1).
+* `workAreaSize` `Size` - `{ width, height }` derived from `workArea` (so identical to `size` on Linux).
+* `scaleFactor` number - device-pixel ratio (≥ 1). Fractional scales (say `1.5`) are reported as such on macOS, Windows and GTK 4.14 or later; older GTK reports a whole number.
 * `rotation` number - degrees clockwise. _macOS_ only reports real values (`CGDisplayRotation`); on Linux and Windows this is always `0`.
 * `internal` boolean - true for a built-in panel. _macOS_ only (`CGDisplayIsBuiltin`); on Linux and Windows this is always `false`.
 
@@ -126,7 +126,6 @@ Compared to Electron's `screen`, these are missing:
 
 * **Events** - `display-added`, `display-removed`, and `display-metrics-changed` are not implemented. Bunmaska's `screen` is a plain object, not an `EventEmitter`, so there is no hot-plug or metrics-change notification. Re-call `getAllDisplays()` if you need fresh data.
 * **DIP/physical conversion methods** - `screenToDipPoint`, `dipToScreenPoint`, `screenToDipRect`, and `dipToScreenRect` are absent. (These are Windows-only or Windows/Linux-only in Electron; Bunmaska does not implement them on any backend, including Windows.)
-* **Working `getCursorScreenPoint()` off Windows** - stubbed to `{0,0}` on macOS and Linux (see above).
-* **Real `workArea` off Windows** - equal to `bounds` on macOS and Linux; the OS-chrome inset is not subtracted there yet.
-* **Accurate macOS multi-monitor origins** - secondary-display `bounds.x`/`bounds.y` are `(0,0)` on macOS pending bun:ffi struct-return support. Linux origins are exact.
+* **`getCursorScreenPoint()` on Linux** - stubbed to `{0,0}` (see above).
+* **A real `workArea` on Linux** - equal to `bounds`; the panel inset is not subtracted there.
 * **Extra `Display` fields** - Electron's `Display` also carries `label`, `colorSpace`, `colorDepth`, `depthPerComponent`, `displayFrequency`, `monochrome`, `accelerometerSupport`, `touchSupport`, and `maximumCursorSize`. Bunmaska's `Display` exposes only the geometry-and-essentials subset listed above. Additionally, `rotation` is macOS-only and `internal` is macOS-only.

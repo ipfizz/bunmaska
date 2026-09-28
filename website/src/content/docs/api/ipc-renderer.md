@@ -4,13 +4,14 @@ description: "Send asynchronous and fire-and-forget messages from a renderer pro
 order: 5
 ---
 
-The `ipcRenderer` module lets a renderer process (your web page) talk to the main process: fire-and-forget `send`, request/response `invoke`, and listeners for messages pushed back from main. It is a thin, typed wrapper over the `globalThis.__bunmaska` bridge that Bunmaska's preload bootstrap installs into every page, and it works on all three platforms - macOS (WKWebView), Linux (WebKitGTK), and Windows (WinCairo, where it runs in the page world).
+The `ipcRenderer` module lets a renderer process (your web page) talk to the main process: fire-and-forget `send`, request/response `invoke`, and listeners for messages pushed back from main. It is a thin, typed wrapper over the `globalThis.__bunmaska` bridge that Bunmaska installs into the preload world of every window's top frame, and it works on all three platforms - macOS (WKWebView), Linux (WebKitGTK), and Windows (WinCairo, where it runs in the page world).
 
 Unlike Electron, Bunmaska's `ipcRenderer` is **not** an `EventEmitter` - it is a plain object with a fixed set of methods. There is no `sendSync`, no `postMessage`, and no `<webview>`/`sendToHost`. The `event` argument passed to listeners is currently a placeholder (an empty object), so don't reach for `event.sender` or `event.ports` yet.
 
-Import it from `bunmaska/renderer` (renderer process). If you use context isolation, call it from your preload and expose a narrow surface via `contextBridge` - same rule as Electron.
+Import it from `bunmaska/renderer` **in your preload**, and expose a narrow surface to the page with `contextBridge` - the same rule as Electron with `contextIsolation: true`. On macOS and Linux isolation is always on, so the bridge exists only in the preload: a page script that calls `ipcRenderer` gets a `BunmaskaError` pointing at `contextBridge`. Use `import`, never `require()`: an `import` gets bundled into the preload, while a `require` is injected as-is and the page has no `require` to call.
 
 ```ts
+// preload.js
 import { ipcRenderer } from 'bunmaska/renderer';
 ```
 
@@ -21,7 +22,9 @@ import { ipcRenderer } from 'bunmaska/renderer';
 * `channel` string
 * `...args` unknown[]
 
-Sends an asynchronous, fire-and-forget message to the main process over `channel`. Arguments are serialized (JSON envelope under the hood) and posted to the main process, which listens with `ipcMain.on`. There is no return value and no acknowledgement - if you need a result back, use `invoke`.
+Sends an asynchronous, fire-and-forget message to the main process over `channel`, which listens with `ipcMain.on`. There is no return value and no acknowledgement - if you need a result back, use `invoke`.
+
+Arguments are **JSON**-serialized, not structured-cloned as in Electron. Rather than let JSON silently drop or garble them, a function, symbol, `bigint`, `Map`, `Set`, `ArrayBuffer` or typed array throws a `TypeError` (`invoke` rejects with it). A `Date` still arrives as a string and `undefined` properties vanish, so send plain data.
 
 ```ts
 import { ipcRenderer } from 'bunmaska/renderer';
@@ -37,18 +40,19 @@ ipcRenderer.send('log', { level: 'info', message: 'page loaded' });
 
 Returns `Promise<unknown>` - resolves with the value the main-process handler returns.
 
-Sends a message to the main process and waits for a single reply, correlated by a monotonic request id. The main process answers with `ipcMain.handle`. If the handler rejects or throws, the returned Promise rejects with an `Error` (the message is carried across the bridge; the `Error` instance is not the same object as the one thrown in main).
+Sends a message to the main process and waits for a single reply, correlated by a request id. The main process answers with `ipcMain.handle`. If the handler rejects or throws, or returns something JSON cannot carry, the returned Promise rejects with an `Error` (the message is carried across the bridge; the `Error` instance is not the same object as the one thrown in main). As in Electron there is no timeout.
 
 ```ts
 import { ipcRenderer } from 'bunmaska/renderer';
 
-const version = await ipcRenderer.invoke('app:getVersion');
-
-try {
-  const user = await ipcRenderer.invoke('db:getUser', userId);
-  render(user);
-} catch (err) {
-  console.error('lookup failed:', err);
+// A preload is bundled to a classic script, so await inside a function.
+async function loadUser(userId) {
+  try {
+    return await ipcRenderer.invoke('db:getUser', userId);
+  } catch (err) {
+    console.error('lookup failed:', err);
+    return null;
+  }
 }
 ```
 

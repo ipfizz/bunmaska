@@ -93,7 +93,7 @@ Full reference, every flag → **[bunmaska.org/docs/cli](https://bunmaska.org/do
 
 ## What you get
 
-An Electron-shaped API surface - `app`, `BrowserWindow`, `webContents`, `ipcMain`/`ipcRenderer` with context isolation, `Menu`, `dialog`, `clipboard`, `Tray`, `Notification`, `nativeImage`, `safeStorage`, and more - plus an auto-updater and the engine store, all pure `bun:ffi`.
+An Electron-shaped API surface - `app`, `BrowserWindow`, `webContents`, `ipcMain`/`ipcRenderer` with a context bridge, `Menu`, `dialog`, `clipboard`, `Tray`, `Notification`, `nativeImage`, `safeStorage`, and more - plus an auto-updater and the engine store, all pure `bun:ffi`.
 
 The README won't try to be the API reference, because that list only grows. The **full module list, per-platform status, and the exact Electron parity matrix** live where they can stay honest:
 

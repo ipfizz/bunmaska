@@ -26,17 +26,17 @@ In Bunmaska, a native module is a TypeScript file that `dlopen`s the operating s
 
 ## The engine is a choice, not a tax
 
-Electron has one engine story: a private Chromium in every app, re-shipped with every update. Bunmaska gives you three, all WebKit, all outside your update pipeline:
+Electron has one engine story: a private Chromium in every app, re-shipped with every update. Bunmaska gives you three, all WebKit:
 
 - **Default - the system's WebKit** (macOS `WKWebView`, Linux WebKitGTK). Nothing extra to download; the OS patches the browser engine for you, while you sleep.
 - **Pinned - an exact, signature-verified WebKit build** from the shared [engine store](/docs/concepts/engine), when byte-for-byte rendering consistency matters. Installed once, shared across every app that pins it - "tested == shipped" without Electron's per-app copy.
-- **Windows - our own from-source WinCairo build** (Windows ships no WebKit). Still WebKit, never Chromium, and loaded from the same store instead of living inside your bundle.
+- **Windows - our own from-source WinCairo build** (Windows ships no WebKit). Still WebKit, never Chromium. It rides embedded in your bundle (dev machines can load it from the same store), so on Windows the engine is the one thing your download does carry.
 
-Whichever you pick, the result is the same: **your app update is your code, not a browser.**
+On macOS and Linux, the result is the whole point: **your app update is your code, not a browser.**
 
 - **~3× smaller installed** and **~7-10× smaller to download** than the Electron equivalent.
 - Updates are tiny - there's no 150 MB Chromium to re-ship every release.
-- Engine security updates arrive with the OS or the engine store - never as a rebuild of your app.
+- On macOS and Linux, engine security updates arrive with the OS or the engine store - never as a rebuild of your app.
 
 | | Electron | Bunmaska |
 | --- | --- | --- |

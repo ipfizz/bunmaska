@@ -10,13 +10,18 @@ Beyond the Electron-shaped modules, the `bunmaska` barrel exports a small set of
 
 ## Errors
 
-Every error Bunmaska throws is a `BunmaskaError`. Branch on `instanceof` and on the stable `code` field, never on message text.
+Errors from Bunmaska's own contracts are a `BunmaskaError`. Branch on `instanceof` and on the stable `code` field, never on message text.
+
+A few throws are deliberately something else, mostly where Electron itself throws a plain type:
+
+- `TypeError` - `Object has been destroyed` from a closed window or its `webContents` (as in Electron), a malformed `webContents.sendInputEvent` event, and preload IPC arguments that JSON cannot carry.
+- `Error` - everything `autoUpdater` throws or rejects with, and the "not implemented" error the `bunmaska/electron` shim raises for a known Electron module Bunmaska lacks.
 
 | Class | `code` | Thrown when |
 | --- | --- | --- |
 | `BunmaskaError` | `undefined` on the base class | Base class for everything below. |
 | `UnsupportedPlatformError` | `ERR_UNSUPPORTED_PLATFORM` | An API is called on a platform that does not support it (e.g. `sendInputEvent` off Windows). |
-| `InvalidArgumentError` | `ERR_INVALID_ARGUMENT` | An argument violates a documented contract - an unknown `app.getPath` name, a raw ESM preload handed to `BrowserWindow`. |
+| `InvalidArgumentError` | `ERR_INVALID_ARGUMENT` | An argument violates a documented contract - an unknown `app.getPath` name, a relative `app.setPath`, `protocol.handle` on a built-in scheme, a zoom factor that is not above `0`, a module-syntax preload a compiled app cannot bundle. |
 | `FFIError` | `ERR_FFI` | A native library or symbol cannot be loaded or resolved through `bun:ffi`. |
 
 ```ts
@@ -28,6 +33,10 @@ try {
   if (err instanceof InvalidArgumentError) console.error(err.code, err.message);
 }
 ```
+
+## Warnings
+
+Some calls do not throw but tell you they did nothing useful - `openDevTools` on Windows, `setWindowOpenHandler` returning `allow`, a custom scheme Windows cannot serve. Those warnings (and errors Bunmaska catches for you, such as a throwing IPC listener) go to stderr, prefixed `[bunmaska:<module>]`. When a page says "logs a warning", that line is what it means.
 
 ## Platform checks
 

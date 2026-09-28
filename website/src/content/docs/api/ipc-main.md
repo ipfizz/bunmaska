@@ -12,7 +12,7 @@ Unlike Electron, Bunmaska's `ipcMain` is **not** a Node.js `EventEmitter` - it i
 import { ipcMain } from 'bunmaska';
 ```
 
-To push messages the other way (main to renderer), use [`webContents.send`](./web-contents.md); `ipcMain` only receives.
+To push messages the other way (main to renderer), use [`webContents.send`](/docs/api/web-contents); `ipcMain` only receives. Messages come from the preload's `ipcRenderer` (see [ipcRenderer](/docs/api/ipc-renderer)), and only from a window's top frame.
 
 ## Methods
 
@@ -23,7 +23,7 @@ To push messages the other way (main to renderer), use [`webContents.send`](./we
   * `event` IpcMainEvent
   * `...args` unknown[]
 
-Listens on `channel`. When a renderer calls `ipcRenderer.send(channel, ...args)`, `listener` is called with `listener(event, ...args)`. Returns `this`, so calls chain. The `event` object exposes `sender` (the originating `WebContents`) - and only that; see [Not in Bunmaska (yet)](#not-in-bunmaska-yet).
+Listens on `channel`. When a renderer calls `ipcRenderer.send(channel, ...args)`, `listener` is called with `listener(event, ...args)`. Returns `this`, so calls chain. The `event` object carries `sender` (the originating `WebContents`) and `reply(channel, ...args)`; see [Properties](#properties). A listener that throws is caught and logged, and the other listeners on the channel still run.
 
 ```ts
 import { ipcMain } from 'bunmaska';
@@ -34,7 +34,7 @@ ipcMain.on('counter:increment', (event, by: number) => {
 ```
 
 ```ts
-// Renderer Process
+// preload.js
 import { ipcRenderer } from 'bunmaska/renderer';
 
 ipcRenderer.send('counter:increment', 1);
@@ -95,7 +95,7 @@ ipcMain.removeAllListeners();           // everything
 
 Registers a handler for an invokable IPC. It is called whenever a renderer runs `ipcRenderer.invoke(channel, ...args)`. If `listener` returns a Promise, its resolved value is sent back as the reply; otherwise the plain return value is used. There is exactly **one** handler per channel - calling `handle` again on the same channel replaces the previous handler.
 
-If the handler throws (or rejects), the error is caught and only its `message` string is serialized back to the renderer, where the `invoke` Promise rejects. The original error object, stack, and custom properties do not cross the boundary.
+If the handler throws (or rejects), the error is caught and only its `message` string is serialized back to the renderer, where the `invoke` Promise rejects. The original error object, stack, and custom properties do not cross the boundary. A result JSON cannot carry (a function, symbol or `bigint`) also rejects the `invoke`, instead of leaving it waiting forever.
 
 ```ts
 import { ipcMain } from 'bunmaska';
@@ -107,10 +107,10 @@ ipcMain.handle('fs:read-config', async (event, name: string) => {
 ```
 
 ```ts
-// Renderer Process
+// preload.js (bundled to a classic script, so no top-level await)
 import { ipcRenderer } from 'bunmaska/renderer';
 
-const config = await ipcRenderer.invoke('fs:read-config', 'app');
+ipcRenderer.invoke('fs:read-config', 'app').then((config) => console.log(config));
 ```
 
 ### `ipcMain.handleOnce(channel, listener)`
@@ -150,9 +150,12 @@ ipcMain.removeHandler('fs:read-config');
 
 `ipcMain` exposes no public properties - it is the bare router singleton.
 
-The `event` argument passed to your listeners and handlers carries a single field:
+The `event` argument passed to your listeners and handlers carries:
 
-* `event.sender` - the `WebContents` that sent the message. This is the only field on both `IpcMainEvent` and `IpcMainInvokeEvent` today. It is enough to identify and reply to a source via `event.sender.send(...)`, but the richer Electron event shape is not present (see below).
+* `event.sender` - the `WebContents` that sent the message, on both `IpcMainEvent` and `IpcMainInvokeEvent`. `BrowserWindow.fromWebContents(event.sender)` finds its window.
+* `event.reply(channel, ...args)` - on `IpcMainEvent` only (the `on`/`once` event), as in Electron: sends back to the renderer the message came from, the same as `event.sender.send(...)`.
+
+The richer Electron event shape is not present (see below).
 
 ## Not in Bunmaska (yet)
 
@@ -160,10 +163,11 @@ The router covers the everyday `on`/`once`/`handle` flow, but several Electron m
 
 * **`ipcMain.off`, `ipcMain.addListener`** - these Electron aliases for `removeListener`/`on` do not exist. Use `removeListener` and `on` directly.
 * **Synchronous IPC (`event.returnValue`)** - there is no synchronous `ipcRenderer.sendSync` path, so listeners cannot set `event.returnValue` to reply inline. Use `handle`/`invoke` for request/response instead.
-* **`event.reply(...)`** - the convenience reply helper is not on the event. To send back to a renderer, call `event.sender.send(channel, ...)` yourself.
 * **`event.frameId` / `event.processId` / `event.senderFrame`** - frame and process routing metadata is not exposed; `event.sender` is all you get, and iframe-level addressing is not modeled.
-* **`event.ports` and `MessagePort` transfer** - `MessagePortMain` / `postMessage` channels are not implemented; payloads cross as JSON, so functions, symbols, and `bigint` are rejected by the serializer.
+* **`event.ports` and `MessagePort` transfer** - `MessagePortMain` / `postMessage` channels are not implemented; payloads cross as JSON, not structured clone. Functions, symbols and `bigint` are rejected on both sides, and the renderer side also rejects `Map`, `Set`, `ArrayBuffer` and typed arrays rather than letting JSON mangle them.
 * **`EventEmitter` surface** - because `ipcMain` is not an `EventEmitter`, methods like `eventNames()`, `listenerCount()`, `setMaxListeners()`, and `prependListener()` are unavailable.
 * **Full-fidelity error propagation** - `handle` errors are flattened to the `message` string only; stack traces and custom error properties are lost across the boundary (the same limitation Electron documents, noted here for parity).
 
 Everything in the [Methods](#methods) section above is genuinely wired and exercised without FFI. The router is platform-neutral and the renderer-to-main transport (the WebKit script-message channel) works on all three platforms - macOS, Linux, and Windows.
+
+One security note for Windows: there is no isolated world there yet, so the bridge lives in the page world and **any page script can invoke any handler**. If a window may load content you do not control, check `event.sender.getURL()` in the handlers that matter.

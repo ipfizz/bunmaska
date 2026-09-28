@@ -8,6 +8,8 @@ order: 21
 
 Process: Main
 
+A divergence to know before you store anything precious: on macOS and Linux the keyring item is **one key shared by every Bunmaska app on the machine** (`dev.bunmaska.safeStorage`), where Electron keeps one per app. Another Bunmaska app running as the same user can use that key (macOS may ask the user first). Windows DPAPI is scoped to the user, so the same holds there. Treat `safeStorage` as protection against other users and at-rest disk theft, not against other apps you install.
+
 One deliberate divergence from Electron: there is **no `basic_text` fallback**. Electron will, when no OS keyring is present, fall back to an obfuscated near-plaintext key stored alongside the ciphertext. Bunmaska refuses to pretend that is encryption - with no keyring, `isEncryptionAvailable()` returns `false` and the encrypt/decrypt calls throw. The blob format is also Bunmaska's own versioned layout (`[version:1][iv:12][ciphertext:N][tag:16]`); it is **not** interchangeable with Electron's encrypted blobs.
 
 ## Methods
