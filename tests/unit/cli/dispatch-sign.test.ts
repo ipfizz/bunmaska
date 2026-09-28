@@ -91,4 +91,36 @@ describe('dispatch --notarize', () => {
     expect(code).toBe(0);
     expect(notarized).toEqual(['/tmp/app.app']);
   });
+
+  test.skipIf(!onlyMac)('with --dmg, packages the .app only after it is stapled', async () => {
+    process.env['APPLE_ID'] = 'dev@example.com';
+    process.env['TEAM_ID'] = 'TEAMID123';
+    process.env['BUNMASKA_NOTARIZE_PASSWORD'] = 'app-specific';
+    const events: string[] = [];
+    const code = await dispatch(
+      {
+        kind: 'build',
+        entry: 'app.ts',
+        options: { target: 'macos', sign: '-', notarize: true, dmg: true },
+      },
+      {
+        buildMac: async (opts) => {
+          events.push(`build dmg=${opts.dmg === true}`);
+          return '/tmp/out/app.app';
+        },
+        notarize: async () => {
+          events.push('notarize');
+        },
+        buildDmg: async (opts) => {
+          events.push(`dmg ${opts.appDir} -> ${opts.outDmg}`);
+        },
+      },
+    );
+    expect(code).toBe(0);
+    expect(events).toEqual([
+      'build dmg=false',
+      'notarize',
+      'dmg /tmp/out/app.app -> /tmp/out/app.dmg',
+    ]);
+  });
 });

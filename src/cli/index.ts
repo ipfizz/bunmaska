@@ -15,6 +15,7 @@ import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
 import {
   type BuildDmg,
   type BuildMacAppOptions,
+  buildDmg,
   buildMacApp,
   type ConvertIcon,
   type SignApp,
@@ -311,6 +312,8 @@ const runBuild = async (
     return 0;
   }
 
+  // A .dmg must wrap the stapled .app, so with --notarize it is built afterwards.
+  const dmgAfterNotarize = command.options.dmg === true && command.options.notarize === true;
   const buildMac = deps.buildMac ?? buildMacApp;
   const appPath = await buildMac({
     entry,
@@ -319,7 +322,7 @@ const runBuild = async (
     ...(command.options.out !== undefined ? { out: command.options.out } : {}),
     ...(icon !== undefined ? { icon } : {}),
     ...(command.options.sign !== undefined ? { sign: command.options.sign } : {}),
-    ...(command.options.dmg === true ? { dmg: true } : {}),
+    ...(command.options.dmg === true && !dmgAfterNotarize ? { dmg: true } : {}),
     ...(deps.signApp !== undefined ? { signApp: deps.signApp } : {}),
     ...(deps.convertIcon !== undefined ? { convertIcon: deps.convertIcon } : {}),
     ...(deps.buildDmg !== undefined ? { buildDmg: deps.buildDmg } : {}),
@@ -340,6 +343,10 @@ const runBuild = async (
       const notarize = deps.notarize ?? ((app: string): Promise<void> => notarizeApp(app, creds));
       await notarize(appPath);
     }
+  }
+  if (dmgAfterNotarize) {
+    const outDmg = join(dirname(appPath), `${name}.dmg`);
+    await (deps.buildDmg ?? buildDmg)({ appDir: appPath, name, outDmg });
   }
   await maybeEmitUpdate(appPath, name, 'macos', command.options);
   return 0;
