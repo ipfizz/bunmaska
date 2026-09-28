@@ -290,24 +290,27 @@ export const pollWindows = (): void => {
     if (h.closed) {
       continue;
     }
-    user32.symbols.GetClientRect(hwnd, rectPtr);
-    const width = read.i32(rectPtr, 8);
-    const height = read.i32(rectPtr, 12);
-    if (width !== h.width || height !== h.height) {
-      h.width = width;
-      h.height = height;
-      h.resizeHook?.(width, height); // keep the hosted view filling the client area
-      h.events.get('resize')?.();
+    const minimized = user32.symbols.IsIconic(hwnd) !== 0;
+    if (minimized !== h.minimized) {
+      h.minimized = minimized;
+      h.events.get(minimized ? 'minimize' : 'restore')?.();
+    }
+    // An iconic window's client rect is 0x0: never size the view (or fire resize) from it.
+    if (!minimized) {
+      user32.symbols.GetClientRect(hwnd, rectPtr);
+      const width = read.i32(rectPtr, 8);
+      const height = read.i32(rectPtr, 12);
+      if (width !== h.width || height !== h.height) {
+        h.width = width;
+        h.height = height;
+        h.resizeHook?.(width, height);
+        h.events.get('resize')?.();
+      }
     }
     const maximized = user32.symbols.IsZoomed(hwnd) !== 0;
     if (maximized !== h.maximized) {
       h.maximized = maximized;
       h.events.get(maximized ? 'maximize' : 'unmaximize')?.();
-    }
-    const minimized = user32.symbols.IsIconic(hwnd) !== 0;
-    if (minimized !== h.minimized) {
-      h.minimized = minimized;
-      h.events.get(minimized ? 'minimize' : 'restore')?.();
     }
     const focused = foreground === hwnd;
     if (focused !== h.focused) {

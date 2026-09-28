@@ -8,6 +8,7 @@ import {
 import { createWindowsDrain } from '../../../src/main/platform/windows/windows-run-loop';
 
 const SW_MAXIMIZE = 3;
+const SW_MINIMIZE = 6;
 const SW_RESTORE = 9;
 const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
 
@@ -211,6 +212,38 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       loadUser32().symbols.ShowWindow(win.hwnd(), SW_RESTORE);
       pollWindows();
       expect(unmaximized).toBe(1);
+    } finally {
+      win.destroy();
+    }
+  });
+
+  test('minimize and restore fire without resizing the view to 0x0', () => {
+    const win = new NativeWin32Window({ title: 'Min', width: 400, height: 300, show: false });
+    let minimizes = 0;
+    let restores = 0;
+    let resizes = 0;
+    let hookCalls = 0;
+    win.onWindowEvent('minimize', () => {
+      minimizes += 1;
+    });
+    win.onWindowEvent('restore', () => {
+      restores += 1;
+    });
+    win.onWindowEvent('resize', () => {
+      resizes += 1;
+    });
+    win.setResizeHook(() => {
+      hookCalls += 1;
+    });
+    try {
+      loadUser32().symbols.ShowWindow(win.hwnd(), SW_MINIMIZE);
+      pollWindows();
+      expect(minimizes).toBe(1);
+      loadUser32().symbols.ShowWindow(win.hwnd(), SW_RESTORE);
+      pollWindows();
+      expect(restores).toBe(1);
+      expect(resizes).toBe(0);
+      expect(hookCalls).toBe(0);
     } finally {
       win.destroy();
     }
