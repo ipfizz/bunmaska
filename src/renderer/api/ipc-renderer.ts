@@ -78,10 +78,12 @@ export const createIpcRenderer = (): IpcRenderer => {
       getBridge().on(channel, wrap(channel, listener));
     },
     once(channel, listener) {
-      // The bridge drops the wrapper after one dispatch, so the tracked wrapper
-      // also drops its own entry when it fires (keeps removeListener consistent).
+      // The bridge drops a fired once, so drop this exact entry, not an `on` of the same listener.
       const wrapper: BridgeListener = (...args) => {
-        takeWrapper(channel, listener);
+        const index = wrappers.findIndex((e) => e.wrapper === wrapper);
+        if (index !== -1) {
+          wrappers.splice(index, 1);
+        }
         listener({}, ...args);
       };
       wrappers.push({ channel, listener, wrapper });

@@ -1,76 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createIpcRenderer } from '../../../src/renderer/api/ipc-renderer';
+import { generatePreloadBootstrap } from '../../../src/renderer/preload-bootstrap';
 
-type Listener = (...args: unknown[]) => void;
+type Bridge = { _dispatch: (raw: string) => void };
 
-type FakeBridge = {
-  send: (channel: string, ...args: unknown[]) => void;
-  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
-  on: (channel: string, listener: Listener) => void;
-  once: (channel: string, listener: Listener) => void;
-  removeListener: (channel: string, listener: Listener) => void;
-  removeAllListeners: (channel?: string) => void;
-};
+let bridge: Bridge;
+let posted: string[];
 
-type Record = { fn: Listener; once: boolean };
-
-let sent: Array<{ channel: string; args: unknown[] }>;
-let invoked: Array<{ channel: string; args: unknown[] }>;
-let registered: Map<string, Record[]>;
-
-/** Mirror the real bridge dispatch so once/remove semantics are exercised. */
-const dispatch = (channel: string, ...args: unknown[]): void => {
-  const live = registered.get(channel) ?? [];
-  for (const record of [...live]) {
-    const current = registered.get(channel) ?? [];
-    if (!current.includes(record)) {
-      continue;
-    }
-    if (record.once) {
-      current.splice(current.indexOf(record), 1);
-    }
-    record.fn(...args);
-  }
-};
+/** Deliver a main-to-renderer `send` through the real bootstrap. */
+const dispatch = (channel: string, ...args: unknown[]): void =>
+  bridge._dispatch(JSON.stringify({ kind: 'send', channel, args }));
 
 beforeEach(() => {
-  sent = [];
-  invoked = [];
-  registered = new Map();
-  const bridge: FakeBridge = {
-    send: (channel, ...args) => sent.push({ channel, args }),
-    invoke: (channel, ...args) => {
-      invoked.push({ channel, args });
-      return Promise.resolve(`result:${channel}`);
-    },
-    on: (channel, listener) => {
-      const list = registered.get(channel) ?? [];
-      list.push({ fn: listener, once: false });
-      registered.set(channel, list);
-    },
-    once: (channel, listener) => {
-      const list = registered.get(channel) ?? [];
-      list.push({ fn: listener, once: true });
-      registered.set(channel, list);
-    },
-    removeListener: (channel, listener) => {
-      const list = registered.get(channel);
-      if (!list) {
-        return;
-      }
-      const index = list.findIndex((r) => r.fn === listener);
-      if (index !== -1) {
-        list.splice(index, 1);
-      }
-    },
-    removeAllListeners: (channel) => {
-      if (channel === undefined) {
-        registered.clear();
-      } else {
-        registered.delete(channel);
-      }
-    },
+  posted = [];
+  const scope: Record<string, unknown> = {
+    webkit: { messageHandlers: { bunmaska: { postMessage: (msg: string) => posted.push(msg) } } },
   };
+  new Function('globalThis', generatePreloadBootstrap())(scope);
+  bridge = scope['__bunmaska'] as Bridge;
   Reflect.set(globalThis, '__bunmaska', bridge);
 });
 
@@ -79,17 +26,21 @@ afterEach(() => {
 });
 
 describe('ipcRenderer.send', () => {
-  test('forwards channel and args to the bridge', () => {
+  test('posts a send envelope with the channel and args', () => {
     createIpcRenderer().send('ping', 1, 2);
-    expect(sent).toEqual([{ channel: 'ping', args: [1, 2] }]);
+    expect(posted.map((raw) => JSON.parse(raw))).toEqual([
+      { kind: 'send', channel: 'ping', args: [1, 2] },
+    ]);
   });
 });
 
 describe('ipcRenderer.invoke', () => {
-  test('forwards to the bridge and returns its promise', async () => {
-    const result = await createIpcRenderer().invoke('compute', 41);
-    expect(invoked).toEqual([{ channel: 'compute', args: [41] }]);
-    expect(result).toBe('result:compute');
+  test('resolves with the reply to its invoke envelope', async () => {
+    const result = createIpcRenderer().invoke('compute', 41);
+    const env = JSON.parse(posted[0] ?? '');
+    expect(env).toMatchObject({ kind: 'invoke', channel: 'compute', args: [41] });
+    bridge._dispatch(JSON.stringify({ kind: 'reply', id: env.id, ok: true, result: 42 }));
+    expect(await result).toBe(42);
   });
 });
 
@@ -109,6 +60,20 @@ describe('ipcRenderer.once', () => {
     dispatch('news', 'hello', 7);
     dispatch('news', 'again');
     expect(received).toEqual([{ event: {}, args: ['hello', 7] }]);
+  });
+
+  test('firing a once leaves an on listener of the same function removable', () => {
+    const ipc = createIpcRenderer();
+    let calls = 0;
+    const listener = (): void => {
+      calls += 1;
+    };
+    ipc.on('state', listener);
+    ipc.once('state', listener);
+    dispatch('state');
+    ipc.removeListener('state', listener);
+    dispatch('state');
+    expect(calls).toBe(2);
   });
 });
 
