@@ -55,7 +55,7 @@ const toBytes = (data: string | Uint8Array): Uint8Array =>
 /** Returns `undefined` when the handler declines (backend serves a 404-ish empty response). */
 export const buildProtocolResponse = (
   handler: ProtocolHandler,
-  request: ProtocolRequest = { url: '' },
+  request: ProtocolRequest,
 ): BuiltProtocolResponse | undefined => {
   const response = handler(request);
   if (response === undefined) {
@@ -115,10 +115,6 @@ const isProtocolHandled = (scheme: string): boolean => registry.has(normalizeSch
 /** Every currently registered scheme, normalized. */
 const getRegisteredSchemes = (): string[] => [...registry.keys()];
 
-/** The handler registered for `scheme`, or `undefined`. */
-const handlerFor = (scheme: string): ProtocolHandler | undefined =>
-  registry.get(normalizeScheme(scheme));
-
 /**
  * Serve `url`. Returns `undefined` for an unregistered scheme, an unparseable
  * URL, or a handler that declined.
@@ -135,18 +131,11 @@ const dispatch = (url: string): BuiltProtocolResponse | undefined => {
   return buildProtocolResponse(handler, { url });
 };
 
-/** Clear every registered scheme. Test-only. */
-const clearForTesting = (): void => {
-  registry.clear();
-};
-
 /** The `protocol` module — Electron-compatible custom URL-scheme registration. */
 export const protocol = {
   handle,
   unhandle,
   isProtocolHandled,
   getRegisteredSchemes,
-  handlerFor,
   dispatch,
-  clearForTesting,
 };

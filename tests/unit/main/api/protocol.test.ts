@@ -46,8 +46,10 @@ describe('schemeOfUrl', () => {
 });
 
 describe('buildProtocolResponse', () => {
+  const request = { url: 'app://host/' };
+
   test('utf8-encodes a string body and defaults the mimeType to text/html', () => {
-    const built = buildProtocolResponse(() => ({ data: 'hi' }));
+    const built = buildProtocolResponse(() => ({ data: 'hi' }), request);
     expect(built).not.toBeUndefined();
     if (built === undefined) {
       throw new Error('expected a built response');
@@ -58,10 +60,10 @@ describe('buildProtocolResponse', () => {
 
   test('passes Uint8Array bytes through unchanged and honours an explicit mimeType', () => {
     const raw = new Uint8Array([1, 2, 3]);
-    const built = buildProtocolResponse(() => ({
-      data: raw,
-      mimeType: 'application/octet-stream',
-    }));
+    const built = buildProtocolResponse(
+      () => ({ data: raw, mimeType: 'application/octet-stream' }),
+      request,
+    );
     if (built === undefined) {
       throw new Error('expected a built response');
     }
@@ -70,11 +72,11 @@ describe('buildProtocolResponse', () => {
   });
 
   test('returns undefined when the handler returns undefined', () => {
-    expect(buildProtocolResponse(() => undefined)).toBeUndefined();
+    expect(buildProtocolResponse(() => undefined, request)).toBeUndefined();
   });
 
   test('utf8-encodes multibyte characters by length, not character count', () => {
-    const built = buildProtocolResponse(() => ({ data: '€' }));
+    const built = buildProtocolResponse(() => ({ data: '€' }), request);
     if (built === undefined) {
       throw new Error('expected a built response');
     }
