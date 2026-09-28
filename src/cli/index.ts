@@ -7,7 +7,6 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { BunmaskaConfig } from '../common/config-schema';
 import { DEFAULT_CHANNEL } from '../common/manifest';
 import { currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -366,13 +365,7 @@ const notarizeCredentials = ():
 };
 
 const runInitCommand = (command: Extract<Command, { kind: 'init' }>): number => {
-  let result: ReturnType<typeof runInit>;
-  try {
-    result = runInit(command.dir, undefined, command.name);
-  } catch (error) {
-    err(error instanceof Error ? error.message : String(error));
-    return 1;
-  }
+  const result = runInit(command.dir, undefined, command.name);
   out(`Scaffolded ${result.name} in ${result.dir}`);
   for (const path of result.written) {
     out(`  create ${path}`);
@@ -412,27 +405,15 @@ const awaitInterrupt = (stop: () => void): Promise<void> =>
  * the system WebKit — which on Windows means no engine at all.
  */
 const launchEngineEnv = async (): Promise<Record<string, string>> => {
-  try {
-    const { config } = await loadConfig(process.cwd());
-    const engineId = resolveBuildEngineId(config.engine?.webkit);
-    return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
-  } catch {
-    // A missing or invalid config is the caller's problem to report, not ours.
-    return {};
-  }
+  const { config } = await loadConfig(process.cwd());
+  const engineId = resolveBuildEngineId(config.engine?.webkit);
+  return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
 };
 
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
-  let entry: string;
-  let renderer: BunmaskaConfig['renderer'];
-  try {
-    const { config } = await loadConfig(process.cwd());
-    entry = resolveDevEntry(config, command.entry);
-    renderer = config.renderer;
-  } catch (error) {
-    err(error instanceof Error ? error.message : String(error));
-    return 1;
-  }
+  const { config } = await loadConfig(process.cwd());
+  const entry = resolveDevEntry(config, command.entry);
+  const renderer = config.renderer;
   const dir = process.cwd();
   const log = (message: string): void => out(message);
   const baseDeps = defaultDevDeps(dir, log, await launchEngineEnv());
@@ -462,8 +443,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
   return 0;
 };
 
-/** Execute a parsed {@link Command} and resolve to the process exit code. */
-export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promise<number> => {
+const runCommand = async (command: Command, deps: DispatchDeps): Promise<number> => {
   switch (command.kind) {
     case 'help':
       out(USAGE);
@@ -490,6 +470,16 @@ export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promi
       err('');
       err(USAGE);
       return 1;
+  }
+};
+
+/** Run a parsed {@link Command} to its exit code; any failure prints as one stderr line. */
+export const dispatch = async (command: Command, deps: DispatchDeps = {}): Promise<number> => {
+  try {
+    return await runCommand(command, deps);
+  } catch (error) {
+    err(error instanceof Error ? error.message : String(error));
+    return 1;
   }
 };
 
