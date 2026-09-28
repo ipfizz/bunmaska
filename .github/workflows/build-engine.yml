@@ -3,11 +3,9 @@ name: build-engine
 # Builds a relocatable WebKitGTK engine from the runner's apt WebKitGTK and
 # proves it loads from the store with its dependency closure resolved via the
 # engine's own $ORIGIN rpaths. This is the start of the hosted-engine pipeline;
-# it runs on demand and on the engine branch, not on every push.
+# it runs on demand, not on every push.
 on:
   workflow_dispatch:
-  push:
-    branches: [feat/relocatable-engine]
 
 jobs:
   build:
@@ -23,7 +21,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - run: bun install --frozen-lockfile
 
@@ -31,7 +29,16 @@ jobs:
         run: |
           chmod +x tools/engine/build-webkitgtk-linux.sh
           WK_VER=$(dpkg-query -W -f='${Version}' libwebkitgtk-6.0-4 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          ENGINE_ID="webkitgtk-6.0-${WK_VER:-0.0.0}-built1-linux-x64"
+          if [ -z "$WK_VER" ]; then
+            echo "could not read the libwebkitgtk-6.0-4 version"
+            exit 1
+          fi
+          case "$(uname -m)" in
+            x86_64) ARCH=x64 ;;
+            aarch64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          ENGINE_ID="webkitgtk-6.0-${WK_VER}-built1-linux-${ARCH}"
           echo "ENGINE_ID=$ENGINE_ID" >> "$GITHUB_ENV"
           echo "Building engine id: $ENGINE_ID"
           mkdir -p "$RUNNER_TEMP/store"
