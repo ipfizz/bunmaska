@@ -24,7 +24,7 @@ import { loadConfig } from './config';
 import { classifyChange, defaultDevDeps, resolveDevEntry, runDev } from './dev';
 import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
-import { enginesPath } from './engine-store';
+import { engineDir, enginesPath, isInstalled } from './engine-store';
 import { runInit } from './init';
 import { runKeygen } from './keygen';
 import { notarizeApp } from './notarize';
@@ -292,16 +292,26 @@ const runBuild = async (
   }
 
   if (target === 'windows') {
-    const { engineId } = await resolveProjectEngine();
+    const { engineId, embed } = await resolveProjectEngine();
+    let embedEngine = command.options.embedEngine;
+    if (embedEngine === undefined && embed) {
+      const root = enginesPath();
+      if (engineId === 'system' || !isInstalled(root, engineId)) {
+        err(
+          `bunmaska build: engine.embed needs the pinned engine installed (${engineId}); ` +
+            'run bunmaska engine install <engine-id> first.',
+        );
+        return 1;
+      }
+      embedEngine = join(engineDir(root, engineId), 'lib');
+    }
     const result = await (deps.buildWindows ?? buildWindowsApp)({
       entry,
       name,
       engineId,
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(icon !== undefined ? { icon } : {}),
-      ...(command.options.embedEngine !== undefined
-        ? { embedEngine: command.options.embedEngine }
-        : {}),
+      ...(embedEngine !== undefined ? { embedEngine } : {}),
       ...(rendererDir !== undefined ? { rendererDir } : {}),
     });
     out(result.appDir);
