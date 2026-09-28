@@ -190,17 +190,10 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.void,
   },
-  // (type, data, size /*gsize*/, trusted /*gboolean*/, notify|null, user_data|null) -> GVariant*
-  //  (FLOATING). With notify=NULL the `data` buffer MUST outlive the variant (retain it).
-  g_variant_new_from_data: {
-    args: [
-      FFIType.pointer,
-      FFIType.pointer,
-      FFIType.u64,
-      FFIType.i32,
-      FFIType.pointer,
-      FFIType.pointer,
-    ],
+  // (element_type, elements, n_elements /*gsize*/, element_size /*gsize*/) -> GVariant* 'a<type>'
+  //  (FLOATING). COPIES `elements`, so the caller's buffer may change or die right after.
+  g_variant_new_fixed_array: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.u64, FFIType.u64],
     returns: FFIType.pointer,
   },
   // (GList*) -> void. Frees the LIST CELLS ONLY - each node's data must already
