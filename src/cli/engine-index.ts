@@ -3,7 +3,12 @@
 
 import { type EngineRef, parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
-import { DEFAULT_ENGINE_FEED_URL, type RemoteFetch, type RemoteManifest } from './engine-remote';
+import {
+  DEFAULT_ENGINE_FEED_URL,
+  MAX_ENGINE_TEXT_BYTES,
+  type RemoteFetch,
+  type RemoteManifest,
+} from './engine-remote';
 
 export type EngineIndexEntry = EngineRef & {
   readonly id: string;
@@ -82,7 +87,9 @@ export const fetchEngineIndex = async (
   feedBase: string,
   fetch: RemoteFetch,
 ): Promise<EngineIndexEntry[]> =>
-  parseEngineIndex(new TextDecoder().decode(await fetch(engineFeedIndexUrl(feedBase))));
+  parseEngineIndex(
+    new TextDecoder().decode(await fetch(engineFeedIndexUrl(feedBase), MAX_ENGINE_TEXT_BYTES)),
+  );
 
 /**
  * Add one engine, keep every other entry, sort by id. `indexText` undefined means

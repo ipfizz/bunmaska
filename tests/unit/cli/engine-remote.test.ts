@@ -9,6 +9,8 @@ import {
   DEFAULT_ENGINE_FEED_URL,
   engineFeedArtifactUrl,
   installFromUrl,
+  MAX_ENGINE_ARTIFACT_BYTES,
+  MAX_ENGINE_TEXT_BYTES,
   parseRemoteManifest,
   type RemoteFetch,
 } from '../../../src/cli/engine-remote';
@@ -127,6 +129,25 @@ describe('installFromUrl', () => {
     expect(existsSync(engineDir(root, ID))).toBe(false);
   });
 
+  test('fetches the small signed files before the artifact, each with a byte cap', async () => {
+    const root = makeTmpDir();
+    const artifact = await buildArtifact(makeTmpDir());
+    const { publicKey, privateKey } = generateSigningKeyPair();
+    const manifest = JSON.stringify({ id: ID, hash: contentHash(artifact) });
+    const feed = fixtureFeed(artifact, manifest, signArtifact(privateKey, artifact));
+    const calls: [string, number][] = [];
+    const fetch: RemoteFetch = (url, maxBytes) => {
+      calls.push([url, maxBytes]);
+      return feed(url, maxBytes);
+    };
+    await installFromUrl(root, base, publicKey, { fetch });
+    expect(calls).toEqual([
+      [`${base}.json`, MAX_ENGINE_TEXT_BYTES],
+      [`${base}.sig`, MAX_ENGINE_TEXT_BYTES],
+      [base, MAX_ENGINE_ARTIFACT_BYTES],
+    ]);
+  });
+
   test('refuses a feed serving another id than the one asked for, before the download', async () => {
     const root = makeTmpDir();
     const artifact = await buildArtifact(makeTmpDir());
@@ -134,9 +155,9 @@ describe('installFromUrl', () => {
     const manifest = JSON.stringify({ id: ID, hash: contentHash(artifact) });
     const feed = fixtureFeed(artifact, manifest, signArtifact(privateKey, artifact));
     const fetched: string[] = [];
-    const fetch: RemoteFetch = (url) => {
+    const fetch: RemoteFetch = (url, maxBytes) => {
       fetched.push(url);
-      return feed(url);
+      return feed(url, maxBytes);
     };
     const asked = 'webkitgtk-6.0-2.52.5-bunmaska1-linux-x64';
 
