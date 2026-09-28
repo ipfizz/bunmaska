@@ -2,8 +2,10 @@ import { JSCallback, type Pointer } from 'bun:ffi';
 import type { MenuRealizer } from '../../api/menu';
 import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { cstr } from '../cstr';
+import { loadGlibFFI } from './glib-ffi';
 import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadGMenuFFI } from './gtk-menu-ffi';
+import { deferCallbackClose } from './gtk-signals';
 
 /**
  * GMenu models plus one GSimpleActionGroup per realization, inserted as `bunmaska` (D039).
@@ -14,7 +16,8 @@ import { loadGMenuFFI } from './gtk-menu-ffi';
 /** `GSimpleAction::activate(action, parameter, user_data)`. */
 const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
-const ACTION_GROUP_PREFIX = 'bunmaska';
+/** The prefix every realization's action group is inserted under. */
+export const ACTION_GROUP_PREFIX = 'bunmaska';
 
 let actionCounter = 0;
 
@@ -23,6 +26,8 @@ export const actionName = (): string => `menu-${actionCounter++}`;
 
 /** The `detailed_action` a GMenu item references, e.g. `bunmaska.menu-0`. */
 export const detailedAction = (name: string): string => `${ACTION_GROUP_PREFIX}.${name}`;
+
+type Closable = { close(): void };
 
 export type Bindings = {
   gMenuNew(): bigint;
@@ -36,7 +41,9 @@ export type Bindings = {
   gSimpleActionSetEnabled(action: bigint, enabled: number): void;
   gActionMapAddAction(group: bigint, action: bigint): void;
   /** Returns the thunk, which the caller must retain. */
-  connectActivate(action: bigint, thunk: () => void): unknown;
+  connectActivate(action: bigint, thunk: () => void): Closable;
+  /** `g_object_unref` a model or group handle. */
+  unref(handle: bigint): void;
   /** Fire `detailed` on `group` without a click (tests). */
   activateAction(group: bigint, detailed: string, parameter: bigint | null): void;
 };
@@ -49,14 +56,14 @@ export type MenuEntry = {
   /** In realization order. */
   readonly actionNames: string[];
   /** Activate thunks; must outlive the menu. */
-  readonly retained: unknown[];
+  readonly retained: Closable[];
   /** Kept so a window can re-realize the tree with role wiring. */
   readonly specs: ReadonlyArray<NativeMenuItemSpec>;
 };
 
 const menuEntries = new Map<bigint, MenuEntry>();
 
-type CurrentAppMenu = {
+export type CurrentAppMenu = {
   readonly model: bigint;
   readonly group: bigint;
   readonly specs: ReadonlyArray<NativeMenuItemSpec>;
@@ -64,12 +71,14 @@ type CurrentAppMenu = {
 
 let currentAppMenu: CurrentAppMenu | undefined;
 
-/** Windows with a live bar register here so `setApplicationMenu(null)` can tear it down. */
-const clearListeners = new Set<() => void>();
-export const onAppMenuCleared = (listener: () => void): (() => void) => {
-  clearListeners.add(listener);
+/** Live windows register here to swap their bar on every `setApplicationMenu`. */
+const appMenuListeners = new Set<(menu: CurrentAppMenu | undefined) => void>();
+export const onAppMenuChanged = (
+  listener: (menu: CurrentAppMenu | undefined) => void,
+): (() => void) => {
+  appMenuListeners.add(listener);
   return () => {
-    clearListeners.delete(listener);
+    appMenuListeners.delete(listener);
   };
 };
 
@@ -96,7 +105,7 @@ const realBindings = (): Bindings => {
         gio.symbols.g_simple_action_new_stateful(
           cstr(name),
           null,
-          gio.symbols.g_variant_new_boolean(state ? 1 : 0),
+          loadGlibFFI().symbols.g_variant_new_boolean(state ? 1 : 0),
         ),
       ),
     gSimpleActionSetEnabled: (action, enabled) =>
@@ -120,6 +129,7 @@ const realBindings = (): Bindings => {
       );
       return callback;
     },
+    unref: (handle) => gobject.symbols.g_object_unref(asPtr(handle)),
     activateAction: (group, detailed, parameter) =>
       gio.symbols.g_action_group_activate_action(
         asPtr(group),
@@ -140,7 +150,7 @@ type WalkContext = {
   readonly b: Bindings;
   readonly group: bigint;
   readonly actionNames: string[];
-  readonly retained: unknown[];
+  readonly retained: Closable[];
   /** Per-window role handler; when set, a role item is wired live to it instead of being inert. */
   readonly dispatchRole?: ((spec: NativeMenuItemSpec) => void) | undefined;
 };
@@ -256,22 +266,41 @@ export const realizeForWindow = (
   dispatchRole: (spec: NativeMenuItemSpec) => void,
 ): MenuEntry => realizeCore(items, dispatchRole);
 
-/** `null` also removes the bars of live windows. */
+/**
+ * Re-realize `handle` with its role items dispatching to one window, and release the original.
+ * Only for a handle no widget ever showed: its actions are unreachable, so closing its thunks
+ * cannot race a click.
+ */
+export const rewireForWindow = (
+  handle: bigint,
+  dispatchRole: (spec: NativeMenuItemSpec) => void,
+): MenuEntry | undefined => {
+  const original = menuEntries.get(handle);
+  if (original === undefined) {
+    return undefined;
+  }
+  menuEntries.delete(handle);
+  const b = bindings();
+  b.unref(original.model);
+  b.unref(original.group);
+  deferCallbackClose(original.retained);
+  return realizeCore(original.specs, dispatchRole);
+};
+
+/** Also swaps (or, for `null`, removes) the bars of live windows, as Electron does on Linux. */
 const setApplicationMenu = (menuHandle: bigint | null): void => {
-  // ponytail: a non-null menu reaches only windows created later; live ones need a bar swap.
   if (menuHandle === null) {
     currentAppMenu = undefined;
-    for (const listener of [...clearListeners]) {
-      listener();
+  } else {
+    const entry = menuEntries.get(menuHandle);
+    if (entry === undefined) {
+      throw new Error(`setApplicationMenu: unknown menu handle ${menuHandle}`);
     }
-    clearListeners.clear();
-    return;
+    currentAppMenu = { model: entry.model, group: entry.group, specs: entry.specs };
   }
-  const entry = menuEntries.get(menuHandle);
-  if (entry === undefined) {
-    throw new Error(`setApplicationMenu: unknown menu handle ${menuHandle}`);
+  for (const listener of [...appMenuListeners]) {
+    listener(currentAppMenu);
   }
-  currentAppMenu = { model: entry.model, group: entry.group, specs: entry.specs };
 };
 
 /** `undefined` for an unknown handle. */

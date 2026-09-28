@@ -13,6 +13,7 @@ import { windowsGlobalShortcutBackend } from './windows-global-shortcut';
 import { type AppMenuWindow, windowsMenuRealizer } from './windows-menu';
 import { ensureOleInitialized, NativeWin32Window, pollWindows } from './windows-native-window';
 import { createWindowsDrain } from './windows-run-loop';
+import { centerIn, monitorRectsForWindow } from './windows-screen';
 import { WindowsWebContents } from './windows-web-contents';
 
 const SW_MAXIMIZE = 3;
@@ -36,8 +37,6 @@ const WS_POPUP = 0x80000000;
 const WS_VISIBLE = 0x10000000;
 const WS_CLIPCHILDREN = 0x02000000;
 const STYLE_RESIZABLE = 0x00050000n; // WS_THICKFRAME | WS_MAXIMIZEBOX
-const SM_CXSCREEN = 0;
-const SM_CYSCREEN = 1;
 
 const TPM_RETURNCMD = 0x0100;
 const TPM_RIGHTBUTTON = 0x0002;
@@ -80,8 +79,19 @@ class WindowsWindow implements NativeWindow {
       options.preloadScript,
     );
     this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
-    this.#appMenuTarget = { setMenuBar: (bar) => this.#native.setMenuBar(bar) };
-    this.#native.onMenuCommand((commandId) => windowsMenuRealizer.dispatchMenuCommand(commandId));
+    this.#appMenuTarget = {
+      setMenuBar: (bar) => this.#native.setMenuBar(bar),
+      performWindowAction: (action) => {
+        if (action === 'togglefullscreen') {
+          this.setFullScreen(!this.#fullscreen);
+        } else {
+          this.#handleWindowOp(action === 'zoom' ? 'toggleMaximize' : action);
+        }
+      },
+    };
+    this.#native.onMenuCommand((commandId) =>
+      windowsMenuRealizer.dispatchMenuCommand(commandId, this.#appMenuTarget),
+    );
     windowsMenuRealizer.registerAppMenuWindow(this.#appMenuTarget);
     this.#webContents.onWindowOp((op) => this.#handleWindowOp(op));
     this.#native.onClosed(() => {
@@ -197,13 +207,10 @@ class WindowsWindow implements NativeWindow {
   }
 
   center(): void {
-    const user32 = loadUser32().symbols;
-    const screenWidth = user32.GetSystemMetrics(SM_CXSCREEN);
-    const screenHeight = user32.GetSystemMetrics(SM_CYSCREEN);
-    const bounds = this.getBounds();
-    const x = Math.max(0, Math.floor((screenWidth - bounds.width) / 2));
-    const y = Math.max(0, Math.floor((screenHeight - bounds.height) / 2));
-    user32.SetWindowPos(this.#hwnd(), 0n, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    const { width, height } = this.getBounds();
+    const { x, y } = centerIn(monitorRectsForWindow(this.#hwnd()).workArea, width, height);
+    const flags = SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
+    loadUser32().symbols.SetWindowPos(this.#hwnd(), 0n, x, y, 0, 0, flags);
   }
 
   show(): void {
@@ -257,11 +264,10 @@ class WindowsWindow implements NativeWindow {
       this.#fullscreen = true;
       this.#savedStyle = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
       this.#savedBounds = this.getBounds();
+      const m = monitorRectsForWindow(hwnd).bounds;
       const fullscreenStyle = BigInt((WS_POPUP | WS_CLIPCHILDREN) >>> 0);
       user32.SetWindowLongPtrW(hwnd, GWL_STYLE, keepVisibility(fullscreenStyle, this.#savedStyle));
-      const width = user32.GetSystemMetrics(SM_CXSCREEN);
-      const height = user32.GetSystemMetrics(SM_CYSCREEN);
-      user32.SetWindowPos(hwnd, 0n, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED);
+      user32.SetWindowPos(hwnd, 0n, m.x, m.y, m.width, m.height, SWP_NOZORDER | SWP_FRAMECHANGED);
     } else if (!flag && this.#fullscreen) {
       this.#fullscreen = false;
       const current = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
@@ -357,7 +363,7 @@ class WindowsWindow implements NativeWindow {
       null,
     );
     if (command !== 0) {
-      windowsMenuRealizer.dispatchMenuCommand(command);
+      windowsMenuRealizer.dispatchMenuCommand(command, this.#appMenuTarget);
     }
     user32.DestroyMenu(menuHandle);
   }

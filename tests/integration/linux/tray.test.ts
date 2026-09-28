@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { ptr } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
+import { cstr } from '../../../src/main/platform/cstr';
 import { loadGDBusFFI } from '../../../src/main/platform/linux/gdbus-ffi';
 import { loadGlibFFI } from '../../../src/main/platform/linux/glib-ffi';
 import { loadGdkPixbufFFI } from '../../../src/main/platform/linux/gdk-pixbuf-ffi';
@@ -33,7 +35,7 @@ describe.skipIf(currentPlatform() !== 'linux')('Linux Tray backend (StatusNotifi
       'g_variant_builder_new',
       'g_variant_builder_add_value',
       'g_variant_builder_end',
-      'g_variant_new_from_data',
+      'g_variant_new_fixed_array',
       'g_variant_new_int32',
       'g_variant_new_object_path',
     ] as const) {
@@ -46,7 +48,14 @@ describe.skipIf(currentPlatform() !== 'linux')('Linux Tray backend (StatusNotifi
       'gdk_pixbuf_get_n_channels',
     ] as const) {
       expect(typeof pix.symbols[name]).toBe('function');
-    }
+    } // The icon pixmap's `ay`: one element per byte, copied out of the JS buffer.
+    const bytes = new Uint8Array([0xff, 0x10, 0x20, 0x30]);
+    const g = glib.symbols;
+    const value = g.g_variant_new_fixed_array(g.g_variant_type_new(cstr('y')), ptr(bytes), 4n, 1n);
+    bytes.fill(0);
+    expect(String(g.g_variant_get_type_string(value))).toBe('ay');
+    expect(g.g_variant_n_children(value)).toBe(4n);
+    g.g_variant_unref(value);
   });
 
   test('the embedded SNI introspection XML parses and the interface resolves', () => {

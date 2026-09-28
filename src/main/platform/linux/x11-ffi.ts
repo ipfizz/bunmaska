@@ -35,8 +35,6 @@ export const X11_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.i32, FFIType.u32, FFIType.u64],
     returns: FFIType.i32,
   },
-  // (Display*, Window, long event_mask) -> int
-  XSelectInput: { args: [FFIType.pointer, FFIType.u64, FFIType.i64], returns: FFIType.i32 },
   // (Display*) -> int
   XPending: { args: [FFIType.pointer], returns: FFIType.i32 },
   // (Display*, XEvent* out) -> int. XEvent is a 192-byte union: pass a byte buffer and read
@@ -44,8 +42,11 @@ export const X11_FFI_SYMBOLS = {
   XNextEvent: { args: [FFIType.pointer, FFIType.pointer], returns: FFIType.i32 },
   // (Display*) -> int
   XFlush: { args: [FFIType.pointer], returns: FFIType.i32 },
-  // (int (*handler)(Display*, XErrorEvent*)) -> previous handler.
-  // ponytail: never installed, so an XGrabKey BadAccess exits the app via Xlib's default handler.
+  // (Display*, Bool discard) -> int. A round trip: every error for earlier requests has
+  //  reached the error handler when it returns, so a refused XGrabKey is known synchronously.
+  XSync: { args: [FFIType.pointer, FFIType.i32], returns: FFIType.i32 },
+  // (int (*handler)(Display*, XErrorEvent*)) -> previous handler. Without one, a BadAccess
+  //  from XGrabKey reaches Xlib's default handler, which exit(1)s the app.
   XSetErrorHandler: { args: [FFIType.pointer], returns: FFIType.pointer },
 } as const;
 

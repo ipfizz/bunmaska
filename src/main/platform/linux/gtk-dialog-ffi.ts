@@ -5,7 +5,6 @@ import { dlopenLinux } from './glib-ffi';
 
 /** Needs GTK >= 4.10 (GtkAlertDialog/GtkFileDialog): Bun fails the whole table on older GTK. */
 const LIBGTK_PATH = 'libgtk-4.so.1';
-const LIBGOBJECT_PATH = 'libgobject-2.0.so.0';
 
 export const GTK_DIALOG_FFI_SYMBOLS = {
   gtk_alert_dialog_get_type: {
@@ -65,6 +64,44 @@ export const GTK_DIALOG_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (self, parent, cancellable, cb, user_data), like gtk_file_dialog_open.
+  gtk_file_dialog_open_multiple: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, result, error /*null*/) -> GListModel* of GFile (transfer-full; NULL on cancel)
+  gtk_file_dialog_open_multiple_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  gtk_file_dialog_select_folder: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, result, error /*null*/) -> GFile* (NULL on cancel)
+  gtk_file_dialog_select_folder_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  gtk_file_dialog_select_multiple_folders: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, result, error /*null*/) -> GListModel* of GFile (transfer-full; NULL on cancel)
+  gtk_file_dialog_select_multiple_folders_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (self, GFile*) -> void. The dialog takes its own ref; the caller still unrefs its GFile.
+  gtk_file_dialog_set_initial_folder: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  // (self, GFile*) -> void. Sets the initial folder AND name from the file's parent and basename.
+  gtk_file_dialog_set_initial_file: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
   gtk_file_dialog_save: {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
@@ -87,18 +124,9 @@ export const GTK_DIALOG_FFI_SYMBOLS = {
   },
 } as const;
 
-// ponytail: duplicate of gobject-ffi's g_object_new; delete once gtk-dialog.ts calls that one.
-export const GTK_DIALOG_GOBJECT_FFI_SYMBOLS = {
-  g_object_new: {
-    args: [FFIType.u64, FFIType.pointer],
-    returns: FFIType.pointer,
-  },
-} as const;
-
 const cache: {
   gtk: ReturnType<typeof dlopenLinux<typeof GTK_DIALOG_FFI_SYMBOLS>> | undefined;
-  gobject: ReturnType<typeof dlopenLinux<typeof GTK_DIALOG_GOBJECT_FFI_SYMBOLS>> | undefined;
-} = { gtk: undefined, gobject: undefined };
+} = { gtk: undefined };
 
 const requireLinux = (fn: string): void => {
   const platform = currentPlatform();
@@ -116,15 +144,5 @@ export const loadGtkDialogFFI = () => {
   }
   const ffi = dlopenLinux(LIBGTK_PATH, GTK_DIALOG_FFI_SYMBOLS);
   cache.gtk = ffi;
-  return ffi;
-};
-
-export const loadGtkDialogGObjectFFI = () => {
-  requireLinux('loadGtkDialogGObjectFFI');
-  if (cache.gobject) {
-    return cache.gobject;
-  }
-  const ffi = dlopenLinux(LIBGOBJECT_PATH, GTK_DIALOG_GOBJECT_FFI_SYMBOLS);
-  cache.gobject = ffi;
   return ffi;
 };

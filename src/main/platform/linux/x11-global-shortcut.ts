@@ -28,17 +28,23 @@ const registrations: Registration[] = [];
 const eventBuffer = new Uint8Array(XEVENT_BUFFER_SIZE);
 const eventView = new DataView(eventBuffer.buffer);
 let errorTrap: JSCallback | undefined;
+let grabFailed = false;
 
 /**
- * Swallow X errors on the grab display: a BadAccess for a key another client holds
- * would otherwise reach Xlib's default handler, which exit(1)s the app. Errors on
+ * Record and swallow X errors on the grab display: a BadAccess for a key another client
+ * holds would otherwise reach Xlib's default handler, which exit(1)s the app. Errors on
  * any other display chain to the previous handler. Never closed (Xlib keeps the pointer).
  */
 const installErrorTrap = (x11: ReturnType<typeof loadX11FFI>): void => {
   let previous: CallableFunction | undefined;
   errorTrap = new JSCallback(
-    (dpy: Pointer | null, event: Pointer | null): number =>
-      dpy === display || previous === undefined ? 0 : Number(previous(dpy, event)),
+    (dpy: Pointer | null, event: Pointer | null): number => {
+      if (dpy === display) {
+        grabFailed = true;
+        return 0;
+      }
+      return previous === undefined ? 0 : Number(previous(dpy, event));
+    },
     { args: ['ptr', 'ptr'], returns: 'i32' },
   );
   const prior = x11.symbols.XSetErrorHandler(errorTrap.ptr);
@@ -109,12 +115,17 @@ const register = (accelerator: string, callback: () => void): boolean => {
     return false;
   }
   const x11 = loadX11FFI();
+  grabFailed = false;
   // owner_events FALSE(0), pointer_mode/keyboard_mode GrabModeAsync(1).
   for (const lockBits of GRAB_VARIANTS) {
     x11.symbols.XGrabKey(dpy, grab.keycode, grab.modifiers | lockBits, rootWindow, 0, 1, 1);
   }
-  // ponytail: a key another client holds still returns true; XSync + a trap flag reports it once x11-ffi declares XSync.
-  x11.symbols.XFlush(dpy);
+  x11.symbols.XSync(dpy, 0);
+  if (grabFailed) {
+    ungrab(dpy, grab);
+    x11.symbols.XSync(dpy, 0);
+    return false;
+  }
   registrations.push({ ...grab, callback });
   return true;
 };

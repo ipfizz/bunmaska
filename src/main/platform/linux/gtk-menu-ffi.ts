@@ -41,11 +41,6 @@ export const GMENU_FFI_SYMBOLS = {
     args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // ponytail: duplicate of GLIB_FFI_SYMBOLS.g_variant_new_boolean; delete once gtk-menu.ts uses it.
-  g_variant_new_boolean: {
-    args: [FFIType.i32],
-    returns: FFIType.pointer,
-  },
   g_simple_action_set_enabled: {
     args: [FFIType.pointer, FFIType.i32],
     returns: FFIType.void,
@@ -69,6 +64,10 @@ export const GTK_MENU_FFI_SYMBOLS = {
     returns: FFIType.pointer,
   },
   gtk_box_append: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  gtk_box_prepend: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,
   },

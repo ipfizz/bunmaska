@@ -15,6 +15,11 @@ export const GIO_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
+  // (const char* path) -> GFile* (transfer-full: g_object_unref). Never fails, even for a missing path.
+  g_file_new_for_path: {
+    args: [FFIType.cstring],
+    returns: FFIType.pointer,
+  },
   // (GListModel*) -> guint number of items
   g_list_model_get_n_items: {
     args: [FFIType.pointer],

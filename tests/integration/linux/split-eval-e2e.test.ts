@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
+import { requireGtkDisplay } from '../../helpers/require-gtk-display';
 import { createLinuxApplication } from '../../../src/main/platform/linux/linux-backend';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
@@ -28,9 +28,7 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
 
 describe.skipIf(!isLinux)('Linux split eval semantics', () => {
   test('page-world global is invisible to the isolated world (and vice versa)', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
 
     const isolatedPreload = [
       'window.__isoMarker = "from-isolated";',

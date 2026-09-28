@@ -6,6 +6,7 @@ import {
   getMenuEntry,
   linuxMenuRealizer,
   resetCurrentAppMenuForTesting,
+  rewireForWindow,
   setBindingsForTesting,
 } from '../../../src/main/platform/linux/gtk-menu';
 import { loadGMenuFFI, loadGtkMenuFFI } from '../../../src/main/platform/linux/gtk-menu-ffi';
@@ -108,6 +109,24 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
     gio.symbols.g_action_group_activate_action(asPtr(group), cstr(`${names[1]}`), null);
     expect(fired).toBe(1);
     expect(firedOther).toBe(1);
+
+    // A popup re-realized for one window fires its role item there and frees the original.
+    const copy = linuxMenuRealizer.realize([
+      {
+        label: 'Copy',
+        type: 'normal',
+        enabled: true,
+        keyEquivalent: '',
+        role: 'copy',
+        editingCommand: 'Copy',
+      },
+    ]);
+    const roles: string[] = [];
+    const rewired = rewireForWindow(copy, (spec) => roles.push(spec.role ?? ''));
+    const roleAction = rewired?.actionNames[0] ?? '';
+    gio.symbols.g_action_group_activate_action(asPtr(rewired?.group ?? 0n), cstr(roleAction), null);
+    expect(roles).toEqual(['copy']);
+    expect(getMenuEntry(copy)).toBeUndefined();
   });
 
   test.skipIf(!hasDisplay)(
@@ -184,8 +203,9 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
   );
 
   test.skipIf(!hasDisplay)(
-    'the default (no app menu) window path still builds without throwing',
+    'a window built with no app menu takes, swaps and drops a later one live',
     async () => {
+      setBindingsForTesting(undefined);
       resetCurrentAppMenuForTesting();
       const app = createLinuxApplication();
       app.start();
@@ -194,8 +214,21 @@ describe.skipIf(!isLinux)('GTK menu backend (Linux)', () => {
         window = app.createWindow({ width: 320, height: 240, title: 'NoMenu', show: true });
       }).not.toThrow();
       await pump(100);
+      const bar = (label: string) =>
+        linuxMenuRealizer.realize([
+          { label, type: 'submenu', enabled: true, keyEquivalent: '', submenu: [] },
+        ]);
+      expect(() => {
+        linuxMenuRealizer.setApplicationMenu(bar('First'));
+        linuxMenuRealizer.setApplicationMenu(bar('Second'));
+        linuxMenuRealizer.setApplicationMenu(null);
+        linuxMenuRealizer.setApplicationMenu(bar('Third'));
+      }).not.toThrow();
+      await pump(100);
       window?.close();
+      linuxMenuRealizer.setApplicationMenu(null);
       app.quit();
+      resetCurrentAppMenuForTesting();
     },
   );
 });

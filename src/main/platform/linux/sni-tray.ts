@@ -136,28 +136,16 @@ const decodeIcon = (path: string): Icon | null => {
   return icon;
 };
 
-/**
- * A floating one-frame `a(iiay)` whose `ay` BORROWS `icon.argb` (from_data, notify=NULL): the
- * tray state owns the buffer, and GDBus serializes the reply inside the getter's dispatch.
- */
+/** A floating one-frame `a(iiay)`; its `ay` is a copy of `icon.argb`. */
 const buildIconPixmap = (icon: Icon): Pointer | null => {
   const g = loadGlibFFI().symbols;
-  // ponytail: G_DBUS_DEBUG=message prints queued replies on the worker thread and can read a
-  // buffer setImage replaced; g_variant_new_fixed_array (a glib-ffi symbol) would copy instead.
   const builder = g.g_variant_builder_new(variantType('a(iiay)'));
   g.g_variant_builder_open(builder, variantType('(iiay)'));
   g.g_variant_builder_add_value(builder, g.g_variant_new_int32(icon.width));
   g.g_variant_builder_add_value(builder, g.g_variant_new_int32(icon.height));
   g.g_variant_builder_add_value(
     builder,
-    g.g_variant_new_from_data(
-      variantType('ay'),
-      ptr(icon.argb),
-      BigInt(icon.argb.length),
-      1,
-      null,
-      null,
-    ),
+    g.g_variant_new_fixed_array(variantType('y'), ptr(icon.argb), BigInt(icon.argb.length), 1n),
   );
   g.g_variant_builder_close(builder);
   const value = g.g_variant_builder_end(builder);

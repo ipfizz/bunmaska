@@ -7,8 +7,10 @@ import {
   getCurrentAppMenu,
   getMenuEntry,
   linuxMenuRealizer,
+  onAppMenuChanged,
   realizeForWindow,
   resetCurrentAppMenuForTesting,
+  rewireForWindow,
   setBindingsForTesting,
 } from '../../../../../src/main/platform/linux/gtk-menu';
 
@@ -84,6 +86,10 @@ const makeFakeBindings = (): { bindings: Bindings; calls: Call[] } => {
     connectActivate: (action, thunk) => {
       activateHandlers.set(action, thunk);
       calls.push({ fn: 'connectActivate', args: [action] });
+      return { close: () => calls.push({ fn: 'closeThunk', args: [action] }) };
+    },
+    unref: (handle) => {
+      calls.push({ fn: 'unref', args: [handle] });
     },
     activateAction: (group, detailed) => {
       const action = groupActions.get(group)?.get(detailed);
@@ -366,6 +372,32 @@ describe('realizeForWindow (per-window role wiring)', () => {
     linuxMenuRealizer.realize([role('Copy', { role: 'copy', editingCommand: 'Copy' })]);
     expect(calls.filter((c) => c.fn === 'connectActivate')).toHaveLength(0);
   });
+  test('rewireForWindow re-realizes a handle with role wiring and releases the original', async () => {
+    const { bindings, calls } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    const copy = role('Copy', { role: 'copy', editingCommand: 'Copy' });
+    const handle = linuxMenuRealizer.realize([copy, role('Open', { onClick: () => undefined })]);
+    const original = getMenuEntry(handle);
+    const dispatched: NativeMenuItemSpec[] = [];
+    const entry = rewireForWindow(handle, (s) => dispatched.push(s));
+    bindings.activateAction(
+      entry?.group as bigint,
+      detailedAction(entry?.actionNames[0] as string),
+      null,
+    );
+    expect(dispatched).toEqual([copy]);
+    expect(getMenuEntry(handle)).toBeUndefined();
+    const unrefs = calls.filter((c) => c.fn === 'unref').map((c) => c.args[0]);
+    expect(unrefs).toEqual([original?.model, original?.group]);
+    expect(calls.filter((c) => c.fn === 'closeThunk')).toHaveLength(0);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls.filter((c) => c.fn === 'closeThunk')).toHaveLength(1);
+  });
+
+  test('rewireForWindow returns undefined for an unknown handle', () => {
+    setBindingsForTesting(makeFakeBindings().bindings);
+    expect(rewireForWindow(424242n, () => undefined)).toBeUndefined();
+  });
 });
 
 describe('shared app-menu state', () => {
@@ -384,6 +416,21 @@ describe('shared app-menu state', () => {
     const entry = getMenuEntry(handle);
     expect(current?.model).toBe(entry?.model as bigint);
     expect(current?.group).toBe(entry?.group as bigint);
+  });
+
+  test('setApplicationMenu tells live windows about a new menu and about null', () => {
+    const { bindings } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    const seen: Array<bigint | undefined> = [];
+    const unsubscribe = onAppMenuChanged((menu) => seen.push(menu?.model));
+    const first = linuxMenuRealizer.realize([]);
+    const second = linuxMenuRealizer.realize([]);
+    linuxMenuRealizer.setApplicationMenu(first);
+    linuxMenuRealizer.setApplicationMenu(null);
+    linuxMenuRealizer.setApplicationMenu(second);
+    unsubscribe();
+    linuxMenuRealizer.setApplicationMenu(first);
+    expect(seen).toEqual([first, undefined, second]);
   });
 
   test('throws if setApplicationMenu is given an unknown handle', () => {

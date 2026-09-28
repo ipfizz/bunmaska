@@ -5,6 +5,7 @@ import { cstr } from '../cstr';
 import type { Rect, WindowEventType } from '../native';
 import { readRect, registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
+import { monitorRectsForWindow } from './windows-screen';
 
 // The WKView's direct host must keep the native DefWindowProcW: WebKit's re-entrant
 // flood during a load crashes a JSCallback WndProc (D043). Only the top-level frame,
@@ -471,8 +472,14 @@ export class NativeWin32Window {
       new DataView(placement.buffer).setUint32(0, WINDOWPLACEMENT_SIZE, true);
       const placementPtr = ptr(placement);
       user32.GetWindowPlacement(this.#hwnd, placementPtr);
-      // ponytail: workspace coords, off by a top/left-docked taskbar; upgrade = add rcWork - rcMonitor
-      return readRect(placementPtr, RC_NORMAL_POSITION_OFFSET);
+      // rcNormalPosition is in workspace coords, offset by a top- or left-docked taskbar.
+      const restored = readRect(placementPtr, RC_NORMAL_POSITION_OFFSET);
+      const { bounds, workArea } = monitorRectsForWindow(this.#hwnd);
+      return {
+        ...restored,
+        x: restored.x + workArea.x - bounds.x,
+        y: restored.y + workArea.y - bounds.y,
+      };
     }
     const rect = new Uint8Array(RECT_SIZE);
     const rectPtr = ptr(rect);

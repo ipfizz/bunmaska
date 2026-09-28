@@ -9,8 +9,8 @@ const LIBWEBKITGTK_PATH = 'libwebkitgtk-6.0.so.4';
 export const WEBKIT_LOAD_STARTED = 0;
 export const WEBKIT_LOAD_COMMITTED = 2;
 export const WEBKIT_LOAD_FINISHED = 3;
-/** `WebKitUserContentInjectedFrames`: inject the preload into every frame. */
-export const WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES = 0;
+/** `WebKitUserContentInjectedFrames`: never subframes, or a third-party iframe gets every exposed API. */
+export const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME = 1;
 /** `WebKitUserScriptInjectionTime`: inject the preload at document start. */
 export const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START = 0;
 /** `WebKitSnapshotRegion`: the visible viewport (Electron `capturePage` semantics), not FULL_DOCUMENT (1). */
@@ -154,6 +154,11 @@ export const WEBKITGTK_FFI_SYMBOLS = {
       FFIType.pointer,
     ],
     returns: FFIType.pointer,
+  },
+  // add_script retains the underlying script, so the caller's ref is dropped right after it.
+  webkit_user_script_unref: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
   },
   // () -> WebKitWebContext* (transfer-none).
   webkit_web_context_get_default: {

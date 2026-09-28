@@ -25,8 +25,12 @@ const wireWindow = (realizer: ReturnType<typeof createWindowsMenuRealizer>) => {
     show: false,
     destroyOnClose: true,
   });
-  native.onMenuCommand((id) => realizer.dispatchMenuCommand(id));
-  realizer.registerAppMenuWindow({ setMenuBar: (bar) => native.setMenuBar(bar) });
+  const target = {
+    setMenuBar: (bar: bigint | null) => native.setMenuBar(bar),
+    performWindowAction: () => undefined,
+  };
+  native.onMenuCommand((id) => realizer.dispatchMenuCommand(id, target));
+  realizer.registerAppMenuWindow(target);
   return native;
 };
 

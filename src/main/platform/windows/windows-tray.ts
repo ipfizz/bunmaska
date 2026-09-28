@@ -20,6 +20,13 @@ const IDI_APPLICATION = 32512n;
 const WM_LBUTTONUP = 0x0202;
 
 let nextUid = 1;
+let taskbarCreated: number | undefined;
+
+/** Broadcast when explorer.exe (re)starts; every tray icon must then be added again. */
+const taskbarCreatedMessage = (): number => {
+  taskbarCreated ??= loadUser32().symbols.RegisterWindowMessageW(ptr(wstr('TaskbarCreated')));
+  return taskbarCreated;
+};
 
 /** A left click on icon `uid`: `wParam` is the icon id, LOWORD(lParam) the mouse event. Pure. */
 export const isTrayActivation = (
@@ -77,9 +84,12 @@ export const windowsTrayBackend: TrayBackend = {
     let toolTip = '';
     let destroyed = false;
 
+    const readdMessage = taskbarCreatedMessage();
     const window = createMessageWindow((message, wParam, lParam) => {
       if (isTrayActivation(message, Number(wParam), Number(lParam), uid)) {
         clickCallback?.();
+      } else if (message === readdMessage && readdMessage !== 0 && !destroyed) {
+        sync(NIM_ADD);
       }
     });
 

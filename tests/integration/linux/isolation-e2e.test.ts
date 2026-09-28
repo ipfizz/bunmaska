@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
+import { requireGtkDisplay } from '../../helpers/require-gtk-display';
 import { createLinuxApplication } from '../../../src/main/platform/linux/linux-backend';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
@@ -32,9 +32,7 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
 
 describe.skipIf(!isLinux)('Linux context isolation end-to-end', () => {
   test('isolated world sees __bunmaska as object; page world sees undefined', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
 
     // The isolated-world preload sees __bunmaska and relays the page world's DOM
     // probe back over IPC. The page world shares the DOM but not the bridge.

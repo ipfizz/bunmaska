@@ -49,6 +49,7 @@ if (currentPlatform() === 'linux') {
       const script = webkit.symbols.webkit_user_script_new(cstr('void 0;'), 0, 0, null, null);
       expect(script).not.toBeNull();
       webkit.symbols.webkit_user_content_manager_add_script(ucm, script);
+      webkit.symbols.webkit_user_script_unref(script);
 
       // evaluate_javascript fire-and-forget (NULL callback) must not crash.
       webkit.symbols.webkit_web_view_evaluate_javascript(

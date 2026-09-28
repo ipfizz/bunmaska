@@ -1,11 +1,13 @@
 import { CString, type Pointer, ptr } from 'bun:ffi';
+import { statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import type { DialogBackend } from '../../api/dialog';
 import { cstr } from '../cstr';
 import { runAsyncReady } from './gasync';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
-import { loadGtkDialogFFI, loadGtkDialogGObjectFFI } from './gtk-dialog-ffi';
+import { loadGtkDialogFFI } from './gtk-dialog-ffi';
 
 // GtkAlertDialog and GtkFileDialog (GTK 4.10+). Callback lifetime rules live in gasync.ts.
 
@@ -96,8 +98,13 @@ const showMessageBox = (spec: {
   readonly type?: string;
 }): Promise<number> => {
   const gtk = loadGtkDialogFFI();
-  const gobject = loadGtkDialogGObjectFFI();
-  const dialog = gobject.symbols.g_object_new(gtk.symbols.gtk_alert_dialog_get_type(), null);
+  const gobject = loadGObjectFFI();
+  const dialog = gobject.symbols.g_object_new(
+    gtk.symbols.gtk_alert_dialog_get_type(),
+    null,
+    null,
+    null,
+  );
   if (dialog === null) {
     throw new Error('g_object_new(GtkAlertDialog) returned null');
   }
@@ -150,12 +157,56 @@ const applyExtensionFilter = (
   loadGObjectFFI().symbols.g_object_unref(filter);
 };
 
-// ponytail: single-file open only; openDirectory, multiSelections and defaultPath need
-// gtk_file_dialog_select_folder, _open_multiple and _set_initial_folder in gtk-dialog-ffi.
+/** Read every path out of a transfer-full `GListModel*` of `GFile`, releasing the list. */
+const readGFileListPaths = (list: Pointer): string[] => {
+  const gio = loadGioFFI().symbols;
+  const paths: string[] = [];
+  const count = gio.g_list_model_get_n_items(list);
+  for (let i = 0; i < count; i += 1) {
+    const file = gio.g_list_model_get_item(list, i);
+    const path = file === null ? '' : readGFilePath(file);
+    if (path !== '') {
+      paths.push(path);
+    }
+  }
+  loadGObjectFFI().symbols.g_object_unref(list);
+  return paths;
+};
+
+/** Open `fileDialog` in `path` when it is a directory, else preselect it as a file in its folder. */
+const setInitialPath = (
+  gtk: ReturnType<typeof loadGtkDialogFFI>,
+  fileDialog: Pointer,
+  path: string,
+): void => {
+  const file = loadGioFFI().symbols.g_file_new_for_path(cstr(path));
+  if (file === null) {
+    return;
+  }
+  if (statSync(path, { throwIfNoEntry: false })?.isDirectory() === true) {
+    gtk.symbols.gtk_file_dialog_set_initial_folder(fileDialog, file);
+  } else {
+    gtk.symbols.gtk_file_dialog_set_initial_file(fileDialog, file);
+  }
+  loadGObjectFFI().symbols.g_object_unref(file);
+};
+
+/** The GtkFileDialog entry point; a folder picker wins over files, as Electron does on Linux. */
+export const openDialogMethod = (spec: {
+  readonly canChooseDirectories: boolean;
+  readonly allowsMultipleSelection: boolean;
+}): 'open' | 'open_multiple' | 'select_folder' | 'select_multiple_folders' => {
+  if (spec.canChooseDirectories) {
+    return spec.allowsMultipleSelection ? 'select_multiple_folders' : 'select_folder';
+  }
+  return spec.allowsMultipleSelection ? 'open_multiple' : 'open';
+};
+
 const showOpenDialog = (spec: {
   readonly canChooseFiles: boolean;
   readonly canChooseDirectories: boolean;
   readonly allowsMultipleSelection: boolean;
+  readonly defaultPath: string;
   readonly extensions: ReadonlyArray<string>;
 }): Promise<string[]> => {
   const gtk = loadGtkDialogFFI();
@@ -163,17 +214,30 @@ const showOpenDialog = (spec: {
   if (fileDialog === null) {
     throw new Error('gtk_file_dialog_new() returned null');
   }
+  const method = openDialogMethod(spec);
   gtk.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Open'));
   gtk.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
-  applyExtensionFilter(gtk, fileDialog, spec.extensions);
+  if (spec.defaultPath.length > 0) {
+    setInitialPath(gtk, fileDialog, spec.defaultPath);
+  }
+  if (!spec.canChooseDirectories) {
+    applyExtensionFilter(gtk, fileDialog, spec.extensions);
+  }
   return runAsyncReady<string[]>(
-    (cbPtr) => gtk.symbols.gtk_file_dialog_open(fileDialog, null, null, cbPtr, null),
+    (cbPtr) => gtk.symbols[`gtk_file_dialog_${method}`](fileDialog, null, null, cbPtr, null),
     (result) => {
-      const path = settleFilePath({
-        result,
-        finish: (r) => gtk.symbols.gtk_file_dialog_open_finish(fileDialog, r, null),
-        readPath: readGFilePath,
-      });
+      const finish = (r: Pointer) =>
+        gtk.symbols[`gtk_file_dialog_${method}_finish`](fileDialog, r, null);
+      if (method === 'open_multiple' || method === 'select_multiple_folders') {
+        let list: Pointer | null = null;
+        try {
+          list = finish(result);
+        } catch {
+          // A dismissal or GError reads as no selection.
+        }
+        return list === null ? [] : readGFileListPaths(list);
+      }
+      const path = settleFilePath({ result, finish, readPath: readGFilePath });
       return path === '' ? [] : [path];
     },
   ).finally(() => loadGObjectFFI().symbols.g_object_unref(fileDialog));
@@ -181,6 +245,7 @@ const showOpenDialog = (spec: {
 
 const showSaveDialog = (spec: {
   readonly defaultName: string;
+  readonly defaultDirectory?: string;
   readonly extensions: ReadonlyArray<string>;
 }): Promise<string> => {
   const gtk = loadGtkDialogFFI();
@@ -190,7 +255,13 @@ const showSaveDialog = (spec: {
   }
   gtk.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Save'));
   gtk.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
-  if (spec.defaultName.length > 0) {
+  if (spec.defaultDirectory !== undefined && spec.defaultDirectory.length > 0) {
+    setInitialPath(gtk, fileDialog, spec.defaultDirectory);
+  }
+  // Electron's defaultPath is an absolute directory, an absolute file or a bare name.
+  if (isAbsolute(spec.defaultName)) {
+    setInitialPath(gtk, fileDialog, spec.defaultName);
+  } else if (spec.defaultName.length > 0) {
     gtk.symbols.gtk_file_dialog_set_initial_name(fileDialog, cstr(spec.defaultName));
   }
   applyExtensionFilter(gtk, fileDialog, spec.extensions);

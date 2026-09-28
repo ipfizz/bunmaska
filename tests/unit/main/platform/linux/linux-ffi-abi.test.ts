@@ -18,10 +18,7 @@ import {
   GOBJECT_FFI_SYMBOLS,
   loadGObjectFFI,
 } from '../../../../../src/main/platform/linux/gobject-ffi';
-import {
-  loadGtkDialogFFI,
-  loadGtkDialogGObjectFFI,
-} from '../../../../../src/main/platform/linux/gtk-dialog-ffi';
+import { loadGtkDialogFFI } from '../../../../../src/main/platform/linux/gtk-dialog-ffi';
 import { GTK_FFI_SYMBOLS, loadGtkFFI } from '../../../../../src/main/platform/linux/gtk-ffi';
 import { loadGMenuFFI, loadGtkMenuFFI } from '../../../../../src/main/platform/linux/gtk-menu-ffi';
 import { JSC_FFI_SYMBOLS, loadJscFFI } from '../../../../../src/main/platform/linux/jsc-ffi';
@@ -192,7 +189,6 @@ const LOADERS: ReadonlyArray<readonly [string, () => unknown]> = [
   ['loadGObjectFFI', loadGObjectFFI],
   ['loadGtkFFI', loadGtkFFI],
   ['loadGtkDialogFFI', loadGtkDialogFFI],
-  ['loadGtkDialogGObjectFFI', loadGtkDialogGObjectFFI],
   ['loadGMenuFFI', loadGMenuFFI],
   ['loadGtkMenuFFI', loadGtkMenuFFI],
   ['loadJscFFI', loadJscFFI],

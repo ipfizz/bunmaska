@@ -65,14 +65,15 @@ describe('WindowsWebContents', () => {
     expect(warnings).toEqual([]);
   });
 
-  test('a null or non-object exec result is ignored and later results still settle', async () => {
-    const { contents, options } = createContents();
+  test('exec results settle only by the unguessable execId the wrapper posts', async () => {
+    const { contents, options, evaluated } = createContents();
     const exec = options.messageHandlers.find((handler) => handler.name === 'bunmaskaExec');
     const pending = contents.executeJavaScript('1 + 1');
-    for (const body of ['null', '1', '"x"']) {
+    const execId = Number(/execId: (\d+)/.exec(evaluated.at(-1) ?? '')?.[1]);
+    for (const body of ['null', '1', JSON.stringify({ execId: 1, ok: true, result: 'forged' })]) {
       expect(() => exec?.onMessage(body)).not.toThrow();
     }
-    exec?.onMessage(JSON.stringify({ execId: 1, ok: true, result: 2 }));
+    exec?.onMessage(JSON.stringify({ execId, ok: true, result: 2 }));
     expect(await pending).toBe(2);
   });
 });
