@@ -79,8 +79,19 @@ class WindowsWindow implements NativeWindow {
       options.preloadScript,
     );
     this.#native.setResizeHook((width, height) => this.#webContents.resize(width, height));
-    this.#appMenuTarget = { setMenuBar: (bar) => this.#native.setMenuBar(bar) };
-    this.#native.onMenuCommand((commandId) => windowsMenuRealizer.dispatchMenuCommand(commandId));
+    this.#appMenuTarget = {
+      setMenuBar: (bar) => this.#native.setMenuBar(bar),
+      performWindowAction: (action) => {
+        if (action === 'togglefullscreen') {
+          this.setFullScreen(!this.#fullscreen);
+        } else {
+          this.#handleWindowOp(action === 'zoom' ? 'toggleMaximize' : action);
+        }
+      },
+    };
+    this.#native.onMenuCommand((commandId) =>
+      windowsMenuRealizer.dispatchMenuCommand(commandId, this.#appMenuTarget),
+    );
     windowsMenuRealizer.registerAppMenuWindow(this.#appMenuTarget);
     this.#webContents.onWindowOp((op) => this.#handleWindowOp(op));
     this.#native.onClosed(() => {
@@ -352,7 +363,7 @@ class WindowsWindow implements NativeWindow {
       null,
     );
     if (command !== 0) {
-      windowsMenuRealizer.dispatchMenuCommand(command);
+      windowsMenuRealizer.dispatchMenuCommand(command, this.#appMenuTarget);
     }
     user32.DestroyMenu(menuHandle);
   }

@@ -51,7 +51,10 @@ const item = (label: string, onClick?: () => void): NativeMenuItemSpec => ({
   ...(onClick !== undefined ? { onClick } : {}),
 });
 
-const window = (): AppMenuWindow => ({ setMenuBar: () => undefined });
+const window = (actions: string[] = []): AppMenuWindow => ({
+  setMenuBar: () => undefined,
+  performWindowAction: (action) => actions.push(action),
+});
 
 describe('createWindowsMenuRealizer command ids', () => {
   test('stay within the 16-bit WM_COMMAND id across 70k popups and fire the newest click', () => {
@@ -62,7 +65,7 @@ describe('createWindowsMenuRealizer command ids', () => {
       realizer.realize([item('Item', () => fired.push(i))]);
     }
     expect(Math.max(...fake.commandIds)).toBeLessThanOrEqual(0xffff);
-    realizer.dispatchMenuCommand(fake.commandIds.at(-1) ?? 0);
+    realizer.dispatchMenuCommand(fake.commandIds.at(-1) ?? 0, window());
     expect(fired).toEqual([69_999]);
   });
 
@@ -76,7 +79,7 @@ describe('createWindowsMenuRealizer command ids', () => {
     for (let i = 0; i < 70_000; i += 1) {
       realizer.realize([item('Popup', () => fired.push('popup'))]);
     }
-    realizer.dispatchMenuCommand(barId);
+    realizer.dispatchMenuCommand(barId, window());
     expect(fired).toEqual(['open']);
   });
 
@@ -88,7 +91,7 @@ describe('createWindowsMenuRealizer command ids', () => {
     realizer.setApplicationMenu(realizer.realize([item('Old', () => fired.push('old'))]));
     const oldBarId = fake.commandIds.at(-1) ?? 0;
     realizer.setApplicationMenu(realizer.realize([item('New', () => fired.push('new'))]));
-    realizer.dispatchMenuCommand(oldBarId);
+    realizer.dispatchMenuCommand(oldBarId, window());
     expect(fired).toEqual([]);
   });
 });
@@ -100,5 +103,16 @@ describe('createWindowsMenuRealizer setApplicationMenu', () => {
     const handle = realizer.realize([item('File')]);
     realizer.setApplicationMenu(handle);
     expect(fake.destroyed).toEqual([handle]);
+  });
+});
+
+describe('createWindowsMenuRealizer roles', () => {
+  test('a window role item acts on the window that dispatches it', () => {
+    const fake = fakeUser32();
+    const realizer = createWindowsMenuRealizer(() => fake.api);
+    const actions: string[] = [];
+    realizer.realize([{ ...item('Minimize'), role: 'minimize', windowAction: 'minimize' }]);
+    realizer.dispatchMenuCommand(fake.commandIds.at(-1) ?? 0, window(actions));
+    expect(actions).toEqual(['minimize']);
   });
 });

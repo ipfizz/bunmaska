@@ -2,7 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import type { NativeMenuItemSpec } from '../../../src/main/platform/macos/cocoa-menu';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
-import { createWindowsMenuRealizer } from '../../../src/main/platform/windows/windows-menu';
+import {
+  type AppMenuWindow,
+  createWindowsMenuRealizer,
+} from '../../../src/main/platform/windows/windows-menu';
 
 /**
  * Windows menu realizer against real Win32 menus. Building the HMENU is NON-modal,
@@ -17,6 +20,11 @@ const item = (overrides: Partial<NativeMenuItemSpec>): NativeMenuItemSpec => ({
   enabled: true,
   keyEquivalent: '',
   ...overrides,
+});
+
+const target = (actions: string[] = []): AppMenuWindow => ({
+  setMenuBar: () => undefined,
+  performWindowAction: (action) => actions.push(action),
 });
 
 if (currentPlatform() === 'windows') {
@@ -42,10 +50,10 @@ if (currentPlatform() === 'windows') {
       const realizer = createWindowsMenuRealizer();
       let clicks = 0;
       const handle = realizer.realize([item({ label: 'Click me', onClick: () => clicks++ })]);
-      realizer.dispatchMenuCommand(1);
+      realizer.dispatchMenuCommand(1, target());
       expect(clicks).toBe(1);
       // An unknown command id is a harmless no-op.
-      realizer.dispatchMenuCommand(999);
+      realizer.dispatchMenuCommand(999, target());
       expect(clicks).toBe(1);
       loadUser32().symbols.DestroyMenu(handle);
     });
@@ -56,19 +64,30 @@ if (currentPlatform() === 'windows') {
       const handle = realizer.realize([
         item({ label: 'Quit', role: 'quit', onClick: () => quits++ }),
       ]);
-      realizer.dispatchMenuCommand(1);
+      realizer.dispatchMenuCommand(1, target());
       expect(quits).toBe(1);
       loadUser32().symbols.DestroyMenu(handle);
     });
 
-    test('a role item stores no JS click, so its id dispatches to nothing', () => {
+    test('an editing role item stores no JS click, so its id dispatches to nothing', () => {
       const realizer = createWindowsMenuRealizer();
       let clicks = 0;
       const handle = realizer.realize([
         item({ label: 'Copy', role: 'copy', onClick: () => clicks++ }),
       ]);
-      realizer.dispatchMenuCommand(1);
+      realizer.dispatchMenuCommand(1, target());
       expect(clicks).toBe(0);
+      loadUser32().symbols.DestroyMenu(handle);
+    });
+
+    test('a window role item runs its action on the dispatching window', () => {
+      const realizer = createWindowsMenuRealizer();
+      const actions: string[] = [];
+      const handle = realizer.realize([
+        item({ label: 'Minimize', role: 'minimize', windowAction: 'minimize' }),
+      ]);
+      realizer.dispatchMenuCommand(1, target(actions));
+      expect(actions).toEqual(['minimize']);
       loadUser32().symbols.DestroyMenu(handle);
     });
 

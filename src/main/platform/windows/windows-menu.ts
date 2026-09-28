@@ -1,6 +1,6 @@
 import { ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import type { MenuRealizer } from '../../api/menu';
+import type { MenuRealizer, MenuWindowAction } from '../../api/menu';
 import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
@@ -40,23 +40,36 @@ type MenuApi = Pick<
 export type AppMenuWindow = {
   /** Attach an HMENU bar, or remove it with `null`. The window owns the HMENU. */
   setMenuBar(menuBar: bigint | null): void;
+  /** Run a window role (minimize, close, zoom, togglefullscreen) on this window. */
+  performWindowAction(action: MenuWindowAction): void;
 };
 
 /** The Windows realizer plus the command dispatch the window calls after a popup. */
 export type WindowsMenuRealizer = MenuRealizer & {
-  /** Fire the `onClick` stored for `commandId` (a `TrackPopupMenu`/`WM_COMMAND` result). */
-  dispatchMenuCommand(commandId: number): void;
+  /** Run the item stored for `commandId` (a `TrackPopupMenu`/`WM_COMMAND` result) on `window`. */
+  dispatchMenuCommand(commandId: number, window: AppMenuWindow): void;
   /** Start mirroring the application menu onto `window` (and apply it if one is set). */
   registerAppMenuWindow(window: AppMenuWindow): void;
   /** Stop mirroring the application menu onto `window` (on window close). */
   unregisterAppMenuWindow(window: AppMenuWindow): void;
 };
 
+type Command = (window: AppMenuWindow) => void;
+
+/** A role wins over a click (D035); quit has no native command, so it keeps its click. */
+const commandFor = ({ onClick, role, windowAction }: NativeMenuItemSpec): Command | undefined => {
+  if (windowAction !== undefined) {
+    return (window) => window.performWindowAction(windowAction);
+  }
+  // ponytail: editing roles are inert; WinCairo's C API has no editing-command call
+  return role === undefined || role === 'quit' ? onClick : undefined;
+};
+
 export const createWindowsMenuRealizer = (
   user32: () => MenuApi = () => loadUser32().symbols,
 ): WindowsMenuRealizer => {
-  // Every id on a menu that may still be shown, with its JS click (undefined for a role).
-  const commands = new Map<number, (() => void) | undefined>();
+  // Every id on a menu that may still be shown, with what it runs (undefined for an inert role).
+  const commands = new Map<number, Command | undefined>();
   let lastCommandId = 0;
   const barIds = new Map<AppMenuWindow, number[]>();
   let appMenuItems: ReadonlyArray<NativeMenuItemSpec> | null = null;
@@ -67,11 +80,11 @@ export const createWindowsMenuRealizer = (
     | { handle: bigint; items: ReadonlyArray<NativeMenuItemSpec>; ids: number[] }
     | undefined;
 
-  const allocateId = (onClick: (() => void) | undefined): number => {
+  const allocateId = (command: Command | undefined): number => {
     for (let tries = 0; tries < MAX_COMMAND_ID; tries += 1) {
       lastCommandId = (lastCommandId % MAX_COMMAND_ID) + 1;
       if (!commands.has(lastCommandId)) {
-        commands.set(lastCommandId, onClick);
+        commands.set(lastCommandId, command);
         return lastCommandId;
       }
     }
@@ -101,10 +114,7 @@ export const createWindowsMenuRealizer = (
         api.AppendMenuW(hmenu, flags, build(item.submenu, false, ids), ptr(labelBuffer));
         continue;
       }
-      // ponytail: role items other than quit are inert (no dispatch or accelerator table)
-      const id = allocateId(
-        item.role === undefined || item.role === 'quit' ? item.onClick : undefined,
-      );
+      const id = allocateId(commandFor(item));
       ids.push(id);
       api.AppendMenuW(
         hmenu,
@@ -158,8 +168,8 @@ export const createWindowsMenuRealizer = (
       barIds.delete(window);
     },
 
-    dispatchMenuCommand(commandId: number): void {
-      commands.get(commandId)?.();
+    dispatchMenuCommand(commandId: number, window: AppMenuWindow): void {
+      commands.get(commandId)?.(window);
     },
   };
 };
