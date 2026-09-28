@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   classifyChange,
   DEV_DEFAULT_ENTRY,
   type ChangeAction,
   type DevDeps,
   DevSupervisor,
+  defaultDevDeps,
   resolveDevEntry,
 } from '../../../src/cli/dev';
 
@@ -428,5 +432,33 @@ describe('DevSupervisor child lifecycle', () => {
     await h.tick();
     expect(h.reloads).toBe(0);
     expect(h.logs.join(' ')).toContain('not running');
+  });
+});
+
+describe('defaultDevDeps', () => {
+  test('the child runs on this bun without one on PATH and receives reload commands', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-dev-'));
+    const devReload = resolve(import.meta.dir, '../../../src/main/dev-reload.ts');
+    writeFileSync(
+      join(dir, 'app.ts'),
+      [
+        "import { writeFileSync } from 'node:fs';",
+        `import { startDevReload } from ${JSON.stringify(devReload)};`,
+        'const deadline = setTimeout(() => process.exit(2), 5000);',
+        'startDevReload(() => {',
+        "  writeFileSync('reloaded.txt', process.env.BUNMASKA_DEV ?? '');",
+        '  clearTimeout(deadline);',
+        '  process.exit(0);',
+        '});',
+      ].join('\n'),
+    );
+    try {
+      const child = defaultDevDeps(dir, () => undefined, { PATH: '' }).spawn('app.ts');
+      child.reload();
+      expect(await child.exited).toBe(0);
+      expect(readFileSync(join(dir, 'reloaded.txt'), 'utf8')).toBe('1');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

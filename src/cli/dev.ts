@@ -7,6 +7,7 @@
 import { extname, resolve } from 'node:path';
 import type { BunmaskaConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
+import { DEV_RELOAD_COMMAND } from '../main/dev-reload';
 import { isIgnoredPath, pathParts, watchTree } from './dev-watch';
 
 export const DEV_DEFAULT_ENTRY = 'src/main.ts';
@@ -293,7 +294,7 @@ export const defaultDevDeps = (
     // how the supervisor delivers reload requests to it. `BUNMASKA_DEV_RESTART`
     // tells a respawned app to show its window without taking focus from the
     // editor the developer is typing in.
-    const proc = Bun.spawn(['bun', 'run', entry], {
+    const proc = Bun.spawn([process.execPath, 'run', entry], {
       cwd,
       env: {
         ...process.env,
@@ -314,7 +315,7 @@ export const defaultDevDeps = (
       },
       reload: () => {
         try {
-          proc.stdin.write('reload\n');
+          proc.stdin.write(`${DEV_RELOAD_COMMAND}\n`);
           proc.stdin.flush();
         } catch {
           // The child may be mid-exit; a dropped reload is harmless.
