@@ -13,10 +13,8 @@ import {
 import { cocoa } from './cocoa-runtime';
 import { type Handle, macOSLibraryAccessor } from './objc';
 
-/**
- * macOS displays. bun:ffi cannot return an NSRect/NSPoint struct, so geometry is read
- * through KVC (`valueForKey:` boxes it in an NSValue) and copied out with `getValue:size:`.
- */
+// bun:ffi cannot return an NSRect/NSPoint struct, so geometry goes through KVC (valueForKey:
+// boxes it in an NSValue) and is copied out with getValue:size:.
 
 const CG_PATH = '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics';
 

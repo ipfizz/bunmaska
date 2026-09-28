@@ -12,22 +12,12 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * Builds native `NSMenu` trees from a backend-neutral menu spec and routes item
- * clicks back to JS.
- *
- * A single shared `BunmaskaMenuTarget` class (defined once at runtime, D026) holds
- * the `bunmaskaMenuAction:` selector that every clickable item points at. When an
- * item fires, AppKit sends `[target bunmaskaMenuAction:item]`; the IMP looks the
- * item handle up in a registry and invokes its JS click handler.
- */
-
 /** A backend-neutral description of one menu item. */
 export type NativeMenuItemSpec = {
   readonly label: string;
   readonly type: 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
   readonly enabled: boolean;
-  /** Whether a checkbox/radio item renders checked (defaults to unchecked). */
+  /** Initial check mark of a checkbox/radio item; absent means unchecked. */
   readonly checked?: boolean;
   /** Single-character key equivalent (e.g. `'q'`), or `''` for none. */
   readonly keyEquivalent: string;
@@ -45,6 +35,7 @@ export type NativeMenuItemSpec = {
   readonly onClick?: () => void;
 };
 
+// Every non-role item targets one shared BunmaskaMenuTarget (D026), which looks its spec up here.
 const clickRegistry = new Map<Handle, NativeMenuItemSpec>();
 
 let sharedTarget: Handle | undefined;
@@ -116,8 +107,8 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
   }
 
   const checkable = spec.type === 'checkbox' || spec.type === 'radio';
-  // A role item's action is the native first-responder selector with a NIL target,
-  // so AppKit routes it up the responder chain (no BunmaskaMenuTarget / clickRegistry).
+  // A role item gets its first-responder selector and a nil target, so AppKit routes it up
+  // the responder chain like the native shortcut (D035).
   const isRole = spec.roleSelector !== undefined;
   const targeted = !isRole && (spec.type === 'normal' || checkable);
   // A nil action is the only way to keep a responder-chain role disabled under autoenabling.
@@ -140,8 +131,7 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
     clickRegistry.set(item, spec);
   }
 
-  // Apply the explicit modifier mask so multi-modifier accelerators (e.g. redo's
-  // Shift+Cmd+Z) don't collapse to AppKit's Command-only default.
+  // Always set the mask: AppKit's Command-only default turns redo's Shift+Cmd+Z into Cmd+Z (D035).
   if (spec.keyEquivalent !== '') {
     msgSendI64(item, rt.selectors.get('setKeyEquivalentModifierMask:'), spec.modifierMask ?? 0n);
   }
@@ -150,8 +140,7 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
     setState(item, spec.checked === true);
   }
 
-  // For role items, let AppKit auto-enable via the responder chain (Copy greys out
-  // when nothing is selected); only honor an explicit `enabled: false`.
+  // Leave role items to responder-chain validation (Copy greys out with no selection).
   if (!isRole) {
     msgSendU8(item, rt.selectors.get('setEnabled:'), spec.enabled ? 1 : 0);
   } else if (spec.enabled === false) {
@@ -213,8 +202,7 @@ export const disposeMenu = (menu: Handle): void => {
 let mainMenu: Handle = 0n;
 let lastPopup: Handle = 0n;
 
-/** Install `menu` as the application's main menu bar. */
-/** Install `menu` as the main menu; `0n` (nil) clears the menu bar. */
+/** Install `menu` as the main menu; `0n` (nil) clears the menu bar. The replaced menu is disposed. */
 export const setApplicationMenu = (menu: Handle): void => {
   const rt = cocoa();
   const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
@@ -228,29 +216,20 @@ export const setApplicationMenu = (menu: Handle): void => {
 /** @internal */
 export const clickRegistrySize = (): number => clickRegistry.size;
 
-/** Number of items in a realized menu. Used for verification. */
 export const menuItemCount = (menu: Handle): number =>
   Number(msgSendReturnsI64(menu, cocoa().selectors.get('numberOfItems')));
 
-/**
- * Programmatically trigger the item at `index` in `menu`, as if clicked.
- * Used for testing the click path without a real event loop.
- */
+/** Fire the item at `index` as if clicked; drives the click path without an event loop. */
 export const performMenuItem = (menu: Handle, index: number): void => {
   msgSendI64(menu, cocoa().selectors.get('performActionForItemAtIndex:'), BigInt(index));
 };
 
 /**
- * Show `menu` as a context menu at content-relative (`x`, `y`) in `view`.
- *
- * BLOCKING: `popUpMenuPositioningItem:atLocation:inView:` runs a nested AppKit tracking loop
- * until the user picks an item or dismisses — the same nested-modal-loop class as the dialog
- * panels' `runModal` (D020: safe; the crash class was a blocking `runUntilDate:`, not an
- * AppKit-owned nested loop). Item clicks route through the shared `BunmaskaMenuTarget` registry
- * exactly as for an application menu. `item = nil` anchors the menu's top-left at the location.
+ * Show `menu` at content-relative (`x`, `y`) in `view`. BLOCKS in AppKit's nested tracking
+ * loop until dismissed, which D040 accepts like `runModal` (not the `runUntilDate:` crash class).
  */
 export const popUpMenu = (menu: Handle, view: Handle, x: number, y: number): boolean => {
-  // ponytail: the previous popup tree lives until the next popup; freeing it on return would race a click AppKit may still deliver.
+  // ponytail: the last popup tree lives until the next popup, since its click may still be queued.
   if (lastPopup !== menu) {
     disposeMenu(lastPopup);
     lastPopup = menu;
@@ -259,7 +238,7 @@ export const popUpMenu = (menu: Handle, view: Handle, x: number, y: number): boo
     msgSendPtrPointPtrReturnsU8(
       menu,
       cocoa().selectors.get('popUpMenuPositioningItem:atLocation:inView:'),
-      0n, // item = nil
+      0n, // nil item: the menu's top-left lands on the point
       x,
       y,
       view,

@@ -6,11 +6,6 @@ import { cocoa } from './cocoa-runtime';
 import { macOSLibraryAccessor } from './objc';
 import type { Handle } from './objc';
 
-/**
- * Desktop integration via `NSWorkspace` and `NSBeep` — the macOS half of
- * Electron's `shell`.
- */
-
 const APPKIT_PATH = '/System/Library/Frameworks/AppKit.framework/AppKit';
 
 const getNSBeep = macOSLibraryAccessor('NSBeep', () =>

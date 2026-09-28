@@ -7,25 +7,7 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * macOS status-bar items via `NSStatusItem` — the macOS half of Bunmaska's `Tray`.
- *
- * RETAIN: `[NSStatusBar systemStatusBar] statusItemWithLength:` returns an
- * autoreleased item that AppKit otherwise owns; Bunmaska retains it on creation so
- * the bigint handle stays valid for the tray's whole lifetime, and releases it in
- * {@link TrayInstance.destroy} after `removeStatusItem:`.
- *
- * CLICK: the status button's target/action is wired to a retained
- * `BunmaskaTrayTarget` whose IMP looks the button up in a registry and fires the
- * JS `click` callback. The target object and its `JSCallback` are retained for the
- * runtime's lifetime (the class is registered once and never torn down), so the
- * IMP is never freed inside its own invocation — avoiding the lifecycle SIGSEGV
- * class. NOTE: when a context menu is set, AppKit consumes the click to show the
- * menu, so `click` fires only when no menu is set (this matches Electron's
- * "menu shows on click" behaviour).
- */
-
-/** `NSVariableStatusItemLength` — a variable-width status item. */
+/** `NSVariableStatusItemLength`. */
 const NS_VARIABLE_STATUS_ITEM_LENGTH = -1;
 
 const clickRegistry = new Map<Handle, () => void>();
@@ -77,12 +59,11 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
     rt.selectors.get('statusItemWithLength:'),
     NS_VARIABLE_STATUS_ITEM_LENGTH,
   );
-  // Retain: the returned item is autoreleased and owned by AppKit otherwise.
+  // statusItemWithLength: returns +0; hold our own reference until destroy() releases it.
   const item = rt.msgSend(rawItem, rt.selectors.get('retain'));
 
   const button = (): Handle => rt.msgSend(item, rt.selectors.get('button'));
 
-  // Guard a nil image (bad path) — set it only when it actually loaded.
   const applyImage = (path: string, template: boolean): void => {
     const btn = button();
     if (btn === 0n) {
@@ -118,8 +99,6 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
       applyImage(path, options?.template === true);
     },
     setContextMenu: (menu: Menu | null) => {
-      // Reuse the Menu realizer so tray-menu clicks route through the shared
-      // BunmaskaMenuTarget registry, exactly like an application menu.
       const nsMenu: Handle = menu === null ? 0n : menu.realize();
       msgSendPtr(item, rt.selectors.get('setMenu:'), nsMenu);
       disposeMenu(contextMenu);

@@ -3,17 +3,7 @@ import { msgSendPtr, msgSendReturnsU8 } from './cocoa-msgsend-variants';
 import { distributedNotificationCenter, observeNotification } from './cocoa-notification-observer';
 import { cocoa } from './cocoa-runtime';
 
-/**
- * macOS appearance query + change observer.
- *
- * Reads the `AppleInterfaceStyle` user default, which is the string `"Dark"`
- * when the system is in dark mode and absent (nil → `''`) otherwise.
- *
- * {@link observeAppearanceChange} subscribes to `AppleInterfaceThemeChangedNotification`
- * on `NSDistributedNotificationCenter` (via the shared notification observer,
- * D034) — the system-wide signal posted when the user toggles light/dark, which
- * is delivered on the pumped run loop (D020/D021).
- */
+// AppleInterfaceStyle is the string 'Dark' in dark mode and absent otherwise.
 
 const APPLE_INTERFACE_STYLE = 'AppleInterfaceStyle';
 const THEME_CHANGED_NOTIFICATION = 'AppleInterfaceThemeChangedNotification';
@@ -54,7 +44,7 @@ export const shouldUseDarkColors = (): boolean => {
   return nsStringToString(style).toLowerCase() === 'dark';
 };
 
-/** Fire `onChange` whenever the system appearance flips (light↔dark). */
+/** Fire `onChange` whenever the system appearance flips between light and dark (D034). */
 export const observeAppearanceChange = (onChange: () => void): void => {
   observeNotification(distributedNotificationCenter(), THEME_CHANGED_NOTIFICATION, onChange);
 };

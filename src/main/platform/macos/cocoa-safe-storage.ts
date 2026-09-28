@@ -8,22 +8,12 @@ import { cocoa } from './cocoa-runtime';
 import type { Handle } from './objc';
 import { loadSecurityFFI, secConstants } from './security-ffi';
 
-/**
- * macOS Keychain backend for `safeStorage`. The 32-byte key is a
- * `kSecClassGenericPassword` item under a fixed service+account, created on first
- * use. The query is an `NSMutableDictionary` (toll-free bridged to
- * `CFDictionaryRef`), avoiding `CFDictionaryCreate` and its callback-struct
- * globals; the keys are the REAL exported `kSec*` constants (SecItem compares
- * keys by pointer identity). The item is created with
- * `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` so the key is device-bound and
- * never syncs to iCloud Keychain.
- */
+// SecItem matches dictionary keys by pointer: always use the exported kSec* constants (security-ffi.ts).
 
 const ERR_SEC_SUCCESS = 0;
 const ERR_SEC_ITEM_NOT_FOUND = -25300;
 const ERR_SEC_DUPLICATE_ITEM = -25299;
 
-/** `[dict setObject:value forKey:key]`. */
 const dictSet = (dict: Handle, value: Handle, key: Handle): void => {
   const rt = cocoa();
   msgSendPtrPtr(dict, rt.selectors.get('setObject:forKey:'), value, key);
@@ -73,7 +63,7 @@ export const makeMacosKeychainBackend = (service: string, account: string): Keyr
     const data = nsDataFromBytes(key);
     dictSet(query, data, k.kSecValueData);
     cocoa().msgSend(data, cocoa().selectors.get('release')); // the dictionary retains it
-    // Device-bound, non-syncing accessibility.
+    // The file-based login keychain ignores this (it stores no pdmn), but it never syncs to iCloud.
     dictSet(query, k.kSecAttrAccessibleWhenUnlockedThisDeviceOnly, k.kSecAttrAccessible);
     const status = sec.symbols.SecItemAdd(query, null);
     if (status === ERR_SEC_SUCCESS) {
@@ -104,7 +94,7 @@ export const makeMacosKeychainBackend = (service: string, account: string): Keyr
       if (addKey(fresh)) {
         return fresh;
       }
-      // Lost the add race — adopt the winner's key.
+      // Lost the add race: adopt the winner's key.
       const winner = lookupKey();
       if (winner === null) {
         throw new Error('safeStorage: key vanished after a duplicate-item race');
@@ -119,7 +109,7 @@ export const deleteMacosKeychainItem = (service: string, account: string): void 
   loadSecurityFFI().symbols.SecItemDelete(identityQuery(service, account));
 };
 
-/** The production macOS Keychain backend. */
+// ponytail: one Keychain item for every Bunmaska app on the machine; key it by app name via api/safe-storage.ts.
 export const macosKeychainBackend = makeMacosKeychainBackend(
   'dev.bunmaska.safeStorage',
   'master-key',

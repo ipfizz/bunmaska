@@ -3,13 +3,7 @@ import { msgSendI64, msgSendPtr, msgSendReturnsI64, msgSendU8 } from './cocoa-ms
 import { cocoa } from './cocoa-runtime';
 import type { Handle } from './objc';
 
-/**
- * Native modal dialogs via `NSAlert`, `NSOpenPanel`, and `NSSavePanel`.
- *
- * Each dialog is split into a non-blocking *build* step and a *run* step that
- * calls the blocking `runModal`, which spins a nested AppKit modal loop and
- * cannot run on a headless CI display.
- */
+// build* is split from show* because runModal blocks in a nested modal loop that CI cannot dismiss.
 
 /** `NSModalResponseOK` for save/open panels. */
 const NS_MODAL_RESPONSE_OK = 1n;
@@ -28,11 +22,7 @@ export type MessageBoxSpec = {
   readonly type?: MessageBoxType;
 };
 
-/**
- * Map an Electron message-box `type` to an `NSAlertStyle` value
- * (warning = 0, informational = 1, critical = 2), or `undefined` to leave the
- * `NSAlert` default.
- */
+/** The `NSAlertStyle` for an Electron message-box `type`; `undefined` keeps the NSAlert default. */
 export const alertStyleForType = (type: MessageBoxType | undefined): bigint | undefined => {
   switch (type) {
     case 'info':

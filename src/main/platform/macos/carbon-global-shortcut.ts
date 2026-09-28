@@ -5,22 +5,6 @@ import { currentPlatform } from '../../../common/platform';
 import { loadCarbonFFI } from './carbon-ffi';
 import { carbonModifierMask, macVirtualKeyCode } from './carbon-keymap';
 
-/**
- * macOS `globalShortcut` backend via Carbon `RegisterEventHotKey`.
- *
- * - ONE process-wide event handler is installed lazily for
- *   `kEventClassKeyboard` / `kEventHotKeyPressed`. Its `JSCallback` is retained
- *   for the process lifetime (it is NEVER closed inside its own invocation — see
- *   the JSCallback-lifecycle SIGSEGV note).
- * - Each registration gets a unique numeric id; we pack `{ signature, id }` into
- *   the `EventHotKeyID` u64 (the verified struct-by-value workaround) and keep an
- *   `id -> callback` map. When the handler fires it reads the fired id back from
- *   the event's `kEventParamHotKeyID` parameter and dispatches that callback.
- *
- * Returns `false` from `register` when the accelerator's key is not in the
- * US-layout virtual-key table or when Carbon refuses the grab (non-`noErr`).
- */
-
 const SIGNATURE = 0x53414d42; // 'SAMB'
 
 const KEYBOARD_EVENT_CLASS = 0x6b657962; // 'keyb'
@@ -39,9 +23,7 @@ const byAccelerator = new Map<string, Registration>();
 const byId = new Map<number, () => void>();
 let nextId = 1;
 
-// The single app event handler's JSCallback, retained for the process lifetime.
-// It is intentionally never closed (closing a JSCallback from within its own
-// invocation crashes; this one outlives every registration anyway).
+// Never closed: it outlives every registration, and closing a JSCallback inside its own call crashes (D022b).
 let handlerCallback: JSCallback | undefined;
 let handlerInstalled = false;
 
@@ -120,7 +102,7 @@ const register = (accelerator: string, callback: () => void): boolean => {
   const carbon = loadCarbonFFI();
   const id = nextId;
   nextId += 1;
-  const packed = BigInt(SIGNATURE) | (BigInt(id) << 32n);
+  const packed = BigInt(SIGNATURE) | (BigInt(id) << 32n); // EventHotKeyID by value, see carbon-ffi.ts
   const outRef = new BigInt64Array(1);
   const rc = carbon.symbols.RegisterEventHotKey(
     keyCode,
@@ -159,7 +141,6 @@ const unregisterAll = (): void => {
   }
 };
 
-/** macOS is supported whenever we are actually on macOS (Carbon is always present). */
 const isSupported = (): boolean => currentPlatform() === 'macos';
 
 export const macosGlobalShortcutBackend: GlobalShortcutBackend = {

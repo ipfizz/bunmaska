@@ -13,26 +13,8 @@ import { cocoa } from './cocoa-runtime';
 import { KCG_ALPHA_PREMULTIPLIED_LAST, loadCoreGraphicsImageFFI } from './core-graphics-image-ffi';
 import { type Handle, ptrIn } from './objc';
 
-/**
- * macOS image backend for `nativeImage`, via `NSBitmapImageRep` / `NSData`.
- *
- * DECODE: we build an `NSBitmapImageRep` DIRECTLY from the file/data
- * (`[[NSBitmapImageRep alloc] initWithData:]`) rather than going through
- * `NSImage`. The rep is the unit that exposes both the scalar pixel dimensions
- * and the PNG encoder, so a single object covers `getSize` and `toPNG`.
- *
- * SIZE WITHOUT A STRUCT — `NSImage.size` returns an `NSSize` (a struct of two
- * doubles) by value, which bun:ffi CANNOT return. `NSBitmapImageRep`'s
- * `pixelsWide` / `pixelsHigh` are `NSInteger` SCALARS instead, read here via the
- * `i64`-returning msgSend variant. This is the entire reason we decode straight
- * to a rep: no struct ever crosses the FFI boundary for sizing.
- *
- * BUFFER DECODE — `[[NSData alloc] initWithBytes:length:]` COPIES the source
- * bytes, so the pinned `Uint8Array` need only outlive that one call.
- *
- * EMPTY — a nil rep (bad path / undecodable bytes) is reported as empty with a
- * `0n` handle and zero dimensions; no fake placeholder image is fabricated.
- */
+// Decode straight to an NSBitmapImageRep, never NSImage: NSImage.size is an NSSize struct that
+// bun:ffi cannot return, while the rep's pixelsWide/pixelsHigh are scalars.
 
 /** `NSBitmapImageFileType` values. */
 const NS_BITMAP_IMAGE_FILE_TYPE_PNG = 4n;
@@ -54,11 +36,11 @@ export const nsDataToBytes = (data: Handle): Uint8Array => {
   if (bytesPtr === 0n) {
     return new Uint8Array(0);
   }
-  // Copy out of the autoreleased NSData-owned buffer so the result owns its bytes.
+  // Copy: the bytes belong to the NSData, which the caller may free right after.
   return new Uint8Array(toArrayBuffer(ptrIn(bytesPtr), 0, length).slice(0));
 };
 
-/** `[[NSData alloc] initWithBytes:length:]` from a Uint8Array (copies the bytes). */
+/** `[[NSData alloc] initWithBytes:length:]` (+1): it copies, so `bytes` need only outlive the call. */
 export const nsDataFromBytes = (bytes: Uint8Array): Handle => {
   const rt = cocoa();
   const alloc = rt.msgSend(rt.classes.get('NSData'), rt.selectors.get('alloc'));
@@ -71,7 +53,7 @@ export const nsDataFromBytes = (bytes: Uint8Array): Handle => {
   );
 };
 
-/** `[[NSBitmapImageRep alloc] initWithData:]` — nil on undecodable data. */
+/** `[[NSBitmapImageRep alloc] initWithData:]` (+1); nil on undecodable data. */
 const bitmapRepFromData = (data: Handle): Handle => {
   if (data === 0n) {
     return 0n;
@@ -97,7 +79,6 @@ const decodeFromRep = (rep: Handle): DecodedImage => {
 
 const decodePath = (path: string): DecodedImage => {
   const rt = cocoa();
-  // [NSData dataWithContentsOfFile:] is nil for a bad/unreadable path.
   const data = msgSendPtr(
     rt.classes.get('NSData'),
     rt.selectors.get('dataWithContentsOfFile:'),
@@ -114,11 +95,8 @@ const decodeBuffer = (bytes: Uint8Array): DecodedImage => {
 };
 
 /**
- * Redraw a rep's `CGImage` into a NEW `width`×`height` offscreen bitmap, placing the source
- * at dest rect `(dx,dy,dw,dh)`, and wrap the result as an `NSBitmapImageRep`. Headless (a
- * malloc-backed CG bitmap context — no window server). The source `[rep CGImage]` is BORROWED
- * (not released); the new rep is leaked for the image's lifetime (matching decode); the CG
- * context / color space / output CGImage temporaries ARE released.
+ * Draw a rep's CGImage at dest rect (dx, dy, dw, dh) of a new width x height bitmap (headless,
+ * no window server). `[rep CGImage]` is borrowed; the caller owns the returned +1 rep.
  */
 const redraw = (
   handle: NativeImageHandle,
@@ -164,12 +142,12 @@ const redraw = (
   }
   const alloc = rt.msgSend(rt.classes.get('NSBitmapImageRep'), rt.selectors.get('alloc'));
   const rep = msgSendPtr(alloc, rt.selectors.get('initWithCGImage:'), BigInt(outImage));
-  cg.CGImageRelease(outImage); // initWithCGImage: copies the pixels into the rep.
+  cg.CGImageRelease(outImage); // the rep retains outImage; drop our +1
   return decodeFromRep(rep);
 };
 
 const resize = (handle: NativeImageHandle, width: number, height: number): DecodedImage =>
-  redraw(handle, width, height, 0, 0, width, height); // scale the whole source to fill the target
+  redraw(handle, width, height, 0, 0, width, height);
 
 const crop = (
   handle: NativeImageHandle,
@@ -181,9 +159,7 @@ const crop = (
   const rt = cocoa();
   const srcW = Number(msgSendReturnsI64(handle, rt.selectors.get('pixelsWide')));
   const srcH = Number(msgSendReturnsI64(handle, rt.selectors.get('pixelsHigh')));
-  // Draw the full source at native size into the crop-sized context, offset so the top-left
-  // crop window lands at the dest origin. CG uses a BOTTOM-left origin, so y flips:
-  //   top-left (x, y) → CG dest origin (-x, -(srcH - y - height)).
+  // CG's origin is bottom-left: top-left crop (x, y) is dest origin (-x, -(srcH - y - height)).
   return redraw(handle, width, height, -x, -(srcH - y - height), srcW, srcH);
 };
 

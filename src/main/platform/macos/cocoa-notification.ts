@@ -9,30 +9,8 @@ import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
 
-/**
- * macOS notifications via the deprecated `NSUserNotification` /
- * `NSUserNotificationCenter` API — the macOS half of Bunmaska's `Notification`.
- *
- * WHY the deprecated API: the modern `UNUserNotificationCenter` REQUIRES a real
- * app bundle (Info.plist + bundle id). Bunmaska runs un-bundled (`bun main.ts`),
- * so `UNUserNotificationCenter` is non-viable here. `NSUserNotification` is the
- * un-bundled-friendlier path.
- *
- * EMPIRICAL FINDING (measured on a real macOS host, un-bundled): the
- * `NSUserNotification` class resolves, `alloc/init` and the `setTitle:` /
- * `setInformativeText:` / `setSubtitle:` setters run cleanly with NO crash — but
- * `[NSUserNotificationCenter defaultUserNotificationCenter]` returns **nil**
- * without an app bundle. So delivery does NOT actually happen un-bundled, even
- * though the FFI path is clean. Sending `deliverNotification:` to a nil center is
- * a safe Objective-C no-op (verified, no SIGSEGV).
- *
- * Reliable macOS delivery is a PACKAGING follow-up (ship Bunmaska as a code-signed
- * .app bundle with a bundle id, then migrate to `UNUserNotificationCenter`).
- *
- * `close` event wiring (an `NSUserNotificationCenterDelegate`) is NOT wired here:
- * un-bundled there is no center to attach a delegate to, so it would never fire.
- * The handle's `onClosed` is therefore a no-op on macOS (best-effort, honest).
- */
+// ponytail: deprecated NSUserNotification, since UNUserNotificationCenter needs an app bundle; switch once apps always ship bundled.
+// Un-bundled the default center is nil, so nothing is delivered (messaging nil is a no-op).
 
 const defaultCenter = (): Handle => {
   const rt = cocoa();
@@ -75,9 +53,7 @@ const buildNotification = (spec: NotificationSpec): Handle => {
   if (spec.subtitle.length > 0) {
     msgSendPtr(notification, rt.selectors.get('setSubtitle:'), nsString(spec.subtitle));
   }
-  // `silent` suppresses the default sound. NSUserNotification plays a sound only
-  // if `soundName` is set, so the default (no sound) already honours silent;
-  // when NOT silent we opt into the default sound name.
+  // NSUserNotification is silent unless soundName is set.
   if (!spec.silent) {
     msgSendPtr(
       notification,
@@ -88,10 +64,6 @@ const buildNotification = (spec: NotificationSpec): Handle => {
   return notification;
 };
 
-/**
- * Build and (best-effort) deliver a notification. Never throws on the un-bundled
- * nil-center path; sending to a nil receiver is a no-op in Objective-C.
- */
 const present = (spec: NotificationSpec): NotificationHandle => {
   const rt = cocoa();
   const notification = buildNotification(spec);
@@ -107,17 +79,11 @@ const present = (spec: NotificationSpec): NotificationHandle => {
         msgSendPtr(c, rt.selectors.get('removeDeliveredNotification:'), notification);
       }
     },
-    // No center un-bundled means no delegate to fire a real close, so this is a
-    // documented no-op on macOS (we do not pretend to wire it). The empty body
-    // is `() => undefined` to satisfy Biome's noEmptyBlockStatements.
-    onClosed: () => undefined,
+    onClosed: () => undefined, // ponytail: the center reports no dismissals; poll deliveredNotifications if 'close' is needed.
   };
 };
 
-/**
- * Honest macOS support: `true` only when the default notification center is
- * non-nil (requires an app bundle). Un-bundled this returns `false`.
- */
+/** True only in a bundled app, where the default center is non-nil. */
 const isSupported = (): boolean => {
   try {
     return defaultCenter() !== 0n;
@@ -126,7 +92,6 @@ const isSupported = (): boolean => {
   }
 };
 
-/** The macOS native notification backend (NSUserNotification, un-bundled-aware). */
 export const macosNotificationBackend: NotificationBackend = {
   isSupported,
   present,

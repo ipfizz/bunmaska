@@ -1,22 +1,12 @@
 import type { ParsedAccelerator } from '../../api/accelerator';
 
-/**
- * Pure macOS-virtual-key-code + Carbon-modifier-mask tables for the Carbon
- * global-shortcut backend.
- *
- * Carbon's `RegisterEventHotKey` wants a hardware virtual key code (US layout)
- * and a modifier mask, NOT a character. These tables map our parsed accelerator
- * key/modifiers onto those. Values are the canonical `kVK_*` constants from
- * `HIToolbox/Events.h`.
- */
-
 /** Carbon modifier mask bits (Events.h `cmdKey`, `shiftKey`, `optionKey`, `controlKey`). */
 export const CMD_KEY = 0x100;
 export const SHIFT_KEY = 0x200;
 export const OPTION_KEY = 0x800;
 export const CONTROL_KEY = 0x1000;
 
-/** US-layout virtual key codes keyed by normalised key label (`kVK_ANSI_*` / `kVK_*`). */
+/** Carbon wants hardware key codes, not characters: US-layout `kVK_*` values from Events.h. */
 const VIRTUAL_KEY_CODES: ReadonlyMap<string, number> = new Map([
   ['A', 0],
   ['S', 1],
@@ -102,18 +92,14 @@ const VIRTUAL_KEY_CODES: ReadonlyMap<string, number> = new Map([
   ['F20', 90],
 ]);
 
-/**
- * Map a parsed accelerator key to a macOS virtual key code, or `undefined` if
- * the key has no entry in the US-layout table.
- */
+/** The US-layout virtual key code for a parsed accelerator key, or `undefined` if unmapped. */
 export const macVirtualKeyCode = (key: string): number | undefined =>
   VIRTUAL_KEY_CODES.get(key.toUpperCase());
 
 /** Build the Carbon modifier mask for a parsed accelerator (CmdOrCtrl already resolved). */
 export const carbonModifierMask = (parsed: ParsedAccelerator): number => {
   let mask = 0;
-  // Electron: Super/Meta is Cmd on macOS. Ignoring parsed.super registered
-  // 'Super+K' as a bare-K global grab.
+  // Super/Meta is Cmd on macOS (Electron); dropping super turns 'Super+K' into a bare-K grab.
   if (parsed.meta || parsed.super) {
     mask |= CMD_KEY;
   }
