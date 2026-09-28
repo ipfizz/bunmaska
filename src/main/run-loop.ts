@@ -1,8 +1,6 @@
-import { createLogger } from '../common/logger';
+import { reportCallbackError } from '../common/report-error';
 
 // Bun owns the main thread; the pumps lend it to the native UI loop between turns (D020, D047).
-
-const log = createLogger('run-loop');
 
 /** Schedules `onTick` every `intervalMs` and returns a cancel function. */
 export type Ticker = (onTick: () => void, intervalMs: number) => () => void;
@@ -12,6 +10,8 @@ export type CooperativePumpOptions = {
   readonly intervalMs?: number;
   /** Timer source; defaults to `setInterval`/`clearInterval`. */
   readonly ticker?: Ticker;
+  /** Receives a drain's throw; defaults to {@link reportCallbackError}. */
+  readonly onError?: (error: unknown) => void;
 };
 
 const DEFAULT_INTERVAL_MS = 16;
@@ -25,12 +25,14 @@ export class CooperativePump {
   readonly #drainOnce: () => void;
   readonly #intervalMs: number;
   readonly #ticker: Ticker;
+  readonly #onError: (error: unknown) => void;
   #cancel: (() => void) | undefined;
 
   constructor(drainOnce: () => void, options?: CooperativePumpOptions) {
     this.#drainOnce = drainOnce;
     this.#intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.#ticker = options?.ticker ?? defaultTicker;
+    this.#onError = options?.onError ?? reportCallbackError;
   }
 
   get isRunning(): boolean {
@@ -59,7 +61,7 @@ export class CooperativePump {
       this.#drainOnce();
     } catch (error) {
       // A failure draining one tick must not tear down the whole pump.
-      log.error('drain tick threw', error);
+      this.#onError(error);
     }
   }
 }
@@ -74,6 +76,8 @@ export type AdaptiveBlockingPumpOptions = {
   readonly maxTimeoutMs?: number;
   /** Schedules the next tick after yielding to Bun's loop. Defaults to `setTimeout(tick, 0)`. */
   readonly schedule?: TickScheduler;
+  /** Receives a drain's throw; defaults to {@link reportCallbackError}. */
+  readonly onError?: (error: unknown) => void;
 };
 
 const DEFAULT_MIN_TIMEOUT_MS = 8;
@@ -92,6 +96,7 @@ export class AdaptiveBlockingPump {
   readonly #minTimeoutMs: number;
   readonly #maxTimeoutMs: number;
   readonly #schedule: TickScheduler;
+  readonly #onError: (error: unknown) => void;
   #timeoutMs: number;
   #running = false;
   /** Bumped by stop(), so a tick scheduled before a stop()/start() pair dies. */
@@ -102,6 +107,7 @@ export class AdaptiveBlockingPump {
     this.#minTimeoutMs = options?.minTimeoutMs ?? DEFAULT_MIN_TIMEOUT_MS;
     this.#maxTimeoutMs = options?.maxTimeoutMs ?? DEFAULT_MAX_TIMEOUT_MS;
     this.#schedule = options?.schedule ?? defaultScheduler;
+    this.#onError = options?.onError ?? reportCallbackError;
     this.#timeoutMs = this.#minTimeoutMs;
   }
 
@@ -138,7 +144,7 @@ export class AdaptiveBlockingPump {
       active = this.#drain(this.#timeoutMs);
     } catch (error) {
       // A failure draining one tick must not tear down the whole pump.
-      log.error('drain tick threw', error);
+      this.#onError(error);
     }
     this.#timeoutMs = active
       ? this.#minTimeoutMs
