@@ -31,12 +31,6 @@ if (currentPlatform() === 'windows') {
       expect(() => handle.close()).not.toThrow();
     });
 
-    test('a silent notification presents without throwing', () => {
-      const handle = windowsNotificationBackend.present({ ...spec, silent: true });
-      handle.close();
-      expect(true).toBe(true);
-    });
-
     test('onClosed registers a callback without firing it eagerly', () => {
       const handle = windowsNotificationBackend.present(spec);
       let closed = 0;

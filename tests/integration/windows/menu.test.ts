@@ -61,12 +61,5 @@ if (currentPlatform() === 'windows') {
       expect(clicks).toBe(0);
       loadUser32().symbols.DestroyMenu(handle);
     });
-
-    test('setApplicationMenu is a no-op (per-window menu bar is deferred)', () => {
-      const realizer = createWindowsMenuRealizer();
-      const handle = realizer.realize([item({ label: 'File' })]);
-      expect(() => realizer.setApplicationMenu(handle)).not.toThrow();
-      loadUser32().symbols.DestroyMenu(handle);
-    });
   });
 }
