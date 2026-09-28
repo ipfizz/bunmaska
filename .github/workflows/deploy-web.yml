@@ -1,14 +1,21 @@
 name: deploy-web
 
-# Builds website/ and deploys it to Cloudflare Pages (project "bunmaska",
-# which serves bunmaska.org) on pushes that touch the site. Repo secrets:
-#   CLOUDFLARE_API_TOKEN   — scoped token (Pages Edit + DNS Edit + Zone Read)
-#   CLOUDFLARE_ACCOUNT_ID  — 33b4bb12637807398ca2edac6c77fe8c
+# Checks website/ on pull requests; on main also deploys it to Cloudflare Pages
+# (project "bunmaska") and pings IndexNow. Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
 on:
   push:
     branches: [main]
-    paths: ['website/**', '.github/workflows/deploy-web.yml']
+    # package.json carries the version the site shows.
+    paths: ['website/**', 'package.json', '.github/workflows/deploy-web.yml']
+  pull_request:
+    branches: [main]
+    paths: ['website/**', 'package.json', '.github/workflows/deploy-web.yml']
   workflow_dispatch:
+
+# Queue instead of racing, so two quick pushes deploy in push order.
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -53,19 +60,17 @@ jobs:
         run: bun run build
 
       # Run wrangler via bunx (the wrangler-action's npm install is flaky on Bun).
-      # wrangler reads the token + account id from the env below.
       - name: Deploy to Cloudflare Pages
+        if: github.event_name != 'pull_request'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@4 pages deploy dist --project-name=bunmaska --branch=main
 
-      # IndexNow: tell Bing (and Yandex, Naver, Seznam, Amazon, and the AI
-      # surfaces riding Bing's index) which pages changed. Google does not
-      # participate; the sitemap covers it. Only URLs whose source changed are
-      # sent; pushing the whole sitemap on every deploy is the protocol's
-      # documented anti-pattern. Key file lives in public/.
+      # Only URLs whose source changed: pinging the whole sitemap on every deploy
+      # is IndexNow's documented anti-pattern. The key file lives in public/.
       - name: Ping IndexNow with the URLs whose source changed
+        if: github.event_name != 'pull_request'
         env:
           BEFORE: ${{ github.event.before }}
         run: |
