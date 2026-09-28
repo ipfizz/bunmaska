@@ -4,7 +4,7 @@ import type { TrayBackend, TrayInstance } from '../../api/tray';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 import { GDIP_OK, loadGdiplus } from './win32-gdiplus-ffi';
-import { loadShell32 } from './win32-shell-ffi';
+import { loadShell32, NIM_ADD, NIM_DELETE, NIM_MODIFY, notifyIconData } from './win32-shell-ffi';
 import { createMessageWindow } from './windows-message-window';
 import { windowsNativeImageBackend } from './windows-native-image';
 
@@ -17,13 +17,6 @@ import { windowsNativeImageBackend } from './windows-native-image';
 /** Custom callback message the tray icon posts to its owner window (WM_APP range). */
 export const WM_TRAYICON = 0x8000 + 1;
 
-const NIM_ADD = 0;
-const NIM_MODIFY = 1;
-const NIM_DELETE = 2;
-const NIF_MESSAGE = 0x1;
-const NIF_ICON = 0x2;
-const NIF_TIP = 0x4;
-
 const IMAGE_ICON = 1;
 const LR_LOADFROMFILE = 0x0010;
 const LR_DEFAULTSIZE = 0x0040;
@@ -31,16 +24,6 @@ const IDI_APPLICATION = 32512n;
 
 /** A left mouse button release over the tray icon (the activation gesture). */
 const WM_LBUTTONUP = 0x0202;
-
-/** `sizeof(NOTIFYICONDATAW)` (current version, x64) — see the field offsets below. */
-const NID_SIZE = 976;
-const NID_HWND_OFFSET = 8;
-const NID_UID_OFFSET = 16;
-const NID_FLAGS_OFFSET = 20;
-const NID_CALLBACK_OFFSET = 24;
-const NID_HICON_OFFSET = 32;
-const NID_TIP_OFFSET = 40;
-const NID_TIP_MAX_BYTES = 254; // 127 WCHARs, leaving room for the NUL terminator
 
 let nextUid = 1;
 
@@ -88,21 +71,6 @@ export const loadTrayIcon = (path: string): TrayIcon => {
   return { handle: user32.LoadIconW(0n, IDI_APPLICATION), owned: false };
 };
 
-/** Build a NOTIFYICONDATAW for `Shell_NotifyIcon`. `hIcon`/`tip` are omitted for a delete. */
-const notifyIconData = (hwnd: bigint, uid: number, hIcon: bigint, tip: string): Uint8Array => {
-  const nid = new Uint8Array(NID_SIZE);
-  const view = new DataView(nid.buffer);
-  view.setUint32(0, NID_SIZE, true); // cbSize
-  view.setBigUint64(NID_HWND_OFFSET, hwnd, true);
-  view.setUint32(NID_UID_OFFSET, uid, true);
-  view.setUint32(NID_FLAGS_OFFSET, NIF_MESSAGE | NIF_ICON | NIF_TIP, true);
-  view.setUint32(NID_CALLBACK_OFFSET, WM_TRAYICON, true);
-  view.setBigUint64(NID_HICON_OFFSET, hIcon, true);
-  const tipBytes = wstr(tip);
-  nid.set(tipBytes.subarray(0, Math.min(tipBytes.length, NID_TIP_MAX_BYTES)), NID_TIP_OFFSET);
-  return nid;
-};
-
 const releaseIcon = (icon: TrayIcon): void => {
   if (icon.owned) {
     loadUser32().symbols.DestroyIcon(icon.handle);
@@ -125,10 +93,14 @@ export const windowsTrayBackend: TrayBackend = {
     });
 
     const sync = (operation: number): void => {
-      shell32.Shell_NotifyIconW(
-        operation,
-        ptr(notifyIconData(window.hwnd, uid, icon.handle, toolTip)),
-      );
+      const nid = notifyIconData({
+        hwnd: window.hwnd,
+        uid,
+        callbackMessage: WM_TRAYICON,
+        hIcon: icon.handle,
+        tip: toolTip,
+      });
+      shell32.Shell_NotifyIconW(operation, ptr(nid));
     };
     sync(NIM_ADD);
 
