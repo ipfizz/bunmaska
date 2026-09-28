@@ -283,11 +283,12 @@ export class WindowsWebContents implements NativeWebContents {
   }
 
   openDevTools(): void {
-    // WinCairo exposes a Web Inspector; wiring it is a seam-fill follow-up.
+    // ponytail: wire WKInspectorShow(WKPageGetInspector(page)) with developer extras enabled.
+    log.warn('openDevTools is not supported on Windows yet: no inspector opens');
   }
 
   closeDevTools(): void {
-    // See openDevTools.
+    // No inspector ever opens (see openDevTools).
   }
 
   setZoomFactor(factor: number): void {

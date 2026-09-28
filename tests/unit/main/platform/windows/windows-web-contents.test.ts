@@ -43,6 +43,13 @@ describe('WindowsWebContents', () => {
     expect(warnings).toEqual([expect.stringContaining('setWindowOpenHandler')]);
   });
 
+  test('openDevTools warns that no inspector opens', () => {
+    const warnings = collectWarnings();
+    const { contents } = createContents();
+    contents.openDevTools();
+    expect(warnings).toEqual([expect.stringContaining('openDevTools')]);
+  });
+
   test('warns when protocol.handle schemes are registered, since none are served', () => {
     protocol.handle('myapp', () => ({ data: 'hi' }));
     const warnings = collectWarnings();
