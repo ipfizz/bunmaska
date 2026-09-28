@@ -1,7 +1,6 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import type { NativeMenuItemSpec } from '../../../../../src/main/platform/macos/cocoa-menu';
 import {
-  ACTION_ACTIVATE_CB_DEF,
   actionName,
   type Bindings,
   detailedAction,
@@ -102,15 +101,8 @@ afterEach(() => {
   resetCurrentAppMenuForTesting();
 });
 
-describe('ACTION_ACTIVATE_CB_DEF (GSimpleAction::activate ABI, shape-only)', () => {
-  it('is (action, parameter, user_data) -> void', () => {
-    expect(ACTION_ACTIVATE_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
-    expect(ACTION_ACTIVATE_CB_DEF.returns).toBe('void');
-  });
-});
-
 describe('action-name helpers', () => {
-  it('actionName produces a unique monotonic menu-<id> per call', () => {
+  test('actionName produces a unique monotonic menu-<id> per call', () => {
     const a = actionName();
     const b = actionName();
     expect(a).not.toBe(b);
@@ -118,13 +110,13 @@ describe('action-name helpers', () => {
     expect(b).toMatch(/^menu-\d+$/);
   });
 
-  it('detailedAction prefixes the action group namespace', () => {
+  test('detailedAction prefixes the action group namespace', () => {
     expect(detailedAction('menu-7')).toBe('bunmaska.menu-7');
   });
 });
 
 describe('linuxMenuRealizer.realize (fake bindings)', () => {
-  it('appends one model entry per normal item and wires its action', () => {
+  test('appends one model entry per normal item and wires its action', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     const items: NativeMenuItemSpec[] = [
@@ -144,7 +136,7 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(calls.filter((c) => c.fn === 'connectActivate')).toHaveLength(2);
   });
 
-  it('creates a stateful boolean action for a checkbox item carrying its checked state', () => {
+  test('creates a stateful boolean action for a checkbox item carrying its checked state', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     linuxMenuRealizer.realize([
@@ -164,7 +156,7 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(calls.filter((c) => c.fn === 'connectActivate')).toHaveLength(1);
   });
 
-  it('routes activate to the matching onClick via the action group', () => {
+  test('routes activate to the matching onClick via the action group', () => {
     const { bindings } = makeFakeBindings();
     setBindingsForTesting(bindings);
     const fired: string[] = [];
@@ -194,7 +186,70 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(fired).toEqual(['beta', 'alpha']);
   });
 
-  it('honours enabled:false via g_simple_action_set_enabled(0)', () => {
+  test('re-throws a failing click on a microtask instead of into the GLib dispatch', () => {
+    const { bindings } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    const boom = new Error('app bug');
+    const handle = linuxMenuRealizer.realize([
+      {
+        label: 'Bad',
+        type: 'normal',
+        enabled: true,
+        keyEquivalent: '',
+        onClick: () => {
+          throw boom;
+        },
+      },
+    ]);
+    const entry = getMenuEntry(handle);
+    const queued: Array<() => void> = [];
+    const original = globalThis.queueMicrotask;
+    globalThis.queueMicrotask = (cb) => {
+      queued.push(cb);
+    };
+    try {
+      const fire = (): void =>
+        bindings.activateAction(
+          entry?.group as bigint,
+          detailedAction(entry?.actionNames[0] as string),
+          null,
+        );
+      expect(fire).not.toThrow();
+    } finally {
+      globalThis.queueMicrotask = original;
+    }
+    expect(queued).toHaveLength(1);
+    expect(() => queued[0]?.()).toThrow(boom);
+  });
+
+  test('maps Electron & mnemonics to GTK underlines and escapes literal underscores', () => {
+    const { bindings, calls } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    linuxMenuRealizer.realize([
+      {
+        label: '&File',
+        type: 'submenu',
+        enabled: true,
+        keyEquivalent: '',
+        submenu: [
+          {
+            label: 'my_notes.txt',
+            type: 'normal',
+            enabled: true,
+            keyEquivalent: '',
+            onClick: () => undefined,
+          },
+          { label: 'Save && Quit', type: 'normal', enabled: true, keyEquivalent: '' },
+        ],
+      },
+    ]);
+    const labels = calls
+      .filter((c) => c.fn === 'gMenuAppend' || c.fn === 'gMenuAppendSubmenu')
+      .map((c) => c.args[1]);
+    expect(labels).toEqual(['my__notes.txt', 'Save & Quit', '_File']);
+  });
+
+  test('honours enabled:false via g_simple_action_set_enabled(0)', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     linuxMenuRealizer.realize([
@@ -205,7 +260,7 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(enabledCalls[0]?.args[1]).toBe(0);
   });
 
-  it('does not create an action for an item without onClick', () => {
+  test('does not create an action for an item without onClick', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     linuxMenuRealizer.realize([
@@ -216,18 +271,24 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(calls.filter((c) => c.fn === 'gMenuAppend')).toHaveLength(1);
   });
 
-  it('renders a separator as a fresh empty section', () => {
+  test('puts the items after a separator into a new section (GTK draws no empty section)', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
-    linuxMenuRealizer.realize([
+    const handle = linuxMenuRealizer.realize([
       { label: 'A', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
       { label: '', type: 'separator', enabled: true, keyEquivalent: '' },
       { label: 'B', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
     ]);
-    expect(calls.filter((c) => c.fn === 'gMenuAppendSection')).toHaveLength(1);
+    const sections = calls.filter((c) => c.fn === 'gMenuAppendSection');
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.args[0]).toBe(handle);
+    const appendedTo = (label: string): unknown =>
+      calls.find((c) => c.fn === 'gMenuAppend' && c.args[1] === label)?.args[0];
+    expect(appendedTo('A')).toBe(handle);
+    expect(appendedTo('B')).toBe(sections[0]?.args[1]);
   });
 
-  it('realizes a submenu into a child model sharing the same action group', () => {
+  test('realizes a submenu into a child model sharing the same action group', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     const fired: string[] = [];
@@ -260,14 +321,14 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(fired).toEqual(['new']);
   });
 
-  it('retains one JSCallback-equivalent thunk per clickable item', () => {
+  test('retains one JSCallback-equivalent thunk per clickable item', () => {
     const { bindings } = makeFakeBindings();
     setBindingsForTesting(bindings);
     const handle = linuxMenuRealizer.realize([
       { label: 'A', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
       { label: 'B', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
     ]);
-    expect(getMenuEntry(handle)?.retainedCount).toBe(2);
+    expect(getMenuEntry(handle)?.retained).toHaveLength(2);
   });
 });
 
@@ -280,7 +341,7 @@ describe('realizeForWindow (per-window role wiring)', () => {
     ...extra,
   });
 
-  it('wires a role item with a Linux action to dispatchRole, fired on activate', () => {
+  test('wires a role item with a Linux action to dispatchRole, fired on activate', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     const dispatched: NativeMenuItemSpec[] = [];
@@ -292,14 +353,14 @@ describe('realizeForWindow (per-window role wiring)', () => {
     expect(dispatched).toEqual([copy]);
   });
 
-  it('leaves a role with no Linux action (quit) inert — no action wired', () => {
+  test('leaves a role with no Linux action (quit) inert — no action wired', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     realizeForWindow([role('Quit', { role: 'quit' })], () => undefined);
     expect(calls.filter((c) => c.fn === 'connectActivate')).toHaveLength(0);
   });
 
-  it('the shared realize() (no dispatcher) leaves role items inert', () => {
+  test('the shared realize() (no dispatcher) leaves role items inert', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
     linuxMenuRealizer.realize([role('Copy', { role: 'copy', editingCommand: 'Copy' })]);
@@ -308,11 +369,11 @@ describe('realizeForWindow (per-window role wiring)', () => {
 });
 
 describe('shared app-menu state', () => {
-  it('is undefined before any setApplicationMenu', () => {
+  test('is undefined before any setApplicationMenu', () => {
     expect(getCurrentAppMenu()).toBeUndefined();
   });
 
-  it('setApplicationMenu stores the realized model + group as the current menu', () => {
+  test('setApplicationMenu stores the realized model + group as the current menu', () => {
     const { bindings } = makeFakeBindings();
     setBindingsForTesting(bindings);
     const handle = linuxMenuRealizer.realize([
@@ -325,7 +386,7 @@ describe('shared app-menu state', () => {
     expect(current?.group).toBe(entry?.group as bigint);
   });
 
-  it('throws if setApplicationMenu is given an unknown handle', () => {
+  test('throws if setApplicationMenu is given an unknown handle', () => {
     const { bindings } = makeFakeBindings();
     setBindingsForTesting(bindings);
     expect(() => linuxMenuRealizer.setApplicationMenu(999999n)).toThrow();

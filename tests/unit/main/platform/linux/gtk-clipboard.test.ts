@@ -1,28 +1,44 @@
 import type { Pointer } from 'bun:ffi';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { currentPlatform } from '../../../../../src/common/platform';
 import {
   type AsyncStreamReader,
-  CLIPBOARD_READ_CB_DEF,
   drainStreamAsync,
+  formatsFromGdk,
   linuxClipboardBackend,
-  settleReadStreamAsync,
+  settleReadStream,
   settleReadText,
 } from '../../../../../src/main/platform/linux/gtk-clipboard';
 
-describe('CLIPBOARD_READ_CB_DEF (GAsyncReadyCallback ABI, shape-only)', () => {
-  it('is (source, result, user_data) -> void', () => {
-    expect(CLIPBOARD_READ_CB_DEF.args).toEqual(['ptr', 'ptr', 'ptr']);
-    expect(CLIPBOARD_READ_CB_DEF.returns).toBe('void');
-  });
+describe('linuxClipboardBackend reads', () => {
+  // On Linux the shared test process may hold a real display, where a read would await a pump.
+  test.skipIf(currentPlatform() === 'linux')(
+    'reject instead of throwing synchronously when GDK is unavailable',
+    async () => {
+      const reads = [
+        linuxClipboardBackend.readText,
+        linuxClipboardBackend.readHTML,
+        linuxClipboardBackend.readImage,
+      ];
+      for (const read of reads) {
+        let pending: Promise<unknown> = Promise.resolve();
+        expect(() => {
+          pending = Promise.resolve(read());
+        }).not.toThrow();
+        await expect(pending).rejects.toThrow();
+      }
+    },
+  );
 });
 
-describe('linuxClipboardBackend shape', () => {
-  it('exposes readText, writeText, readHTML, writeHTML and clear', () => {
-    expect(typeof linuxClipboardBackend.readText).toBe('function');
-    expect(typeof linuxClipboardBackend.writeText).toBe('function');
-    expect(typeof linuxClipboardBackend.readHTML).toBe('function');
-    expect(typeof linuxClipboardBackend.writeHTML).toBe('function');
-    expect(typeof linuxClipboardBackend.clear).toBe('function');
+describe('formatsFromGdk', () => {
+  test('reports MIME names without parameters, drops GType names and dedupes', () => {
+    const gdk = 'gchararray GdkTexture text/plain;charset=utf-8 text/plain image/png';
+    expect(formatsFromGdk(gdk)).toEqual(['text/plain', 'image/png']);
+  });
+
+  test('returns no formats for an empty clipboard', () => {
+    expect(formatsFromGdk('')).toEqual([]);
   });
 });
 
@@ -44,27 +60,27 @@ describe('drainStreamAsync (injected AsyncStreamReader, no real GInputStream)', 
     };
   };
 
-  it('concatenates multi-chunk reads and UTF-8 decodes them', async () => {
+  test('concatenates multi-chunk reads and UTF-8 decodes them', async () => {
     const enc = new TextEncoder();
     const { reader, closed } = makeReader([enc.encode('<b>café'), enc.encode(' & co</b>')]);
     expect(await drainStreamAsync(reader)).toBe('<b>café & co</b>');
     expect(closed()).toBe(1);
   });
 
-  it('decodes a multibyte char split across a chunk boundary (bytes joined before decode)', async () => {
+  test('decodes a multibyte char split across a chunk boundary (bytes joined before decode)', async () => {
     // '🎉' is 4 UTF-8 bytes (F0 9F 8E 89); split it 2/2 across two chunks.
     const party = new TextEncoder().encode('🎉'); // length 4
     const { reader } = makeReader([party.slice(0, 2), party.slice(2, 4)]);
     expect(await drainStreamAsync(reader)).toBe('🎉');
   });
 
-  it('returns empty string and still closes when the stream is immediately EOF', async () => {
+  test('returns empty string and still closes when the stream is immediately EOF', async () => {
     const { reader, closed } = makeReader([]);
     expect(await drainStreamAsync(reader)).toBe('');
     expect(closed()).toBe(1);
   });
 
-  it('still closes the stream when a read rejects (finally path)', async () => {
+  test('still closes the stream when a read rejects (finally path)', async () => {
     let closed = 0;
     const reader: AsyncStreamReader = {
       read: () => Promise.reject(new Error('boom')),
@@ -77,9 +93,10 @@ describe('drainStreamAsync (injected AsyncStreamReader, no real GInputStream)', 
   });
 });
 
-describe('settleReadStreamAsync (injected finish + async drain, no real clipboard)', () => {
-  it('drains the stream when finish yields a non-null GInputStream*', async () => {
-    const value = await settleReadStreamAsync({
+describe('settleReadStream (injected finish + async drain, no real clipboard)', () => {
+  test('drains the stream when finish yields a non-null GInputStream*', async () => {
+    const value = await settleReadStream({
+      empty: '',
       result: 1 as unknown as Pointer,
       finish: () => 42 as unknown as Pointer,
       drain: (stream) => {
@@ -90,8 +107,9 @@ describe('settleReadStreamAsync (injected finish + async drain, no real clipboar
     expect(value).toBe('<p>html</p>');
   });
 
-  it('returns empty string when finish yields null (no matching format)', async () => {
-    const value = await settleReadStreamAsync({
+  test('returns empty string when finish yields null (no matching format)', async () => {
+    const value = await settleReadStream({
+      empty: '',
       result: 0 as unknown as Pointer,
       finish: () => null,
       drain: () => {
@@ -101,8 +119,9 @@ describe('settleReadStreamAsync (injected finish + async drain, no real clipboar
     expect(value).toBe('');
   });
 
-  it('returns empty string when finish throws (GError path)', async () => {
-    const value = await settleReadStreamAsync({
+  test('returns empty string when finish throws (GError path)', async () => {
+    const value = await settleReadStream({
+      empty: '',
       result: 0 as unknown as Pointer,
       finish: () => {
         throw new Error('read failed');
@@ -114,7 +133,7 @@ describe('settleReadStreamAsync (injected finish + async drain, no real clipboar
 });
 
 describe('settleReadText (injected finish-fn, no real clipboard)', () => {
-  it('returns the read string when the injected finish-fn yields a non-null char*', () => {
+  test('returns the read string when the injected finish-fn yields a non-null char*', () => {
     const fakeResult = 7 as unknown as Pointer;
     const value = settleReadText({
       result: fakeResult,
@@ -130,7 +149,7 @@ describe('settleReadText (injected finish-fn, no real clipboard)', () => {
     expect(value).toBe('clipboard text');
   });
 
-  it('returns empty string when the injected finish-fn yields null (empty/none)', () => {
+  test('returns empty string when the injected finish-fn yields null (empty/none)', () => {
     const value = settleReadText({
       result: 0 as unknown as Pointer,
       finish: () => null,
@@ -141,7 +160,7 @@ describe('settleReadText (injected finish-fn, no real clipboard)', () => {
     expect(value).toBe('');
   });
 
-  it('returns empty string when finish throws (GError path)', () => {
+  test('returns empty string when finish throws (GError path)', () => {
     const value = settleReadText({
       result: 0 as unknown as Pointer,
       finish: () => {

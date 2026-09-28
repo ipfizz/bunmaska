@@ -6,45 +6,24 @@ import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadGMenuFFI } from './gtk-menu-ffi';
 
 /**
- * Builds native GTK 4 application menus from the backend-neutral menu spec and
- * routes item clicks back to JS — the Linux equivalent of `cocoa-menu.ts`.
- *
- * A GTK menu is a `GMenu` *model* paired with a `GSimpleActionGroup`. Each
- * clickable item is given a uniquely named `GSimpleAction` (e.g. `menu-0`); the
- * model entry references it as `"bunmaska.menu-0"`. Activating the action — by a
- * click, an accelerator, or `g_action_group_activate_action` — emits the
- * action's `activate` signal, which fires the item's JS `onClick`. This mirrors
- * the macOS `bunmaskaMenuAction:` registry pattern.
- *
- * One action group is shared by the whole tree (submenus add their actions to
- * the SAME group), so a single `gtk_widget_insert_action_group(window,
- * "bunmaska", group)` makes every item live.
- *
- * JSCallback lifecycle: the `activate` thunks are LONG-LIVED — they must stay
- * reachable for the menu's lifetime or GObject jumps into freed memory on the
- * next click (a past SIGSEGV class). Every thunk is therefore retained in the
- * per-menu {@link MenuEntry} (held by {@link menuEntries}) and NEVER closed
- * synchronously inside its own invocation. In v1 they are not closed at all.
+ * GMenu models plus one GSimpleActionGroup per realization, inserted as `bunmaska` (D039).
+ * Activate thunks stay retained for the menu's lifetime and are never closed: GObject jumps
+ * into a freed trampoline on the next click (a past SIGSEGV). No accelerators are installed (D035).
  */
 
-/** ABI shape for `GSimpleAction::activate`: `(action, parameter, user_data) -> void`. */
-export const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
+/** `GSimpleAction::activate(action, parameter, user_data)`. */
+const ACTION_ACTIVATE_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
-/** The action-group namespace prefix inserted into the window. */
 const ACTION_GROUP_PREFIX = 'bunmaska';
 
 let actionCounter = 0;
 
-/** A fresh, process-unique action name like `menu-0`, `menu-1`, … */
+/** Process-unique, e.g. `menu-0`. */
 export const actionName = (): string => `menu-${actionCounter++}`;
 
-/** Namespace an action name for a `GMenu` `detailed_action` (e.g. `bunmaska.menu-0`). */
+/** The `detailed_action` a GMenu item references, e.g. `bunmaska.menu-0`. */
 export const detailedAction = (name: string): string => `${ACTION_GROUP_PREFIX}.${name}`;
 
-/**
- * The native operations the realizer needs. Handles are `bigint` here; the real
- * binding casts to/from `Pointer`.
- */
 export type Bindings = {
   gMenuNew(): bigint;
   gMenuAppend(menu: bigint, label: string, detailed: string): void;
@@ -56,25 +35,22 @@ export type Bindings = {
   gSimpleActionNewStatefulBool(name: string, state: boolean): bigint;
   gSimpleActionSetEnabled(action: bigint, enabled: number): void;
   gActionMapAddAction(group: bigint, action: bigint): void;
-  /** Connect a retained `activate` handler to `action`; returns the retained thunk. */
+  /** Returns the thunk, which the caller must retain. */
   connectActivate(action: bigint, thunk: () => void): unknown;
-  /** Programmatically fire `detailed` on `group` (the testing/verification path). */
+  /** Fire `detailed` on `group` without a click (tests). */
   activateAction(group: bigint, detailed: string, parameter: bigint | null): void;
 };
 
-/** The realized native artefacts for one top-level menu, kept in {@link menuEntries}. */
 export type MenuEntry = {
-  /** The top-level `GMenu` model pointer (also the realizer's bigint handle). */
+  /** Also the realizer's handle. */
   readonly model: bigint;
-  /** The `GSimpleActionGroup` shared by the whole tree. */
+  /** Shared by the whole tree, submenus included. */
   readonly group: bigint;
-  /** Action names (e.g. `menu-0`) in realization order, for lookup/verification. */
+  /** In realization order. */
   readonly actionNames: string[];
-  /** Retained activate thunks — kept alive for the menu's lifetime. */
+  /** Activate thunks; must outlive the menu. */
   readonly retained: unknown[];
-  /** Count of retained thunks (one per clickable item). */
-  readonly retainedCount: number;
-  /** The spec tree this entry was realized from (so a window can re-realize it with role wiring). */
+  /** Kept so a window can re-realize the tree with role wiring. */
   readonly specs: ReadonlyArray<NativeMenuItemSpec>;
 };
 
@@ -99,7 +75,6 @@ export const onAppMenuCleared = (listener: () => void): (() => void) => {
 
 let injectedBindings: Bindings | undefined;
 
-/** The real GIO/GObject-backed bindings (constructed lazily on Linux). */
 const realBindings = (): Bindings => {
   const gio = loadGMenuFFI();
   const gobject = loadGObjectFFI();
@@ -170,25 +145,56 @@ type WalkContext = {
   readonly dispatchRole?: ((spec: NativeMenuItemSpec) => void) | undefined;
 };
 
-const appendItems = (
+/** Electron `&` mnemonics as GTK underlines (`&&` is a literal `&`); literal `_` doubled. */
+const gtkLabel = (label: string): string =>
+  label.replace(/_/g, '__').replace(/&(&?)/g, (_match, escaped: string) => (escaped ? '&' : '_'));
+
+/** Re-throw a click's error on a microtask: unwinding into the GLib dispatch loses it. */
+const guarded = (thunk: () => void) => (): void => {
+  try {
+    thunk();
+  } catch (error) {
+    queueMicrotask(() => {
+      throw error;
+    });
+  }
+};
+
+const wireAction = (
   ctx: WalkContext,
   model: bigint,
+  label: string,
+  name: string,
+  action: bigint,
+  thunk: () => void,
+): void => {
+  ctx.retained.push(ctx.b.connectActivate(action, guarded(thunk)));
+  ctx.b.gActionMapAddAction(ctx.group, action);
+  ctx.actionNames.push(name);
+  ctx.b.gMenuAppend(model, gtkLabel(label), detailedAction(name));
+};
+
+const appendItems = (
+  ctx: WalkContext,
+  root: bigint,
   items: ReadonlyArray<NativeMenuItemSpec>,
 ): void => {
+  let model = root;
   for (const spec of items) {
     if (spec.type === 'separator') {
-      ctx.b.gMenuAppendSection(model, ctx.b.gMenuNew());
+      // GTK draws a divider only above a NON-empty section, so later items go inside it.
+      model = ctx.b.gMenuNew();
+      ctx.b.gMenuAppendSection(root, model);
       continue;
     }
     if (spec.type === 'submenu' && spec.submenu !== undefined) {
       const child = ctx.b.gMenuNew();
       appendItems(ctx, child, spec.submenu);
-      ctx.b.gMenuAppendSubmenu(model, spec.label, child);
+      ctx.b.gMenuAppendSubmenu(model, gtkLabel(spec.label), child);
       continue;
     }
-    // A role item with a per-window dispatcher + a Linux action: wire its activate to the
-    // dispatcher (which runs the editing command / window op on THIS window). Roles without a
-    // Linux action (quit/about/…) or without a dispatcher fall through to the inert-label path.
+    // Role items act on THIS window via dispatchRole. Roles with no Linux action (quit, about)
+    // or realized without a dispatcher fall through to an inert label (D039).
     if (
       spec.role !== undefined &&
       ctx.dispatchRole !== undefined &&
@@ -198,41 +204,29 @@ const appendItems = (
       const action = ctx.b.gSimpleActionNew(name);
       ctx.b.gSimpleActionSetEnabled(action, spec.enabled === false ? 0 : 1);
       const dispatch = ctx.dispatchRole;
-      const retained = ctx.b.connectActivate(action, () => dispatch(spec));
-      ctx.b.gActionMapAddAction(ctx.group, action);
-      ctx.actionNames.push(name);
-      ctx.retained.push(retained);
-      ctx.b.gMenuAppend(model, spec.label, detailedAction(name));
+      wireAction(ctx, model, spec.label, name, action, () => dispatch(spec));
       continue;
     }
     if ((spec.type === 'checkbox' || spec.type === 'radio') && spec.onClick !== undefined) {
       const name = actionName();
       const action = ctx.b.gSimpleActionNewStatefulBool(name, spec.checked ?? false);
       ctx.b.gSimpleActionSetEnabled(action, spec.enabled ? 1 : 0);
-      const retained = ctx.b.connectActivate(action, spec.onClick);
-      ctx.b.gActionMapAddAction(ctx.group, action);
-      ctx.actionNames.push(name);
-      ctx.retained.push(retained);
-      ctx.b.gMenuAppend(model, spec.label, detailedAction(name));
+      wireAction(ctx, model, spec.label, name, action, spec.onClick);
       continue;
     }
     if (spec.type === 'normal' && spec.onClick !== undefined) {
       const name = actionName();
       const action = ctx.b.gSimpleActionNew(name);
       ctx.b.gSimpleActionSetEnabled(action, spec.enabled ? 1 : 0);
-      const retained = ctx.b.connectActivate(action, spec.onClick);
-      ctx.b.gActionMapAddAction(ctx.group, action);
-      ctx.actionNames.push(name);
-      ctx.retained.push(retained);
-      ctx.b.gMenuAppend(model, spec.label, detailedAction(name));
+      wireAction(ctx, model, spec.label, name, action, spec.onClick);
       continue;
     }
-    // A normal item with no onClick: a static, inert label (e.g. a heading).
-    ctx.b.gMenuAppend(model, spec.label, detailedAction(actionName()));
+    // No onClick: an inert label.
+    ctx.b.gMenuAppend(model, gtkLabel(spec.label), detailedAction(actionName()));
   }
 };
 
-/** Build a `GMenu` model + `GSimpleActionGroup` for `items` (optionally role-wired); stores + returns the entry. */
+/** Realize `items` (role-wired when `dispatchRole` is given) and store the entry. */
 const realizeCore = (
   items: ReadonlyArray<NativeMenuItemSpec>,
   dispatchRole?: (spec: NativeMenuItemSpec) => void,
@@ -247,31 +241,26 @@ const realizeCore = (
     group,
     actionNames: ctx.actionNames,
     retained: ctx.retained,
-    retainedCount: ctx.retained.length,
     specs: items,
   };
   menuEntries.set(model, entry);
   return entry;
 };
 
-/** Build a shared model + group for `items` (no role wiring); returns the model handle. */
+/** Realize without role wiring; returns the model handle. */
 const realize = (items: ReadonlyArray<NativeMenuItemSpec>): bigint => realizeCore(items).model;
 
-/**
- * Realize a PER-WINDOW model + group from `items`, wiring role items live to `dispatchRole`
- * (so their clicks act on that window's own web view / window). Returns the fresh entry.
- */
+/** A per-window realization whose role items dispatch to that window (D039). */
 export const realizeForWindow = (
   items: ReadonlyArray<NativeMenuItemSpec>,
   dispatchRole: (spec: NativeMenuItemSpec) => void,
 ): MenuEntry => realizeCore(items, dispatchRole);
 
-/** Install `menuHandle` as the current application menu (applied to future windows). */
+/** `null` also removes the bars of live windows. */
 const setApplicationMenu = (menuHandle: bigint | null): void => {
+  // ponytail: a non-null menu reaches only windows created later; live ones need a bar swap.
   if (menuHandle === null) {
     currentAppMenu = undefined;
-    // Live bars come down too; a later setApplicationMenu(menu) still only
-    // applies to windows created after it.
     for (const listener of [...clearListeners]) {
       listener();
     }
@@ -285,26 +274,17 @@ const setApplicationMenu = (menuHandle: bigint | null): void => {
   currentAppMenu = { model: entry.model, group: entry.group, specs: entry.specs };
 };
 
-/** The realized artefacts for a handle, or `undefined`. Used by tests + verification. */
+/** `undefined` for an unknown handle. */
 export const getMenuEntry = (handle: bigint): MenuEntry | undefined => menuEntries.get(handle);
 
-/**
- * The model + action group of the current application menu, or `undefined` if
- * none is set. Read by {@link LinuxWindow} construction to attach a menu bar.
- */
+/** Read when a LinuxWindow is constructed, to attach its menu bar. */
 export const getCurrentAppMenu = (): CurrentAppMenu | undefined => currentAppMenu;
 
-/** Replace the current application menu state directly. @internal */
-export const setCurrentAppMenu = (menu: CurrentAppMenu | undefined): void => {
-  currentAppMenu = menu;
-};
-
-/** Clear the stored application menu. Test-only. */
+/** Test-only. */
 export const resetCurrentAppMenuForTesting = (): void => {
   currentAppMenu = undefined;
 };
 
-/** The Linux native menu realizer (GMenu + GSimpleActionGroup + GtkPopoverMenuBar). */
 export const linuxMenuRealizer: MenuRealizer = {
   realize,
   setApplicationMenu,
