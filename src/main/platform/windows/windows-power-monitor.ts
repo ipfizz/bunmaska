@@ -1,3 +1,4 @@
+import { createLogger } from '../../../common/logger';
 import type { PowerEventHandlers } from '../macos/cocoa-power';
 import { loadWtsapi32, NOTIFY_FOR_THIS_SESSION } from './win32-wts-ffi';
 import { createMessageWindow, type MessageWindow } from './windows-message-window';
@@ -7,6 +8,8 @@ import { createMessageWindow, type MessageWindow } from './windows-message-windo
  * lock/unlock as `WM_WTSSESSION_CHANGE` after `WTSRegisterSessionNotification`. Both are
  * delivered to a hidden, non-WebKit window (see `windows-message-window.ts`).
  */
+
+const log = createLogger('windows-power-monitor');
 
 /** `WM_POWERBROADCAST` — system power-state change. */
 export const WM_POWERBROADCAST = 0x0218;
@@ -64,12 +67,18 @@ export const observePowerEvents = (handlers: PowerEventHandlers): void => {
   observerWindow = createMessageWindow((message, wParam) =>
     dispatchPowerMessage(handlers, message, Number(wParam)),
   );
+  let registered = false;
   try {
-    loadWtsapi32().symbols.WTSRegisterSessionNotification(
-      observerWindow.hwnd,
-      NOTIFY_FOR_THIS_SESSION,
-    );
+    registered =
+      loadWtsapi32().symbols.WTSRegisterSessionNotification(
+        observerWindow.hwnd,
+        NOTIFY_FOR_THIS_SESSION,
+      ) !== 0;
   } catch {
-    // Lock/unlock notifications are unavailable; suspend/resume still work.
+    // wtsapi32 is missing; handled as a failed registration below.
+  }
+  if (!registered) {
+    // ponytail: no retry, so an early-logon failure loses lock/unlock until restart
+    log.warn('lock-screen/unlock-screen unavailable: WTSRegisterSessionNotification failed');
   }
 };
