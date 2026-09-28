@@ -245,7 +245,6 @@ const showOpenDialog = (spec: {
 
 const showSaveDialog = (spec: {
   readonly defaultName: string;
-  readonly defaultDirectory?: string;
   readonly extensions: ReadonlyArray<string>;
 }): Promise<string> => {
   const gtk = loadGtkDialogFFI();
@@ -255,9 +254,6 @@ const showSaveDialog = (spec: {
   }
   gtk.symbols.gtk_file_dialog_set_title(fileDialog, cstr('Save'));
   gtk.symbols.gtk_file_dialog_set_modal(fileDialog, 1);
-  if (spec.defaultDirectory !== undefined && spec.defaultDirectory.length > 0) {
-    setInitialPath(gtk, fileDialog, spec.defaultDirectory);
-  }
   // Electron's defaultPath is an absolute directory, an absolute file or a bare name.
   if (isAbsolute(spec.defaultName)) {
     setInitialPath(gtk, fileDialog, spec.defaultName);

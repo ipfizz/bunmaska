@@ -141,7 +141,7 @@ export const dialog: Dialog = {
   async showSaveDialog(...args) {
     const options = (args.length === 2 ? args[1] : args[0]) ?? {};
     const filePath = await getBackend().showSaveDialog({
-      defaultName: options.defaultPath ?? '', // ponytail: macOS/Linux need dir + name split in their backends
+      defaultName: options.defaultPath ?? '',
       extensions: flattenFilterExtensions(options.filters),
     });
     return { canceled: filePath.length === 0, filePath };
