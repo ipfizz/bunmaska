@@ -4,11 +4,11 @@ description: Every published release gets an entry here - what shipped, what bro
 order: 2
 ---
 
-The current version is **`0.1.0-alpha.8`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
+The current version is **`0.1.0-alpha.9`** (`npm i bunmaska` installs the latest published alpha). Newest first; still a curated snapshot rather than a per-commit log.
 
-## Unreleased
+## `0.1.0-alpha.9`
 
-The pre-beta review: every module read line by line against Electron's contract, and a few hundred commits fixing what that turned up. We found more than we would like to admit, which is rather the point of looking. The parts you might notice:
+The pre-beta review: every module read line by line against Electron's contract, and a few hundred commits fixing what that turned up. We found more than we would like to admit, which is rather the point of looking. The engine catalogue and the React starter move to alpha.10. The parts you might notice:
 
 **Behaviour changes**
 

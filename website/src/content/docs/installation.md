@@ -41,6 +41,6 @@ bun add -g bunmaska
 bunmaska --help
 ```
 
-> Heads up: it's alpha, so pin the exact version (`bun add bunmaska@0.1.0-alpha.8`) and expect the surface to move between releases. A range like `0.1.x` skips prereleases, so it matches none of the versions published so far. We'll tell you what changed in the [changelog](/docs/changelog).
+> Heads up: it's alpha, so pin the exact version (`bun add bunmaska@0.1.0-alpha.9`) and expect the surface to move between releases. A range like `0.1.x` skips prereleases, so it matches none of the versions published so far. We'll tell you what changed in the [changelog](/docs/changelog).
 
 Next: [Quickstart](/docs/quickstart).

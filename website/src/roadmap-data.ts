@@ -60,7 +60,7 @@ export const milestones: readonly Milestone[] = [
     version: 'alpha.8',
     status: 'shipped',
     title: 'Docs versus reality. Reality lost three rounds.',
-    note: 'the current release. `npm i bunmaska` gets you this.',
+    note: 'the release before this one.',
     items: [
       'Every claim in the docs was checked against the code, per platform, and whichever side was wrong got fixed. A new errors page, a reconciled parity table, and a CLI reference that matches `--help`.',
       'Three real bugs the pass flushed out: a `will-quit` veto left the app alive with a dead run loop; `build` ignored `name`, `id` and `icon` in the config; a dev restart stole focus from your editor on every save.',
@@ -71,6 +71,20 @@ export const milestones: readonly Milestone[] = [
   },
   {
     version: 'alpha.9',
+    status: 'shipped',
+    title: 'The pre-beta review. Every line, read.',
+    note: 'the current release. `npm i bunmaska` gets you this.',
+    items: [
+      "Every module read line by line against Electron's contract: 669 findings, and a few hundred fixes, each proven by a failing test first. We found more than we would like to admit, which is rather the point of looking.",
+      'Quit behaves like Electron: `before-quit`, every window closes (a veto cancels), `will-quit`, `quit`. Cmd+Q and the Dock go through it on macOS, and the quit role works on Linux and Windows.',
+      'Leaks and crash classes closed: closed macOS windows are finally released along with their web process, native images are freed on every OS, and a callback that throws through a native frame surfaces as an uncaught exception instead of taking the process down.',
+      'Built apps know who they are: a shipped `package.json` gives `app.getName()`, `getVersion()` and `autoUpdater` your identity, `update.json` is signed as well as the artifact, and `build` no longer ships a signing key that happens to sit beside your entry.',
+      'One seam between the Electron-shaped API and the three OS backends, enforced by lint instead of by good intentions.',
+      'What did not ship: the engine catalogue and the React starter. Both move to alpha.10; a beta built on unreviewed code was the worse trade.',
+    ],
+  },
+  {
+    version: 'alpha.10',
     status: 'now',
     title: 'The engine catalogue, a React starter, the last API stretch',
     note: 'what we are building now. The feed itself has been live since alpha.6; what it serves is the work.',
@@ -117,6 +131,6 @@ export const milestones: readonly Milestone[] = [
 export const snapshot = [
   { value: '21', label: 'Electron-shaped modules' },
   { value: '~70-80%', label: 'weighted API parity' },
-  { value: '~1,600', label: 'tests passing · 3-OS CI matrix' },
+  { value: '~1,900', label: 'tests passing · 3-OS CI matrix' },
   { value: '0', label: 'compiled native code' },
 ] as const;

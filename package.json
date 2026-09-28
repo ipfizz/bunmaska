@@ -1,6 +1,6 @@
 {
   "name": "bunmaska",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "Electron minus Chromium, powered by Bun and WebKit: a drop-in Electron replacement and lightweight Electron alternative. Same APIs, no bundled Chromium, 23MB downloads, native modules that are just .ts files.",
   "keywords": [
     "electron",
