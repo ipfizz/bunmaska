@@ -115,13 +115,19 @@ export const defineObjcClass = (
   for (const method of methods) {
     const callback = buildCallback(method);
     retainedCallbacks.push(callback);
-    const imp = callback.ptr === null ? 0n : BigInt(callback.ptr);
-    runtime.symbols.class_addMethod(
-      cls,
-      rt.selectors.get(method.selector),
-      imp,
-      cstr(method.typeEncoding),
-    );
+    if (
+      callback.ptr === null ||
+      runtime.symbols.class_addMethod(
+        cls,
+        rt.selectors.get(method.selector),
+        BigInt(callback.ptr),
+        cstr(method.typeEncoding),
+      ) === 0
+    ) {
+      throw new BunmaskaError(
+        `defineObjcClass: could not add ${method.selector} to ${name} (a duplicate selector, or no IMP)`,
+      );
+    }
   }
 
   runtime.symbols.objc_registerClassPair(cls);

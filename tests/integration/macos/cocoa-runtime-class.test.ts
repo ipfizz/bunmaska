@@ -66,5 +66,17 @@ if (currentPlatform() === 'macos') {
       expect(msgSendReturnsU8(instance, rt.selectors.get('bunmaskaShouldYes'))).toBe(1);
       expect(msgSendReturnsU8(instance, rt.selectors.get('bunmaskaShouldNo'))).toBe(0);
     });
+
+    test('throws when a selector is added twice instead of dropping the second impl', () => {
+      const spec = {
+        selector: 'bunmaskaTwice',
+        typeEncoding: 'v@:',
+        args: [],
+        impl: () => undefined,
+      };
+      expect(() => defineObjcClass('BunmaskaTestClassTwice', 'NSObject', [spec, spec])).toThrow(
+        /bunmaskaTwice/,
+      );
+    });
   });
 }
