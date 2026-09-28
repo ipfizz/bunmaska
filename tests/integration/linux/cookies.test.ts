@@ -10,7 +10,7 @@ import { createLinuxApplication } from '../../../src/main/platform/linux/linux-b
  * ubuntu under `xvfb-run -a`; inert elsewhere via `describe.skipIf`.
  */
 
-const isLinux = process.platform === 'linux';
+const hasDisplay = process.platform === 'linux' && loadGtkFFI().symbols.gtk_init_check() !== 0;
 
 const pump = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -29,11 +29,8 @@ const settleWithPump = async <T>(promise: Promise<T>, budgetMs: number): Promise
   return promise;
 };
 
-describe.skipIf(!isLinux)('session.cookies over the real WebKitGTK network session', () => {
+describe.skipIf(!hasDisplay)('session.cookies over the real WebKitGTK network session', () => {
   test('set -> get roundtrip -> remove -> gone', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
     const app = createLinuxApplication();
     app.start();
     const window = app.createWindow({ width: 320, height: 240, title: 'cookies', show: true });
