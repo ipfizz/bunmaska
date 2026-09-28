@@ -68,12 +68,20 @@ const installErrorTrap = (x11: ReturnType<typeof loadX11FFI>): void => {
   }
 };
 
+/** XWayland root grabs never see keys routed to native Wayland clients, so Wayland is unsupported. */
+export const isWaylandSession = (env: Readonly<Record<string, string | undefined>>): boolean =>
+  Boolean(env['WAYLAND_DISPLAY']) || env['XDG_SESSION_TYPE'] === 'wayland';
+
 /** Open (once) the dedicated X display for grabs, or record that it is unavailable. */
 const ensureDisplay = (): Pointer | null => {
   if (display !== undefined) {
     return display;
   }
   if (displayFailed) {
+    return null;
+  }
+  if (isWaylandSession(process.env)) {
+    displayFailed = true;
     return null;
   }
   try {
