@@ -8,8 +8,6 @@ export type CocoaWindowStyle = {
   readonly closable?: boolean;
   readonly miniaturizable?: boolean;
   readonly resizable?: boolean;
-  readonly utility?: boolean;
-  readonly fullSizeContentView?: boolean;
 };
 
 const STYLE_BITS = {
@@ -17,8 +15,6 @@ const STYLE_BITS = {
   closable: 1 << 1,
   miniaturizable: 1 << 2,
   resizable: 1 << 3,
-  utility: 1 << 4,
-  fullSizeContentView: 1 << 15,
 } as const;
 
 export const STANDARD_WINDOW_STYLE: CocoaWindowStyle = Object.freeze({
@@ -41,12 +37,6 @@ export const computeWindowStyleMask = (style: CocoaWindowStyle): number => {
   }
   if (style.resizable === true) {
     mask |= STYLE_BITS.resizable;
-  }
-  if (style.utility === true) {
-    mask |= STYLE_BITS.utility;
-  }
-  if (style.fullSizeContentView === true) {
-    mask |= STYLE_BITS.fullSizeContentView;
   }
   return mask;
 };

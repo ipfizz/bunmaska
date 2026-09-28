@@ -25,14 +25,6 @@ describe('computeWindowStyleMask', () => {
     expect(computeWindowStyleMask({ resizable: true })).toBe(1 << 3);
   });
 
-  test('utility-only is bit 4 (16)', () => {
-    expect(computeWindowStyleMask({ utility: true })).toBe(1 << 4);
-  });
-
-  test('fullSizeContentView-only is bit 15 (32768)', () => {
-    expect(computeWindowStyleMask({ fullSizeContentView: true })).toBe(1 << 15);
-  });
-
   test('combines independent flags via bitwise OR', () => {
     const mask = computeWindowStyleMask({
       titled: true,
