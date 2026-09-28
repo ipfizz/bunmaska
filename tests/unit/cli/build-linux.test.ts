@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   buildControlFile,
+  buildLinuxApp,
   buildDesktopEntry,
   debFileName,
   DEFAULT_LINUX_DEPENDS,
@@ -48,6 +52,10 @@ describe('tarballName / debFileName', () => {
   test('deb is <slug>_<version>_amd64.deb', () => {
     expect(debFileName('My App', '1.2.3', 'x64')).toBe('my-app_1.2.3_amd64.deb');
     expect(debFileName('My App', '1.2.3', 'arm64')).toBe('my-app_1.2.3_arm64.deb');
+  });
+
+  test('deb names a prerelease with the Debian tilde', () => {
+    expect(debFileName('My App', '1.0.0-beta.1', 'x64')).toBe('my-app_1.0.0~beta.1_amd64.deb');
   });
 });
 
@@ -103,6 +111,17 @@ describe('buildControlFile', () => {
     expect(text).toContain('Architecture: amd64');
     expect(text).toContain('Maintainer: Bunmaska <noreply@bunmaska.dev>');
     expect(text).toContain('Description: My App built with Bunmaska');
+    expect(text).toContain('Recommends: libnotify4');
+  });
+
+  test('maps a semver prerelease to a tilde so the final release sorts above it', () => {
+    const pre = buildControlFile({
+      slug: 'my-app',
+      version: '1.0.0-beta.1',
+      maintainer: 'x <x@example.com>',
+      description: 'x',
+    });
+    expect(pre).toContain('Version: 1.0.0~beta.1\n');
   });
 
   test('ends with a trailing newline', () => {
@@ -131,6 +150,15 @@ describe('buildControlFile', () => {
       depends: [],
     });
     expect(noDeps).not.toContain('Depends:');
+  });
+});
+
+describe('buildLinuxApp', () => {
+  test('refuses a one-character package name before compiling', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'bunmaska-deb-name-'));
+    await expect(buildLinuxApp({ entry: 'missing.ts', name: 'X', out })).rejects.toThrow(
+      /at least 2 characters/,
+    );
   });
 });
 

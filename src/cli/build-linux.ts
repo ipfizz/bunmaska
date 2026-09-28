@@ -64,8 +64,11 @@ export const debArch = (arch: Arch): 'amd64' | 'arm64' => (arch === 'x64' ? 'amd
 export const tarballName = (name: string, arch: Arch = currentArch()): string =>
   `${name}-linux-${arch}.tar.gz`;
 
+// dpkg reads the last `-` as a revision, so `1.0.0-beta.1` would sort ABOVE `1.0.0`; `~` sorts below.
+const debVersion = (version: string): string => version.replace('-', '~');
+
 export const debFileName = (name: string, version: string, arch: Arch = currentArch()): string =>
-  `${bundleIdSlug(name)}_${version}_${debArch(arch)}.deb`;
+  `${bundleIdSlug(name)}_${debVersion(version)}_${debArch(arch)}.deb`;
 
 export type DesktopEntryOptions = {
   readonly name: string;
@@ -108,12 +111,14 @@ export const DEFAULT_LINUX_DEPENDS: readonly string[] = ['libwebkitgtk-6.0-4', '
 export const buildControlFile = (opts: ControlFileOptions): string =>
   [
     `Package: ${opts.slug}`,
-    `Version: ${opts.version}`,
+    `Version: ${debVersion(opts.version)}`,
     `Architecture: ${opts.arch ?? debArch(currentArch())}`,
     `Maintainer: ${opts.maintainer}`,
     ...(opts.depends !== undefined && opts.depends.length > 0
       ? [`Depends: ${opts.depends.join(', ')}`]
       : []),
+    // Notifications dlopen libnotify.so.4; the app runs without it.
+    'Recommends: libnotify4',
     `Description: ${opts.description}`,
     '',
   ].join('\n');
@@ -205,6 +210,11 @@ export type BuildLinuxAppResult = {
 export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLinuxAppResult> => {
   const out = opts.out ?? process.cwd();
   const layout = linuxLayout(out, opts.name);
+  if (layout.slug.length < 2) {
+    throw new Error(
+      `bunmaska build: a .deb package name needs at least 2 characters (got "${layout.slug}"); use a longer app name.`,
+    );
+  }
   const maintainer = `${opts.id ?? `com.bunmaska.${layout.slug}`} <noreply@bunmaska.dev>`;
   const description = `${opts.name} built with Bunmaska`;
 
