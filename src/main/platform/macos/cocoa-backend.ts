@@ -114,7 +114,7 @@ const WK_INJECTION_TIME_AT_DOCUMENT_START = 0n;
 /** Electron runs preloads in the main frame only; an iframe must never get the bridge. */
 const FOR_MAIN_FRAME_ONLY = 1;
 const SCRIPT_MESSAGE_HANDLER_NAME = 'bunmaska';
-/** Page-world handler name `executeJavaScript` posts its result to (D022). */
+/** Page-world handler name `executeJavaScript` posts its result to (D022b). */
 const EXEC_RESULT_HANDLER_NAME = 'bunmaskaExec';
 /** Milliseconds before a pending printToPDF/capturePage rejects. */
 const RENDER_TIMEOUT_MS = 30_000;
@@ -394,7 +394,7 @@ class MacOSWebContents implements NativeWebContents {
 
   /**
    * Evaluate `code` in the page world (Electron's main world). The result comes
-   * back through the page-world `bunmaskaExec` handler, not a completion block (D022).
+   * back through the page-world `bunmaskaExec` handler, not a completion block (D022b).
    */
   executeJavaScript(code: string): Promise<unknown> {
     if (this.#destroyed) {
@@ -529,7 +529,7 @@ class MacOSWebContents implements NativeWebContents {
     this.#evaluateInWorld(dispatchScript(envelopeJson), this.#isolatedWorld);
   }
 
-  /** Fire-and-forget in `world`'s main frame: nil frame, nil completion handler (D022). */
+  /** Fire-and-forget in `world`'s main frame: nil frame, nil completion handler (D021). */
   #evaluateInWorld(code: string, world: Handle): void {
     const rt = cocoa();
     msgSendPtr4(
@@ -1013,7 +1013,7 @@ class MacOSApplication implements NativeApplication {
       nsString(SCRIPT_MESSAGE_HANDLER_NAME),
     );
 
-    // executeJavaScript's return channel (D022). pageWorld() is interned by WebKit,
+    // executeJavaScript's return channel (D022b). pageWorld() is interned by WebKit,
     // so teardown gets the same handle without a retain here.
     const execHandler = createScriptMessageHandler((json) => contents?.deliverExecResult(json));
     msgSendPtr3(
