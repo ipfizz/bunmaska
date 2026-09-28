@@ -203,8 +203,6 @@ export type BuildLinuxAppOptions = {
   readonly icon?: string;
   /** Engine-id to bake (the per-app pin); `system` (the default) = OS WebView. */
   readonly engineId?: string;
-  /** Engine shipped inside the bundle — drops the system WebKitGTK `Depends:`. */
-  readonly embedEngine?: boolean;
   /** The app's own version for the .deb; defaults to the framework version. */
   readonly version?: string;
   /** Target architecture; defaults to the host's. */
@@ -265,8 +263,6 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   const tarball = join(out, tarballName(opts.name, arch));
   await tarGz(tarball, out, opts.name);
 
-  // An embedded engine ships its own WebKitGTK, so it needs no system Depends.
-  const depends = opts.embedEngine === true ? [] : DEFAULT_LINUX_DEPENDS;
   const deb = await packageDeb({
     layout,
     out,
@@ -275,7 +271,6 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
     name: opts.name,
     maintainer,
     description,
-    depends,
   });
 
   return { appDir: layout.appDir, tarball, deb };
@@ -293,9 +288,8 @@ const packageDeb = async (args: {
   readonly name: string;
   readonly maintainer: string;
   readonly description: string;
-  readonly depends: readonly string[];
 }): Promise<string> => {
-  const { layout, out, version, arch, name, maintainer, description, depends } = args;
+  const { layout, out, version, arch, name, maintainer, description } = args;
   const staging = mkdtempSync(join(tmpdir(), 'bunmaska-deb-'));
   try {
     const controlDir = join(staging, 'control-root');
@@ -308,7 +302,7 @@ const packageDeb = async (args: {
         arch: debArch(arch),
         maintainer,
         description,
-        depends,
+        depends: DEFAULT_LINUX_DEPENDS,
       }),
     );
 

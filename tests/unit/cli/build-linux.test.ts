@@ -141,7 +141,7 @@ describe('buildControlFile', () => {
     expect(withDeps.indexOf('Depends:')).toBeLessThan(withDeps.indexOf('Description:'));
   });
 
-  test('omits the Depends field entirely when deps are empty (embedded engine)', () => {
+  test('omits the Depends field entirely when deps are empty', () => {
     const noDeps = buildControlFile({
       slug: 'my-app',
       version: '1.0.0',
