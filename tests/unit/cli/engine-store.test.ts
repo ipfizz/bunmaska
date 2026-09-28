@@ -287,6 +287,23 @@ describe('gc', () => {
     expect(result.removed).toEqual([ID2]);
   });
 
+  test('refuses to run when a link is unreadable, rather than freeing its engine', async () => {
+    const root = makeTmpDir();
+    await installFromSource(root, fakeSource(ID), { extract: fakeExtract });
+    linkApp(root, '/opt/MyApp', ID);
+    writeFileSync(linkPath(root, '/opt/MyApp'), '{"app":"/opt/My'); // torn write
+    await expect(gc(root, { exists: () => true })).rejects.toThrow(/unreadable/);
+    expect(isInstalled(root, ID)).toBe(true);
+  });
+
+  test('ignores a link write still in progress', async () => {
+    const root = makeTmpDir();
+    linkApp(root, '/opt/MyApp', ID);
+    writeFileSync(`${linkPath(root, '/opt/MyApp')}.123.tmp`, '{"app":');
+    expect(readLinks(root)).toEqual([{ app: '/opt/MyApp', engine: ID }]);
+    await expect(gc(root, { exists: () => true })).resolves.toBeDefined();
+  });
+
   test('drops links whose app no longer exists, freeing its engine', async () => {
     const root = makeTmpDir();
     await installFromSource(root, fakeSource(ID), { extract: fakeExtract });

@@ -112,35 +112,46 @@ export const listInstalled = (root: string): string[] => {
 /** A refcount entry: which engine id an installed app needs. */
 export type EngineLink = { readonly app: string; readonly engine: string };
 
-/** Register an installed app as needing `engineId` (a refcount entry). */
+/** Register an app as needing `engineId`; written via rename, so a crash never leaves a torn link. */
 export const linkApp = (root: string, appPath: string, engineId: string): void => {
   mkdirSync(join(root, LINKS_DIR), { recursive: true });
-  writeFileSync(linkPath(root, appPath), JSON.stringify({ app: appPath, engine: engineId }));
+  const path = linkPath(root, appPath);
+  const staging = `${path}.${process.pid}.tmp`;
+  writeFileSync(staging, JSON.stringify({ app: appPath, engine: engineId }));
+  renameSync(staging, path);
 };
 
 export const unlinkApp = (root: string, appPath: string): void => {
   rmSync(linkPath(root, appPath), { force: true });
 };
 
-/** Read every refcount entry. Malformed entries are skipped. */
-export const readLinks = (root: string): EngineLink[] => {
+/** Link files are named by the sha1 of the app path; anything else is a write in progress. */
+const LINK_NAME = /^[0-9a-f]{40}$/;
+
+const scanLinks = (root: string): { links: EngineLink[]; unreadable: string[] } => {
   const dir = join(root, LINKS_DIR);
-  if (!existsSync(dir)) {
-    return [];
-  }
   const links: EngineLink[] = [];
-  for (const name of readdirSync(dir)) {
+  const unreadable: string[] = [];
+  for (const name of existsSync(dir) ? readdirSync(dir) : []) {
+    if (!LINK_NAME.test(name)) {
+      continue;
+    }
     try {
       const raw = JSON.parse(readFileSync(join(dir, name), 'utf8')) as Partial<EngineLink>;
       if (typeof raw.app === 'string' && typeof raw.engine === 'string') {
         links.push({ app: raw.app, engine: raw.engine });
+        continue;
       }
     } catch {
-      // Skip an unreadable/corrupt link entry rather than failing GC.
+      // Counted below.
     }
+    unreadable.push(join(dir, name));
   }
-  return links;
+  return { links, unreadable };
 };
+
+/** Read every refcount entry. Malformed entries are skipped. */
+export const readLinks = (root: string): EngineLink[] => scanLinks(root).links;
 
 export type InstallSource = {
   readonly id: string;
@@ -341,9 +352,17 @@ export const gc = async (root: string, deps: GcDeps = {}): Promise<GcResult> => 
   const dryRun = deps.dryRun === true;
   const remove = deps.remove ?? ((path: string) => rmSync(path, { recursive: true, force: true }));
   const scan = (): GcResult => {
+    const { links, unreadable } = scanLinks(root);
+    if (unreadable.length > 0) {
+      // Its engine may be in use: fail closed rather than free it.
+      throw new BunmaskaError(
+        `engine store: unreadable app link ${unreadable[0]}; delete it or relaunch that app, then prune again`,
+        { code: 'ERR_ENGINE_LINK' },
+      );
+    }
     let droppedLinks = 0;
     const used = new Set<string>();
-    for (const link of readLinks(root)) {
+    for (const link of links) {
       if (exists(link.app)) {
         used.add(link.engine);
       } else {
