@@ -1,4 +1,5 @@
 import { CString, JSCallback, type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
+import { reportCallbackError } from '../../../common/report-error';
 import type { TrayBackend, TrayInstance } from '../../api/tray';
 import { cstr } from '../cstr';
 import {
@@ -276,7 +277,8 @@ const createLive = (conn: Pointer, initialImage: string, appName: string): TrayI
     let value: Pointer | null = null;
     try {
       value = getPropertyValue(state, propName === null ? '' : new CString(propName).toString());
-    } catch {
+    } catch (error) {
+      reportCallbackError(error);
       value = null;
     }
     if (value === null) {
@@ -290,8 +292,9 @@ const createLive = (conn: Pointer, initialImage: string, appName: string): TrayI
       if ((method === null ? '' : new CString(method).toString()) === 'Activate') {
         state.click?.();
       }
-    } catch {
+    } catch (error) {
       // A throwing click handler must not skip the reply below.
+      reportCallbackError(error);
     }
     // Complete every method with an empty reply so the host is never left hanging.
     gdbus.symbols.g_dbus_method_invocation_return_value(invocation, null);

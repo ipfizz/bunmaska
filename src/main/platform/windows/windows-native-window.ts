@@ -1,6 +1,7 @@
 import { FFIType, JSCallback, type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { isDevRestart } from '../../dev-reload';
 import { FFIError } from '../../../common/errors';
+import { reportCallbackError } from '../../../common/report-error';
 import { cstr } from '../cstr';
 import type { Rect, WindowEventType } from '../native';
 import { readRect, registerWindowClass, wstr } from './win32';
@@ -92,8 +93,9 @@ const ensureFrameWindowClass = (): bigint => {
       let handled: boolean;
       try {
         handled = handleFrameMessage(hwnd, message, wParam, lParam);
-      } catch {
+      } catch (error) {
         // A throwing JS handler must never propagate into the native WndProc.
+        reportCallbackError(error);
         handled = true;
       }
       return handled ? 0n : user32.symbols.DefWindowProcW(hwnd, message, wParam, lParam);

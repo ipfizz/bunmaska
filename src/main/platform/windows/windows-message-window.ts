@@ -1,5 +1,6 @@
 import { FFIType, JSCallback, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
+import { reportCallbackError } from '../../../common/report-error';
 import { registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
 
@@ -37,8 +38,9 @@ const ensureClassRegistered = (): void => {
       if (handler !== undefined) {
         try {
           handler(message, wParam, lParam);
-        } catch {
+        } catch (error) {
           // Same rule as the frame proc: never propagate into native code.
+          reportCallbackError(error);
         }
       }
       // An external WM_CLOSE must not destroy it; only destroy() does.

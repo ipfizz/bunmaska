@@ -1,4 +1,5 @@
 import { CString, JSCallback, type Pointer } from 'bun:ffi';
+import { reportCallbackError } from '../../../common/report-error';
 import { cstr } from '../cstr';
 import {
   DBUS_CALL_TIMEOUT_MS,
@@ -88,8 +89,9 @@ export const subscribeSignal = (
           signalName: signalName === null ? '' : new CString(signalName).toString(),
           parameters,
         });
-      } catch {
+      } catch (error) {
         // A throw must not unwind into the GMainContext dispatch.
+        reportCallbackError(error);
       }
     },
     DBUS_SIGNAL_CB_DEF,
