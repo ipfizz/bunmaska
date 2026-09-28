@@ -37,7 +37,7 @@ const descriptorPtr = (): Pointer => {
   return ptr(sharedDescriptor);
 };
 
-type RetainedBlock = { readonly literal: Uint8Array; readonly cb: JSCallback; cancelled: boolean };
+type RetainedBlock = { readonly literal: Uint8Array; readonly cb: JSCallback };
 const retained = new Map<Handle, RetainedBlock>();
 
 /** Number of blocks still awaiting their callback. Test-only. */
@@ -58,9 +58,7 @@ export const makeOneShotBlock = (
   let blockPtr = 0n;
   const cb = new JSCallback(
     (...all: BlockArg[]) => {
-      if (retained.get(blockPtr)?.cancelled === false) {
-        callFromNative(undefined, () => handler(...all.slice(1)));
-      }
+      callFromNative(undefined, () => handler(...all.slice(1)));
       setTimeout(() => {
         retained.delete(blockPtr);
         cb.close();
@@ -83,18 +81,6 @@ export const makeOneShotBlock = (
   view.setBigUint64(24, BigInt(descriptorPtr()), true); // descriptor
 
   blockPtr = BigInt(ptr(literal));
-  retained.set(blockPtr, { literal, cb, cancelled: false });
+  retained.set(blockPtr, { literal, cb });
   return blockPtr;
-};
-
-/**
- * Silence a block whose caller gave up on it (a timed-out completion). The callee
- * still holds the pointer and may invoke it later, so it stays retained until it
- * fires and is then freed as usual; freeing it now would be a use-after-free.
- */
-export const cancelOneShotBlock = (blockPtr: Handle): void => {
-  const entry = retained.get(blockPtr);
-  if (entry !== undefined) {
-    entry.cancelled = true;
-  }
 };
