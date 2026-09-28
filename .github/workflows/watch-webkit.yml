@@ -24,13 +24,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           latest_tag=$(git ls-remote --tags https://github.com/WebKit/WebKit.git 'wpewebkit-*' \
             | awk -F/ '{print $3}' | grep -E '^wpewebkit-[0-9]+\.[0-9]+\.[0-9]+$' \
             | awk -F'[-.]' '$3 % 2 == 0' | sort -V | tail -1)
           latest="${latest_tag#wpewebkit-}"
-          served=$(curl -sf https://engines.bunmaska.org/index.json \
-            | jq -r '.engines[].id' | cut -d- -f3 | sort -V | tail -1)
-          echo "upstream latest: $latest / feed serves: $served"
+          # Only stable Windows WebKit ids count: a dev (odd-minor), other-OS or
+          # other-family id must never mask a stable update.
+          served=$(curl -sf https://engines.bunmaska.org/index.json | jq -r '.engines[].id' \
+            | awk -F- '$1 == "webkit" && $5 == "windows" { split($3, v, "."); if (v[2] % 2 == 0) print $3 }' \
+            | sort -V | tail -1)
+          if [ -z "$latest" ]; then
+            echo "found no stable upstream WPE WebKit tag"
+            exit 1
+          fi
+          echo "upstream latest: $latest / feed serves: ${served:-none}"
           newest=$(printf '%s\n%s\n' "$served" "$latest" | sort -V | tail -1)
           if [ "$newest" = "$served" ]; then
             echo "feed is current"
@@ -45,7 +53,7 @@ jobs:
           gh label create engine-update --repo "$GITHUB_REPOSITORY" \
             --description "a newer upstream WebKit is available for the engine feed" \
             --color D93F0B 2>/dev/null || true
-          body=$(printf 'The weekly upstream watch found a newer stable WPE WebKit release.\n\n- Upstream: `%s`\n- Live feed serves: `%s` (https://engines.bunmaska.org/index.json)\n\nTo ship it: dispatch `build-engine-windows.yml` with `webkit_tag=%s`. Pack, sign, publish, and the index refresh all run unattended off the repo secrets. Release policy notes live in the engine hosting runbook (.admin).' "$latest_tag" "$served" "$latest_tag")
+          body=$(printf 'The weekly upstream watch found a newer stable WPE WebKit release.\n\n- Upstream: `%s`\n- Live feed serves: `%s` (https://engines.bunmaska.org/index.json)\n\nTo ship it: dispatch `build-engine-windows.yml` with `webkit_tag=%s`, then approve its `publish` job (pack, sign, upload and the index refresh). Release policy notes live in the engine hosting runbook (.admin).' "$latest_tag" "${served:-none}" "$latest_tag")
           gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "engine: upstream WebKit $latest available (feed serves $served)" \
+            --title "engine: upstream WebKit $latest available (feed serves ${served:-none})" \
             --label engine-update --body "$body"
