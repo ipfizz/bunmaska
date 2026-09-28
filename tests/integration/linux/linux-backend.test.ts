@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
+import { requireGtkDisplay } from '../../helpers/require-gtk-display';
 import { createLinuxApplication } from '../../../src/main/platform/linux/linux-backend';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
@@ -34,11 +34,7 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
 
 describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
   test('init + window + webview lifecycle and IPC round-trip', async () => {
-    // gtk_init_check must succeed under Xvfb; if not, there is no display and
-    // the rest cannot run — skip rather than fail.
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
 
     const app = createLinuxApplication();
     app.start();
@@ -127,9 +123,7 @@ describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
   });
 
   test('openDevTools exists and does not throw', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
     const app = createLinuxApplication();
     app.start();
     const window: NativeWindow = app.createWindow({
@@ -149,9 +143,7 @@ describe.skipIf(!isLinux)('Linux backend end-to-end', () => {
   });
 
   test('runtime setters (resizable/opacity/minSize/center) drive GTK without throwing', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
     const app = createLinuxApplication();
     app.start();
     const window: NativeWindow = app.createWindow({

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
+import { requireGtkDisplay } from '../../helpers/require-gtk-display';
 import { createLinuxApplication } from '../../../src/main/platform/linux/linux-backend';
 
 /** Electron runs preloads and dom-ready in the main frame only (nodeIntegrationInSubFrames off). */
@@ -14,9 +14,7 @@ const pumpUntil = async (predicate: () => boolean, budgetMs: number): Promise<vo
 
 describe.skipIf(!isLinux)('Linux injection is top-frame only', () => {
   test('an iframe gets no preload, no exposed API and no dom-ready', async () => {
-    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
-      return;
-    }
+    requireGtkDisplay();
     const app = createLinuxApplication();
     app.start();
     const window = app.createWindow({
