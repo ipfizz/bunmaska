@@ -59,3 +59,34 @@ describe('dispatch run forwards the engine pin', () => {
     expect(env).toEqual({});
   });
 });
+
+describe('dispatch build on macOS', () => {
+  test.skipIf(currentPlatform() !== 'macos')(
+    'refuses a Blink pin that the .app would silently drop for the system WebKit',
+    async () => {
+      dir = mkdtempSync(join(tmpdir(), 'bunmaska-dispatch-build-'));
+      const pin = `cef-154.0.28-154.0.8037.58-bunmaska1-macos-${currentArch()}`;
+      writeFileSync(
+        join(dir, 'bunmaska.config.ts'),
+        `export default { engine: { webkit: '${pin}' } };\n`,
+      );
+      process.chdir(dir);
+      let built = false;
+      let code: number | undefined;
+      const streams = await captureStdio(async () => {
+        code = await dispatch(
+          { kind: 'build', entry: 'app.ts', options: { target: 'macos' } },
+          {
+            buildMac: async () => {
+              built = true;
+              return '/tmp/Demo.app';
+            },
+          },
+        );
+      });
+      expect(code).toBe(1);
+      expect(built).toBe(false);
+      expect(streams.err.join('')).toContain(`the Blink engine ${pin} runs under dev and run only`);
+    },
+  );
+});
