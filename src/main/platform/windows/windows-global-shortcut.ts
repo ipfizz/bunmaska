@@ -113,14 +113,21 @@ export type WindowsGlobalShortcutBackend = GlobalShortcutBackend & {
   dispatchHotkeyMessage(message: number, wParam: bigint): boolean;
 };
 
+/** The user32 calls the backend makes. */
+type HotkeyApi = Pick<
+  ReturnType<typeof loadUser32>['symbols'],
+  'RegisterHotKey' | 'UnregisterHotKey'
+>;
+
 /**
  * Build a Windows globalShortcut backend. A factory (not just a singleton) so
  * tests get an isolated id space; production uses {@link windowsGlobalShortcutBackend}.
  */
-export const createWindowsGlobalShortcutBackend = (): WindowsGlobalShortcutBackend => {
+export const createWindowsGlobalShortcutBackend = (
+  user32: () => HotkeyApi = () => loadUser32().symbols,
+): WindowsGlobalShortcutBackend => {
   const idByAccelerator = new Map<string, number>();
   const callbackById = new Map<number, () => void>();
-  let nextId = 1;
 
   return {
     isSupported: (): boolean => true,
@@ -130,11 +137,14 @@ export const createWindowsGlobalShortcutBackend = (): WindowsGlobalShortcutBacke
       if (hotkey === undefined) {
         return false;
       }
-      const id = nextId;
-      if (loadUser32().symbols.RegisterHotKey(0n, id, hotkey.modifiers, hotkey.vk) === 0) {
+      // The lowest free id keeps ids inside RegisterHotKey's app range (0x0000-0xBFFF).
+      let id = 1;
+      while (callbackById.has(id)) {
+        id += 1;
+      }
+      if (user32().RegisterHotKey(0n, id, hotkey.modifiers, hotkey.vk) === 0) {
         return false; // the OS refused the grab (reserved/already taken)
       }
-      nextId += 1;
       idByAccelerator.set(accelerator, id);
       callbackById.set(id, callback);
       return true;
@@ -145,15 +155,15 @@ export const createWindowsGlobalShortcutBackend = (): WindowsGlobalShortcutBacke
       if (id === undefined) {
         return;
       }
-      loadUser32().symbols.UnregisterHotKey(0n, id);
+      user32().UnregisterHotKey(0n, id);
       idByAccelerator.delete(accelerator);
       callbackById.delete(id);
     },
 
     unregisterAll(): void {
-      const user32 = loadUser32().symbols;
+      const api = user32();
       for (const id of callbackById.keys()) {
-        user32.UnregisterHotKey(0n, id);
+        api.UnregisterHotKey(0n, id);
       }
       idByAccelerator.clear();
       callbackById.clear();

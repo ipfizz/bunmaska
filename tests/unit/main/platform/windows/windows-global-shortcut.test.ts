@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { acceleratorToHotkey } from '../../../../../src/main/platform/windows/windows-global-shortcut';
+import {
+  acceleratorToHotkey,
+  createWindowsGlobalShortcutBackend,
+} from '../../../../../src/main/platform/windows/windows-global-shortcut';
 
 /**
  * Pure accelerator → Windows hot key translation (virtual-key code + RegisterHotKey
@@ -62,5 +65,20 @@ describe('acceleratorToHotkey', () => {
   test('a key with no Windows virtual-key code yields undefined', () => {
     // '£' parses as a one-char key but has no VK mapping.
     expect(acceleratorToHotkey('CmdOrCtrl+£')).toBeUndefined();
+  });
+});
+
+describe('createWindowsGlobalShortcutBackend', () => {
+  test('reuses a freed hot-key id, so a register/unregister cycle stays in the app id range', () => {
+    const ids: number[] = [];
+    const backend = createWindowsGlobalShortcutBackend(() => ({
+      RegisterHotKey: (_hwnd: unknown, id: unknown) => ids.push(Number(id)),
+      UnregisterHotKey: () => 1,
+    }));
+    for (let i = 0; i < 3; i += 1) {
+      backend.register('Ctrl+Alt+K', () => undefined);
+      backend.unregister('Ctrl+Alt+K');
+    }
+    expect(ids).toEqual([1, 1, 1]);
   });
 });
