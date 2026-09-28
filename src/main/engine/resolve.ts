@@ -1,7 +1,7 @@
 // Launch-time engine choice: the OS WebView (default) or a pinned engine from the store.
 
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { type EngineRef, isSystemEngine, parseEngineId } from '../../common/engine-id';
 import { type Arch, currentArch, currentPlatform, type Platform } from '../../common/platform';
 import {
@@ -43,10 +43,7 @@ export const bakedIdCandidates = (execPath: string, env: StoreEnv): string[] => 
   if (explicit !== undefined && explicit.length > 0) {
     return [explicit];
   }
-  const dir = dirname(execPath);
-  const sibling = join(dir, 'engine.id');
-  const usrBin = basename(dir) === 'bin' && basename(dirname(dir)) === 'usr';
-  return usrBin ? [join(dir, '..', 'share', basename(execPath), 'engine.id'), sibling] : [sibling];
+  return [join(dirname(execPath), 'engine.id')];
 };
 
 const defaultReadBakedId = (env: StoreEnv): string | null => {

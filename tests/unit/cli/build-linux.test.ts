@@ -27,8 +27,12 @@ describe('linuxLayout', () => {
     expect(layout.slug).toBe('my-app');
   });
 
-  test('places the binary at usr/bin/<slug>', () => {
-    expect(layout.binPath).toBe('/tmp/out/My App/usr/bin/my-app');
+  test('places the binary in its own usr/lib/<slug> directory', () => {
+    expect(layout.binPath).toBe('/tmp/out/My App/usr/lib/my-app/my-app');
+  });
+
+  test('puts only the launcher link in the shared usr/bin', () => {
+    expect(layout.launcherPath).toBe('/tmp/out/My App/usr/bin/my-app');
   });
 
   test('places the desktop entry under usr/share/applications', () => {
@@ -39,8 +43,8 @@ describe('linuxLayout', () => {
     expect(layout.iconPath).toBe('/tmp/out/My App/usr/share/icons/hicolor/512x512/apps/my-app.png');
   });
 
-  test('bakes engine.id under usr/share/<slug>', () => {
-    expect(layout.engineIdPath).toBe('/tmp/out/My App/usr/share/my-app/engine.id');
+  test('bakes engine.id beside the binary', () => {
+    expect(layout.engineIdPath).toBe('/tmp/out/My App/usr/lib/my-app/engine.id');
   });
 });
 

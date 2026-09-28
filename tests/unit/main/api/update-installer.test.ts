@@ -51,17 +51,18 @@ describe('deriveInstallRoot', () => {
     expect(deriveInstallRoot('/tmp/NotABundle/Contents/MacOS/Demo', 'macos')).toBeUndefined();
   });
 
-  test('Linux: the AppDir root is three levels above the usr/bin executable', () => {
-    expect(deriveInstallRoot('/opt/demo/usr/bin/demo', 'linux')).toBe('/opt/demo');
+  test('Linux: the AppDir root sits above the usr/lib/<slug>/<slug> executable', () => {
+    expect(deriveInstallRoot('/opt/demo/usr/lib/demo/demo', 'linux')).toBe('/opt/demo');
   });
 
   test('Linux: refuses a system binary whose AppDir would be the filesystem root', () => {
-    expect(deriveInstallRoot('/usr/bin/demo', 'linux')).toBeUndefined();
+    expect(deriveInstallRoot('/usr/lib/demo/demo', 'linux')).toBeUndefined();
   });
 
-  test('Linux: refuses when the directory names are not usr/bin', () => {
-    expect(deriveInstallRoot('/opt/demo/bin/demo', 'linux')).toBeUndefined();
-    expect(deriveInstallRoot('/opt/demo/usr/sbin/demo', 'linux')).toBeUndefined();
+  test('Linux: refuses any other layout', () => {
+    expect(deriveInstallRoot('/opt/demo/usr/bin/demo', 'linux')).toBeUndefined();
+    expect(deriveInstallRoot('/opt/demo/usr/lib/other/demo', 'linux')).toBeUndefined();
+    expect(deriveInstallRoot('/opt/demo/lib/demo/demo', 'linux')).toBeUndefined();
   });
 
   test('Windows: the portable dir is the executable directory, never a root', () => {
@@ -266,9 +267,9 @@ describe('installStagedUpdate', () => {
   });
 
   test('Linux: the helper relaunches the AppDir binary', () => {
-    const h = makeDeps('/opt/My App/usr/bin/my-app', 'linux');
+    const h = makeDeps('/opt/My App/usr/lib/my-app/my-app', 'linux');
     installStagedUpdate(staged(), h.deps);
-    expect(h.scripts[0]?.text).toContain("'/opt/My App/usr/bin/my-app' &");
+    expect(h.scripts[0]?.text).toContain("'/opt/My App/usr/lib/my-app/my-app' &");
     expect(h.spawns[0]?.[0]).toBe('/bin/sh');
   });
 

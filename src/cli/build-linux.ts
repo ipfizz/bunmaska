@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,10 +21,12 @@ import { bundleIdSlug } from './build-macos';
 export type LinuxLayout = {
   readonly appDir: string;
   readonly slug: string;
+  /** `usr/lib/<slug>/<slug>`: the binary and its assets share a directory no other package owns. */
   readonly binPath: string;
+  /** `usr/bin/<slug>`, a relative link to {@link binPath}; the only file in the shared `usr/bin`. */
+  readonly launcherPath: string;
   readonly desktopPath: string;
   readonly iconPath: string;
-  /** The baked engine-id, read at launch (resolves `usr/bin/<slug>` -> here). */
   readonly engineIdPath: string;
 };
 
@@ -35,10 +38,11 @@ export const linuxLayout = (out: string, name: string): LinuxLayout => {
   return {
     appDir,
     slug,
-    binPath: join(appDir, 'usr', 'bin', slug),
+    binPath: join(appDir, 'usr', 'lib', slug, slug),
+    launcherPath: join(appDir, 'usr', 'bin', slug),
     desktopPath: join(appDir, 'usr', 'share', 'applications', `${slug}.desktop`),
     iconPath: join(appDir, 'usr', 'share', 'icons', 'hicolor', '512x512', 'apps', `${slug}.png`),
-    engineIdPath: join(appDir, 'usr', 'share', slug, 'engine.id'),
+    engineIdPath: join(appDir, 'usr', 'lib', slug, 'engine.id'),
   };
 };
 
@@ -211,11 +215,13 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
   // Start clean (everything the build writes is under usr/): cpSync merges into stale trees.
   rmSync(join(layout.appDir, 'usr'), { recursive: true, force: true });
   mkdirSync(dirname(layout.binPath), { recursive: true });
+  mkdirSync(dirname(layout.launcherPath), { recursive: true });
   mkdirSync(dirname(layout.desktopPath), { recursive: true });
 
   const arch = opts.arch ?? currentArch();
   await compileLinuxBinary(opts.entry, layout.binPath, arch);
   chmodSync(layout.binPath, 0o755);
+  symlinkSync(posix.join('..', 'lib', layout.slug, layout.slug), layout.launcherPath);
 
   const assetsDir = dirname(layout.binPath);
   bundlePreloadAssets(opts.entry, assetsDir, copyAppAssets(opts.entry, assetsDir));
@@ -237,7 +243,6 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
     copyFileSync(opts.icon, layout.iconPath);
   }
 
-  mkdirSync(dirname(layout.engineIdPath), { recursive: true });
   writeFileSync(layout.engineIdPath, `${opts.engineId ?? 'system'}\n`);
 
   const tarball = join(out, tarballName(opts.name, arch));

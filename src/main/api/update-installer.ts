@@ -27,12 +27,18 @@ export const deriveInstallRoot = (execPath: string, os: ArtifactOs): string | un
     return appDir;
   }
   if (os === 'linux') {
-    // build-linux layout: <AppDir>/usr/bin/<slug>; a system /usr/bin binary
+    // build-linux layout: <AppDir>/usr/lib/<slug>/<slug>; a system (.deb) install
     // would derive the filesystem root, which is never a swappable AppDir.
-    const binDir = dirname(execPath);
-    const usrDir = dirname(binDir);
+    const slugDir = dirname(execPath);
+    const libDir = dirname(slugDir);
+    const usrDir = dirname(libDir);
     const rootDir = dirname(usrDir);
-    if (basename(binDir) !== 'bin' || basename(usrDir) !== 'usr' || dirname(rootDir) === rootDir) {
+    if (
+      basename(slugDir) !== basename(execPath) ||
+      basename(libDir) !== 'lib' ||
+      basename(usrDir) !== 'usr' ||
+      dirname(rootDir) === rootDir
+    ) {
       return undefined;
     }
     return rootDir;

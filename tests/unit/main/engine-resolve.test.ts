@@ -114,15 +114,13 @@ describe('resolveEngineWith', () => {
 });
 
 describe('bakedIdCandidates', () => {
-  test('prefers the install layout usr/share/<slug>/engine.id', () => {
-    const c = bakedIdCandidates('/opt/app/usr/bin/my-app', {});
-    expect(slash(c[0] ?? '')).toBe('/opt/app/usr/share/my-app/engine.id');
-    expect(slash(c[1] ?? '')).toBe('/opt/app/usr/bin/engine.id');
-  });
-
-  test('outside a usr/bin layout, reads only the sibling engine.id', () => {
-    const c = bakedIdCandidates('/home/u/Downloads/MyApp/MyApp', {});
-    expect(c.map(slash)).toEqual(['/home/u/Downloads/MyApp/engine.id']);
+  test('reads only the engine.id beside the executable', () => {
+    expect(bakedIdCandidates('/opt/app/usr/lib/my-app/my-app', {}).map(slash)).toEqual([
+      '/opt/app/usr/lib/my-app/engine.id',
+    ]);
+    expect(bakedIdCandidates('/home/u/Downloads/MyApp/MyApp', {}).map(slash)).toEqual([
+      '/home/u/Downloads/MyApp/engine.id',
+    ]);
   });
 
   test('an explicit BUNMASKA_ENGINE_ID_FILE wins outright', () => {
