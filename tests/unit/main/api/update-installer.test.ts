@@ -184,12 +184,12 @@ const makeDeps = (execPath: string, os: 'macos' | 'linux' | 'windows'): Harness 
 };
 
 describe('installStagedUpdate', () => {
-  test('refuses to swap when the executable is not an installed bundle, and only quits', () => {
+  test('refuses an executable that is not an installed bundle by throwing, leaving the app running', () => {
     const h = makeDeps('/opt/homebrew/bin/bun', 'macos');
-    installStagedUpdate(staged(), h.deps);
+    expect(() => installStagedUpdate(staged(), h.deps)).toThrow(/not an installed macos bundle/);
     expect(h.scripts).toHaveLength(0);
     expect(h.spawns).toHaveLength(0);
-    expect(h.quits).toHaveLength(1);
+    expect(h.quits).toHaveLength(0);
   });
 
   test('macOS: writes the sh helper, spawns it detached via /bin/sh, then quits', () => {

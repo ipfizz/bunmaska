@@ -8,13 +8,10 @@
 import { chmodSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { createLogger } from '../../common/logger';
 import type { ArtifactOs } from '../../common/manifest';
 import { currentPlatform } from '../../common/platform';
 import { app } from './app';
 import type { StagedUpdate } from './auto-updater';
-
-const log = createLogger('auto-updater');
 
 /**
  * Where the running app is installed, derived from the executable path;
@@ -149,12 +146,10 @@ export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): 
   const execPath = deps.execPath();
   const installRoot = deriveInstallRoot(execPath, os);
   if (installRoot === undefined) {
-    log.warn(
+    throw new Error(
       `autoUpdater.quitAndInstall: ${execPath} is not an installed ${os} bundle; ` +
         `refusing to swap (staged tar left at ${staged.tarPath})`,
     );
-    deps.quit();
-    return;
   }
   const bundleDirName = stagedBundleDirName(staged.manifest.name, os);
   const pid = deps.pid();
