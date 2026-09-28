@@ -109,6 +109,8 @@ export class AdaptiveBlockingPump {
   readonly #schedule: TickScheduler;
   #timeoutMs: number;
   #running = false;
+  /** Bumped by stop(), so a tick scheduled before a stop()/start() pair dies. */
+  #generation = 0;
 
   constructor(drain: (timeoutMs: number) => boolean, options?: AdaptiveBlockingPumpOptions) {
     this.#drain = drain;
@@ -133,16 +135,17 @@ export class AdaptiveBlockingPump {
       return;
     }
     this.#running = true;
-    this.#tick();
+    this.#tick(this.#generation);
   }
 
   /** Stop pumping. Idempotent — safe to call when not running. */
   stop(): void {
     this.#running = false;
+    this.#generation += 1;
   }
 
-  #tick(): void {
-    if (!this.#running) {
+  #tick(generation: number): void {
+    if (generation !== this.#generation) {
       return;
     }
     let active = false;
@@ -155,6 +158,6 @@ export class AdaptiveBlockingPump {
     this.#timeoutMs = active
       ? this.#minTimeoutMs
       : Math.min(this.#timeoutMs * 2, this.#maxTimeoutMs);
-    this.#schedule(() => this.#tick());
+    this.#schedule(() => this.#tick(generation));
   }
 }

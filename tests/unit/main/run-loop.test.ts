@@ -191,6 +191,28 @@ describe('AdaptiveBlockingPump start / stop', () => {
   });
 });
 
+describe('AdaptiveBlockingPump restart', () => {
+  test('stop then start in the same turn keeps a single tick chain', () => {
+    const queue: Array<() => void> = [];
+    let drains = 0;
+    const pump = new AdaptiveBlockingPump(
+      () => {
+        drains += 1;
+        return false;
+      },
+      { schedule: (tick) => queue.push(tick) },
+    );
+    pump.start();
+    pump.stop();
+    pump.start();
+    drains = 0;
+    for (const tick of queue.splice(0)) {
+      tick();
+    }
+    expect(drains).toBe(1);
+  });
+});
+
 describe('AdaptiveBlockingPump adaptive timeout', () => {
   test('starts at the minimum and drives the drain with the current timeout', () => {
     const s = manualScheduler();
