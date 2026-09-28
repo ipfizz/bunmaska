@@ -34,13 +34,7 @@ export {
   type MenuItemType,
   type MenuPopupOptions,
 } from './api/menu';
-export {
-  type DecodedImage,
-  NativeImage,
-  type NativeImageBackend,
-  type NativeImageHandle,
-  nativeImage,
-} from './api/native-image';
+export { NativeImage, nativeImage } from './api/native-image';
 export { nativeTheme, type NativeTheme } from './api/native-theme';
 export { Notification, type NotificationOptions } from './api/notification';
 export { type PowerMonitor, powerMonitor } from './api/power-monitor';
@@ -57,7 +51,7 @@ export { type Display, type Point, screen, type Size } from './api/screen';
 export type { Cookie, CookieFilter, CookieSetDetails } from './api/cookie-util';
 export { Cookies, Session, session } from './api/session';
 export { shell, type Shell } from './api/shell';
-export { Tray, type TrayBackend, type TrayImageOptions, type TrayInstance } from './api/tray';
+export { Tray, type TrayImageOptions } from './api/tray';
 export type { KeyboardInputEvent, MouseInputEvent, NativeInputEvent } from './platform/native';
 export {
   FFIError,
