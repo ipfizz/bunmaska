@@ -396,6 +396,29 @@ describe('DevSupervisor child lifecycle', () => {
     expect(h.logs.join(' ')).toContain('force-killed');
   });
 
+  test('a failed respawn is logged and the next edit retries it', async () => {
+    const h = makeHarness();
+    let failSpawn = false;
+    const deps: DevDeps = {
+      ...h.deps,
+      spawn: (entry, opts) => {
+        if (failSpawn) {
+          throw new Error('spawn ENOENT');
+        }
+        return h.deps.spawn(entry, opts);
+      },
+    };
+    new DevSupervisor('/proj', 'src/main.ts', deps);
+    failSpawn = true;
+    h.fire('src/main.ts');
+    await h.tick();
+    expect(h.logs.join(' ')).toContain('spawn ENOENT');
+    failSpawn = false;
+    h.fire('src/main.ts');
+    await h.tick();
+    expect(h.spawns).toHaveLength(2);
+  });
+
   test('a reload after the app quits says so instead of reporting success', async () => {
     const h = makeHarness({ manualExit: true });
     new DevSupervisor('/proj', 'src/main.ts', h.deps);

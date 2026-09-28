@@ -243,6 +243,8 @@ export class DevSupervisor {
       this.#child = this.#track(this.#deps.spawn(this.#entry, { restart: true }));
       this.starts += 1;
       this.#deps.log(`restarted (${this.#entry})`);
+    } catch (error) {
+      this.#deps.log(`restart failed: ${String(error)}`);
     } finally {
       this.#restarting = false;
     }
