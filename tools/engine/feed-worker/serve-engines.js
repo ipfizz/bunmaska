@@ -1,5 +1,5 @@
-// Serves the signed Bunmaska engine feed from the bunmaska-engines R2 bucket.
-// Read-only, public, long-cache (engine ids are content-addressed + immutable).
+// Serves the signed Bunmaska engine feed from the bunmaska-engines R2 bucket. Read-only, public.
+// Engine objects are immutable per id (publish refuses a republish); index.json changes.
 export default {
   async fetch(request, env) {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -12,7 +12,10 @@ export default {
     const headers = new Headers();
     obj.writeHttpMetadata(headers);
     headers.set('etag', obj.httpEtag);
-    headers.set('cache-control', 'public, max-age=31536000, immutable');
+    headers.set(
+      'cache-control',
+      key === 'index.json' ? 'no-cache' : 'public, max-age=31536000, immutable',
+    );
     headers.set('access-control-allow-origin', '*');
     return new Response(request.method === 'HEAD' ? null : obj.body, { headers });
   },
