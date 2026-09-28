@@ -21,19 +21,27 @@ import { type Handle, LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
  * on other platforms.
  */
 
+export type CGRectArgs = readonly [x: number, y: number, width: number, height: number];
+
+// D018: arm64 passes a 4-double CGRect (an HFA) in d0-d3, exactly like four doubles.
+// x86_64 SysV classes a 32-byte struct MEMORY and copies it to the stack, so eight
+// dummy doubles fill xmm0-7 first and the real four spill to the stack in field order.
+const rectPadding = (arch: string): number => (arch === 'x64' ? 8 : 0);
+
+/** The f64 values that pass `rect` by value on `arch` (D018). */
+export const cgRectArgs = (rect: CGRectArgs, arch: string = process.arch): number[] => [
+  ...new Array<number>(rectPadding(arch)).fill(0),
+  ...rect,
+];
+
+/** The FFI slots matching {@link cgRectArgs} on this host. */
+export const RECT_F64: readonly FFIType.f64[] = new Array<FFIType.f64>(
+  rectPadding(process.arch) + 4,
+).fill(FFIType.f64);
+
 const INIT_WITH_CONTENT_RECT_VARIANT = {
   objc_msgSend: {
-    args: [
-      FFIType.u64,
-      FFIType.u64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.u64,
-      FFIType.u64,
-      FFIType.u8,
-    ],
+    args: [FFIType.u64, FFIType.u64, ...RECT_F64, FFIType.u64, FFIType.u64, FFIType.u8],
     returns: FFIType.u64,
   },
 } as const;
@@ -110,32 +118,15 @@ const PTR_RETURNS_U8_VARIANT = {
 
 const FRAME_CONFIG_VARIANT = {
   objc_msgSend: {
-    args: [
-      FFIType.u64,
-      FFIType.u64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.u64,
-    ],
+    args: [FFIType.u64, FFIType.u64, ...RECT_F64, FFIType.u64],
     returns: FFIType.u64,
   },
 } as const;
 
-// (receiver, selector, NSRect{x,y,w,h} as four doubles (D018), BOOL) -> void.
-// For -[NSWindow setFrame:display:].
+// (receiver, selector, NSRect by value (D018), BOOL) -> void.
 const RECT_U8_VARIANT = {
   objc_msgSend: {
-    args: [
-      FFIType.u64,
-      FFIType.u64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.f64,
-      FFIType.u8,
-    ],
+    args: [FFIType.u64, FFIType.u64, ...RECT_F64, FFIType.u8],
     returns: FFIType.void,
   },
 } as const;
@@ -198,16 +189,7 @@ const getPtrReturnsU8Lib = macOSLibraryAccessor('msgSendPtrReturnsU8', () =>
 
 const getSizeLib = macOSLibraryAccessor('msgSendSize', () => dlopen(LIBOBJC_PATH, SIZE_VARIANT));
 
-export type CGRectArgs = readonly [x: number, y: number, width: number, height: number];
-
-/**
- * Send `initWithContentRect:styleMask:backing:defer:` to an NSWindow receiver.
- *
- * On both macOS ABIs (ARM64 and x86_64 SysV) a `CGRect` (struct of four
- * `double`s) is passed in exactly the same registers as four separate `double`
- * args, so this variant declares raw f64×4 in place of the CGRect struct — no
- * C shim required (D018).
- */
+/** Send `initWithContentRect:styleMask:backing:defer:`; the rect goes by value (D018). */
 export const msgSendInitWithContentRect = (
   receiver: Handle,
   selector: Handle,
@@ -219,31 +201,20 @@ export const msgSendInitWithContentRect = (
   getInitWithContentRectLib().symbols.objc_msgSend(
     receiver,
     selector,
-    rect[0],
-    rect[1],
-    rect[2],
-    rect[3],
+    ...cgRectArgs(rect),
     styleMask,
     backing,
     defer ? 1 : 0,
   );
 
-/** Send a message with an NSRect (four doubles, D018) plus a trailing BOOL. */
+/** Send a message with an NSRect by value (D018) plus a trailing BOOL. */
 export const msgSendRectU8 = (
   receiver: Handle,
   selector: Handle,
   rect: CGRectArgs,
   flag: boolean,
 ): void => {
-  getRectU8Lib().symbols.objc_msgSend(
-    receiver,
-    selector,
-    rect[0],
-    rect[1],
-    rect[2],
-    rect[3],
-    flag ? 1 : 0,
-  );
+  getRectU8Lib().symbols.objc_msgSend(receiver, selector, ...cgRectArgs(rect), flag ? 1 : 0);
 };
 
 export const msgSendPtr = (receiver: Handle, selector: Handle, arg: Handle): Handle =>
@@ -274,26 +245,14 @@ export const msgSendPtrPtr = (
   arg1: Handle,
 ): Handle => getPtrPtrLib().symbols.objc_msgSend(receiver, selector, arg0, arg1);
 
-/**
- * Send `initWithFrame:configuration:` to a WKWebView receiver: a `CGRect`
- * (four `double`s via the struct-as-doubles trick, D018) plus a trailing
- * configuration pointer.
- */
+/** Send `initWithFrame:configuration:`; the rect goes by value (D018). */
 export const msgSendInitWithFrameConfig = (
   receiver: Handle,
   selector: Handle,
   frame: CGRectArgs,
   configuration: Handle,
 ): Handle =>
-  getFrameConfigLib().symbols.objc_msgSend(
-    receiver,
-    selector,
-    frame[0],
-    frame[1],
-    frame[2],
-    frame[3],
-    configuration,
-  );
+  getFrameConfigLib().symbols.objc_msgSend(receiver, selector, ...cgRectArgs(frame), configuration);
 
 export const msgSendPtr3 = (
   receiver: Handle,
