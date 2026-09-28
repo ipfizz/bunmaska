@@ -427,12 +427,12 @@ class MacOSWebContents implements NativeWebContents {
           clearTimeout(timer);
           const data = BigInt(pdfData ?? 0);
           if (data === 0n) {
-            reject(new Error(`printToPDF failed (NSError ${error ?? 'nil'})`));
+            reject(new Error(`printToPDF failed (NSError ${error || 'nil'})`));
             return;
           }
           resolve(nsDataToBytes(data));
         },
-        [FFIType.ptr, FFIType.ptr],
+        [FFIType.u64, FFIType.u64],
       );
       msgSendPtrPtr(
         this.#webview,
@@ -457,7 +457,7 @@ class MacOSWebContents implements NativeWebContents {
           clearTimeout(timer);
           const img = BigInt(image ?? 0);
           if (img === 0n) {
-            reject(new Error(`capturePage failed (NSError ${error ?? 'nil'})`));
+            reject(new Error(`capturePage failed (NSError ${error || 'nil'})`));
             return;
           }
           try {
@@ -466,7 +466,7 @@ class MacOSWebContents implements NativeWebContents {
             reject(cause instanceof Error ? cause : new Error(String(cause)));
           }
         },
-        [FFIType.ptr, FFIType.ptr],
+        [FFIType.u64, FFIType.u64],
       );
       msgSendPtrPtr(
         this.#webview,
