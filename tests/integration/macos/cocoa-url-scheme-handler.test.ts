@@ -104,39 +104,45 @@ afterEach(() => {
   setUrlSchemeDispatcherForTesting(undefined);
 });
 
-describe.skipIf(currentPlatform() !== 'macos')('BunmaskaURLSchemeHandler task serving', () => {
-  test('serves the dispatched body with its MIME type and length, then finishes', () => {
-    const bytes = new TextEncoder().encode('<h1>hi</h1>');
-    const seen = serve({ bytes, mimeType: 'text/html' });
-    expect(seen).toEqual(['app://host/index.html']);
-    expect(responseString('MIMEType')).toBe('text/html');
-    expect(msgSendReturnsI64(log.response, cocoa().selectors.get('expectedContentLength'))).toBe(
-      BigInt(bytes.length),
-    );
-    expect(log.dataLength).toBe(BigInt(bytes.length));
-    expect([log.finished, log.failed]).toEqual([1, 0]);
+if (currentPlatform() === 'macos') {
+  describe('BunmaskaURLSchemeHandler task serving', () => {
+    test('serves the dispatched body with its MIME type and length, then finishes', () => {
+      const bytes = new TextEncoder().encode('<h1>hi</h1>');
+      const seen = serve({ bytes, mimeType: 'text/html' });
+      expect(seen).toEqual(['app://host/index.html']);
+      expect(responseString('MIMEType')).toBe('text/html');
+      const responseUrl = cocoa().msgSend(log.response, cocoa().selectors.get('URL'));
+      expect(
+        nsStringToString(cocoa().msgSend(responseUrl, cocoa().selectors.get('absoluteString'))),
+      ).toBe('app://host/index.html');
+      expect(msgSendReturnsI64(log.response, cocoa().selectors.get('expectedContentLength'))).toBe(
+        BigInt(bytes.length),
+      );
+      expect(log.dataLength).toBe(BigInt(bytes.length));
+      expect([log.finished, log.failed]).toEqual([1, 0]);
+    });
+
+    test('a charset parameter becomes the text encoding, not part of the MIME type', () => {
+      serve({ bytes: new Uint8Array([65]), mimeType: 'text/html; charset="Shift_JIS"' });
+      expect(responseString('MIMEType')).toBe('text/html');
+      expect(responseString('textEncodingName')).toBe('Shift_JIS');
+    });
+
+    test('the handler does not keep its own reference to the response', () => {
+      serve({ bytes: new Uint8Array([1, 2, 3]), mimeType: 'application/octet-stream' });
+      // Only the fake task's retain is left; a leaked +1 from alloc/init would make this 2.
+      expect(msgSendReturnsI64(log.response, cocoa().selectors.get('retainCount'))).toBe(1n);
+    });
+
+    test('a declined request fails the task', () => {
+      serve(undefined);
+      expect([log.finished, log.failed]).toEqual([0, 1]);
+    });
   });
 
-  test('a charset parameter becomes the text encoding, not part of the MIME type', () => {
-    serve({ bytes: new Uint8Array([65]), mimeType: 'text/html; charset="Shift_JIS"' });
-    expect(responseString('MIMEType')).toBe('text/html');
-    expect(responseString('textEncodingName')).toBe('Shift_JIS');
+  describe('createUrlSchemeHandler', () => {
+    test('every window shares one handler instance instead of leaking one each', () => {
+      expect(createUrlSchemeHandler().handle).toBe(createUrlSchemeHandler().handle);
+    });
   });
-
-  test('the handler does not keep its own reference to the response', () => {
-    serve({ bytes: new Uint8Array([1, 2, 3]), mimeType: 'application/octet-stream' });
-    // Only the fake task's retain is left; a leaked +1 from alloc/init would make this 2.
-    expect(msgSendReturnsI64(log.response, cocoa().selectors.get('retainCount'))).toBe(1n);
-  });
-
-  test('a declined request fails the task', () => {
-    serve(undefined);
-    expect([log.finished, log.failed]).toEqual([0, 1]);
-  });
-});
-
-describe.skipIf(currentPlatform() !== 'macos')('createUrlSchemeHandler', () => {
-  test('every window shares one handler instance instead of leaking one each', () => {
-    expect(createUrlSchemeHandler().handle).toBe(createUrlSchemeHandler().handle);
-  });
-});
+}

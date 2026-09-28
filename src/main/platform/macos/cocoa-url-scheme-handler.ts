@@ -41,26 +41,6 @@ export const setUrlSchemeDispatcherForTesting = (
   dispatcher = fake ?? protocol.dispatch;
 };
 
-/** Read the absolute string of a `WKURLSchemeTask`'s request URL. */
-const requestUrlOf = (task: Handle): string => {
-  const rt = cocoa();
-  const request = rt.msgSend(task, rt.selectors.get('request'));
-  if (request === 0n) {
-    return '';
-  }
-  const url = rt.msgSend(request, rt.selectors.get('URL'));
-  if (url === 0n) {
-    return '';
-  }
-  return nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString')));
-};
-
-/** Build an `NSURL` from a string for the response's URL field. */
-const nsUrl = (url: string): Handle => {
-  const rt = cocoa();
-  return msgSendPtr(rt.classes.get('NSURL'), rt.selectors.get('URLWithString:'), nsString(url));
-};
-
 /**
  * Fail `task` with an `NSError` (no registered handler / declined / empty body).
  * Best-effort: a task that WebKit has already finished/stopped throws on a
@@ -87,7 +67,7 @@ const failTask = (task: Handle): void => {
  * `NSURLResponse` for `url`, then drive the task through
  * `didReceiveResponse:` → `didReceiveData:` → `didFinish`.
  */
-const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): void => {
+const serveTask = (task: Handle, url: Handle, built: BuiltProtocolResponse): void => {
   const rt = cocoa();
   // NSData dataWithBytes:length: copies, so `bytes` only needs to outlive this
   // call — no long-lived pinning. A zero-length body still produces a valid
@@ -110,7 +90,7 @@ const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): voi
   const response = msgSendPtrPtrI64Ptr(
     rt.msgSend(rt.classes.get('NSURLResponse'), rt.selectors.get('alloc')),
     rt.selectors.get('initWithURL:MIMEType:expectedContentLength:textEncodingName:'),
-    nsUrl(url),
+    url,
     nsString(mimeType),
     BigInt(bytes.length),
     nsString(charset || 'utf-8'),
@@ -128,8 +108,9 @@ const serveTask = (task: Handle, url: string, built: BuiltProtocolResponse): voi
  */
 export const handleStartTask = (task: Handle): void => {
   try {
-    const url = requestUrlOf(task);
-    const built = dispatcher(url);
+    const rt = cocoa();
+    const url = rt.msgSend(rt.msgSend(task, rt.selectors.get('request')), rt.selectors.get('URL'));
+    const built = dispatcher(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
     if (built === undefined) {
       failTask(task);
       return;
