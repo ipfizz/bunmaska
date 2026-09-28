@@ -24,12 +24,13 @@ const ensureInit = (): boolean => {
     initialized = true;
     return true;
   }
+  // ponytail: every app notifies as 'Bunmaska'; needs app.getName() passed down from api/notification.ts.
   const ok = notify.symbols.notify_init(cstr('Bunmaska')) !== 0;
   initialized = ok;
   return ok;
 };
 
-// ponytail: libnotify's show/close are 25 s sync D-Bus calls; send Notify via linux-dbus callMethodSync (5 s bound) if a wedged daemon matters.
+// ponytail: show/close are libnotify's 25 s sync D-Bus calls; bound them via linux-dbus callMethodSync (5 s).
 const present = (spec: NotificationSpec): NotificationHandle => {
   const notify = loadLibnotifyFFI();
   const gobject = loadGObjectFFI().symbols;
