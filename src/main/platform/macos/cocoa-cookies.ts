@@ -25,7 +25,7 @@ import type { Handle } from './objc';
  * is a one-shot Block (D022b) fired on the pumped run loop.
  */
 
-const COOKIE_TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 15_000;
 
 /** The default data store's `WKHTTPCookieStore`. */
 const cookieStore = (): Handle => {
@@ -40,29 +40,34 @@ const cookieStore = (): Handle => {
   return rt.msgSend(store, rt.selectors.get('httpCookieStore'));
 };
 
-/** Run `run` with settle callbacks under the bounded cookie-op deadline. */
-const bounded = <T>(
+const asError = (cause: unknown): Error =>
+  cause instanceof Error ? cause : new Error(String(cause));
+
+/**
+ * Run `run` with settle callbacks under a deadline; a throw from `run` rejects. A timed-out
+ * Block is never cancelled: WebKit may still invoke it, and a closed trampoline would SIGSEGV.
+ */
+export const bounded = <T>(
   label: string,
   run: (resolve: (value: T) => void, reject: (error: Error) => void) => void,
 ): Promise<T> =>
   new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${COOKIE_TIMEOUT_MS}ms`));
-    }, COOKIE_TIMEOUT_MS);
-    run(
-      (value) => {
+      reject(new Error(`${label} timed out after ${TIMEOUT_MS}ms`));
+    }, TIMEOUT_MS);
+    const fail = (error: Error): void => {
+      clearTimeout(timer);
+      reject(error);
+    };
+    try {
+      run((value) => {
         clearTimeout(timer);
         resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
+      }, fail);
+    } catch (cause) {
+      fail(asError(cause));
+    }
   });
-
-const asError = (cause: unknown): Error =>
-  cause instanceof Error ? cause : new Error(String(cause));
 
 /** Read one `NSHTTPCookie` into the shared {@link Cookie} shape. */
 const readCookie = (handle: Handle): Cookie => {
