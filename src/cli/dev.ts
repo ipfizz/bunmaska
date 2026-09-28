@@ -1,8 +1,4 @@
-/**
- * `bunmaska dev`: a change in the main-process graph restarts the
- * `bun run <entry>` child; any other watched file is a renderer asset and
- * live-reloads the open windows in place.
- */
+/** `bunmaska dev`: runs the app and restarts, rebuilds or reloads it as files change. */
 
 import { resolve } from 'node:path';
 import type { BunmaskaConfig } from '../common/config-schema';
@@ -18,7 +14,6 @@ export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 /** Default debounce window (ms) collapsing a burst of file changes into one action. */
 export const DEV_DEBOUNCE_MS = 120;
 
-/** Default for {@link DevDeps.killGraceMs}. */
 const DEV_KILL_GRACE_MS = 3000;
 
 /** Resolves true once `promise` settles, or false after `ms`. */
@@ -31,14 +26,11 @@ const settlesWithin = (promise: Promise<unknown> | undefined, ms: number): Promi
     });
   });
 
-/**
- * Precedence: the explicit argument, then the config's `entry`, then
- * {@link DEV_DEFAULT_ENTRY}.
- */
+/** The explicit entry, then the config's `entry`, then {@link DEV_DEFAULT_ENTRY}. */
 export const resolveDevEntry = (config: BunmaskaConfig, explicit?: string): string =>
   explicit ?? config.entry ?? DEV_DEFAULT_ENTRY;
 
-/** Debounce-window precedence: a restart beats a rebuild beats a reload. */
+/** Debounce-window precedence: a restart (which rebuilds first) beats a rebuild beats a reload. */
 const ACTION_RANK: Record<Exclude<ChangeAction, 'ignore'>, number> = {
   restart: 3,
   rebuild: 2,
@@ -48,17 +40,15 @@ const ACTION_RANK: Record<Exclude<ChangeAction, 'ignore'>, number> = {
 export type DevChild = {
   /** SIGTERM, or SIGKILL when `force`. */
   readonly kill: (force?: boolean) => void;
-  /** Ask the running child to live-reload its open windows (a renderer-only change). */
+  /** Live-reload the child's open windows. */
   readonly reload: () => void;
   /**
-   * Settles when the process is really gone. Awaited before respawning: `kill()`
-   * only delivers a signal, so spawning immediately leaves two live apps racing
-   * for the window and the single-instance lock.
+   * Settles when the process is gone. Await it before respawning: `kill()` only
+   * signals, and two live apps race for the window and the single-instance lock.
    */
   readonly exited?: Promise<unknown>;
 };
 export type DevWatcher = { readonly close: () => void };
-/** Timers; defaults to the global setTimeout/clearTimeout. */
 export type DevTimers = {
   readonly set: (fn: () => void, ms: number) => unknown;
   readonly clear: (handle: unknown) => void;
@@ -116,7 +106,6 @@ export class DevSupervisor {
     if (action === 'ignore') {
       return;
     }
-    // The strongest action coalesced into the debounce window wins.
     this.#pendingAction =
       this.#pendingAction !== undefined && ACTION_RANK[this.#pendingAction] >= ACTION_RANK[action]
         ? this.#pendingAction
@@ -141,15 +130,13 @@ export class DevSupervisor {
       return;
     }
     if (action === 'rebuild') {
-      // The rebuild's own output writes come back through the watcher as
-      // 'reload', so the window refreshes only once the new bundle exists.
+      // The bundle's writes come back through the watcher as reloads.
       this.#rebuild();
       return;
     }
-    // Reloading a child that already quit silently does nothing, and logging
-    // 'reloaded' at it is how the loop ends up pretending to drive a corpse.
+    // A reload sent to a child that already quit is silently lost.
     if (!this.#alive) {
-      this.#deps.log('app is not running — edit a main-process file to restart it');
+      this.#deps.log('app is not running - edit a main-process file to restart it');
       return;
     }
     this.#child.reload();
@@ -243,9 +230,7 @@ export class DevSupervisor {
 
 const defaultTimers: DevTimers = {
   set: (fn, ms) => setTimeout(fn, ms),
-  clear: (handle) => {
-    clearTimeout(handle as ReturnType<typeof setTimeout>);
-  },
+  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
 export const defaultDevDeps = (
@@ -254,10 +239,8 @@ export const defaultDevDeps = (
   extraEnv: Readonly<Record<string, string>> = {},
 ): DevDeps => ({
   spawn: (entry, opts) => {
-    // `BUNMASKA_DEV` switches on the app's stdin reload listener; a piped stdin is
-    // how the supervisor delivers reload requests to it. `BUNMASKA_DEV_RESTART`
-    // tells a respawned app to show its window without taking focus from the
-    // editor the developer is typing in.
+    // BUNMASKA_DEV turns on the app's stdin reload listener; BUNMASKA_DEV_RESTART
+    // shows a respawned window without stealing focus from the editor.
     const proc = Bun.spawn([process.execPath, 'run', entry], {
       cwd,
       env: {
@@ -291,10 +274,7 @@ export const defaultDevDeps = (
   log,
 });
 
-/**
- * Resolves only once `awaitStop` signals stop (e.g. SIGINT); the supervisor is
- * torn down either way.
- */
+/** Supervise `entry` in `targetDir` until `awaitStop` resolves; the supervisor is torn down either way. */
 export const runDev = async (
   targetDir: string,
   entry: string,

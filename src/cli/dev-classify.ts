@@ -8,21 +8,14 @@ import { isIgnoredPath, pathParts } from './dev-watch';
 /** TypeScript is compiled into the main process, so a change there restarts it. */
 const MAIN_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.mts', '.cts']);
 
-/**
- * The preload is read and bundled once, when the window is constructed, so a
- * reload would re-inject the STALE script. Restarting is the honest action.
- * Matches the shipped-asset convention in {@link ../cli/app-assets}.
- */
+/** The preload is bundled once, at window construction: a reload re-injects the stale script. */
 const PRELOAD_BASENAME = /^preload\.(?:js|mjs|cjs|ts)$/i;
 
 export type ChangeAction = 'restart' | 'rebuild' | 'reload' | 'ignore';
 
 /**
- * Classify a changed path, relative to the watched root. Dotfiles are ignored
- * because they catch editor swap files. With `rendererRoot` set (the directory
- * of `config.renderer.entry`), a change under it is `rebuild`: the renderer is
- * re-bundled and the resulting output writes live-reload the window, so a
- * React component edit no longer restarts the whole app.
+ * Classify a root-relative changed path. Under `rendererRoot` (the renderer
+ * entry's directory) an edit rebuilds, and the bundle's writes then reload.
  */
 export const classifyChange = (relPath: string, rendererRoot?: string): ChangeAction => {
   if (isIgnoredPath(relPath)) {
@@ -60,10 +53,10 @@ export const devClassifier = (
   let main = mainModules(dir, entry);
   return (relPath) => {
     const action = classifyChange(relPath, rendererRoot);
-    const parts = pathParts(relPath);
     if (action === 'ignore') {
       return action;
     }
+    const parts = pathParts(relPath);
     if (copies.some((source) => isWithin(parts, source, true))) {
       return 'rebuild';
     }
@@ -83,7 +76,7 @@ const SCRIPT_FILE = /\.[cm]?[jt]sx?$/i;
  * Only `./`, `../` and absolute specifiers are followed, so resolving never
  * reaches the package manager.
  */
-export const mainModules = (dir: string, entry: string): Set<string> => {
+const mainModules = (dir: string, entry: string): Set<string> => {
   const found = new Set<string>();
   let root: string;
   try {

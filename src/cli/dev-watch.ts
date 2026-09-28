@@ -34,27 +34,20 @@ export const isIgnoredPath = (relPath: string): boolean => {
   return parts.length === 0 || parts.some(isIgnoredSegment);
 };
 
-/** The two content-comparison modes the watcher needs. Same seen-map underneath. */
+/** Two views over one content-hash baseline. */
 export type ContentFilter = {
-  /**
-   * First sight passes (a newly created file is a real change); thereafter only
-   * a byte change passes. A vanished file always passes (a deletion is real).
-   */
+  /** True for a new file, a byte change or a deletion. */
   changed(relPath: string): boolean;
   /**
-   * Strict: passes only for a path already seen whose bytes changed; an unseen
-   * path is silently seeded. Used when rescanning a directory on an editor
-   * temp-file event, where first-sight-passes would fire every untouched
-   * sibling.
+   * True only for a seen path whose bytes changed; an unseen path is seeded
+   * silently. Rescans need this: first-sight-passes would fire every sibling.
    */
   changedIfSeen(relPath: string): boolean;
 };
 
 /**
- * Drop events whose file content did not actually change. `fs.watch` fires on a
- * metadata-only touch, and a formatter that rewrites identical bytes fires too;
- * both would otherwise restart the app. `readFile` is a seam so this tests
- * without the filesystem.
+ * Drop events whose bytes did not change: `fs.watch` fires on a metadata-only
+ * touch and on a formatter rewriting identical bytes, and both would restart the app.
  */
 export const makeContentFilter = (
   readFile: (relPath: string) => Uint8Array | undefined,
@@ -91,11 +84,10 @@ export const makeContentFilter = (
 };
 
 /**
- * The parent directory of an editor temp-file event, or `undefined` when the
- * event is not one. An atomic save (write temp + rename) can coalesce under
- * FSEvents into a SINGLE event for the dot-named temp file (`.!1234!main.ts`
- * from BSD sed, swap files, etc.), so ignoring dot basenames outright loses the
- * save; the caller rescans this directory instead. Pure.
+ * The directory of an editor temp-file event, or `undefined` for any other path.
+ * FSEvents can coalesce an atomic save (write temp, rename) into a SINGLE event
+ * for the dot-named temp file (`.!1234!main.ts` from BSD sed), so dropping dot
+ * basenames loses the save; the caller rescans this directory instead.
  */
 export const editorTempDir = (relPath: string): string | undefined => {
   const parts = pathParts(relPath);
@@ -104,13 +96,10 @@ export const editorTempDir = (relPath: string): string | undefined => {
   return base.startsWith('.') && !dirs.some(isIgnoredSegment) ? dirs.join('/') : undefined;
 };
 
-/** Files bigger than this are not hashed at seed time (first-sight then applies). */
+/** Files bigger than this are not seeded; their first event passes as first sight. */
 const SEED_MAX_BYTES = 5_000_000;
 
-/**
- * Hash every watchable file up front so the strict rescan mode has a baseline
- * from the first save of the session, not the second.
- */
+/** Hash every watchable file up front, so a rescan has a baseline from the first save. */
 const seedContentFilter = (root: string, filter: ContentFilter, relDir = ''): void => {
   let entries: Dirent[];
   try {

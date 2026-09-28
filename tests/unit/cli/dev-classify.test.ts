@@ -15,14 +15,13 @@ describe('classifyChange', () => {
   });
 
   test('restarts on a preload change, which a reload cannot pick up', () => {
-    // The preload is bundled once in the BrowserWindow constructor, so reloading
-    // re-injects the stale script.
+    // The preload is bundled at window construction; a reload re-injects the stale one.
     expect(classifyChange('src/preload.js')).toBe('restart');
     expect(classifyChange('app/preload.cjs')).toBe('restart');
   });
 
   test('reloads on a renderer bundle under dist', () => {
-    // Ignoring dist meant a rebuilt renderer could never reach the window.
+    // An ignored dist would keep a rebuilt renderer from ever reaching the window.
     expect(classifyChange('dist/renderer/assets/app.js')).toBe('reload');
     expect(classifyChange('dist/renderer/index.html')).toBe('reload');
   });
@@ -54,8 +53,6 @@ describe('classifyChange', () => {
 
 describe('classifyChange with a renderer root', () => {
   test('a source change under the renderer root rebuilds instead of restarting', () => {
-    // This is the React fix: a component edit re-bundles and reloads, it no
-    // longer tears the window down.
     expect(classifyChange('src/renderer/App.tsx', 'src/renderer')).toBe('rebuild');
     expect(classifyChange('src/renderer/styles.css', 'src/renderer')).toBe('rebuild');
   });
