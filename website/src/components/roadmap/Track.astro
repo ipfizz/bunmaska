@@ -14,7 +14,10 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 const inlineCode = (text: string): string =>
-  text.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em] text-text">$1</code>');
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em] text-text">$1</code>');
 ---
 
 <section class="section-border py-16 sm:py-20">
