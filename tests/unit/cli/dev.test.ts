@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -9,6 +9,7 @@ import {
   type DevDeps,
   DevSupervisor,
   defaultDevDeps,
+  devClassifier,
   resolveDevEntry,
 } from '../../../src/cli/dev';
 
@@ -96,6 +97,68 @@ describe('classifyChange with a renderer root', () => {
 
   test('a preload under the renderer root still restarts', () => {
     expect(classifyChange('src/renderer/preload.js', 'src/renderer')).toBe('restart');
+  });
+});
+
+/** A temp project with `files` written; disposing it deletes the tree. */
+const tempProject = (files: Record<string, string>) => {
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-dev-'));
+  const write = (rel: string, contents: string): void => {
+    mkdirSync(join(dir, rel, '..'), { recursive: true });
+    writeFileSync(join(dir, rel), contents);
+  };
+  for (const [rel, contents] of Object.entries(files)) {
+    write(rel, contents);
+  }
+  return { dir, write, [Symbol.dispose]: () => rmSync(dir, { recursive: true }) };
+};
+
+describe('devClassifier', () => {
+  test('a renderer.copy source rebuilds so dist gets the new copy', () => {
+    // Its dist copy then reloads the window, or restarts the app for a preload.
+    const classify = devClassifier('/proj', 'src/main.ts', {
+      entry: 'src/renderer/main.ts',
+      copy: ['src/index.html', 'src/preload.js', 'assets'],
+    });
+    expect(classify('src/index.html')).toBe('rebuild');
+    expect(classify('src/preload.js')).toBe('rebuild');
+    expect(classify('assets/sfx/jump.ogg')).toBe('rebuild');
+    expect(classify('dist/renderer/preload.js')).toBe('restart');
+    expect(classify('src/main.ts')).toBe('restart');
+  });
+
+  test('a JavaScript module the entry imports restarts; other scripts reload', () => {
+    using p = tempProject({
+      'main.js': "const ipc = require('./ipc.js');",
+      'ipc.js': 'module.exports = {};',
+      'renderer.js': 'document.title = "x";',
+    });
+    const classify = devClassifier(p.dir, 'main.js');
+    expect(classify('main.js')).toBe('restart');
+    expect(classify('ipc.js')).toBe('restart');
+    expect(classify('renderer.js')).toBe('reload');
+  });
+
+  test('in a flat layout a main module under the renderer root restarts', () => {
+    using p = tempProject({
+      'src/main.ts': "import { load } from './state';\nload();",
+      'src/state.ts': 'export const load = () => 1;',
+      'src/index.tsx': "import { App } from './App';\nApp();",
+      'src/App.tsx': 'export const App = () => null;',
+    });
+    const classify = devClassifier(p.dir, 'src/main.ts', { entry: 'src/index.tsx' });
+    expect(classify('src/main.ts')).toBe('restart');
+    expect(classify('src/state.ts')).toBe('restart');
+    expect(classify('src/App.tsx')).toBe('rebuild');
+  });
+
+  test('an import added to a main module is tracked from its next edit', () => {
+    using p = tempProject({ 'main.js': '', 'late.js': '' });
+    const classify = devClassifier(p.dir, 'main.js');
+    expect(classify('late.js')).toBe('reload');
+    p.write('main.js', "require('./late.js');");
+    expect(classify('main.js')).toBe('restart');
+    expect(classify('late.js')).toBe('restart');
   });
 });
 
@@ -240,6 +303,16 @@ describe('DevSupervisor', () => {
     h.fire('src/main.ts');
     await h.tick();
     expect(h.restarts).toEqual([false, true]);
+  });
+
+  test('by default an edit to a .js module the entry imports restarts', async () => {
+    using p = tempProject({ 'main.js': "require('./ipc.js');", 'ipc.js': '' });
+    const h = makeHarness();
+    new DevSupervisor(p.dir, 'main.js', h.deps);
+    h.fire('ipc.js');
+    await h.tick();
+    expect(h.spawns).toHaveLength(2);
+    expect(h.reloads).toBe(0);
   });
 
   test('a renderer asset change live-reloads instead of restarting', async () => {

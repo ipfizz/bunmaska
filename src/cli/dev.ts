@@ -4,11 +4,11 @@
  * live-reloads the open windows in place.
  */
 
-import { extname, resolve } from 'node:path';
-import type { BunmaskaConfig } from '../common/config-schema';
+import { dirname, extname, resolve } from 'node:path';
+import type { BunmaskaConfig, BunmaskaRendererConfig } from '../common/config-schema';
 import { InvalidArgumentError } from '../common/errors';
 import { DEV_RELOAD_COMMAND } from '../main/dev-reload';
-import { DEV_STATE_FILE, isIgnoredPath, pathParts, watchTree } from './dev-watch';
+import { DEV_STATE_FILE, isIgnoredPath, mainModules, pathParts, watchTree } from './dev-watch';
 
 export const DEV_DEFAULT_ENTRY = 'src/main.ts';
 
@@ -63,17 +63,47 @@ export const classifyChange = (relPath: string, rendererRoot?: string): ChangeAc
   if (PRELOAD_BASENAME.test(base)) {
     return 'restart';
   }
-  if (rendererRoot !== undefined) {
-    const rootParts = pathParts(rendererRoot);
-    const underRoot =
-      rootParts.length > 0 &&
-      rootParts.length < parts.length &&
-      rootParts.every((part, i) => parts[i] === part);
-    if (underRoot) {
-      return 'rebuild';
-    }
+  if (rendererRoot !== undefined && isWithin(parts, pathParts(rendererRoot))) {
+    return 'rebuild';
   }
   return MAIN_SOURCE_EXTENSIONS.has(extname(base).toLowerCase()) ? 'restart' : 'reload';
+};
+
+/** True when `parts` lies strictly under `root` (or is it, with `orSelf`). */
+const isWithin = (parts: readonly string[], root: readonly string[], orSelf = false): boolean =>
+  root.length > 0 &&
+  root.length <= parts.length - (orSelf ? 0 : 1) &&
+  root.every((part, i) => parts[i] === part);
+
+/**
+ * {@link classifyChange} for a project: a `renderer.copy` source rebuilds (its
+ * dist copy then reloads, or restarts for a preload), and a module the entry
+ * imports restarts wherever it lives.
+ */
+export const devClassifier = (
+  dir: string,
+  entry: string,
+  renderer?: BunmaskaRendererConfig,
+): ((relPath: string) => ChangeAction) => {
+  const rendererRoot = renderer === undefined ? undefined : dirname(renderer.entry);
+  const copies = (renderer?.copy ?? []).map(pathParts);
+  let main = mainModules(dir, entry);
+  return (relPath) => {
+    const action = classifyChange(relPath, rendererRoot);
+    const parts = pathParts(relPath);
+    if (action === 'ignore') {
+      return action;
+    }
+    if (copies.some((source) => isWithin(parts, source, true))) {
+      return 'rebuild';
+    }
+    if (main.has(parts.join('/'))) {
+      // The edit may add an import.
+      main = mainModules(dir, entry);
+      return 'restart';
+    }
+    return action;
+  };
 };
 
 /** Debounce-window precedence: a restart beats a rebuild beats a reload. */
@@ -111,7 +141,7 @@ export type DevDeps = {
   readonly debounceMs?: number;
   /** How long a killed child gets to exit before it is force-killed. */
   readonly killGraceMs?: number;
-  /** Overrides {@link classifyChange} (e.g. bound to a renderer root). */
+  /** Defaults to {@link devClassifier} without a renderer. */
   readonly classify?: (relPath: string) => ChangeAction;
   /** Rebuild the configured renderer; also runs before every restart. A throw is logged. */
   readonly rebuild?: () => void | Promise<void>;
@@ -121,6 +151,7 @@ export class DevSupervisor {
   readonly #entry: string;
   readonly #deps: DevDeps;
   readonly #debounceMs: number;
+  readonly #classify: (relPath: string) => ChangeAction;
   #child: DevChild;
   readonly #watcher: DevWatcher;
   #pending: unknown;
@@ -138,6 +169,7 @@ export class DevSupervisor {
     this.#entry = entry;
     this.#deps = deps;
     this.#debounceMs = deps.debounceMs ?? DEV_DEBOUNCE_MS;
+    this.#classify = deps.classify ?? devClassifier(dir, entry);
     this.#child = this.#track(deps.spawn(entry));
     this.#watcher = deps.watch(dir, (relPath) => {
       this.#onChange(relPath);
@@ -148,7 +180,7 @@ export class DevSupervisor {
     if (this.#stopped) {
       return;
     }
-    const action = (this.#deps.classify ?? classifyChange)(relPath);
+    const action = this.#classify(relPath);
     if (action === 'ignore') {
       return;
     }

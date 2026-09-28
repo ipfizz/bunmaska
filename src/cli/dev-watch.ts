@@ -1,7 +1,14 @@
 /** The `bunmaska dev` file watcher: which paths count, and which events are real edits. */
 
-import { type Dirent, readdirSync, readFileSync, statSync, watch as fsWatch } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  type Dirent,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  watch as fsWatch,
+} from 'node:fs';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 /** The dev window-state file `bunmaska dev` keeps in the project root. */
 export const DEV_STATE_FILE = '.bunmaska-dev-state.json';
@@ -32,6 +39,55 @@ export const pathParts = (relPath: string): string[] =>
 export const isIgnoredPath = (relPath: string): boolean => {
   const parts = pathParts(relPath);
   return parts.length === 0 || parts.some(isIgnoredSegment);
+};
+
+const SCRIPT_FILE = /\.[cm]?[jt]sx?$/i;
+
+/**
+ * Root-relative paths of `entry` and every local module it imports, transitively.
+ * Only `./`, `../` and absolute specifiers are followed, so resolving never
+ * reaches the package manager.
+ */
+export const mainModules = (dir: string, entry: string): Set<string> => {
+  const found = new Set<string>();
+  let root: string;
+  try {
+    root = realpathSync(dir);
+  } catch {
+    return found;
+  }
+  const visit = (file: string): void => {
+    const rel = relative(root, file).split(sep).join('/');
+    if (found.has(rel) || rel.startsWith('..') || isAbsolute(rel) || isIgnoredPath(rel)) {
+      return;
+    }
+    found.add(rel);
+    if (!SCRIPT_FILE.test(file)) {
+      return;
+    }
+    let imports: readonly { readonly path: string }[];
+    try {
+      const loader = /x$/i.test(file) ? 'tsx' : 'ts';
+      imports = new Bun.Transpiler({ loader }).scanImports(readFileSync(file, 'utf8'));
+    } catch {
+      return;
+    }
+    for (const { path } of imports) {
+      if (/^\.{0,2}\//.test(path)) {
+        try {
+          visit(Bun.resolveSync(path, dirname(file)));
+        } catch {
+          // A missing local module is not a main module yet.
+        }
+      }
+    }
+  };
+  try {
+    visit(realpathSync(resolve(dir, entry)));
+  } catch {
+    // No entry file: nothing to follow.
+  }
+  return found;
 };
 
 /** The two content-comparison modes the watcher needs. Same seen-map underneath. */
