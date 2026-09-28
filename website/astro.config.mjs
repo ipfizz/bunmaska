@@ -14,6 +14,8 @@ export default defineConfig({
   site: 'https://bunmaska.org',
   output: 'static',
   trailingSlash: 'never',
+  // Pages serves about.html at /about; a directory build 308s every URL to /about/.
+  build: { format: 'file' },
   integrations: [react(), mdx(), icon(), sitemap()],
   redirects: {
     '/docs': '/docs/introduction',

@@ -1,10 +1,10 @@
 ---
 import ThemeToggle from "./ui/ThemeToggle.tsx";
-import { VERSION, GITHUB, STARS, starsLabel } from "../site";
+import { VERSION, GITHUB, STARS, starsLabel, pagePath } from "../site";
 import { Icon } from "astro-icon/components";
 
 const stars = starsLabel(STARS);
-const path = Astro.url.pathname;
+const path = pagePath(Astro.url);
 const isDocs = path.startsWith("/docs/") && !path.startsWith("/docs/native-modules");
 const TABS = [
   { href: "/", label: "Home", icon: "lucide:house", active: path === "/" },

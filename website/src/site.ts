@@ -7,6 +7,9 @@ export const VERSION: string = pkg.version;
 export const GITHUB = 'https://github.com/ipfizz/bunmaska';
 export const NPM = 'https://www.npmjs.com/package/bunmaska';
 
+/** The public URL path of a page; a file-format build reports `/about.html` and `/index.html`. */
+export const pagePath = (url: URL): string => url.pathname.replace(/(\/index)?\.html$/, '') || '/';
+
 /**
  * GitHub star count, fetched once at build time (this module evaluates once
  * per build). `null` when the API is unreachable, so the CTA degrades to a

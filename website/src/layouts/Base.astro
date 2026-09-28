@@ -1,7 +1,7 @@
 ---
 import "../fonts";
 import "../styles/global.css";
-import { VERSION, GITHUB, NPM } from "../site";
+import { VERSION, GITHUB, NPM, pagePath } from "../site";
 
 interface Props {
   title?: string | undefined;
@@ -30,9 +30,10 @@ const {
 // A page passes its keyword-rich phrase as `title`; the brand suffix is added
 // once. The home page (no title) uses the full default.
 const fullTitle = title ? `${title} | bunmaska` : DEFAULT_TITLE;
-const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const path = pagePath(Astro.url);
+const canonical = new URL(path, Astro.site).href;
 const ogImage = new URL(image, Astro.site).href;
-const isHome = Astro.url.pathname === "/";
+const isHome = path === "/";
 
 // Site-wide identity graph. SoftwareApplication only where it belongs (home);
 // WebSite everywhere. Page-specific graphs (FAQPage/Breadcrumb/TechArticle)
