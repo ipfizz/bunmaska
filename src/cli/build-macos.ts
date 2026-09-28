@@ -40,6 +40,26 @@ export const bundleIdSlug = (name: string): string => {
 
 export const defaultBundleId = (name: string): string => `com.bunmaska.${bundleIdSlug(name)}`;
 
+/**
+ * Info.plist versions and a Windows PE VERSIONINFO accept only a numeric
+ * `major.minor.patch`, so `+build` and `-prerelease` are dropped, short segments
+ * zero-padded, and a non-numeric segment becomes `0`. `0.1.0-alpha.2` -> `0.1.0`.
+ */
+export const numericVersion = (version: string): string => {
+  const core = (version.split('+', 1)[0] ?? '').split('-', 1)[0] ?? '';
+  const parts = core
+    .split('.')
+    .slice(0, 3)
+    .map((segment) => {
+      const value = Number.parseInt(segment, 10);
+      return Number.isNaN(value) ? '0' : String(value);
+    });
+  while (parts.length < 3) {
+    parts.push('0');
+  }
+  return parts.join('.');
+};
+
 export type InfoPlistOptions = {
   readonly name: string;
   readonly bundleId: string;
@@ -58,8 +78,8 @@ export const buildInfoPlist = (opts: InfoPlistOptions): string => {
     plistString('CFBundleExecutable', opts.name),
     plistString('CFBundlePackageType', 'APPL'),
     plistString('CFBundleInfoDictionaryVersion', '6.0'),
-    plistString('CFBundleShortVersionString', opts.version),
-    plistString('CFBundleVersion', opts.version),
+    plistString('CFBundleShortVersionString', numericVersion(opts.version)),
+    plistString('CFBundleVersion', numericVersion(opts.version)),
     plistString('LSMinimumSystemVersion', MINIMUM_SYSTEM_VERSION),
     '  <key>NSHighResolutionCapable</key>\n  <true/>',
   ];
@@ -332,6 +352,8 @@ export type BuildMacAppOptions = {
   readonly signApp?: SignApp;
   readonly convertIcon?: ConvertIcon;
   readonly buildDmg?: BuildDmg;
+  /** The app's own version for Info.plist; defaults to the framework version. */
+  readonly version?: string;
 };
 
 const compileBinary = (entry: string, outfile: string): Promise<void> =>
@@ -340,6 +362,7 @@ const compileBinary = (entry: string, outfile: string): Promise<void> =>
 export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => {
   const out = opts.out ?? process.cwd();
   const bundleId = opts.id ?? defaultBundleId(opts.name);
+  const version = opts.version ?? BUNMASKA_VERSION;
   const layout = appBundleLayout(out, opts.name);
 
   mkdirSync(layout.macosDir, { recursive: true });
@@ -371,8 +394,8 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
 
   const plist = buildInfoPlist(
     iconFile === undefined
-      ? { name: opts.name, bundleId, version: BUNMASKA_VERSION }
-      : { name: opts.name, bundleId, version: BUNMASKA_VERSION, iconFile },
+      ? { name: opts.name, bundleId, version }
+      : { name: opts.name, bundleId, version, iconFile },
   );
   writeFileSync(layout.infoPlistPath, plist);
 

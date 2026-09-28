@@ -12,7 +12,7 @@ import { currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets } from './app-assets';
 import { runTool } from './run-tool';
-import { bundleIdSlug } from './build-macos';
+import { bundleIdSlug, numericVersion } from './build-macos';
 import { buildZipArchive, type ZipEntry } from './zip';
 
 /**
@@ -44,26 +44,6 @@ export const windowsLayout = (out: string, name: string): WindowsLayout => {
 };
 
 export const zipFileName = (name: string): string => `${name}-windows-x64.zip`;
-
-/**
- * A Windows PE VERSIONINFO resource (`--windows-version`) accepts only a numeric
- * `major.minor.patch`, so `+build` and `-prerelease` are dropped, short segments
- * zero-padded, and a non-numeric segment becomes `0`. `0.1.0-alpha.2` -> `0.1.0`.
- */
-export const numericVersion = (version: string): string => {
-  const core = (version.split('+', 1)[0] ?? '').split('-', 1)[0] ?? '';
-  const parts = core
-    .split('.')
-    .slice(0, 3)
-    .map((segment) => {
-      const value = Number.parseInt(segment, 10);
-      return Number.isNaN(value) ? '0' : String(value);
-    });
-  while (parts.length < 3) {
-    parts.push('0');
-  }
-  return parts.join('.');
-};
 
 export type WindowsMetadata = {
   readonly title: string;
@@ -151,6 +131,8 @@ export type BuildWindowsAppOptions = {
   readonly engineId?: string;
   /** Directory of a WinCairo WebKit engine to bundle into the app's `webkit/` folder. */
   readonly embedEngine?: string;
+  /** The app's own version for the .exe; defaults to the framework version. */
+  readonly version?: string;
 };
 
 export type BuildWindowsAppResult = {
@@ -190,8 +172,8 @@ export const buildWindowsApp = async (
   }
   const meta: WindowsMetadata = {
     title: opts.name,
-    publisher: 'Bunmaska',
-    version: numericVersion(BUNMASKA_VERSION),
+    publisher: opts.name,
+    version: numericVersion(opts.version ?? BUNMASKA_VERSION),
     description: `${opts.name} built with Bunmaska`,
     hideConsole: true,
     ...(opts.icon !== undefined ? { icon: opts.icon } : {}),

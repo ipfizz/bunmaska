@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMacApp } from '../../../src/cli/build-macos';
 import { currentPlatform } from '../../../src/common/platform';
-import { BUNMASKA_VERSION } from '../../../src/common/version';
 
 /**
  * Integration test for the macOS `.app` bundler. It writes a trivial entry
@@ -37,6 +36,7 @@ if (currentPlatform() === 'macos') {
         name,
         id: 'com.example.hi',
         out: outDir,
+        version: '2.3.0',
       });
 
       expect(appPath).toBe(join(outDir, `${name}.app`));
@@ -48,7 +48,7 @@ if (currentPlatform() === 'macos') {
       expect(plistText).toContain('<key>CFBundleIdentifier</key>');
       expect(plistText).toContain('com.example.hi');
       expect(plistText).toContain(name);
-      expect(plistText).toContain(BUNMASKA_VERSION);
+      expect(plistText).toContain('<key>CFBundleVersion</key>\n  <string>2.3.0</string>');
 
       const exe = join(appPath, 'Contents', 'MacOS', name);
       expect(existsSync(exe)).toBe(true);

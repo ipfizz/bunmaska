@@ -4,6 +4,7 @@ import {
   bundleIdSlug,
   buildInfoPlist,
   defaultBundleId,
+  numericVersion,
 } from '../../../src/cli/build-macos';
 
 describe('bundleIdSlug', () => {
@@ -25,6 +26,30 @@ describe('bundleIdSlug', () => {
 describe('defaultBundleId', () => {
   test('namespaces the slug under com.bunmaska', () => {
     expect(defaultBundleId('My App')).toBe('com.bunmaska.my-app');
+  });
+});
+
+describe('numericVersion', () => {
+  test('strips a prerelease tag to the numeric core (the VERSIONINFO need)', () => {
+    expect(numericVersion('0.1.0-alpha.2')).toBe('0.1.0');
+  });
+
+  test('passes a clean x.y.z through', () => {
+    expect(numericVersion('1.2.3')).toBe('1.2.3');
+  });
+
+  test('zero-pads short versions to three segments', () => {
+    expect(numericVersion('1.2')).toBe('1.2.0');
+    expect(numericVersion('2')).toBe('2.0.0');
+  });
+
+  test('drops +build metadata and any 4th segment', () => {
+    expect(numericVersion('1.0.0+build.5')).toBe('1.0.0');
+    expect(numericVersion('3.4.5.6')).toBe('3.4.5');
+  });
+
+  test('substitutes zero for a non-numeric segment', () => {
+    expect(numericVersion('x.y.z')).toBe('0.0.0');
   });
 });
 
@@ -68,6 +93,16 @@ describe('buildInfoPlist', () => {
     expect(plist).toContain('<key>CFBundleIdentifier</key>\n  <string>com.example.app</string>');
     expect(plist).toContain('<key>CFBundleShortVersionString</key>\n  <string>1.2.3</string>');
     expect(plist).toContain('<key>CFBundleVersion</key>\n  <string>1.2.3</string>');
+  });
+
+  test('stamps the numeric core of a prerelease, the only version form macOS accepts', () => {
+    const pre = buildInfoPlist({
+      name: 'My App',
+      bundleId: 'com.example.app',
+      version: '2.3.0-beta.1',
+    });
+    expect(pre).toContain('<key>CFBundleShortVersionString</key>\n  <string>2.3.0</string>');
+    expect(pre).toContain('<key>CFBundleVersion</key>\n  <string>2.3.0</string>');
   });
 
   test('declares an APPL package type and the 6.0 dictionary version', () => {
