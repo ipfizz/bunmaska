@@ -47,11 +47,9 @@ export type AppEnvironment = {
 /** A `bun build --compile` binary runs its entry from Bun's embedded filesystem. */
 const COMPILED_ENTRY = /^(?:\/\$bunfs\/|[A-Za-z]:[\\/]~BUN[\\/])/;
 
-const computePreferredLanguages = (
-  env: EnvironmentDeps['env'],
-  normalizedLocale: string,
-): string[] => {
-  const fromEnv = parsePreferredLanguages(env);
+/** `$LANGUAGE`/`$LANG` only on Linux: macOS and Windows `Intl` follow the system, not the env. */
+const computePreferredLanguages = (deps: EnvironmentDeps, normalizedLocale: string): string[] => {
+  const fromEnv = deps.platform === 'linux' ? parsePreferredLanguages(deps.env) : [];
   if (fromEnv.length > 0) {
     return fromEnv;
   }
@@ -97,7 +95,7 @@ export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
     env: deps.platform === 'linux' ? { ...readUserDirs(deps), ...deps.env } : deps.env,
     manifest: app.manifest,
     locale,
-    preferredLanguages: computePreferredLanguages(deps.env, locale),
+    preferredLanguages: computePreferredLanguages(deps, locale),
     isPackaged: COMPILED_ENTRY.test(deps.mainScript),
     exit: deps.exit,
     relaunch: deps.relaunch,

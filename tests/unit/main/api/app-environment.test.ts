@@ -86,11 +86,14 @@ describe('buildAppEnvironment — locale & languages', () => {
     expect(build({ locale: 'en_US.UTF-8' }).locale).toBe('en-US');
   });
 
-  test('derives preferred languages from the environment', () => {
-    expect(build({ env: { LANGUAGE: 'fr_FR:en_US' } }).preferredLanguages).toEqual([
-      'fr-FR',
-      'en-US',
-    ]);
+  test('derives preferred languages from the Linux environment', () => {
+    const env = build({ platform: 'linux', env: { LANGUAGE: 'fr_FR:en_US' } });
+    expect(env.preferredLanguages).toEqual(['fr-FR', 'en-US']);
+  });
+
+  test('ignores LANG off Linux, where the system locale is authoritative', () => {
+    const env = build({ platform: 'macos', locale: 'fr-FR', env: { LANG: 'en_US.UTF-8' } });
+    expect(env.preferredLanguages).toEqual(['fr-FR']);
   });
 
   test('falls back to the normalized locale when no language env is set', () => {

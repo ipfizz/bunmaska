@@ -348,10 +348,12 @@ describe('App locale', () => {
   });
 
   test('getPreferredSystemLanguages reflects the environment', () => {
-    expect(appWith({ env: { LANGUAGE: 'fr_FR:en_US' } }).getPreferredSystemLanguages()).toEqual([
-      'fr-FR',
-      'en-US',
-    ]);
+    expect(
+      appWith({
+        platform: 'linux',
+        env: { LANGUAGE: 'fr_FR:en_US' },
+      }).getPreferredSystemLanguages(),
+    ).toEqual(['fr-FR', 'en-US']);
   });
 });
 
