@@ -78,6 +78,7 @@ describe('dispatch build --update signing', () => {
     expect(code).toBe(0);
     const sigPath = join(root, `${ARTIFACT}.sig`);
     expect(streams.out.join('')).toContain(sigPath);
+    expect(streams.out.join('')).toContain(join(root, 'update.json.sig'));
     expect(streams.err.join('')).not.toContain('UNSIGNED');
     const artifact = readFileSync(join(root, ARTIFACT));
     const publicPem = readFileSync(join(keysDir, 'update-public-key.pem'), 'utf8');

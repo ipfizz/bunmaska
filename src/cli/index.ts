@@ -181,6 +181,9 @@ const maybeEmitUpdate = async (
   if (result.sigPath !== undefined) {
     out(result.sigPath);
   }
+  if (result.manifestSigPath !== undefined) {
+    out(result.manifestSigPath);
+  }
 };
 
 /** The project's engine pin; a bare version warns and falls back to the system WebKit. */
