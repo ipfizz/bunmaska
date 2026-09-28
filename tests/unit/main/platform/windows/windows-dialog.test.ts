@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { ptr } from 'bun:ffi';
 import { join } from 'node:path';
 import type { MessageBoxSpec } from '../../../../../src/main/platform/macos/cocoa-dialog';
 import {
@@ -6,6 +7,7 @@ import {
   messageBoxResponse,
   messageBoxUType,
   parseSelectedPaths,
+  readFileDialogResult,
 } from '../../../../../src/main/platform/windows/windows-dialog';
 
 /**
@@ -24,6 +26,16 @@ const IDOK = 1;
 const IDCANCEL = 2;
 const IDYES = 6;
 const IDNO = 7;
+
+/** A UTF-16LE `lpstrFile` buffer holding `text`, zero-padded to `wchars`. */
+const fileBuffer = (text: string, wchars: number): Uint8Array => {
+  const buffer = new Uint8Array(wchars * 2);
+  for (let i = 0; i < text.length; i += 1) {
+    buffer[i * 2] = text.charCodeAt(i) & 0xff;
+    buffer[i * 2 + 1] = text.charCodeAt(i) >> 8;
+  }
+  return buffer;
+};
 
 const spec = (buttons: string[], type?: MessageBoxSpec['type']): MessageBoxSpec => ({
   message: 'm',
@@ -98,5 +110,21 @@ describe('parseSelectedPaths', () => {
 
   test('empty input is no selection', () => {
     expect(parseSelectedPaths('')).toEqual([]);
+  });
+});
+
+describe('readFileDialogResult', () => {
+  test('a single-select result stops at the first NUL, ignoring a longer default name', () => {
+    // GetSaveFileNameW overwrote 'C:\\docs\\Untitled Document.txt' with a shorter path.
+    const buffer = fileBuffer('C:\\docs\\a.txt\0ed Document.txt\0', 64);
+    expect(readFileDialogResult(ptr(buffer), 64, false)).toEqual(['C:\\docs\\a.txt']);
+  });
+
+  test('a multi-select result reads the directory and names up to the double NUL', () => {
+    const buffer = fileBuffer('C:\\docs\0a.txt\0b.png\0', 64);
+    expect(readFileDialogResult(ptr(buffer), 64, true)).toEqual([
+      join('C:\\docs', 'a.txt'),
+      join('C:\\docs', 'b.png'),
+    ]);
   });
 });

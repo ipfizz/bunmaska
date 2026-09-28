@@ -1,4 +1,4 @@
-import { ptr, read } from 'bun:ffi';
+import { type Pointer, ptr, read } from 'bun:ffi';
 import { join } from 'node:path';
 import type { DialogBackend } from '../../api/dialog';
 import type { MessageBoxSpec, OpenDialogSpec, SaveDialogSpec } from '../macos/cocoa-dialog';
@@ -141,6 +141,22 @@ const readPathString = (bufferPtr: ReturnType<typeof ptr>, maxWchars: number): s
   return String.fromCharCode(...units);
 };
 
+/**
+ * Decode the `lpstrFile` buffer after a confirmed file dialog. A single-select result
+ * stops at the first NUL: the dialog does not clear the pre-filled default name's tail.
+ */
+export const readFileDialogResult = (
+  bufferPtr: Pointer,
+  maxWchars: number,
+  multi: boolean,
+): string[] => {
+  if (!multi) {
+    const path = readPathString(bufferPtr, maxWchars);
+    return path.length > 0 ? [path] : [];
+  }
+  return parseSelectedPaths(readResultString(bufferPtr, maxWchars));
+};
+
 /** Run a `GetOpenFileNameW`/`GetSaveFileNameW`-shaped call and return the chosen path(s). */
 const runFileDialog = (
   call: (ofnPtr: ReturnType<typeof ptr>) => number,
@@ -166,7 +182,11 @@ const runFileDialog = (
   if (call(ptr(ofn)) === 0) {
     return []; // the user cancelled
   }
-  return parseSelectedPaths(readResultString(fileBufferPtr, FILE_BUFFER_WCHARS));
+  return readFileDialogResult(
+    fileBufferPtr,
+    FILE_BUFFER_WCHARS,
+    (flags & OFN_ALLOWMULTISELECT) !== 0,
+  );
 };
 
 /** Show the legacy folder picker, returning the chosen directory or `[]` on cancel. */
