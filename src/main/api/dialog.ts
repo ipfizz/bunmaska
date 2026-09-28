@@ -33,7 +33,7 @@ export type OpenDialogOptions = {
   readonly properties?: ReadonlyArray<
     'openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory'
   >;
-  /** macOS only: the folder to open in, or a file path's folder. Ignored on Linux and Windows. */
+  /** The folder to open in, or a file path's folder; the Windows folder picker ignores it. */
   readonly defaultPath?: string;
   /** The selectable extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;
@@ -45,7 +45,7 @@ export type OpenDialogReturnValue = {
 };
 
 export type SaveDialogOptions = {
-  /** A file name, or on Windows also a full path. */
+  /** A file name, a full file path, or on macOS and Linux a folder to open in. */
   readonly defaultPath?: string;
   /** The allowed extensions are the UNION of every filter's. */
   readonly filters?: ReadonlyArray<FileFilter>;

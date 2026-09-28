@@ -360,7 +360,6 @@ export class BrowserWindow extends EventEmitter {
   }
 }
 
-// Menu.popup resolves its window through this, so menu.ts never imports this module (a cycle).
 app.setWindowCloser(() => {
   for (const window of BrowserWindow.getAllWindows()) {
     window.close();
@@ -368,6 +367,7 @@ app.setWindowCloser(() => {
   return registry.size === 0;
 });
 
+// Menu.popup resolves its window through this, so menu.ts never imports this module (a cycle).
 installWindowResolver({
   focused: () => {
     const window = BrowserWindow.getFocusedWindow();
