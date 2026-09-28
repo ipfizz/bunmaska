@@ -5,6 +5,10 @@ import { cstr } from '../../../src/main/platform/cstr';
 
 if (currentPlatform() === 'macos') {
   describe('Cocoa FFI on macOS', () => {
+    test('loadCocoaFFI opens the libraries once', () => {
+      expect(loadCocoaFFI()).toBe(loadCocoaFFI());
+    });
+
     test('sel_registerName returns a non-null selector for "alloc"', () => {
       const lib = loadCocoaFFI();
       const sel = lib.symbols.sel_registerName(cstr('alloc'));

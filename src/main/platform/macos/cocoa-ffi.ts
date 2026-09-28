@@ -1,8 +1,6 @@
 import { FFIType } from 'bun:ffi';
 import { dlopen } from '../dlopen';
-import { UnsupportedPlatformError } from '../../../common/errors';
-import { currentPlatform } from '../../../common/platform';
-import { LIBOBJC_PATH } from './objc';
+import { LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
 const FOUNDATION_PATH = '/System/Library/Frameworks/Foundation.framework/Foundation';
 const APPKIT_PATH = '/System/Library/Frameworks/AppKit.framework/AppKit';
@@ -21,9 +19,6 @@ const APPKIT_SYMBOLS = {
   },
 };
 
-let foundationLib: unknown;
-let appKitLib: unknown;
-
 /**
  * Open `libobjc.A.dylib` plus `Foundation.framework` and `AppKit.framework`.
  *
@@ -35,27 +30,15 @@ let appKitLib: unknown;
  * classes (`NSString`, `NSWindow`, `NSApplication`, etc.) with the Objective-C
  * runtime so subsequent `objc_getClass(...)` calls resolve them. Bun requires
  * at least one symbol per `dlopen`, so we declare anchor symbols
- * (`NSGetSizeAndAlignment`, `NSApplicationMain`) without invoking them. The
- * handles are kept at module scope to prevent GC from closing the libraries.
+ * (`NSGetSizeAndAlignment`, `NSApplicationMain`) without invoking them. Both
+ * live in the dyld shared cache, which never unloads, so the handles are dropped.
  *
  * Throws {@link BunmaskaError} on non-macOS at call time, not at module load, so
  * this module stays safely *importable* on Linux/Windows.
  */
-export const loadCocoaFFI = () => {
-  const platform = currentPlatform();
-  if (platform !== 'macos') {
-    throw new UnsupportedPlatformError(
-      `loadCocoaFFI() is only supported on macOS; current platform is ${platform}`,
-    );
-  }
-
-  if (foundationLib === undefined) {
-    foundationLib = dlopen(FOUNDATION_PATH, FOUNDATION_SYMBOLS);
-  }
-
-  if (appKitLib === undefined) {
-    appKitLib = dlopen(APPKIT_PATH, APPKIT_SYMBOLS);
-  }
+export const loadCocoaFFI = macOSLibraryAccessor('loadCocoaFFI()', () => {
+  dlopen(FOUNDATION_PATH, FOUNDATION_SYMBOLS);
+  dlopen(APPKIT_PATH, APPKIT_SYMBOLS);
 
   // ObjC handles (id/SEL/Class) are declared u64, not pointer: tagged-pointer
   // objects (short NSString/NSNumber/NSDate) set high bits that exceed 2^53,
@@ -75,4 +58,4 @@ export const loadCocoaFFI = () => {
       returns: FFIType.u64,
     },
   });
-};
+});
