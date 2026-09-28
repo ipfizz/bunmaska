@@ -30,6 +30,7 @@ import {
   LIBNOTIFY_FFI_SYMBOLS,
   loadLibnotifyFFI,
 } from '../../../../../src/main/platform/linux/libnotify-ffi';
+import { loadLibsecretFFI } from '../../../../../src/main/platform/linux/libsecret-ffi';
 import { loadSoupFFI, SOUP_FFI_SYMBOLS } from '../../../../../src/main/platform/linux/soup-ffi';
 import {
   loadWebKitGtkFFI,
@@ -37,6 +38,7 @@ import {
   WEBKIT_LOAD_FINISHED,
   WEBKITGTK_FFI_SYMBOLS,
 } from '../../../../../src/main/platform/linux/webkitgtk-ffi';
+import { loadX11FFI } from '../../../../../src/main/platform/linux/x11-ffi';
 
 /**
  * The Linux FFI declarations that a reviewer would plausibly get WRONG. Restating a
@@ -213,8 +215,10 @@ const LOADERS: ReadonlyArray<readonly [string, () => unknown]> = [
   ['loadGtkMenuFFI', loadGtkMenuFFI],
   ['loadJscFFI', loadJscFFI],
   ['loadLibnotifyFFI', loadLibnotifyFFI],
+  ['loadLibsecretFFI', loadLibsecretFFI],
   ['loadWebKitGtkFFI', loadWebKitGtkFFI],
   ['loadSoupFFI', loadSoupFFI],
+  ['loadX11FFI', loadX11FFI],
 ];
 
 test.skipIf(currentPlatform() === 'linux')(

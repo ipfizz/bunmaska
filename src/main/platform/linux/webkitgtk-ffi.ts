@@ -1,8 +1,7 @@
 import { CString, FFIType, type Pointer } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
-import { engineLibPath, prepareEngineForLoad, resolveEngine } from '../../engine/resolve';
+import { dlopenLinux } from './glib-ffi';
 
 /**
  * Loads WebKitGTK 6.0 — the Linux system-WebKit web view (the role
@@ -279,7 +278,7 @@ export const WEBKITGTK_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof WEBKITGTK_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof WEBKITGTK_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -293,12 +292,7 @@ export const loadWebKitGtkFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  // Resolve the pinned engine (if any) before dlopen, so a `bunmaska build`-baked
-  // engine-id loads its own WebKitGTK from the shared store instead of the
-  // system soname. System mode (the default) passes the bare soname through.
-  const engine = resolveEngine();
-  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
-  const ffi = dlopen(engineLibPath(engine, LIBWEBKITGTK_PATH), WEBKITGTK_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBWEBKITGTK_PATH, WEBKITGTK_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

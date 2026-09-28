@@ -1,7 +1,7 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { dlopenLinux } from './glib-ffi';
 
 /**
  * Xlib FFI for the Linux `globalShortcut` backend (`XGrabKey`).
@@ -62,7 +62,7 @@ export const X11_FFI_SYMBOLS = {
   XSetErrorHandler: { args: [FFIType.pointer], returns: FFIType.pointer },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof X11_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof X11_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -77,7 +77,7 @@ export const loadX11FFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBX11_PATH, X11_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBX11_PATH, X11_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

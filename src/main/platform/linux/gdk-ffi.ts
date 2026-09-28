@@ -1,7 +1,7 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { dlopenLinux } from './glib-ffi';
 
 /**
  * Loads GDK 4's display, system-beep, and clipboard symbols.
@@ -101,7 +101,7 @@ export const GDK_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GDK_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GDK_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -115,7 +115,7 @@ export const loadGdkFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGTK_PATH, GDK_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGTK_PATH, GDK_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

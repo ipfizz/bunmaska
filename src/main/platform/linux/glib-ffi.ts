@@ -1,7 +1,14 @@
-import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
+import { type FFIFunction, FFIType } from 'bun:ffi';
+import { existsSync } from 'node:fs';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import {
+  type EngineResolution,
+  engineLibPath,
+  prepareEngineForLoad,
+  resolveEngine,
+} from '../../engine/resolve';
+import { dlopen, type NarrowLibrary } from '../dlopen';
 
 /**
  * Loads GLib's main-context iteration symbols plus `g_free`.
@@ -19,6 +26,30 @@ import { currentPlatform } from '../../../common/platform';
  */
 
 const LIBGLIB_PATH = 'libglib-2.0.so.0';
+
+/** The path to dlopen for `soname`: the pinned engine's bundled copy when it has one, else the bare soname. */
+export const linuxLibPath = (
+  engine: EngineResolution,
+  soname: string,
+  exists: (path: string) => boolean = existsSync,
+): string => {
+  const bundled = engineLibPath(engine, soname);
+  return bundled !== soname && exists(bundled) ? bundled : soname;
+};
+
+/**
+ * `dlopen` for every Linux loader. A pinned engine must supply GLib, GTK and the rest of its
+ * closure to the whole process: a bare-soname load of any of them first binds the system copy,
+ * and the engine's GTK/WebKit then resolve their DT_NEEDED against it (mixed GLib, or two GTKs).
+ */
+export const dlopenLinux = <Fns extends Record<string, FFIFunction>>(
+  soname: string,
+  symbols: Fns,
+): NarrowLibrary<Fns> => {
+  const engine = resolveEngine();
+  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
+  return dlopen(linuxLibPath(engine, soname), symbols);
+};
 
 /** The GLib FFI symbol descriptor table. */
 export const GLIB_FFI_SYMBOLS = {
@@ -204,7 +235,7 @@ export const GLIB_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GLIB_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GLIB_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -218,7 +249,7 @@ export const loadGlibFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGLIB_PATH, GLIB_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGLIB_PATH, GLIB_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

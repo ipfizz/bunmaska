@@ -1,7 +1,7 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { dlopenLinux } from './glib-ffi';
 
 /**
  * Loads the GTK 4 native-dialog symbols behind Bunmaska's `dialog` API:
@@ -130,8 +130,8 @@ export const GTK_DIALOG_GOBJECT_FFI_SYMBOLS = {
 } as const;
 
 const cache: {
-  gtk: ReturnType<typeof dlopen<typeof GTK_DIALOG_FFI_SYMBOLS>> | undefined;
-  gobject: ReturnType<typeof dlopen<typeof GTK_DIALOG_GOBJECT_FFI_SYMBOLS>> | undefined;
+  gtk: ReturnType<typeof dlopenLinux<typeof GTK_DIALOG_FFI_SYMBOLS>> | undefined;
+  gobject: ReturnType<typeof dlopenLinux<typeof GTK_DIALOG_GOBJECT_FFI_SYMBOLS>> | undefined;
 } = { gtk: undefined, gobject: undefined };
 
 const requireLinux = (fn: string): void => {
@@ -148,7 +148,7 @@ export const loadGtkDialogFFI = () => {
   if (cache.gtk) {
     return cache.gtk;
   }
-  const ffi = dlopen(LIBGTK_PATH, GTK_DIALOG_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGTK_PATH, GTK_DIALOG_FFI_SYMBOLS);
   cache.gtk = ffi;
   return ffi;
 };
@@ -158,7 +158,7 @@ export const loadGtkDialogGObjectFFI = () => {
   if (cache.gobject) {
     return cache.gobject;
   }
-  const ffi = dlopen(LIBGOBJECT_PATH, GTK_DIALOG_GOBJECT_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGOBJECT_PATH, GTK_DIALOG_GOBJECT_FFI_SYMBOLS);
   cache.gobject = ffi;
   return ffi;
 };

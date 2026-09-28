@@ -1,7 +1,7 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { dlopenLinux } from './glib-ffi';
 
 /**
  * GDBus (D-Bus over GIO) symbols behind Bunmaska's deadlock-safe signal-subscription
@@ -183,7 +183,7 @@ export const GDBUS_FFI_SYMBOLS = {
   },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof GDBUS_FFI_SYMBOLS>> | undefined } = {
+const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GDBUS_FFI_SYMBOLS>> | undefined } = {
   ffi: undefined,
 };
 
@@ -202,7 +202,7 @@ export const loadGDBusFFI = () => {
   if (cache.ffi) {
     return cache.ffi;
   }
-  const ffi = dlopen(LIBGIO_PATH, GDBUS_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGIO_PATH, GDBUS_FFI_SYMBOLS);
   cache.ffi = ffi;
   return ffi;
 };

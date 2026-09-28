@@ -1,7 +1,7 @@
 import { FFIType } from 'bun:ffi';
-import { dlopen } from '../dlopen';
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
+import { dlopenLinux } from './glib-ffi';
 
 /**
  * Loads the GIO `GMenu`/`GAction` model symbols and the GTK 4
@@ -126,8 +126,8 @@ export const GTK_MENU_FFI_SYMBOLS = {
 } as const;
 
 const cache: {
-  gio: ReturnType<typeof dlopen<typeof GMENU_FFI_SYMBOLS>> | undefined;
-  gtk: ReturnType<typeof dlopen<typeof GTK_MENU_FFI_SYMBOLS>> | undefined;
+  gio: ReturnType<typeof dlopenLinux<typeof GMENU_FFI_SYMBOLS>> | undefined;
+  gtk: ReturnType<typeof dlopenLinux<typeof GTK_MENU_FFI_SYMBOLS>> | undefined;
 } = { gio: undefined, gtk: undefined };
 
 const requireLinux = (fn: string): void => {
@@ -145,7 +145,7 @@ export const loadGMenuFFI = () => {
   if (cache.gio) {
     return cache.gio;
   }
-  const ffi = dlopen(LIBGIO_PATH, GMENU_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGIO_PATH, GMENU_FFI_SYMBOLS);
   cache.gio = ffi;
   return ffi;
 };
@@ -156,7 +156,7 @@ export const loadGtkMenuFFI = () => {
   if (cache.gtk) {
     return cache.gtk;
   }
-  const ffi = dlopen(LIBGTK_PATH, GTK_MENU_FFI_SYMBOLS);
+  const ffi = dlopenLinux(LIBGTK_PATH, GTK_MENU_FFI_SYMBOLS);
   cache.gtk = ffi;
   return ffi;
 };
