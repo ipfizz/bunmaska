@@ -690,6 +690,15 @@ describe('App-level window events', () => {
     expect(appExitCodes()).toEqual([0]);
   });
 
+  test('a throwing closed listener still lets the last close quit the app', () => {
+    const win = new BrowserWindow();
+    win.on('closed', () => {
+      throw new Error('listener bug');
+    });
+    expect(() => win.close()).toThrow('listener bug');
+    expect(appExitCodes()).toEqual([0]);
+  });
+
   test('app.quit closes every window, then exits', () => {
     const a = new BrowserWindow();
     const b = new BrowserWindow();
