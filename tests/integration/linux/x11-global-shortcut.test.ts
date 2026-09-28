@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { dlopen, FFIType, type Pointer } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
+import { cstr } from '../../../src/main/platform/cstr';
 import {
   linuxGlobalShortcutBackend,
   pollX11ShortcutsOnce,
 } from '../../../src/main/platform/linux/x11-global-shortcut';
 import { loadX11FFI } from '../../../src/main/platform/linux/x11-ffi';
+import { CONTROL_MASK, SHIFT_MASK } from '../../../src/main/platform/linux/x11-keymap';
 
 /**
  * Linux-only. Exercises the REAL Xlib `XGrabKey` path. Needs an X server — under
@@ -17,6 +20,29 @@ import { loadX11FFI } from '../../../src/main/platform/linux/x11-ffi';
  * poll drains cleanly. Wayland is out of scope (XGrabKey is X11-only).
  */
 const isLinux = currentPlatform() === 'linux';
+
+/** XSync is not in the backend's table; a second client needs it to order its grab first. */
+const xSync = (dpy: Pointer): void => {
+  dlopen('libX11.so.6', {
+    XSync: { args: [FFIType.pointer, FFIType.i32], returns: FFIType.i32 },
+  }).symbols.XSync(dpy, 0);
+};
+
+/** Open a second X client, independent of the backend's grab connection. */
+const openOtherClient = (): Pointer => {
+  const dpy = loadX11FFI().symbols.XOpenDisplay(null);
+  if (dpy === null) {
+    throw new Error('XOpenDisplay failed for the second client');
+  }
+  return dpy;
+};
+
+const pumpShortcuts = async (until: () => boolean): Promise<void> => {
+  for (let i = 0; i < 50 && !until(); i += 1) {
+    pollX11ShortcutsOnce();
+    await Bun.sleep(10);
+  }
+};
 
 const hasDisplay = (): boolean => {
   if (!isLinux) {
@@ -64,6 +90,22 @@ describe.skipIf(!isLinux)('x11-global-shortcut (Linux)', () => {
 
     test('pollX11ShortcutsOnce() drains cleanly with no pending events', () => {
       expect(() => pollX11ShortcutsOnce()).not.toThrow();
+    });
+
+    test('a key another client already grabbed does not exit the process', async () => {
+      const x11 = loadX11FFI().symbols;
+      const other = openOtherClient();
+      try {
+        const keycode = x11.XKeysymToKeycode(other, x11.XStringToKeysym(cstr('j')));
+        const mods = CONTROL_MASK | SHIFT_MASK;
+        x11.XGrabKey(other, keycode, mods, x11.XDefaultRootWindow(other), 0, 1, 1);
+        xSync(other);
+        linuxGlobalShortcutBackend.register('Ctrl+Shift+J', () => undefined);
+        await pumpShortcuts(() => false);
+        expect(() => pollX11ShortcutsOnce()).not.toThrow();
+      } finally {
+        x11.XCloseDisplay(other);
+      }
     });
 
     test('register/unregisterAll several grabs cleanly', () => {

@@ -1,4 +1,4 @@
-import { type Pointer, ptr } from 'bun:ffi';
+import { CFunction, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { parseAccelerator } from '../../api/accelerator';
 import type { GlobalShortcutBackend } from '../../api/global-shortcut';
 import { cstr } from '../cstr';
@@ -48,6 +48,25 @@ let display: Pointer | null | undefined;
 let displayFailed = false;
 let rootWindow = 0n;
 const registrations: Registration[] = [];
+let errorTrap: JSCallback | undefined;
+
+/**
+ * Swallow X errors on the grab display: a BadAccess for a key another client holds
+ * would otherwise reach Xlib's default handler, which exit(1)s the app. Errors on
+ * any other display chain to the previous handler. Never closed (Xlib keeps the pointer).
+ */
+const installErrorTrap = (x11: ReturnType<typeof loadX11FFI>): void => {
+  let previous: CallableFunction | undefined;
+  errorTrap = new JSCallback(
+    (dpy: Pointer | null, event: Pointer | null): number =>
+      dpy === display || previous === undefined ? 0 : Number(previous(dpy, event)),
+    { args: ['ptr', 'ptr'], returns: 'i32' },
+  );
+  const prior = x11.symbols.XSetErrorHandler(errorTrap.ptr);
+  if (prior !== null) {
+    previous = CFunction({ ptr: prior, args: ['ptr', 'ptr'], returns: 'i32' });
+  }
+};
 
 /** Open (once) the dedicated X display for grabs, or record that it is unavailable. */
 const ensureDisplay = (): Pointer | null => {
@@ -65,6 +84,7 @@ const ensureDisplay = (): Pointer | null => {
       return null;
     }
     display = dpy;
+    installErrorTrap(x11);
     rootWindow = x11.symbols.XDefaultRootWindow(dpy);
     x11.symbols.XSelectInput(dpy, rootWindow, KEY_PRESS_MASK);
     return dpy;
@@ -101,6 +121,7 @@ const register = (accelerator: string, callback: () => void): boolean => {
   for (const lockBits of GRAB_VARIANTS) {
     x11.symbols.XGrabKey(dpy, keycode, modifiers | lockBits, rootWindow, 0, 1, 1);
   }
+  // ponytail: a key another client holds still returns true; XSync + a trap flag reports it once x11-ffi declares XSync.
   x11.symbols.XFlush(dpy);
   registrations.push({ keycode, modifiers, callback });
   return true;
