@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync, rmSync, statSync } from 'node:fs';
+import { dirname } from 'node:path';
 import {
   assertSizeWithin,
   AutoUpdaterImpl,
   type AutoUpdaterDeps,
   MAX_COMPRESSED_ARTIFACT_BYTES,
-  MAX_DECOMPRESSED_TAR_BYTES,
+  readFeedResponse,
   type StagedUpdate,
+  stageToTmp,
 } from '../../../../src/main/api/auto-updater';
 import {
   contentHash,
@@ -35,6 +39,17 @@ const manifest = (version: string): UpdateManifest => ({
   artifact: 'my-app-stable-macos-arm64.tar.zst',
 });
 
+/** A feed serving `m` as update.json, signed by the publisher key, plus the artifact `.sig`. */
+const signedFeed =
+  (m: UpdateManifest, manifestSignedAs: UpdateManifest = m) =>
+  async (url: string): Promise<string> => {
+    if (url.endsWith('update.json.sig')) {
+      const signed = new TextEncoder().encode(serializeUpdateManifest(manifestSignedAs));
+      return signArtifact(KEYS.privateKey, signed);
+    }
+    return url.endsWith('.sig') ? SIG : serializeUpdateManifest(m);
+  };
+
 type Harness = {
   updater: AutoUpdaterImpl;
   staged: StagedUpdate[];
@@ -47,13 +62,12 @@ const makeUpdater = (overrides: Partial<AutoUpdaterDeps>, feedVersion = '2.0.0')
   const decompressed: Uint8Array[] = [];
   const events: string[] = [];
   const deps: Partial<AutoUpdaterDeps> = {
-    fetchText: async (url) =>
-      url.endsWith('.sig') ? SIG : serializeUpdateManifest(manifest(feedVersion)),
+    fetchText: signedFeed(manifest(feedVersion)),
     fetchBytes: async () => ARTIFACT,
     currentVersion: () => '1.0.0',
     currentOs: () => 'macos',
     currentArch: () => 'arm64',
-    decompress: (bytes) => {
+    decompress: async (bytes) => {
       decompressed.push(bytes);
       return TAR;
     },
@@ -100,6 +114,19 @@ describe('autoUpdater.setFeedURL / getFeedURL', () => {
     expect(() => updater.setFeedURL('not a url')).toThrow(/invalid url/i);
   });
 
+  test('rejects a publicKey that is not a PEM Ed25519 public key', () => {
+    const { updater } = makeUpdater({});
+    const ecKey = generateKeyPairSync('ec', {
+      namedCurve: 'P-256',
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    }).publicKey;
+    for (const publicKey of ['not a pem', KEYS.publicKey.replaceAll('\n', ''), ecKey]) {
+      expect(() => updater.setFeedURL({ url: 'https://feed', publicKey })).toThrow(/Ed25519/);
+    }
+    expect(() => updater.setFeedURL(FEED)).not.toThrow();
+  });
+
   test('allows http only for a localhost dev feed', () => {
     const { updater } = makeUpdater({});
     updater.setFeedURL('http://localhost:8080/feed');
@@ -112,9 +139,11 @@ describe('autoUpdater.setFeedURL / getFeedURL', () => {
 });
 
 describe('autoUpdater.checkForUpdates', () => {
-  test('throws when the feed URL is not set', () => {
-    const { updater } = makeUpdater({});
-    expect(updater.checkForUpdates()).rejects.toThrow(/feed URL is not set/);
+  test('rejects and emits error when the feed URL is not set', async () => {
+    const h = makeUpdater({});
+    await expect(h.updater.checkForUpdates()).rejects.toThrow(/feed URL is not set/);
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/feed URL is not set/);
+    expect(h.events.filter((e) => e === 'error')).toHaveLength(2);
   });
 
   test('emits update-available and returns the result for a newer version', async () => {
@@ -123,6 +152,14 @@ describe('autoUpdater.checkForUpdates', () => {
     const result = await h.updater.checkForUpdates();
     expect(result?.updateInfo).toEqual({ version: '2.0.0', releaseName: 'My App' });
     expect(h.events).toEqual(['checking-for-update', 'update-available']);
+  });
+
+  test('refuses to check while the running version is unknown (0.0.0), which would reinstall forever', async () => {
+    const h = makeUpdater({ currentVersion: () => '0.0.0' }, '2.0.0');
+    h.updater.setFeedURL(FEED);
+    await expect(h.updater.checkForUpdates()).rejects.toThrow(/version/);
+    expect(h.events).not.toContain('update-available');
+    expect(h.events).toContain('error');
   });
 
   test('emits update-not-available and returns null for an equal/older version', async () => {
@@ -205,6 +242,26 @@ describe('autoUpdater.downloadUpdate', () => {
     expect(h.events).toContain('error');
   });
 
+  test('refuses a re-labelled update.json before fetching the artifact (rollback guard)', async () => {
+    let fetched = false;
+    const h = makeUpdater(
+      {
+        // A genuinely signed 2.0.0 release re-served under a forged version.
+        fetchText: signedFeed(manifest('99.0.0'), manifest('2.0.0')),
+        fetchBytes: async () => {
+          fetched = true;
+          return ARTIFACT;
+        },
+      },
+      '99.0.0',
+    );
+    h.updater.setFeedURL(FEED);
+    await h.updater.checkForUpdates();
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/update\.json signature/);
+    expect(fetched).toBe(false);
+    expect(h.events).toContain('error');
+  });
+
   test('rejects + emits error on an artifact size mismatch', async () => {
     const h = makeUpdater({ fetchBytes: async () => new Uint8Array([1, 2]) }, '2.0.0');
     h.updater.setFeedURL(FEED);
@@ -225,13 +282,7 @@ describe('autoUpdater.downloadUpdate', () => {
     let fetched = false;
     const h = makeUpdater(
       {
-        fetchText: async (url) =>
-          url.endsWith('.sig')
-            ? SIG
-            : serializeUpdateManifest({
-                ...manifest('2.0.0'),
-                size: MAX_COMPRESSED_ARTIFACT_BYTES + 1,
-              }),
+        fetchText: signedFeed({ ...manifest('2.0.0'), size: MAX_COMPRESSED_ARTIFACT_BYTES + 1 }),
         fetchBytes: async () => {
           fetched = true;
           return ARTIFACT;
@@ -251,9 +302,30 @@ describe('assertSizeWithin (zip-bomb guard)', () => {
     expect(() => assertSizeWithin(100, 100, 'thing')).not.toThrow();
     expect(() => assertSizeWithin(101, 100, 'thing')).toThrow(/exceeds/);
   });
+});
 
-  test('the decompressed cap is larger than the compressed cap', () => {
-    expect(MAX_DECOMPRESSED_TAR_BYTES).toBeGreaterThan(MAX_COMPRESSED_ARTIFACT_BYTES);
+describe('autoUpdater fire-and-forget calls (Electron style)', () => {
+  test('a failure reaches the error listener without an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const h = makeUpdater({
+        fetchText: async () => {
+          throw new Error('offline');
+        },
+      });
+      h.updater.setFeedURL(FEED);
+      h.updater.checkForUpdates();
+      h.updater.downloadUpdate();
+      await Bun.sleep(10);
+      expect(h.events.filter((e) => e === 'error')).toHaveLength(2);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });
 
@@ -271,5 +343,57 @@ describe('autoUpdater.quitAndInstall', () => {
     h.updater.quitAndInstall();
     expect(h.staged).toHaveLength(1);
     expect(h.staged[0]?.manifest.version).toBe('2.0.0');
+  });
+});
+
+describe('stageToTmp', () => {
+  test('writes the tar into a fresh private directory, never a guessable shared path', async () => {
+    const a = await stageToTmp(TAR);
+    const b = await stageToTmp(TAR);
+    try {
+      expect(dirname(a)).not.toBe(dirname(b));
+      expect(new Uint8Array(readFileSync(a))).toEqual(TAR);
+      if (process.platform !== 'win32') {
+        expect(statSync(dirname(a)).mode & 0o777).toBe(0o700);
+      }
+    } finally {
+      rmSync(dirname(a), { recursive: true, force: true });
+      rmSync(dirname(b), { recursive: true, force: true });
+    }
+  });
+});
+
+describe('readFeedResponse', () => {
+  const KIB = new Uint8Array(1024);
+
+  test('rejects a body past the cap without draining the rest of the stream', async () => {
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 1000) {
+          controller.close();
+        } else {
+          controller.enqueue(KIB);
+        }
+      },
+    });
+    await expect(readFeedResponse(new Response(body), 'https://feed/a', 4 * 1024)).rejects.toThrow(
+      /exceeds/,
+    );
+    expect(pulls).toBeLessThan(10);
+  });
+
+  test('returns a body within the cap', async () => {
+    const bytes = await readFeedResponse(new Response(KIB), 'https://feed/a', 1024);
+    expect(bytes.length).toBe(1024);
+  });
+
+  test('refuses a response that was redirected off https', async () => {
+    const response = new Response('{}');
+    Object.defineProperty(response, 'url', { value: 'http://evil.example/update.json' });
+    await expect(readFeedResponse(response, 'https://feed/update.json', 1024)).rejects.toThrow(
+      /http:\/\/evil\.example/,
+    );
   });
 });

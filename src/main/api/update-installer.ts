@@ -1,26 +1,16 @@
 /**
- * The default `quitAndInstall` installer: a detached helper script waits for the
- * app to exit, extracts the staged tar into a TEMP SIBLING of the install root,
- * rename-swaps it into place (a half-extract can never brick the installed
- * app), relaunches, and deletes itself.
+ * The default `quitAndInstall`: a detached helper extracts into a sibling of the install
+ * root and rename-swaps it in, so a half-finished extract can never brick the installed app.
  */
 
 import { chmodSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { createLogger } from '../../common/logger';
 import type { ArtifactOs } from '../../common/manifest';
 import { currentPlatform } from '../../common/platform';
 import { app } from './app';
 import type { StagedUpdate } from './auto-updater';
 
-const log = createLogger('auto-updater');
-
-/**
- * Where the running app is installed, derived from the executable path;
- * `undefined` means "not an installed bundle" (e.g. `bun main.ts`) and the
- * installer must refuse rather than swap a guessed directory.
- */
+/** The bundle root around `execPath`, or `undefined` (e.g. `bun main.ts`): never swap a guessed dir. */
 export const deriveInstallRoot = (execPath: string, os: ArtifactOs): string | undefined => {
   if (os === 'macos') {
     // build-macos layout: <Name>.app/Contents/MacOS/<Name>
@@ -47,9 +37,18 @@ export const deriveInstallRoot = (execPath: string, os: ArtifactOs): string | un
     }
     return rootDir;
   }
-  // build-windows layout: the portable dir holds the exe; refuse a drive root.
+  // build-windows layout: <Name>/<Name>.exe. Anything else (bun.exe in its
+  // toolchain dir, a drive root) would get moved aside and deleted by the swap.
   const rootDir = dirname(execPath);
-  return dirname(rootDir) === rootDir ? undefined : rootDir;
+  const exeStem = basename(execPath).replace(/\.exe$/i, '');
+  if (
+    dirname(rootDir) === rootDir ||
+    /^(bun|node)$/i.test(exeStem) ||
+    exeStem.toLowerCase() !== basename(rootDir).toLowerCase()
+  ) {
+    return undefined;
+  }
+  return rootDir;
 };
 
 /** Top-level dir inside the update tar; mirrors `bunmaska build`'s bundle names. */
@@ -80,15 +79,17 @@ export const buildShInstallScript = (spec: ShInstallSpec): string => {
   return [
     '#!/bin/sh',
     '# bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
+    // Every failure relaunches the old app; a failed update must not leave the user with none.
+    `fail() { rm -rf ${staging}; ${relaunch} & exit 1; }`,
     `while kill -0 ${spec.pid} 2>/dev/null; do sleep 0.5; done`,
     `rm -rf ${staging} ${old}`,
-    `mkdir -p ${staging} || exit 1`,
+    `mkdir -p ${staging} || fail`,
     // A failed extract only dirties the staging dir; the installed app is untouched.
-    `tar -xf ${tar} -C ${staging} || { rm -rf ${staging}; exit 1; }`,
-    `[ -d ${fresh} ] || { rm -rf ${staging}; exit 1; }`,
+    `tar -xf ${tar} -C ${staging} || fail`,
+    `[ -d ${fresh} ] || fail`,
     // The swap is two renames; a failed second rename rolls the first back.
-    `mv ${root} ${old} || exit 1`,
-    `mv ${fresh} ${root} || { mv ${old} ${root}; exit 1; }`,
+    `mv ${root} ${old} || fail`,
+    `mv ${fresh} ${root} || { mv ${old} ${root}; fail; }`,
     `rm -rf ${old} ${staging}`,
     `rm -f ${tar}`,
     `${relaunch} &`,
@@ -109,27 +110,35 @@ export type CmdInstallSpec = {
 export const buildCmdInstallScript = (spec: CmdInstallSpec): string => {
   const staging = `${spec.installRoot}.update-staging`;
   const old = `${spec.installRoot}.update-old`;
+  const start = `start "" "${spec.installRoot}\\${spec.exeName}"`;
   return [
     '@echo off',
     'rem bunmaska auto-update helper: waits for the app to exit, swaps, relaunches.',
     ':wait',
     `tasklist /FI "PID eq ${spec.pid}" | find "${spec.pid}" >nul`,
-    'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)',
+    // timeout.exe exits at once when stdin is redirected (the helper's is), spinning this loop.
+    'if not errorlevel 1 (ping -n 2 127.0.0.1 >nul & goto wait)',
     `if exist "${old}" rmdir /s /q "${old}"`,
     `if exist "${staging}" rmdir /s /q "${staging}"`,
-    `mkdir "${staging}" || exit /b 1`,
+    `mkdir "${staging}" || goto fail`,
     'rem extract from cwd, not tar -C: Windows bsdtar mangles backslash -C paths',
-    `cd /d "${staging}" || exit /b 1`,
-    `tar -xf "${spec.tarPath}" || exit /b 1`,
+    `cd /d "${staging}" || goto fail`,
+    // System bsdtar by full path: a Git-for-Windows GNU tar on PATH reads C:\ as a remote host.
+    `"%SystemRoot%\\System32\\tar.exe" -xf "${spec.tarPath}" || goto fail`,
     'cd /d "%TEMP%"',
-    `if not exist "${staging}\\${spec.bundleDirName}" exit /b 1`,
-    `move "${spec.installRoot}" "${old}" || exit /b 1`,
-    `move "${staging}\\${spec.bundleDirName}" "${spec.installRoot}" || (move "${old}" "${spec.installRoot}" & exit /b 1)`,
+    `if not exist "${staging}\\${spec.bundleDirName}" goto fail`,
+    `move "${spec.installRoot}" "${old}" || goto fail`,
+    `move "${staging}\\${spec.bundleDirName}" "${spec.installRoot}" || (move "${old}" "${spec.installRoot}" & goto fail)`,
     `rmdir /s /q "${old}"`,
     `rmdir /s /q "${staging}"`,
     `del /q "${spec.tarPath}"`,
-    `start "" "${spec.installRoot}\\${spec.exeName}"`,
+    start,
     '(goto) 2>nul & del "%~f0"',
+    ':fail',
+    'cd /d "%TEMP%"',
+    `if exist "${staging}" rmdir /s /q "${staging}"`,
+    start,
+    'exit /b 1',
     '',
   ].join('\r\n');
 };
@@ -143,23 +152,21 @@ export type InstallerDeps = {
   readonly quit: () => void;
 };
 
-/** Write + spawn the helper for a staged update, then quit; refuses un-bundled layouts. */
+/** Writes and spawns the helper, then quits; throws, without quitting, for an unswappable layout. */
 export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): void => {
   const os = deps.os();
   const execPath = deps.execPath();
   const installRoot = deriveInstallRoot(execPath, os);
   if (installRoot === undefined) {
-    log.warn(
+    throw new Error(
       `autoUpdater.quitAndInstall: ${execPath} is not an installed ${os} bundle; ` +
         `refusing to swap (staged tar left at ${staged.tarPath})`,
     );
-    deps.quit();
-    return;
   }
   const bundleDirName = stagedBundleDirName(staged.manifest.name, os);
   const pid = deps.pid();
   if (os === 'windows') {
-    const scriptPath = join(tmpdir(), `bunmaska-install-${staged.manifest.hash}.cmd`);
+    const scriptPath = join(dirname(staged.tarPath), 'install.cmd');
     deps.writeScript(
       scriptPath,
       buildCmdInstallScript({
@@ -172,7 +179,7 @@ export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): 
     );
     deps.spawnDetached(['cmd.exe', '/c', scriptPath]);
   } else {
-    const scriptPath = join(tmpdir(), `bunmaska-install-${staged.manifest.hash}.sh`);
+    const scriptPath = join(dirname(staged.tarPath), 'install.sh');
     const relaunchArgv = os === 'macos' ? ['open', installRoot] : [execPath];
     deps.writeScript(
       scriptPath,
@@ -189,10 +196,13 @@ export const installStagedUpdate = (staged: StagedUpdate, deps: InstallerDeps): 
   deps.quit();
 };
 
-const spawnDetachedScript = (argv: readonly string[]): void => {
-  // unref so app.quit() is not held open; a POSIX orphan reparents and lives on.
-  const proc = Bun.spawn([...argv], { stdio: ['ignore', 'ignore', 'ignore'] });
-  proc.unref();
+/**
+ * Must be `detached`: on Windows a non-detached child sits in the app's
+ * kill-on-close job and dies with it (D043's TerminateProcess exit), so the swap
+ * never runs; on POSIX it gets its own session. `unref` keeps quit from waiting.
+ */
+export const spawnDetachedScript = (argv: readonly string[]): void => {
+  Bun.spawn([...argv], { stdio: ['ignore', 'ignore', 'ignore'], detached: true }).unref();
 };
 
 /** The production default installer behind `autoUpdater.quitAndInstall`. */

@@ -1,12 +1,11 @@
 /**
- * The Ed25519 signature is verified against the release public key BEFORE the
- * bytes reach the store. Artifact layout at a feed: `<base>` (the `.tar.zst`),
- * `<base>.json`, `<base>.sig`.
+ * The Ed25519 signature is verified against the resolved feed key BEFORE the bytes reach
+ * the store. Feed layout: `<base>` (the `.tar.zst`), `<base>.json`, `<base>.sig`.
  */
 
 import { BunmaskaError } from '../common/errors';
+import { verifyArtifact } from '../common/signature';
 import { installFromSource, type InstallResult } from './engine-store';
-import { verifyArtifact } from './engine-signature';
 
 /**
  * The official feed. A self-hosted mirror overrides it via `bunmaska.config`
@@ -53,7 +52,7 @@ export const parseRemoteManifest = (text: string): RemoteManifest => {
 
 export const zstdTarExtract = async (bytes: Uint8Array, destDir: string): Promise<void> => {
   const tarBytes = Bun.zstdDecompressSync(bytes);
-  // extract via cwd, not `-C <dir>` — Windows bsdtar mangles backslash paths
+  // extract via cwd, not `-C <dir>`: Windows bsdtar mangles backslash paths
   const proc = Bun.spawn(['tar', '-xf', '-'], {
     cwd: destDir,
     stdin: tarBytes,
