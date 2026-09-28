@@ -80,6 +80,10 @@ describe('classifyChange with a renderer root', () => {
     expect(classifyChange('dist/renderer/main.js', 'src/renderer')).toBe('reload');
   });
 
+  test('a ./-prefixed renderer root matches like a bare one', () => {
+    expect(classifyChange('src/renderer/App.tsx', './src/renderer')).toBe('rebuild');
+  });
+
   test('a preload under the renderer root still restarts', () => {
     expect(classifyChange('src/renderer/preload.js', 'src/renderer')).toBe('restart');
   });

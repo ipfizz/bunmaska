@@ -27,9 +27,9 @@ const IGNORED_SEGMENT_SUFFIXES: readonly string[] = ['.app', '.AppDir'];
 const isIgnoredSegment = (p: string): boolean =>
   IGNORED_SEGMENTS.has(p) || IGNORED_SEGMENT_SUFFIXES.some((suffix) => p.endsWith(suffix));
 
-/** Split a watcher path on either separator. */
+/** Split a watcher or config path on either separator, dropping `.` segments. */
 export const pathParts = (relPath: string): string[] =>
-  relPath.split(/[\\/]/).filter((p) => p.length > 0);
+  relPath.split(/[\\/]/).filter((p) => p.length > 0 && p !== '.');
 
 /** True for a path `bunmaska dev` never reacts to: ignored trees and dotfiles. */
 export const isIgnoredPath = (relPath: string): boolean => {
