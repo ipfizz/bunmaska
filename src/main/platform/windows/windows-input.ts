@@ -51,7 +51,7 @@ const buttonDown = (button: MouseButton): { readonly message: number; readonly m
   }
 };
 
-/** The *BUTTONUP message for a mouse button (WPARAM is 0 — no button still held). */
+/** The *BUTTONUP message for a mouse button. */
 const buttonUp = (button: MouseButton): number => {
   switch (button) {
     case 'right':
@@ -122,23 +122,37 @@ const virtualKey = (keyCode: string): number | undefined => {
   return undefined;
 };
 
+/** The MK_* button bits still down after `event`: mouseDown adds its button, mouseUp clears it. */
+export const heldButtonsAfter = (event: NativeInputEvent, held: number): number => {
+  if (event.type !== 'mouseDown' && event.type !== 'mouseUp') {
+    return held;
+  }
+  const { mk } = buttonDown(event.button ?? 'left');
+  return event.type === 'mouseDown' ? held | mk : held & ~mk;
+};
+
 /**
  * Map a synthesized {@link NativeInputEvent} to the single Win32 window message
  * that delivers it, or `undefined` for a key we do not map (a lenient no-op,
- * matching Electron). Pure.
+ * matching Electron). `held` is the MK_* set down before the event. Pure.
  */
-export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | undefined => {
+export const inputEventToMessage = (
+  event: NativeInputEvent,
+  held = 0,
+): WindowMessage | undefined => {
   switch (event.type) {
     case 'mouseMove':
-      return { message: WM_MOUSEMOVE, wParam: 0n, lParam: mouseLParam(event.x, event.y) };
-    case 'mouseDown': {
-      const { message, mk } = buttonDown(event.button ?? 'left');
-      return { message, wParam: BigInt(mk), lParam: mouseLParam(event.x, event.y) };
-    }
+      return { message: WM_MOUSEMOVE, wParam: BigInt(held), lParam: mouseLParam(event.x, event.y) };
+    case 'mouseDown':
+      return {
+        message: buttonDown(event.button ?? 'left').message,
+        wParam: BigInt(heldButtonsAfter(event, held)),
+        lParam: mouseLParam(event.x, event.y),
+      };
     case 'mouseUp':
       return {
         message: buttonUp(event.button ?? 'left'),
-        wParam: 0n,
+        wParam: BigInt(heldButtonsAfter(event, held)),
         lParam: mouseLParam(event.x, event.y),
       };
     case 'char': {
@@ -178,20 +192,17 @@ export const inputEventToMessage = (event: NativeInputEvent): WindowMessage | un
   }
 };
 
-/** Keyboard messages must bypass the pump's queue (see below). */
 const KEYBOARD_MESSAGES = new Set<number>([WM_KEYDOWN, WM_KEYUP, WM_CHAR]);
 
 /**
- * Post a synthesized {@link NativeInputEvent} to a WKView's `hwnd` so WinCairo
- * WebKit delivers it as a trusted DOM event. Unmapped keys are silently ignored.
- *
- * Mouse messages are POSTed (async, no focus steal). Keyboard messages are SENT
- * directly to the view's native WndProc: a POSTed WM_KEYDOWN would pass through
- * the pump's `TranslateMessage`, which synthesizes a SECOND, real-keyboard-state
- * WM_CHAR — doubling and corrupting the typed text. SendMessageW skips the queue.
+ * Deliver a synthesized event to a WKView's `hwnd` as a trusted DOM event; `held` is the
+ * MK_* set down before it. Keyboard messages must be SENT, never POSTed: the pump's
+ * `TranslateMessage` would synthesize a second WM_CHAR from the real keyboard state,
+ * doubling the typed text. Modifier state comes from the physical keyboard, and a
+ * synthesized hover ends at once while the real cursor is outside the view (TME_LEAVE).
  */
-export const postWindowsInputEvent = (hwnd: bigint, event: NativeInputEvent): void => {
-  const msg = inputEventToMessage(event);
+export const postWindowsInputEvent = (hwnd: bigint, event: NativeInputEvent, held = 0): void => {
+  const msg = inputEventToMessage(event, held);
   if (msg === undefined) {
     return;
   }

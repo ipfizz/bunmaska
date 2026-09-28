@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { inputEventToMessage } from '../../../../../src/main/platform/windows/windows-input';
+import {
+  heldButtonsAfter,
+  inputEventToMessage,
+} from '../../../../../src/main/platform/windows/windows-input';
 
 // Win32 message constants mirrored here for readable assertions.
 const WM_MOUSEMOVE = 0x0200;
@@ -41,6 +44,16 @@ describe('inputEventToMessage', () => {
     const msg = inputEventToMessage({ type: 'mouseUp', x: 5, y: 5 });
     expect(msg?.message).toBe(WM_LBUTTONUP);
     expect(msg?.wParam).toBe(0n);
+  });
+
+  test('a mouse message carries every button still held (so a move after mouseDown drags)', () => {
+    const left = 0x0001;
+    const right = 0x0002;
+    expect(inputEventToMessage({ type: 'mouseMove', x: 1, y: 1 }, left)?.wParam).toBe(1n);
+    expect(
+      inputEventToMessage({ type: 'mouseDown', x: 1, y: 1, button: 'right' }, left)?.wParam,
+    ).toBe(3n);
+    expect(inputEventToMessage({ type: 'mouseUp', x: 1, y: 1 }, left | right)?.wParam).toBe(2n);
   });
 
   test('a named key maps to its virtual-key code and scan code (Escape)', () => {
@@ -97,5 +110,18 @@ describe('inputEventToMessage', () => {
 
   test('an unmapped key is a no-op (undefined)', () => {
     expect(inputEventToMessage({ type: 'keyDown', keyCode: 'F13' })).toBeUndefined();
+  });
+});
+
+describe('heldButtonsAfter', () => {
+  test('mouseDown adds its button, mouseUp clears it, anything else keeps the set', () => {
+    const afterLeft = heldButtonsAfter({ type: 'mouseDown', x: 0, y: 0 }, 0);
+    const afterRight = heldButtonsAfter(
+      { type: 'mouseDown', x: 0, y: 0, button: 'right' },
+      afterLeft,
+    );
+    expect([afterLeft, afterRight]).toEqual([0x0001, 0x0003]);
+    expect(heldButtonsAfter({ type: 'mouseMove', x: 0, y: 0 }, afterRight)).toBe(0x0003);
+    expect(heldButtonsAfter({ type: 'mouseUp', x: 0, y: 0 }, afterRight)).toBe(0x0002);
   });
 });

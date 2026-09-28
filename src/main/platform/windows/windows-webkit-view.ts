@@ -4,7 +4,7 @@ import type { NativeInputEvent, NativeNavigationEvent } from '../native';
 import { wkRelease, wkString, wkStringToJs, wkUrl, wkUrlToJs } from './webkit-string';
 import { loadWebKit2, WK_INJECT_AT_DOCUMENT_START } from './webkit2-ffi';
 import { loadKernel32, loadUser32 } from './win32-ffi';
-import { postWindowsInputEvent } from './windows-input';
+import { heldButtonsAfter, postWindowsInputEvent } from './windows-input';
 import { createNativeChildHost, ensureOleInitialized } from './windows-native-window';
 
 /**
@@ -217,6 +217,7 @@ export class WindowsWebView {
   readonly #retainedController: Pointer;
   readonly #callbacks: JSCallback[];
   #disposed = false;
+  #heldButtons = 0;
 
   private constructor(
     view: Pointer,
@@ -416,8 +417,9 @@ export class WindowsWebView {
   sendInputEvent(event: NativeInputEvent): void {
     const hwnd = loadWebKit2().symbols.WKViewGetWindow(this.#view);
     if (hwnd !== 0n) {
-      postWindowsInputEvent(hwnd, event);
+      postWindowsInputEvent(hwnd, event, this.#heldButtons);
     }
+    this.#heldButtons = heldButtonsAfter(event, this.#heldButtons);
   }
 
   /**
