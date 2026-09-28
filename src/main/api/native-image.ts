@@ -3,7 +3,7 @@ import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
 import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
 import { windowsNativeImageBackend } from '../platform/windows/windows-native-image';
 
-/** Opaque: an ObjC object address (macOS) or a `Pointer` (Linux), both as `bigint`. */
+/** Opaque: an NSBitmapImageRep (macOS), GdkPixbuf (Linux) or GDI+ image (Windows) address. */
 export type NativeImageHandle = bigint;
 
 /** Size comes from scalar getters at decode time: bun:ffi cannot return `NSSize` by value. */

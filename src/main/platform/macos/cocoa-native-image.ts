@@ -214,4 +214,9 @@ export const cocoaNativeImageBackend: NativeImageBackend = {
   },
   resize,
   crop,
+  release: (handle) => {
+    if (handle !== 0n) {
+      cocoa().msgSend(handle, cocoa().selectors.get('release'));
+    }
+  },
 };

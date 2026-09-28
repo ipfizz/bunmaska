@@ -1,14 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { ptr, toArrayBuffer } from 'bun:ffi';
+import { type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
 import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
 import { cstr } from '../cstr';
 import { loadGdkPixbufFFI } from './gdk-pixbuf-ffi';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
-
-// ponytail: decoded, resized and cropped GdkPixbufs are never unref'd (one per image for the process
-// lifetime); fix with a NativeImageBackend.release driven by a FinalizationRegistry in api/native-image.ts.
 
 const handleToPtr = (handle: NativeImageHandle) => (handle === 0n ? null : Number(handle));
 
@@ -163,4 +160,9 @@ export const gdkNativeImageBackend: NativeImageBackend = {
     encode(handle, 'jpeg', quality),
   resize,
   crop,
+  release: (handle) => {
+    if (handle !== 0n) {
+      loadGObjectFFI().symbols.g_object_unref(Number(handle) as Pointer);
+    }
+  },
 };

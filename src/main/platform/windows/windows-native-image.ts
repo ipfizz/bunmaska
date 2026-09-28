@@ -236,4 +236,10 @@ export const windowsNativeImageBackend: NativeImageBackend = {
     }
     return toDecoded(read.u64(cropped.pointer, 0));
   },
+
+  release(handle: NativeImageHandle): void {
+    if (handle !== 0n) {
+      loadGdiplus().symbols.GdipDisposeImage(handle);
+    }
+  },
 };

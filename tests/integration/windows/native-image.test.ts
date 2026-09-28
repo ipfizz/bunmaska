@@ -89,6 +89,12 @@ if (currentPlatform() === 'windows') {
       expect(cropped.empty).toBe(false);
       expect(cropped.width).toBe(1);
     });
+
+    test('release disposes a decoded image and ignores the empty handle', () => {
+      const { handle } = windowsNativeImageBackend.decode(PNG_1x1);
+      expect(() => windowsNativeImageBackend.release?.(handle)).not.toThrow();
+      expect(() => windowsNativeImageBackend.release?.(0n)).not.toThrow();
+    });
   });
 
   describe('Windows public nativeImage (over the real backend)', () => {

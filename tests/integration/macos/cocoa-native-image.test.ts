@@ -132,5 +132,16 @@ if (currentPlatform() === 'macos') {
       expect(empty.resize({ width: 4, height: 4 }).isEmpty()).toBe(true);
       expect(empty.crop({ x: 0, y: 0, width: 1, height: 1 }).isEmpty()).toBe(true);
     });
+
+    test('release drops the reference decode returned', () => {
+      const rt = cocoa();
+      const { handle } = cocoaNativeImageBackend.decode(makeTinyPng());
+      const retainCount = (): bigint => rt.msgSend(handle, rt.selectors.get('retainCount'));
+      rt.msgSend(handle, rt.selectors.get('retain')); // keeps the rep alive to count
+      const held = retainCount();
+      cocoaNativeImageBackend.release?.(handle);
+      expect(retainCount()).toBe(held - 1n);
+      rt.msgSend(handle, rt.selectors.get('release'));
+    });
   });
 }
