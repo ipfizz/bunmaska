@@ -161,13 +161,15 @@ const enableDeveloperExtras = (preferences: Handle): void => {
   }
 };
 
+/** RFC 3986 scheme syntax. */
+const VALID_SCHEME = /^[a-z][a-z0-9+.-]*$/;
+
 /**
- * Register every scheme currently registered with the `protocol` module onto a
- * `WKWebViewConfiguration` via `setURLSchemeHandler:forURLScheme:`. Must run
- * BEFORE the web view is created from this config (WebKit forbids adding a
- * scheme handler afterwards). One shared handler serves all schemes; a failure
- * to register one scheme (e.g. a forbidden/built-in scheme) is logged and
- * skipped so it cannot abort window creation.
+ * Put every `protocol.handle` scheme on `configuration`; WebKit only accepts
+ * scheme handlers before the web view exists. `setURLSchemeHandler:` raises an
+ * NSException for a scheme WebKit handles itself (https, file, ...) or a
+ * malformed one, and an NSException aborts Bun past any JS catch, so those are
+ * skipped up front.
  */
 const registerCustomSchemes = (configuration: Handle): void => {
   const schemes = protocol.getRegisteredSchemes();
@@ -177,6 +179,17 @@ const registerCustomSchemes = (configuration: Handle): void => {
   const rt = cocoa();
   const handler = createUrlSchemeHandler();
   for (const scheme of schemes) {
+    const unsupported =
+      !VALID_SCHEME.test(scheme) ||
+      msgSendPtrReturnsU8(
+        rt.classes.get('WKWebView'),
+        rt.selectors.get('handlesURLScheme:'),
+        nsString(scheme),
+      ) === 1;
+    if (unsupported) {
+      log.warn(`protocol.handle('${scheme}') is ignored on macOS: WebKit cannot intercept it`);
+      continue;
+    }
     try {
       msgSendPtrPtr(
         configuration,

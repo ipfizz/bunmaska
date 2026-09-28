@@ -1,5 +1,6 @@
 import { describe, expect, jest, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
+import { protocol } from '../../../src/main/api/protocol';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
 import { retainedBlockCount } from '../../../src/main/platform/macos/cocoa-block';
 import { nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
@@ -388,6 +389,23 @@ if (currentPlatform() === 'macos') {
         expect(seen).toEqual(['object', 'undefined']);
         expect(domReady).toBe(1);
       } finally {
+        app.quit();
+      }
+    });
+
+    test('a WebKit-native or malformed protocol.handle scheme does not abort window creation', () => {
+      const app = createMacOSApplication();
+      app.start();
+      const serve = () => ({ data: 'x' });
+      protocol.handle('https', serve);
+      protocol.handle('my_app', serve);
+      try {
+        const win = app.createWindow({ width: 320, height: 240, title: 't', show: false });
+        expect(win.getTitle()).toBe('t');
+        win.destroy();
+      } finally {
+        protocol.unhandle('https');
+        protocol.unhandle('my_app');
         app.quit();
       }
     });
