@@ -40,6 +40,7 @@ const WS_EX_LAYERED = 0x00080000n;
 const LWA_ALPHA = 0x02;
 const WS_POPUP = 0x80000000;
 const WS_VISIBLE = 0x10000000;
+const WS_CLIPCHILDREN = 0x02000000;
 const STYLE_RESIZABLE = 0x00050000n; // WS_THICKFRAME | WS_MAXIMIZEBOX
 const SM_CXSCREEN = 0;
 const SM_CYSCREEN = 1;
@@ -48,6 +49,10 @@ const SM_CYSCREEN = 1;
 // right mouse button.
 const TPM_RETURNCMD = 0x0100;
 const TPM_RIGHTBUTTON = 0x0002;
+
+/** `style` with the `WS_VISIBLE` bit of `current`: a style swap must never show or hide. */
+const keepVisibility = (style: bigint, current: bigint): bigint =>
+  (style & ~BigInt(WS_VISIBLE)) | (current & BigInt(WS_VISIBLE));
 
 /** Windows {@link NativeWindow}: a top-level window hosting a WinCairo `WKView`. */
 class WindowsWindow implements NativeWindow {
@@ -111,6 +116,9 @@ class WindowsWindow implements NativeWindow {
         this.#native.emit('ready-to-show');
       }
     });
+    if (options.fullscreen === true) {
+      this.setFullScreen(true);
+    }
     if (options.show) {
       this.show();
     }
@@ -264,13 +272,15 @@ class WindowsWindow implements NativeWindow {
       this.#fullscreen = true;
       this.#savedStyle = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
       this.#savedBounds = this.getBounds();
-      user32.SetWindowLongPtrW(hwnd, GWL_STYLE, BigInt((WS_POPUP | WS_VISIBLE | 0x02000000) >>> 0));
+      const fullscreenStyle = BigInt((WS_POPUP | WS_CLIPCHILDREN) >>> 0);
+      user32.SetWindowLongPtrW(hwnd, GWL_STYLE, keepVisibility(fullscreenStyle, this.#savedStyle));
       const width = user32.GetSystemMetrics(SM_CXSCREEN);
       const height = user32.GetSystemMetrics(SM_CYSCREEN);
       user32.SetWindowPos(hwnd, 0n, 0, 0, width, height, SWP_NOZORDER | SWP_FRAMECHANGED);
     } else if (!flag && this.#fullscreen) {
       this.#fullscreen = false;
-      user32.SetWindowLongPtrW(hwnd, GWL_STYLE, this.#savedStyle);
+      const current = user32.GetWindowLongPtrW(hwnd, GWL_STYLE);
+      user32.SetWindowLongPtrW(hwnd, GWL_STYLE, keepVisibility(this.#savedStyle, current));
       const b = this.#savedBounds;
       user32.SetWindowPos(hwnd, 0n, b.x, b.y, b.width, b.height, SWP_NOZORDER | SWP_FRAMECHANGED);
     }
