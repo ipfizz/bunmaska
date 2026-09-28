@@ -6,7 +6,7 @@ keywords: ["webkit engine store", "pin webkit version desktop app", "bunmaska en
 order: 4
 ---
 
-The **engine repository** is the signed feed Bunmaska publishes pinned WebKit engines to, at **`https://engines.bunmaska.org`**. It's the hosted half of the [pinned-engine model](engine.md): an app declares the exact engine-id it was tested against, and that engine is fetched, signature-verified, and installed side by side with any others. "Tested == shipped", for real, from the cloud.
+The **engine repository** is the signed feed Bunmaska publishes pinned WebKit engines to, at **`https://engines.bunmaska.org`**. It's the hosted half of the [pinned-engine model](/docs/concepts/engine): an app declares the exact engine-id it was tested against, and that engine is fetched, signature-verified, and installed side by side with any others. "Tested == shipped", for real, from the cloud.
 
 You almost never think about it. Most apps use your operating system's own WebKit and download nothing. The repository matters on the one platform that has no system WebKit - Windows - and as an opt-in on Linux.
 
@@ -38,7 +38,7 @@ A `*` means it's already installed locally; a `>` means it matches your OS + arc
 
 ### The engine-id
 
-Every engine has a flat, content-addressed id: `<family>-<api>-<upstream>-<rev>-<os>-<arch>`, e.g. `webkit-2-2.53.3-bunmaska1-windows-x64` (WinCairo WebKit, upstream 2.53.3, Bunmaska build 1, Windows x64). The id encodes exactly what you're getting, and the store keys directories on it so many versions coexist. Supported today: **Windows x64** (ARM64 is on the roadmap). Details in [the engine concept page](engine.md#the-engine-id).
+Every engine has a flat id (a name, not a content hash): `<family>-<api>-<upstream>-<rev>-<os>-<arch>`, e.g. `webkit-2-2.53.3-bunmaska1-windows-x64` (WinCairo WebKit, upstream 2.53.3, Bunmaska build 1, Windows x64). The id encodes exactly what you're getting, and the store keys directories on it so many versions coexist. Supported today: **Windows x64** (ARM64 is on the roadmap). Details in [the engine concept page](/docs/concepts/engine#the-engine-id).
 
 ## How to install one
 
@@ -50,9 +50,9 @@ bunmaska engine install webkit-2-2.53.3-bunmaska1-windows-x64
 bunmaska engine install https://engines.bunmaska.org/webkit-2-2.53.3-bunmaska1-windows-x64.tar.zst
 ```
 
-The install downloads the `.tar.zst`, **verifies its Ed25519 signature** against Bunmaska's baked-in release key and its content hash, checks the extracted engine's own signed `engine.json` id matches what you asked for (so a compromised mirror can't swap engines), and installs it into the shared store. Nothing runs before the signature verifies.
+The install downloads the `.tar.zst`, **verifies its Ed25519 signature** against Bunmaska's baked-in release key and its content hash, checks that the extracted engine's own signed `engine.json` id matches the feed's manifest (so a compromised mirror can't slip one engine in under another's id), and installs it into the shared store. Nothing runs before the signature verifies.
 
-To pin an app to it, set it in `bunmaska.config` - then `bunmaska build` bakes the id into the bundle and the app resolves it at launch:
+To pin an app to it, set it in `bunmaska.config` - then `bunmaska build` bakes the id into the bundle and the app resolves it at launch. A Windows id only means something on Windows: the same project built for Linux or run on a Mac treats the pin as absent and uses the system WebKit.
 
 ```ts
 import { defineConfig } from "bunmaska/config";
@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-Or embed the engine directly in the build (offline / airgapped, no feed at runtime):
+Your users never run `bunmaska engine install`, so for anything you ship, embed the engine in the build (offline / airgapped, no feed at runtime) - either from the pin you just installed, with `engine: { webkit: "...", embed: true }`, or from a directory:
 
 ```sh
 bunmaska build --target windows --embed-engine <engine-dir>
@@ -81,4 +81,4 @@ export default defineConfig({
 });
 ```
 
-`bunmaska engine available` and `install` then read *your* feed's `index.json` and artifacts, verified against *your* key. See [the engine concept page](engine.md#self-hosting-an-engine-feed-advanced).
+`bunmaska engine available` and `install` then read *your* feed's `index.json` and artifacts, verified against *your* key. See [the engine concept page](/docs/concepts/engine#self-hosting-an-engine-feed-advanced).

@@ -150,7 +150,7 @@ The pinned-WebKit engine store - the opt-in path to "tested == shipped." Most ap
 
 **Highlights**
 
-- **Side-by-side engine store** at `~/.bunmaska/webkit/` - content-addressed, many versions coexist, each app resolves its own pin (no global switch). Install marker, content-hash integrity, refcount, and garbage collection.
+- **Side-by-side engine store** at `~/.bunmaska/webkit/` - id-addressed, many versions coexist, each app resolves its own pin (no global switch). Install marker, content-hash integrity, refcount, and garbage collection.
 - **Launch resolver** - env > baked `engine.id` > marker check > loud fallback to the system WebKit if a pin is missing (the app still launches).
 - **`bunmaska engine` CLI** (`list` / `which` / `install` / `use` / `prune` / `verify`) and **`bunmaska doctor`**.
 - **Signed feed install** - `engine install <url>` verifies an Ed25519 signature + content hash before extracting.

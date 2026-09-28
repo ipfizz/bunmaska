@@ -27,7 +27,7 @@ export const milestones: readonly Milestone[] = [
     items: [
       'The Electron-shaped API on Bun and WebKit: 21 main-process modules, roughly 70-80% of what a typical app touches, pure `bun:ffi`, zero compiled native code, zero runtime dependencies.',
       'macOS and Linux in full. Windows (x64) in beta on a from-source WinCairo WebKit backend, green on CI next to the other two.',
-      'The CLI loop, `init` / `dev` / `build`, producing real .app, .deb and .exe distributables, and the pinned-WebKit engine store: side-by-side, content-addressed, signature-verified.',
+      'The CLI loop, `init` / `dev` / `build`, producing real .app, .deb and .exe distributables, and the pinned-WebKit engine store: side-by-side, id-addressed, signature-verified.',
       'Frameless windows, bundled preloads, and an event-driven macOS run loop that idles at about a tenth of the CPU.',
     ],
   },
