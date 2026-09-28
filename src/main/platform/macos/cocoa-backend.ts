@@ -265,14 +265,14 @@ class MacOSWebContents implements NativeWebContents {
    * `{ execId, ok, result?, error? }` outcome of an `executeJavaScript` call.
    */
   deliverExecResult(json: string): void {
-    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string };
+    let outcome: { execId?: number; ok?: boolean; result?: unknown; error?: string } | null;
     try {
       outcome = JSON.parse(json);
     } catch (error) {
       log.warn('dropping malformed exec result', error);
       return;
     }
-    if (typeof outcome.execId !== 'number') {
+    if (typeof outcome?.execId !== 'number') {
       return;
     }
     const pending = this.#pendingExecs.get(outcome.execId);

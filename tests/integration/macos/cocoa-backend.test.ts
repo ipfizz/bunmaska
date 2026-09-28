@@ -16,7 +16,10 @@ import {
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 import { loadWebKit } from '../../../src/main/platform/macos/cocoa-webkit';
-import { LIBOBJC_PATH } from '../../../src/main/platform/macos/objc';
+import {
+  LIBOBJC_PATH,
+  setNativeErrorReporterForTesting,
+} from '../../../src/main/platform/macos/objc';
 import type { NativeWindow } from '../../../src/main/platform/native';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -252,6 +255,26 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
       expect(await win.webContents.executeJavaScript('2 + 3')).toBe(5);
       win.destroy();
     } finally {
+      app.quit();
+    }
+  });
+
+  test('a page posting null to the exec channel is ignored', async () => {
+    const app = createMacOSApplication();
+    app.start();
+    const errors: unknown[] = [];
+    setNativeErrorReporterForTesting((error) => errors.push(error));
+    try {
+      const win = app.createWindow({ width: 320, height: 240, title: 't', show: true });
+      await loadPage(
+        win,
+        "<script>webkit.messageHandlers.bunmaskaExec.postMessage('null')</script>",
+      );
+      expect(await win.webContents.executeJavaScript('1')).toBe(1);
+      expect(errors).toEqual([]);
+      win.destroy();
+    } finally {
+      setNativeErrorReporterForTesting(undefined);
       app.quit();
     }
   });
