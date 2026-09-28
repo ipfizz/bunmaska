@@ -327,6 +327,7 @@ const runBuild = async (
       entry,
       name,
       engineId,
+      version: readAppVersion(),
       ...(command.options.out !== undefined ? { out: command.options.out } : {}),
       ...(icon !== undefined ? { icon } : {}),
       ...(embedEngine !== undefined ? { embedEngine } : {}),
@@ -345,6 +346,7 @@ const runBuild = async (
   const appPath = await buildMac({
     entry,
     name,
+    version: readAppVersion(),
     ...(id !== undefined ? { id } : {}),
     ...(command.options.out !== undefined ? { out: command.options.out } : {}),
     ...(icon !== undefined ? { icon } : {}),
