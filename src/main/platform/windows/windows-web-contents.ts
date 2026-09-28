@@ -1,5 +1,6 @@
 import { UnsupportedPlatformError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
+import { protocol } from '../../api/protocol';
 import {
   generateChannelId,
   generateIsolatedChannelSetup,
@@ -114,6 +115,11 @@ export class WindowsWebContents implements NativeWebContents {
   readonly #windowOpCallbacks: Array<(op: string) => void> = [];
 
   constructor(hwnd: bigint, width: number, height: number, preloadScript?: string) {
+    const schemes = protocol.getRegisteredSchemes();
+    if (schemes.length > 0) {
+      // ponytail: the WinCairo C API has no URL-scheme handler hook at wpewebkit-2.52.5.
+      log.warn(`protocol.handle schemes are not served on Windows yet: ${schemes.join(', ')}`);
+    }
     const channelId = generateChannelId();
     const userScripts: string[] = [
       generateIsolatedChannelSetup(channelId),

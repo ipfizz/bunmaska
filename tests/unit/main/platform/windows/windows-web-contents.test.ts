@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { type LogRecord, resetLogger, setLogSink } from '../../../../../src/common/logger';
+import { protocol } from '../../../../../src/main/api/protocol';
 import { WindowsWebContents } from '../../../../../src/main/platform/windows/windows-web-contents';
 import { WindowsWebView } from '../../../../../src/main/platform/windows/windows-webkit-view';
 
@@ -31,6 +32,7 @@ const collectWarnings = (): string[] => {
 afterEach(() => {
   mock.restore();
   resetLogger();
+  protocol.clearForTesting();
 });
 
 describe('WindowsWebContents', () => {
@@ -39,5 +41,18 @@ describe('WindowsWebContents', () => {
     const { contents } = createContents();
     contents.setWindowOpenHandler(() => undefined);
     expect(warnings).toEqual([expect.stringContaining('setWindowOpenHandler')]);
+  });
+
+  test('warns when protocol.handle schemes are registered, since none are served', () => {
+    protocol.handle('myapp', () => ({ data: 'hi' }));
+    const warnings = collectWarnings();
+    createContents();
+    expect(warnings).toEqual([expect.stringContaining('myapp')]);
+  });
+
+  test('does not warn about schemes when none are registered', () => {
+    const warnings = collectWarnings();
+    createContents();
+    expect(warnings).toEqual([]);
   });
 });
