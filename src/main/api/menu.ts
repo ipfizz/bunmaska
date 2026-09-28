@@ -327,6 +327,7 @@ const activate = (item: MenuItem, siblings: readonly MenuItem[]): void => {
       other.checked = other === item;
     }
   }
+  // ponytail: Linux/Windows menu bars show the old check mark until the next setApplicationMenu; re-realize them here
   item.click?.(item, windowResolver?.focusedWindow(), {});
 };
 
