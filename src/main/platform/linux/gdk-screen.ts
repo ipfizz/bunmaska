@@ -1,5 +1,5 @@
 import { FFIType, type Pointer, ptr } from 'bun:ffi';
-import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import type { Point, RawDisplay, ScreenBackend } from '../services';
 import { dlopen } from '../dlopen';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';

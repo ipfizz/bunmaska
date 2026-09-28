@@ -1,8 +1,4 @@
-import type {
-  NativeBlocker,
-  PowerSaveBlockerBackend,
-  PowerSaveBlockerType,
-} from '../../api/power-save-blocker';
+import type { NativeBlocker, PowerSaveBlockerBackend, PowerSaveBlockerType } from '../services';
 import { loadKernel32 } from './win32-ffi';
 
 // SetThreadExecutionState is ONE per-thread state, not a stack of assertions: re-apply the

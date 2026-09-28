@@ -1,5 +1,5 @@
 import { FFIType, JSCallback, ptr, read } from 'bun:ffi';
-import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import type { Point, RawDisplay, ScreenBackend } from '../services';
 import type { Rect } from '../native';
 import { readRect } from './win32';
 import { loadUser32 } from './win32-ffi';

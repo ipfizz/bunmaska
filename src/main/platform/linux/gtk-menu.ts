@@ -1,8 +1,7 @@
 import { JSCallback, type Pointer } from 'bun:ffi';
 import { reportCallbackError } from '../../../common/report-error';
-import type { MenuRealizer } from '../../api/menu';
-import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { cstr } from '../cstr';
+import type { MenuRealizer, NativeMenuItemSpec } from '../services';
 import { loadGlibFFI } from './glib-ffi';
 import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadGMenuFFI } from './gtk-menu-ffi';

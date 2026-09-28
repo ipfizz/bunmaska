@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
-import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
+import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../services';
 import { cstr } from '../cstr';
 import { loadGdkPixbufFFI } from './gdk-pixbuf-ffi';
 import { loadGioFFI } from './gio-ffi';

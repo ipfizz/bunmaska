@@ -1,6 +1,6 @@
 import { FFIType, ptr } from 'bun:ffi';
 import { dlopen } from '../dlopen';
-import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import type { Point, RawDisplay, ScreenBackend } from '../services';
 import type { Rect } from '../native';
 import { nsString } from './cocoa-foundation';
 import {

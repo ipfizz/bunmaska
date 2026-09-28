@@ -1,10 +1,6 @@
 import { FFIType, ptr } from 'bun:ffi';
 import { dlopen } from '../dlopen';
-import type {
-  NativeBlocker,
-  PowerSaveBlockerBackend,
-  PowerSaveBlockerType,
-} from '../../api/power-save-blocker';
+import type { NativeBlocker, PowerSaveBlockerBackend, PowerSaveBlockerType } from '../services';
 import { nsString } from './cocoa-foundation';
 import { macOSLibraryAccessor } from './objc';
 

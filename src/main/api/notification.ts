@@ -4,33 +4,13 @@ import { linuxNotificationBackend } from '../platform/linux/gtk-notification';
 import { macosNotificationBackend } from '../platform/macos/cocoa-notification';
 import { windowsNotificationBackend } from '../platform/windows/windows-notification';
 import { app } from './app';
+import type { NotificationBackend, NotificationHandle } from '../platform/services';
 
 export type NotificationOptions = {
   readonly title?: string;
   readonly body?: string;
   readonly subtitle?: string;
   readonly silent?: boolean;
-};
-
-export type NotificationSpec = {
-  readonly title: string;
-  readonly body: string;
-  readonly subtitle: string;
-  readonly silent: boolean;
-  /** `app.getName()`, for backends that register the sender by name. */
-  readonly appName?: string;
-};
-
-export type NotificationHandle = {
-  /** Safe to call more than once. */
-  close(): void;
-  /** Fired when the OS closes or the user dismisses it. */
-  onClosed(callback: () => void): void;
-};
-
-export type NotificationBackend = {
-  isSupported(): boolean;
-  present(spec: NotificationSpec): NotificationHandle;
 };
 
 const macosBackend: NotificationBackend = macosNotificationBackend;

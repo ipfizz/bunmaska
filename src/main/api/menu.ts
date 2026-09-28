@@ -2,9 +2,9 @@ import { BunmaskaError, InvalidArgumentError, UnsupportedPlatformError } from '.
 import { currentPlatform } from '../../common/platform';
 import { linuxMenuRealizer } from '../platform/linux/gtk-menu';
 import { parseAccelerator } from './accelerator';
-import type { NativeMenuItemSpec } from '../platform/macos/cocoa-menu';
 import * as cocoaMenu from '../platform/macos/cocoa-menu';
 import { windowsMenuRealizer } from '../platform/windows/windows-menu';
+import type { MenuRealizer, MenuWindowAction, NativeMenuItemSpec } from '../platform/services';
 import type { BrowserWindow } from './browser-window';
 
 export type MenuItemType = 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
@@ -53,9 +53,6 @@ export type MenuItemClick = (
   window: BrowserWindow | undefined,
   event: { readonly triggeredByAccelerator?: boolean },
 ) => void;
-
-/** Operated on the ACTIVATING window, not a fixed one. */
-export type MenuWindowAction = 'minimize' | 'close' | 'zoom' | 'togglefullscreen';
 
 /**
  * `macSelector` drives macOS (D035); `editingCommand` or `windowAction` drive Linux
@@ -270,12 +267,6 @@ export class MenuItem {
     this.type = options.type ?? (this.submenu !== undefined ? 'submenu' : 'normal');
   }
 }
-
-/** `realize` returns an opaque native menu handle. */
-export type MenuRealizer = {
-  realize(items: ReadonlyArray<NativeMenuItemSpec>): bigint;
-  setApplicationMenu(menu: bigint | null): void;
-};
 
 const macosRealizer: MenuRealizer = {
   realize: (items) => cocoaMenu.realizeMenu(items),

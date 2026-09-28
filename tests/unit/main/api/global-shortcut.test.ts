@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  type GlobalShortcutBackend,
   globalShortcut,
   setGlobalShortcutBackendForTesting,
 } from '../../../../src/main/api/global-shortcut';
+import type { GlobalShortcutBackend } from '../../../../src/main/platform/services';
 
 /**
  * The platform-neutral `globalShortcut` API, exercised with a fake backend so

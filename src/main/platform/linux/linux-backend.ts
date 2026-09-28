@@ -11,7 +11,7 @@ import {
 import { generatePreloadBootstrap } from '../../../renderer/preload-bootstrap';
 import { CooperativePump } from '../../run-loop';
 import { cstr } from '../cstr';
-import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
+import type { NativeMenuItemSpec } from '../services';
 import type {
   NativeApplication,
   NativeNavigationEvent,

@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { NativeMenuItemSpec } from '../../../../../src/main/platform/macos/cocoa-menu';
 import {
   type AppMenuWindow,
   createWindowsMenuRealizer,
   menuItemFlags,
 } from '../../../../../src/main/platform/windows/windows-menu';
+import type { NativeMenuItemSpec } from '../../../../../src/main/platform/services';
 
 const MF_STRING = 0x0;
 const MF_GRAYED = 0x1;

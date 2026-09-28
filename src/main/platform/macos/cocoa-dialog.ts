@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute } from 'node:path';
 import { nsString, nsStringToString } from './cocoa-foundation';
 import { msgSendI64, msgSendPtr, msgSendReturnsI64, msgSendU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
+import type { MessageBoxSpec, MessageBoxType, OpenDialogSpec, SaveDialogSpec } from '../services';
 import type { Handle } from './objc';
 
 // build* is split from show* because runModal blocks in a nested modal loop that CI cannot dismiss.
@@ -11,18 +12,6 @@ import type { Handle } from './objc';
 const NS_MODAL_RESPONSE_OK = 1n;
 /** `NSAlertFirstButtonReturn`; subsequent buttons are this + index. */
 const NS_ALERT_FIRST_BUTTON_RETURN = 1000n;
-
-/** Electron message-box severity. Drives the `NSAlert` icon/style on macOS. */
-export type MessageBoxType = 'none' | 'info' | 'error' | 'question' | 'warning';
-
-export type MessageBoxSpec = {
-  readonly message: string;
-  readonly detail: string;
-  /** Button titles in order; the first is the default. */
-  readonly buttons: ReadonlyArray<string>;
-  /** Severity styling; omitted/`none` leaves the default warning style. */
-  readonly type?: MessageBoxType;
-};
 
 /** The `NSAlertStyle` for an Electron message-box `type`; `undefined` keeps the NSAlert default. */
 export const alertStyleForType = (type: MessageBoxType | undefined): bigint | undefined => {
@@ -37,25 +26,6 @@ export const alertStyleForType = (type: MessageBoxType | undefined): bigint | un
     default:
       return undefined;
   }
-};
-
-export type OpenDialogSpec = {
-  readonly canChooseFiles: boolean;
-  readonly canChooseDirectories: boolean;
-  readonly allowsMultipleSelection: boolean;
-  /** Show the "New Folder" button so the user can create a directory in-panel. */
-  readonly canCreateDirectories: boolean;
-  /** Directory the panel opens at (`''` = system default / last location). */
-  readonly defaultPath: string;
-  /** Allowed file extensions (without dots); empty means any file. */
-  readonly extensions: ReadonlyArray<string>;
-};
-
-export type SaveDialogSpec = {
-  /** Electron's `defaultPath`: a file name, an absolute file path, or a directory to open at. */
-  readonly defaultName: string;
-  /** Allowed file extensions (without dots); empty means any file. */
-  readonly extensions: ReadonlyArray<string>;
 };
 
 /** `[NSArray]` of `NSString`s built incrementally (no varargs) from JS strings. */

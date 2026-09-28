@@ -4,17 +4,7 @@ import { linuxGlobalShortcutBackend } from '../platform/linux/x11-global-shortcu
 import { macosGlobalShortcutBackend } from '../platform/macos/carbon-global-shortcut';
 import { windowsGlobalShortcutBackend } from '../platform/windows/windows-global-shortcut';
 import { parseAccelerator } from './accelerator';
-
-/** The API owns parsing and the registry; the backend owns the OS grab and firing `callback`. */
-export type GlobalShortcutBackend = {
-  /** `false` where no grab is possible, e.g. Linux without an X11 display. */
-  isSupported(): boolean;
-  /** `false` when the OS refused the grab, e.g. the key is already taken. */
-  register(accelerator: string, callback: () => void): boolean;
-  /** No-op if `accelerator` was not grabbed. */
-  unregister(accelerator: string): void;
-  unregisterAll(): void;
-};
+import type { GlobalShortcutBackend } from '../platform/services';
 
 const macosBackend: GlobalShortcutBackend = macosGlobalShortcutBackend;
 const linuxBackend: GlobalShortcutBackend = linuxGlobalShortcutBackend; // ponytail: X11 only; Wayland needs the GlobalShortcuts portal

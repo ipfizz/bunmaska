@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   clampCropRect,
-  type NativeImageBackend,
-  type NativeImageHandle,
   nativeImage,
   resolveResizeDimensions,
   setNativeImageBackendForTesting,
 } from '../../../../src/main/api/native-image';
+import type { NativeImageBackend, NativeImageHandle } from '../../../../src/main/platform/services';
 
 /**
  * Unit tests for the pure `NativeImage` class against a FAKE backend, so the

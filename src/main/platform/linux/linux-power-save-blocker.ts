@@ -1,9 +1,5 @@
 import { type Pointer, ptr } from 'bun:ffi';
-import type {
-  NativeBlocker,
-  PowerSaveBlockerBackend,
-  PowerSaveBlockerType,
-} from '../../api/power-save-blocker';
+import type { NativeBlocker, PowerSaveBlockerBackend, PowerSaveBlockerType } from '../services';
 import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
 import { callMethodSync, getSessionBus } from './linux-dbus';

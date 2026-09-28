@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import type { RawDisplay } from '../../../src/main/api/screen';
 import { cocoaScreenBackend, getDisplays } from '../../../src/main/platform/macos/cocoa-screen';
+import type { RawDisplay } from '../../../src/main/platform/services';
 
 const primaryOf = (displays: readonly RawDisplay[]): RawDisplay => {
   const primary = displays.find((d) => d.primary);

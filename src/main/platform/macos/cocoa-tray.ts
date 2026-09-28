@@ -1,5 +1,5 @@
 import type { Menu } from '../../api/menu';
-import type { TrayBackend, TrayInstance, TrayImageOptions } from '../../api/tray';
+import type { TrayBackend, TrayInstance, TrayImageOptions } from '../services';
 import { nsString } from './cocoa-foundation';
 import { disposeMenu } from './cocoa-menu';
 import { msgSendF64, msgSendPtr, msgSendU8 } from './cocoa-msgsend-variants';

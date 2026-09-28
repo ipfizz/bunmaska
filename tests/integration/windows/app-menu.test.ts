@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import type { NativeMenuItemSpec } from '../../../src/main/platform/macos/cocoa-menu';
 import { resolveWindowsEngineDir } from '../../../src/main/platform/windows/webkit2-ffi';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import { createWindowsMenuRealizer } from '../../../src/main/platform/windows/windows-menu';
 import { NativeWin32Window } from '../../../src/main/platform/windows/windows-native-window';
+import type { NativeMenuItemSpec } from '../../../src/main/platform/services';
 
 /**
  * The application menu BAR on Windows - pure Win32 (no WebKit engine needed). A

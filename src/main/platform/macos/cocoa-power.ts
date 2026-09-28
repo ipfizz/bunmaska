@@ -3,6 +3,7 @@ import {
   observeNotification,
   workspaceNotificationCenter,
 } from './cocoa-notification-observer';
+import type { PowerEventHandlers } from '../services';
 
 // Screen lock/unlock use the undocumented but long-stable com.apple.screenIs(Un)locked names.
 
@@ -10,13 +11,6 @@ const WILL_SLEEP = 'NSWorkspaceWillSleepNotification';
 const DID_WAKE = 'NSWorkspaceDidWakeNotification';
 const SCREEN_LOCKED = 'com.apple.screenIsLocked';
 const SCREEN_UNLOCKED = 'com.apple.screenIsUnlocked';
-
-export type PowerEventHandlers = {
-  readonly onSuspend: () => void;
-  readonly onResume: () => void;
-  readonly onLockScreen: () => void;
-  readonly onUnlockScreen: () => void;
-};
 
 /** Register the four power/lock observers. Retained for the process lifetime. */
 export const observePowerEvents = (handlers: PowerEventHandlers): void => {

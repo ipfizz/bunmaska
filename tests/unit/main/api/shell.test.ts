@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import {
-  type ShellBackend,
-  setShellBackendForTesting,
-  shell,
-} from '../../../../src/main/api/shell';
+import { setShellBackendForTesting, shell } from '../../../../src/main/api/shell';
+import type { ShellBackend } from '../../../../src/main/platform/services';
 
 let calls: string[];
 let openExternalResult = true;

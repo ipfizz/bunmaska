@@ -2,41 +2,7 @@ import { selectBackend } from '../platform/index';
 import { gdkNativeImageBackend } from '../platform/linux/gdk-native-image';
 import { cocoaNativeImageBackend } from '../platform/macos/cocoa-native-image';
 import { windowsNativeImageBackend } from '../platform/windows/windows-native-image';
-
-/** Opaque: an NSBitmapImageRep (macOS), GdkPixbuf (Linux) or GDI+ image (Windows) address. */
-export type NativeImageHandle = bigint;
-
-/** Size comes from scalar getters at decode time: bun:ffi cannot return `NSSize` by value. */
-export type DecodedImage = {
-  /** `0n` when empty or the decode failed. */
-  readonly handle: NativeImageHandle;
-  /** Pixels; `0` when empty. */
-  readonly width: number;
-  /** Pixels; `0` when empty. */
-  readonly height: number;
-  /** Set for a bad path or undecodable bytes. */
-  readonly empty: boolean;
-};
-
-export type NativeImageBackend = {
-  /** A filesystem path or in-memory PNG/JPEG bytes. */
-  decode(source: string | Uint8Array): DecodedImage;
-  encodePng(handle: NativeImageHandle): Uint8Array;
-  /** `quality` is 0-100. */
-  encodeJpeg(handle: NativeImageHandle, quality: number): Uint8Array;
-  /** Redraws at exactly `width`×`height` px into a NEW native image. */
-  resize(handle: NativeImageHandle, width: number, height: number): DecodedImage;
-  /** Copies the sub-rectangle into a NEW native image. */
-  crop(
-    handle: NativeImageHandle,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-  ): DecodedImage;
-  /** Drops the reference `decode`, `resize` or `crop` returned, once its image is collected. */
-  release?(handle: NativeImageHandle): void;
-};
+import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../platform/services';
 
 /** Preserves aspect ratio when one dimension is omitted. */
 export const resolveResizeDimensions = (

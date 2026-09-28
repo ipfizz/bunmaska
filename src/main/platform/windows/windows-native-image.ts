@@ -1,7 +1,7 @@
 import { CFunction, FFIType, type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { readFileSync } from 'node:fs';
 import { FFIError } from '../../../common/errors';
-import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
+import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../services';
 import { loadKernel32, loadOle32 } from './win32-ffi';
 import {
   GDIP_OK,

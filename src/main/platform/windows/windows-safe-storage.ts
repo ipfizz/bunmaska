@@ -4,7 +4,7 @@ import { existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSyn
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { FFIError } from '../../../common/errors';
-import type { KeyringBackend } from '../../api/safe-storage';
+import type { KeyringBackend } from '../services';
 import { CRYPTPROTECT_UI_FORBIDDEN, loadCrypt32 } from './win32-crypt-ffi';
 import { loadKernel32 } from './win32-ffi';
 

@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { app } from '../../../../src/main/api/app';
-import {
-  type NativeBlocker,
-  PowerSaveBlockerImpl,
-  type PowerSaveBlockerBackend,
-  type PowerSaveBlockerType,
-} from '../../../../src/main/api/power-save-blocker';
+import { PowerSaveBlockerImpl } from '../../../../src/main/api/power-save-blocker';
+import type {
+  NativeBlocker,
+  PowerSaveBlockerBackend,
+  PowerSaveBlockerType,
+} from '../../../../src/main/platform/services';
 
 /** A fake backend recording acquire/release calls and handing out tagged handles. */
 const makeFakeBackend = (

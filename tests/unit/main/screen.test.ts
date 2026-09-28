@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import {
-  type RawDisplay,
-  screen,
-  type ScreenBackend,
-  setScreenBackendForTesting,
-} from '../../../src/main/api/screen';
+import { screen, setScreenBackendForTesting } from '../../../src/main/api/screen';
+import type { RawDisplay, ScreenBackend } from '../../../src/main/platform/services';
 
 /**
  * A two-display fake: a primary 1920x1080 at the origin and a secondary

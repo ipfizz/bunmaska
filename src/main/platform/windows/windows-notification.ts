@@ -1,9 +1,5 @@
 import { ptr } from 'bun:ffi';
-import type {
-  NotificationBackend,
-  NotificationHandle,
-  NotificationSpec,
-} from '../../api/notification';
+import type { NotificationBackend, NotificationHandle, NotificationSpec } from '../services';
 import { loadUser32 } from './win32-ffi';
 import { loadShell32, NIM_ADD, NIM_DELETE, notifyIconData } from './win32-shell-ffi';
 import { createMessageWindow } from './windows-message-window';

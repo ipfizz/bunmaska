@@ -2,14 +2,12 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { app } from '../../../../src/main/api/app';
 import { Menu } from '../../../../src/main/api/menu';
-import {
-  setTrayBackendForTesting,
-  Tray,
-  type TrayBackend,
-  type TrayImage,
-  type TrayImageOptions,
-  type TrayInstance,
-} from '../../../../src/main/api/tray';
+import { setTrayBackendForTesting, Tray, type TrayImage } from '../../../../src/main/api/tray';
+import type {
+  TrayBackend,
+  TrayImageOptions,
+  TrayInstance,
+} from '../../../../src/main/platform/services';
 
 type FakeInstance = TrayInstance & {
   readonly image: string;

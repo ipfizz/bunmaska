@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
-import type { NativeMenuItemSpec } from '../../../src/main/platform/macos/cocoa-menu';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import {
   type AppMenuWindow,
   createWindowsMenuRealizer,
 } from '../../../src/main/platform/windows/windows-menu';
+import type { NativeMenuItemSpec } from '../../../src/main/platform/services';
 
 /**
  * Windows menu realizer against real Win32 menus. Building the HMENU is NON-modal,

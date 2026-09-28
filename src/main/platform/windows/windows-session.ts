@@ -1,6 +1,6 @@
 import { FFIType, JSCallback, type Pointer } from 'bun:ffi';
 import { UnsupportedPlatformError } from '../../../common/errors';
-import type { SessionBackend } from '../../api/session';
+import type { SessionBackend } from '../services';
 import { loadWebKit2 } from './webkit2-ffi';
 
 /**

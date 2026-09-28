@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { app } from '../../../../src/main/api/app';
 import {
   Notification,
-  type NotificationBackend,
-  type NotificationHandle,
-  type NotificationSpec,
   setNotificationBackendForTesting,
 } from '../../../../src/main/api/notification';
+import type {
+  NotificationBackend,
+  NotificationHandle,
+  NotificationSpec,
+} from '../../../../src/main/platform/services';
 
 let presented: NotificationSpec[];
 let closedCalls: number;

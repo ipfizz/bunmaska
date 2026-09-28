@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { CString, type Pointer } from 'bun:ffi';
-import type { KeyringBackend } from '../../api/safe-storage';
+import type { KeyringBackend } from '../services';
 import { cstr } from '../cstr';
 import { loadLibsecretFFI, secretSchema } from './libsecret-ffi';
 

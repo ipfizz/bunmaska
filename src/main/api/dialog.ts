@@ -4,6 +4,7 @@ import { linuxDialogBackend } from '../platform/linux/gtk-dialog';
 import * as cocoaDialog from '../platform/macos/cocoa-dialog';
 import { windowsDialogBackend } from '../platform/windows/windows-dialog';
 import type { BrowserWindow } from './browser-window';
+import type { DialogBackend, MessageBoxType } from '../platform/services';
 
 export type MessageBoxOptions = {
   readonly message: string;
@@ -14,7 +15,7 @@ export type MessageBoxOptions = {
    */
   readonly buttons?: ReadonlyArray<string>;
   /** The alert icon on macOS and Windows; ignored on Linux (GtkAlertDialog has no severity). */
-  readonly type?: cocoaDialog.MessageBoxType;
+  readonly type?: MessageBoxType;
 };
 
 export type MessageBoxReturnValue = {
@@ -70,13 +71,6 @@ export const flattenFilterExtensions = (filters?: ReadonlyArray<FileFilter>): st
 export type SaveDialogReturnValue = {
   readonly canceled: boolean;
   readonly filePath: string;
-};
-
-/** macOS and Windows panels are modal and return a value; Linux (GTK) is async and returns a Promise. */
-export type DialogBackend = {
-  showMessageBox(spec: cocoaDialog.MessageBoxSpec): number | Promise<number>;
-  showOpenDialog(spec: cocoaDialog.OpenDialogSpec): string[] | Promise<string[]>;
-  showSaveDialog(spec: cocoaDialog.SaveDialogSpec): string | Promise<string>;
 };
 
 const macosBackend: DialogBackend = {

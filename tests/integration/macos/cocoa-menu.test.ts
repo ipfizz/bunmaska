@@ -4,7 +4,6 @@ import {
   clickRegistrySize,
   disposeMenu,
   menuItemCount,
-  type NativeMenuItemSpec,
   performMenuItem,
   realizeMenu,
   setApplicationMenu,
@@ -17,6 +16,7 @@ import {
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 import type { Handle } from '../../../src/main/platform/macos/objc';
 import { objcWeakRef } from '../../helpers/objc-weak';
+import type { NativeMenuItemSpec } from '../../../src/main/platform/services';
 
 /** Realize one item and run AppKit's autoenable pass, as opening the menu or a key press does. */
 const realizeAndValidate = (spec: NativeMenuItemSpec): { menu: Handle; item: Handle } => {

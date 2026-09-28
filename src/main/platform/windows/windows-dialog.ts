@@ -1,8 +1,7 @@
 import { type Pointer, ptr, read } from 'bun:ffi';
 import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { DialogBackend } from '../../api/dialog';
-import type { MessageBoxSpec, OpenDialogSpec, SaveDialogSpec } from '../macos/cocoa-dialog';
+import type { DialogBackend, MessageBoxSpec, OpenDialogSpec, SaveDialogSpec } from '../services';
 import { wstr } from './win32';
 import { loadComdlg32 } from './win32-dialog-ffi';
 import { loadOle32, loadUser32 } from './win32-ffi';

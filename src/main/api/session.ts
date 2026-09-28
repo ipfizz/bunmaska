@@ -12,16 +12,7 @@ import * as macosCookies from '../platform/macos/cocoa-cookies';
 import * as macosWebsiteData from '../platform/macos/cocoa-website-data';
 import * as linuxCookies from '../platform/linux/webkit-cookies';
 import { windowsSessionBackend } from '../platform/windows/windows-session';
-
-export type SessionBackend = {
-  clearStorageData(): Promise<void>;
-  /** Already filtered by the backend. */
-  getCookies(filter: CookieFilter): Promise<Cookie[]>;
-  /** A fully normalized cookie; the api layer derives domain and path. */
-  setCookie(cookie: Cookie): Promise<void>;
-  /** Delete every cookie named `name` that matches `url`'s host and path. */
-  removeCookie(url: string, name: string): Promise<void>;
-};
+import type { SessionBackend } from '../platform/services';
 
 const macosBackend: SessionBackend = {
   clearStorageData: () => macosWebsiteData.clearStorageData(),

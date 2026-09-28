@@ -1,7 +1,6 @@
 import { ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import type { MenuRealizer, MenuWindowAction } from '../../api/menu';
-import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
+import type { MenuRealizer, MenuWindowAction, NativeMenuItemSpec } from '../services';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 

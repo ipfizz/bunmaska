@@ -2,13 +2,7 @@ import { selectBackend } from '../platform/index';
 import * as gtkShell from '../platform/linux/gtk-shell';
 import * as cocoaShell from '../platform/macos/cocoa-shell';
 import { windowsShellBackend } from '../platform/windows/windows-shell';
-
-export type ShellBackend = {
-  openExternal(url: string): boolean;
-  openPath(path: string): boolean;
-  showItemInFolder(path: string): void;
-  beep(): void;
-};
+import type { ShellBackend } from '../platform/services';
 
 const macosBackend: ShellBackend = {
   openExternal: (url) => cocoaShell.openExternal(url),

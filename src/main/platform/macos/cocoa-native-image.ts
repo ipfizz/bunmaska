@@ -1,5 +1,5 @@
 import { ptr, toArrayBuffer } from 'bun:ffi';
-import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../../api/native-image';
+import type { DecodedImage, NativeImageBackend, NativeImageHandle } from '../services';
 import { nsString } from './cocoa-foundation';
 import {
   msgSendF64,

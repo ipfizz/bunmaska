@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { InvalidArgumentError, UnsupportedPlatformError } from '../../../../src/common/errors';
 import type { Cookie, CookieFilter } from '../../../../src/main/api/cookie-util';
-import {
-  Session,
-  type SessionBackend,
-  session,
-  setSessionBackendForTesting,
-} from '../../../../src/main/api/session';
+import { Session, session, setSessionBackendForTesting } from '../../../../src/main/api/session';
+import type { SessionBackend } from '../../../../src/main/platform/services';
 
 /** A fake backend recording calls; every method resolves unless overridden. */
 const fakeBackend = (overrides: Partial<SessionBackend> = {}) => {

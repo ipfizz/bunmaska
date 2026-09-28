@@ -1,6 +1,6 @@
 import { ptr } from 'bun:ffi';
 import { win32 } from 'node:path';
-import type { ShellBackend } from '../../api/shell';
+import type { ShellBackend } from '../services';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 import { loadShell32, SHELL_EXECUTE_SUCCESS_THRESHOLD, SW_SHOWNORMAL } from './win32-shell-ffi';

@@ -10,30 +10,8 @@ import {
 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
+import type { NativeMenuItemSpec } from '../services';
 import type { Handle } from './objc';
-
-/** A backend-neutral description of one menu item. */
-export type NativeMenuItemSpec = {
-  readonly label: string;
-  readonly type: 'normal' | 'separator' | 'submenu' | 'checkbox' | 'radio';
-  readonly enabled: boolean;
-  /** Initial check mark of a checkbox/radio item; absent means unchecked. */
-  readonly checked?: boolean;
-  /** Single-character key equivalent (e.g. `'q'`), or `''` for none. */
-  readonly keyEquivalent: string;
-  /** `NSEventModifierFlags` mask for the key equivalent; absent means no modifiers. */
-  readonly modifierMask?: bigint;
-  /** A predefined role name (the item's behavior is native, not a JS click). */
-  readonly role?: string;
-  /** The macOS first-responder selector for a role item (e.g. `'copy:'`). */
-  readonly roleSelector?: string;
-  /** Linux: a WebKitGTK editing command a role runs on the focused web view (e.g. `'Copy'`). */
-  readonly editingCommand?: string;
-  /** Linux: a GTK window op a role performs (e.g. `'minimize'`). */
-  readonly windowAction?: 'minimize' | 'close' | 'zoom' | 'togglefullscreen';
-  readonly submenu?: ReadonlyArray<NativeMenuItemSpec>;
-  readonly onClick?: () => void;
-};
 
 // Every non-role item targets one shared BunmaskaMenuTarget (D026), which looks its spec up here.
 const clickRegistry = new Map<Handle, NativeMenuItemSpec>();

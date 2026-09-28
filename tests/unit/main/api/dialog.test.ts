@@ -1,15 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { BrowserWindow } from '../../../../src/main/api/browser-window';
-import {
-  type DialogBackend,
-  dialog,
-  setDialogBackendForTesting,
-} from '../../../../src/main/api/dialog';
+import { dialog, setDialogBackendForTesting } from '../../../../src/main/api/dialog';
 import type {
+  DialogBackend,
   MessageBoxSpec,
   OpenDialogSpec,
   SaveDialogSpec,
-} from '../../../../src/main/platform/macos/cocoa-dialog';
+} from '../../../../src/main/platform/services';
 
 let lastMessageBox: MessageBoxSpec | undefined;
 let lastOpen: OpenDialogSpec | undefined;

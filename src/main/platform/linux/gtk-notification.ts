@@ -1,9 +1,5 @@
 import { JSCallback } from 'bun:ffi';
-import type {
-  NotificationBackend,
-  NotificationHandle,
-  NotificationSpec,
-} from '../../api/notification';
+import type { NotificationBackend, NotificationHandle, NotificationSpec } from '../services';
 import { cstr } from '../cstr';
 import { loadGlibFFI } from './glib-ffi';
 import { loadGObjectFFI } from './gobject-ffi';

@@ -1,5 +1,5 @@
 import { createLogger } from '../../../common/logger';
-import type { PowerEventHandlers } from '../macos/cocoa-power';
+import type { PowerEventHandlers } from '../services';
 import { loadWtsapi32, NOTIFY_FOR_THIS_SESSION } from './win32-wts-ffi';
 import { createMessageWindow, type MessageWindow } from './windows-message-window';
 

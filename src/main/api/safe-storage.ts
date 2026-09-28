@@ -5,6 +5,7 @@ import { currentPlatform } from '../../common/platform';
 import { linuxLibsecretBackend } from '../platform/linux/libsecret-keyring';
 import { macosKeychainBackend } from '../platform/macos/cocoa-safe-storage';
 import { windowsDpapiBackend } from '../platform/windows/windows-safe-storage';
+import type { KeyringBackend } from '../platform/services';
 
 /**
  * AES-256-GCM under a keyring-held key (a DPAPI-sealed file on Windows), with no plaintext
@@ -18,13 +19,6 @@ export type SafeStorage = {
   encryptString(plainText: string): Buffer;
   /** Throws on tamper, bad format or unavailability; never returns garbage. */
   decryptString(encrypted: Buffer): string;
-};
-
-export type KeyringBackend = {
-  /** MUST be cheap, non-blocking, and never throw. */
-  isAvailable(): boolean;
-  /** Exactly 32 bytes. May throw; the throw is surfaced by encrypt/decrypt. */
-  getOrCreateKey(): Buffer;
 };
 
 const KEY_LENGTH = 32;

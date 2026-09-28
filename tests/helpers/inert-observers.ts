@@ -1,6 +1,6 @@
-import type { MenuRealizer } from '../../src/main/api/menu';
 import { startNativeThemeObserving } from '../../src/main/api/native-theme';
 import { startPowerMonitorObserving } from '../../src/main/api/power-monitor';
+import type { MenuRealizer } from '../../src/main/platform/services';
 
 /** Arm bootstrap's once-guards with no-ops, so a fake `onReady` never registers real OS observers. */
 export const armInertObservers = (): void => {

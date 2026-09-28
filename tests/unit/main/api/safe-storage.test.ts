@@ -2,10 +2,10 @@ import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { InvalidArgumentError, BunmaskaError } from '../../../../src/common/errors';
 import {
-  type KeyringBackend,
   safeStorage,
   setSafeStorageBackendForTesting,
 } from '../../../../src/main/api/safe-storage';
+import type { KeyringBackend } from '../../../../src/main/platform/services';
 
 /** A fake keyring holding a fixed in-memory key: no FFI, no real keyring. */
 const makeFakeBackend = (

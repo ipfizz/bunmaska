@@ -1,6 +1,6 @@
 import { CString, JSCallback, type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
 import { reportCallbackError } from '../../../common/report-error';
-import type { TrayBackend, TrayInstance } from '../../api/tray';
+import type { TrayBackend, TrayInstance } from '../services';
 import { cstr } from '../cstr';
 import {
   DBUS_GET_PROPERTY_CB_DEF,

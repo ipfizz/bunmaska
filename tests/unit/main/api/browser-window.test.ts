@@ -9,7 +9,6 @@ import {
   resetApplicationMenuForTesting,
   setMenuRealizerForTesting,
 } from '../../../../src/main/api/menu';
-import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
 import {
   BrowserWindow,
   resetWindowRegistryForTesting,
@@ -28,6 +27,7 @@ import type {
 } from '../../../../src/main/platform/native';
 import { armInertObservers, inertMenuRealizer } from '../../../helpers/inert-observers';
 import { appExitCodes, installSafeAppExit } from '../../../helpers/safe-app-exit';
+import type { NativeMenuItemSpec } from '../../../../src/main/platform/services';
 
 type FakeWindow = NativeWindow & {
   fireClosed: () => void;

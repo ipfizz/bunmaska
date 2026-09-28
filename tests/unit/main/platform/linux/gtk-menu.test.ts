@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { NativeMenuItemSpec } from '../../../../../src/main/platform/macos/cocoa-menu';
 import {
   actionName,
   type Bindings,
@@ -13,6 +12,7 @@ import {
   rewireForWindow,
   setBindingsForTesting,
 } from '../../../../../src/main/platform/linux/gtk-menu';
+import type { NativeMenuItemSpec } from '../../../../../src/main/platform/services';
 
 /**
  * Pure-logic unit tests for the Linux GMenu realizer. The native GIO/GTK calls

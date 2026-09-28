@@ -1,5 +1,5 @@
 import type { Pointer } from 'bun:ffi';
-import type { PowerEventHandlers } from '../macos/cocoa-power';
+import type { PowerEventHandlers } from '../services';
 import { loadGlibFFI } from './glib-ffi';
 import { getSystemBus, type SignalEvent, type SignalMatch, subscribeSignal } from './linux-dbus';
 

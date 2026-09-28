@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ptr } from 'bun:ffi';
-import type { KeyringBackend } from '../../api/safe-storage';
+import type { KeyringBackend } from '../services';
 import { nsString } from './cocoa-foundation';
 import { msgSendPtrPtr } from './cocoa-msgsend-variants';
 import { nsDataFromBytes, nsDataToBytes } from './cocoa-native-image';

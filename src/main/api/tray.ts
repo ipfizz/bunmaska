@@ -9,28 +9,9 @@ import { windowsTrayBackend } from '../platform/windows/windows-tray';
 import { app } from './app';
 import type { Menu } from './menu';
 import type { NativeImage } from './native-image';
+import type { TrayBackend, TrayImageOptions, TrayInstance } from '../platform/services';
 
 export type TrayImage = string | NativeImage;
-
-/** Only macOS honours `template`. */
-export type TrayImageOptions = { readonly template?: boolean };
-
-export type TrayInstance = {
-  setToolTip(toolTip: string): void;
-  setTitle(title: string): void;
-  setImage(image: string, options?: TrayImageOptions): void;
-  /** `null` clears the installed menu. */
-  setContextMenu(menu: Menu | null): void;
-  onClick(callback: () => void): void;
-  /** Must be idempotent. */
-  destroy(): void;
-  isDestroyed(): boolean;
-};
-
-export type TrayBackend = {
-  /** `image` is a filesystem path, never a {@link NativeImage}; `appName` is `app.getName()`. */
-  create(image: string, options?: TrayImageOptions, appName?: string): TrayInstance;
-};
 
 const macosBackend: TrayBackend = macosTrayBackend;
 const linuxBackend: TrayBackend = linuxTrayBackend;

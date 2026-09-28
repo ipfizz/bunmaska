@@ -4,12 +4,7 @@ import { gdkScreenBackend } from '../platform/linux/gdk-screen';
 import { cocoaScreenBackend } from '../platform/macos/cocoa-screen';
 import type { Rect } from '../platform/native';
 import { windowsScreenBackend } from '../platform/windows/windows-screen';
-
-/** Top-left screen coordinates; backends already report top-left rects, so none is flipped here. */
-export type Point = {
-  readonly x: number;
-  readonly y: number;
-};
+import type { Point, RawDisplay, ScreenBackend } from '../platform/services';
 
 export type Size = {
   readonly width: number;
@@ -30,23 +25,6 @@ export type Display = {
   readonly scaleFactor: number;
   readonly rotation: number;
   readonly internal: boolean;
-};
-
-/** A backend's display, before the derived sizes. */
-export type RawDisplay = {
-  readonly id: number;
-  readonly bounds: Rect;
-  readonly workArea: Rect;
-  readonly scaleFactor: number;
-  readonly rotation: number;
-  readonly internal: boolean;
-  readonly primary: boolean;
-};
-
-export type ScreenBackend = {
-  /** Must return at least one display on a real host. */
-  getDisplays(): readonly RawDisplay[];
-  getCursorScreenPoint(): Point;
 };
 
 const toDisplay = (raw: RawDisplay): Display => ({

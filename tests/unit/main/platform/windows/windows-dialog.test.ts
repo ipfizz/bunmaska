@@ -3,7 +3,6 @@ import { ptr } from 'bun:ffi';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { MessageBoxSpec } from '../../../../../src/main/platform/macos/cocoa-dialog';
 import {
   buildFileFilter,
   initialDirectory,
@@ -12,6 +11,7 @@ import {
   parseSelectedPaths,
   readFileDialogResult,
 } from '../../../../../src/main/platform/windows/windows-dialog';
+import type { MessageBoxSpec } from '../../../../../src/main/platform/services';
 
 /**
  * Pure option→native mapping for the Windows dialog backend. The dialogs

@@ -8,7 +8,7 @@ import {
 } from '../../../src/main/api/menu';
 import { resetNativeThemeObservingForTesting } from '../../../src/main/api/native-theme';
 import { resetPowerMonitorObservingForTesting } from '../../../src/main/api/power-monitor';
-import { type DialogBackend, setDialogBackendForTesting } from '../../../src/main/api/dialog';
+import { setDialogBackendForTesting } from '../../../src/main/api/dialog';
 import {
   ensureNativeStarted,
   reportUncaughtException,
@@ -18,6 +18,7 @@ import { setNativeAppForTesting } from '../../../src/main/native-app';
 import type { NativeApplication } from '../../../src/main/platform/native';
 import { armInertObservers, inertMenuRealizer } from '../../helpers/inert-observers';
 import { installSafeAppExit } from '../../helpers/safe-app-exit';
+import type { DialogBackend } from '../../../src/main/platform/services';
 
 type NativeTriggers = {
   native: NativeApplication;

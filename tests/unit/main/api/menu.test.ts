@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { NativeMenuItemSpec } from '../../../../src/main/platform/macos/cocoa-menu';
 import type { BrowserWindow } from '../../../../src/main/api/browser-window';
 import {
   installDefaultApplicationMenu,
   Menu,
   MenuItem,
-  type MenuRealizer,
   type PopupTarget,
   resetApplicationMenuForTesting,
   resolvePopupTarget,
@@ -13,6 +11,7 @@ import {
   setMenuRealizerForTesting,
   setWindowResolverForTesting,
 } from '../../../../src/main/api/menu';
+import type { MenuRealizer, NativeMenuItemSpec } from '../../../../src/main/platform/services';
 
 let realized: ReadonlyArray<NativeMenuItemSpec> | undefined;
 let installed = 0;

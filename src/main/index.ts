@@ -49,12 +49,13 @@ export {
   protocol,
 } from './api/protocol';
 export { type SafeStorage, safeStorage } from './api/safe-storage';
-export { type Display, type Point, screen, type Size } from './api/screen';
+export { type Display, screen, type Size } from './api/screen';
 export type { Cookie, CookieFilter, CookieSetDetails } from './api/cookie-util';
 export { Cookies, Session, session } from './api/session';
 export { shell, type Shell } from './api/shell';
-export { Tray, type TrayImageOptions } from './api/tray';
+export { Tray } from './api/tray';
 export type { KeyboardInputEvent, MouseInputEvent, NativeInputEvent } from './platform/native';
+export type { Point, TrayImageOptions } from './platform/services';
 export {
   FFIError,
   InvalidArgumentError,

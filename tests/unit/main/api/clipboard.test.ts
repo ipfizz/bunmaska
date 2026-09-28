@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import {
-  type ClipboardBackend,
-  clipboard,
-  setClipboardBackendForTesting,
-} from '../../../../src/main/api/clipboard';
+import { clipboard, setClipboardBackendForTesting } from '../../../../src/main/api/clipboard';
 import type { NativeImage } from '../../../../src/main/api/native-image';
+import type { ClipboardBackend } from '../../../../src/main/platform/services';
 
 /** A backend fake with every method as a benign default; override per test. */
 const makeFakeBackend = (overrides: Partial<ClipboardBackend> = {}): ClipboardBackend => ({

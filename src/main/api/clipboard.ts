@@ -3,6 +3,7 @@ import { linuxClipboardBackend } from '../platform/linux/gtk-clipboard';
 import * as macosClipboard from '../platform/macos/cocoa-clipboard';
 import { windowsClipboardBackend } from '../platform/windows/windows-clipboard';
 import { type NativeImage, nativeImage } from './native-image';
+import type { ClipboardBackend } from '../platform/services';
 
 /** Reads are async everywhere because GDK 4 can only read async (D033); Electron's are sync. */
 export type Clipboard = {
@@ -17,18 +18,6 @@ export type Clipboard = {
   /** Written as PNG. */
   writeImage(image: NativeImage): void;
   /** MIME type names. */
-  availableFormats(): string[];
-  clear(): void;
-};
-
-export type ClipboardBackend = {
-  readText(): string | Promise<string>;
-  writeText(text: string): void;
-  readHTML(): string | Promise<string>;
-  writeHTML(markup: string): void;
-  /** PNG bytes, or an empty array if the clipboard holds no image. */
-  readImage(): Uint8Array | Promise<Uint8Array>;
-  writeImage(bytes: Uint8Array): void;
   availableFormats(): string[];
   clear(): void;
 };

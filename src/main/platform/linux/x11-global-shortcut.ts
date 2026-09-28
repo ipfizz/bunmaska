@@ -1,6 +1,6 @@
 import { CFunction, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import { parseAccelerator } from '../../api/accelerator';
-import type { GlobalShortcutBackend } from '../../api/global-shortcut';
+import type { GlobalShortcutBackend } from '../services';
 import { cstr } from '../cstr';
 import { loadX11FFI } from './x11-ffi';
 import {

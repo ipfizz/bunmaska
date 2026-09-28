@@ -1,5 +1,5 @@
 import { CString, JSCallback, type Pointer, ptr, toArrayBuffer } from 'bun:ffi';
-import type { ClipboardBackend } from '../../api/clipboard';
+import type { ClipboardBackend } from '../services';
 import { cstr } from '../cstr';
 import { GASYNC_READY_CB_DEF } from './gasync';
 import { loadGdkFFI } from './gdk-ffi';

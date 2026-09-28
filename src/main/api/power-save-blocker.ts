@@ -3,18 +3,11 @@ import { app } from './app';
 import { linuxPowerSaveBlockerBackend } from '../platform/linux/linux-power-save-blocker';
 import { cocoaPowerSaveBlockerBackend } from '../platform/macos/cocoa-power-save-blocker';
 import { windowsPowerSaveBlockerBackend } from '../platform/windows/windows-power-save-blocker';
-
-export type PowerSaveBlockerType = 'prevent-app-suspension' | 'prevent-display-sleep';
-
-/** Opaque and platform-owned, e.g. an IOPMAssertion id or a D-Bus cookie. */
-export type NativeBlocker = unknown;
-
-/** `acquire` returns null without a mechanism (the block is then a no-op); `release` is best-effort. */
-export type PowerSaveBlockerBackend = {
-  /** `appName` is `app.getName()`, for backends that name the inhibitor. */
-  acquire: (type: PowerSaveBlockerType, appName?: string) => NativeBlocker | null;
-  release: (handle: NativeBlocker) => void;
-};
+import type {
+  NativeBlocker,
+  PowerSaveBlockerBackend,
+  PowerSaveBlockerType,
+} from '../platform/services';
 
 const noopBackend: PowerSaveBlockerBackend = {
   acquire: () => null,

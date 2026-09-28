@@ -1,7 +1,7 @@
 import { CString, type Pointer, ptr } from 'bun:ffi';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
-import type { DialogBackend } from '../../api/dialog';
+import type { DialogBackend, MessageBoxSpec, OpenDialogSpec, SaveDialogSpec } from '../services';
 import { cstr } from '../cstr';
 import { runAsyncReady } from './gasync';
 import { loadGioFFI } from './gio-ffi';
@@ -90,13 +90,7 @@ const readGFilePath = (file: Pointer): string => {
   return path;
 };
 
-const showMessageBox = (spec: {
-  readonly message: string;
-  readonly detail: string;
-  readonly buttons: ReadonlyArray<string>;
-  // GtkAlertDialog has no severity concept, so `type` is accepted but ignored.
-  readonly type?: string;
-}): Promise<number> => {
+const showMessageBox = (spec: MessageBoxSpec): Promise<number> => {
   const gtk = loadGtkDialogFFI();
   const gobject = loadGObjectFFI();
   const dialog = gobject.symbols.g_object_new(
@@ -192,23 +186,16 @@ const setInitialPath = (
 };
 
 /** The GtkFileDialog entry point; a folder picker wins over files, as Electron does on Linux. */
-export const openDialogMethod = (spec: {
-  readonly canChooseDirectories: boolean;
-  readonly allowsMultipleSelection: boolean;
-}): 'open' | 'open_multiple' | 'select_folder' | 'select_multiple_folders' => {
+export const openDialogMethod = (
+  spec: Pick<OpenDialogSpec, 'canChooseDirectories' | 'allowsMultipleSelection'>,
+): 'open' | 'open_multiple' | 'select_folder' | 'select_multiple_folders' => {
   if (spec.canChooseDirectories) {
     return spec.allowsMultipleSelection ? 'select_multiple_folders' : 'select_folder';
   }
   return spec.allowsMultipleSelection ? 'open_multiple' : 'open';
 };
 
-const showOpenDialog = (spec: {
-  readonly canChooseFiles: boolean;
-  readonly canChooseDirectories: boolean;
-  readonly allowsMultipleSelection: boolean;
-  readonly defaultPath: string;
-  readonly extensions: ReadonlyArray<string>;
-}): Promise<string[]> => {
+const showOpenDialog = (spec: OpenDialogSpec): Promise<string[]> => {
   const gtk = loadGtkDialogFFI();
   const fileDialog = gtk.symbols.gtk_file_dialog_new();
   if (fileDialog === null) {
@@ -243,10 +230,7 @@ const showOpenDialog = (spec: {
   ).finally(() => loadGObjectFFI().symbols.g_object_unref(fileDialog));
 };
 
-const showSaveDialog = (spec: {
-  readonly defaultName: string;
-  readonly extensions: ReadonlyArray<string>;
-}): Promise<string> => {
+const showSaveDialog = (spec: SaveDialogSpec): Promise<string> => {
   const gtk = loadGtkDialogFFI();
   const fileDialog = gtk.symbols.gtk_file_dialog_new();
   if (fileDialog === null) {

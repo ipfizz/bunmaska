@@ -1,6 +1,6 @@
 import { ptr, read } from 'bun:ffi';
 import type { Menu } from '../../api/menu';
-import type { TrayBackend, TrayInstance } from '../../api/tray';
+import type { TrayBackend, TrayInstance } from '../services';
 import { wstr } from './win32';
 import { loadUser32 } from './win32-ffi';
 import { GDIP_OK, loadGdiplus } from './win32-gdiplus-ffi';

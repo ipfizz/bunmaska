@@ -1,10 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { currentPlatform } from '../../common/platform';
 import { observePowerEvents as linuxObservePowerEvents } from '../platform/linux/linux-power-monitor';
-import {
-  observePowerEvents as macosObservePowerEvents,
-  type PowerEventHandlers,
-} from '../platform/macos/cocoa-power';
+import { observePowerEvents as macosObservePowerEvents } from '../platform/macos/cocoa-power';
+import type { PowerEventHandlers } from '../platform/services';
 import { observePowerEvents as windowsObservePowerEvents } from '../platform/windows/windows-power-monitor';
 
 const observePower = (handlers: PowerEventHandlers): void => {

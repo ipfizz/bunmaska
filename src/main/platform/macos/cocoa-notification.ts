@@ -1,8 +1,4 @@
-import type {
-  NotificationBackend,
-  NotificationHandle,
-  NotificationSpec,
-} from '../../api/notification';
+import type { NotificationBackend, NotificationHandle, NotificationSpec } from '../services';
 import { nsString } from './cocoa-foundation';
 import { msgSendPtr } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';

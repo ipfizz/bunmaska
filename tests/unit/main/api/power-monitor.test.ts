@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { PowerEventHandlers } from '../../../../src/main/platform/macos/cocoa-power';
 import {
   powerMonitor,
   resetPowerMonitorObservingForTesting,
   startPowerMonitorObserving,
 } from '../../../../src/main/api/power-monitor';
+import type { PowerEventHandlers } from '../../../../src/main/platform/services';
 
 describe('powerMonitor', () => {
   test('is an EventEmitter (for suspend/resume/lock events)', () => {

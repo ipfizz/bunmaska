@@ -1,7 +1,7 @@
 import { type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
 import { createLogger } from '../../../common/logger';
-import type { ClipboardBackend } from '../../api/clipboard';
+import type { ClipboardBackend } from '../services';
 import { wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
 import {
