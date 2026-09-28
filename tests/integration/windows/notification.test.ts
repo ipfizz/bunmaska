@@ -25,16 +25,15 @@ if (currentPlatform() === 'windows') {
 
     test('present shows a balloon and returns a closable handle', () => {
       const handle = windowsNotificationBackend.present(spec);
-      expect(typeof handle.close).toBe('function');
       expect(() => handle.close()).not.toThrow();
       // close is idempotent.
       expect(() => handle.close()).not.toThrow();
     });
 
     test('a silent notification presents without throwing', () => {
-      const handle = windowsNotificationBackend.present({ ...spec, silent: true });
-      handle.close();
-      expect(true).toBe(true);
+      expect(() =>
+        windowsNotificationBackend.present({ ...spec, silent: true }).close(),
+      ).not.toThrow();
     });
 
     test('onClosed registers a callback without firing it eagerly', () => {
