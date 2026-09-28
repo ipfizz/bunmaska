@@ -14,23 +14,21 @@ import { windowsShellBackend } from '../../../src/main/platform/windows/windows-
  */
 const NON_EXISTENT = 'C:\\bunmaska_definitely_not_a_real_path_zzz\\nope.txt';
 
-if (currentPlatform() === 'windows') {
-  describe('Windows shell backend', () => {
-    test('beep does not throw', () => {
-      expect(() => windowsShellBackend.beep()).not.toThrow();
-    });
-
-    test('openPath on a non-existent path returns false (no launch)', () => {
-      expect(windowsShellBackend.openPath(NON_EXISTENT)).toBe(false);
-    });
-
-    test('the public shell.openPath surfaces the failure as an error string', async () => {
-      const result = await shell.openPath(NON_EXISTENT);
-      expect(result).toContain('Failed to open path');
-    });
-
-    test('the public shell.beep delegates without throwing', () => {
-      expect(() => shell.beep()).not.toThrow();
-    });
+describe.skipIf(currentPlatform() !== 'windows')('Windows shell backend', () => {
+  test('beep does not throw', () => {
+    expect(() => windowsShellBackend.beep()).not.toThrow();
   });
-}
+
+  test('openPath on a non-existent path returns false (no launch)', () => {
+    expect(windowsShellBackend.openPath(NON_EXISTENT)).toBe(false);
+  });
+
+  test('the public shell.openPath surfaces the failure as an error string', async () => {
+    const result = await shell.openPath(NON_EXISTENT);
+    expect(result).toContain('Failed to open path');
+  });
+
+  test('the public shell.beep delegates without throwing', () => {
+    expect(() => shell.beep()).not.toThrow();
+  });
+});
