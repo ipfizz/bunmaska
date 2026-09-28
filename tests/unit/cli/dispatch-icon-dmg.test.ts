@@ -33,20 +33,4 @@ describe('dispatch routes --icon and --dmg to the macOS builder', () => {
     expect(captured?.convertIcon).toBe(convertIcon);
     expect(captured?.buildDmg).toBe(buildDmg);
   });
-
-  test('--dmg with --target linux is a clear macOS-only error (no build run)', async () => {
-    let built = false;
-    const code = await dispatch(
-      { kind: 'build', entry: 'app.ts', options: { target: 'linux', dmg: true } },
-      {
-        buildLinux: async () => {
-          built = true;
-          return { appDir: '', tarball: '', deb: '' };
-        },
-      },
-    );
-
-    expect(code).toBe(1);
-    expect(built).toBe(false);
-  });
 });

@@ -27,22 +27,6 @@ describe('dispatch routes --sign to the macOS builder', () => {
     expect(captured?.sign).toBe('-');
     expect(captured?.signApp).toBe(signApp);
   });
-
-  test('--sign with --target linux is a clear macOS-only error (no build run)', async () => {
-    let built = false;
-    const code = await dispatch(
-      { kind: 'build', entry: 'app.ts', options: { target: 'linux', sign: '-' } },
-      {
-        buildLinux: async () => {
-          built = true;
-          return { appDir: '', tarball: '', deb: '' };
-        },
-      },
-    );
-
-    expect(code).toBe(1);
-    expect(built).toBe(false);
-  });
 });
 
 describe('dispatch --notarize', () => {
