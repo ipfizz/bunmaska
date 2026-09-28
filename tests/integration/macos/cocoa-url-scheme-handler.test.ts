@@ -9,6 +9,7 @@ import {
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 import { defineObjcClass } from '../../../src/main/platform/macos/cocoa-runtime-class';
 import {
+  createUrlSchemeHandler,
   handleStartTask,
   setUrlSchemeDispatcherForTesting,
 } from '../../../src/main/platform/macos/cocoa-url-scheme-handler';
@@ -131,5 +132,11 @@ describe.skipIf(currentPlatform() !== 'macos')('BunmaskaURLSchemeHandler task se
   test('a declined request fails the task', () => {
     serve(undefined);
     expect([log.finished, log.failed]).toEqual([0, 1]);
+  });
+});
+
+describe.skipIf(currentPlatform() !== 'macos')('createUrlSchemeHandler', () => {
+  test('every window shares one handler instance instead of leaking one each', () => {
+    expect(createUrlSchemeHandler().handle).toBe(createUrlSchemeHandler().handle);
   });
 });

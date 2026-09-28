@@ -175,14 +175,14 @@ export type UrlSchemeHandler = {
   readonly handle: Handle;
 };
 
-/**
- * Create a shared `WKURLSchemeHandler` instance. The instance routes every
- * scheme through {@link protocol.dispatch}, so one instance serves all
- * registered schemes on a given configuration.
- */
+let shared: UrlSchemeHandler | undefined;
+
+/** The process-wide `WKURLSchemeHandler`; it holds no per-window state, so every configuration shares it. */
 export const createUrlSchemeHandler = (): UrlSchemeHandler => {
-  const rt = cocoa();
-  const cls = ensureHandlerClass();
-  const handle = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
-  return { handle };
+  if (shared === undefined) {
+    const rt = cocoa();
+    const alloc = rt.msgSend(ensureHandlerClass(), rt.selectors.get('alloc'));
+    shared = { handle: rt.msgSend(alloc, rt.selectors.get('init')) };
+  }
+  return shared;
 };
