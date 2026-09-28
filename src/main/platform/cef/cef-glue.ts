@@ -1,6 +1,5 @@
 import { cc, FFIType, type Pointer } from 'bun:ffi';
-import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -95,23 +94,28 @@ export type CefGlue = {
 
 let cached: CefGlue | undefined;
 
-/** Compile the glue once per process (TinyCC needs a source file on disk). */
+/**
+ * Compile the glue once per process. TinyCC reads a file, written into a private mkdtemp
+ * dir: a shared fixed path lets another user (TMPDIR unset = /tmp) swap in their own C.
+ */
 export const cefGlue = (): CefGlue => {
   if (cached !== undefined) {
     return cached;
   }
-  const hash = createHash('sha256').update(GLUE_SOURCE).digest('hex').slice(0, 16);
-  const dir = join(tmpdir(), 'bunmaska-cef');
-  mkdirSync(dir, { recursive: true });
-  const source = join(dir, `glue-${hash}.c`);
-  writeFileSync(source, GLUE_SOURCE);
-  const lib = cc({ source, symbols: SYMBOLS });
-  const toNumber = (value: unknown): number => Number(value ?? 0);
-  cached = {
-    initBase: (struct, size) => lib.symbols.bm_init_base(struct, BigInt(size)),
-    slotGetter: (index) => toNumber(lib.symbols.bm_slot_getter(index)),
-    pumpInit: () => lib.symbols.bm_pump_init(),
-    scheduleFn: () => toNumber(lib.symbols.bm_schedule_fn()),
-  };
-  return cached;
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-cef-'));
+  try {
+    const source = join(dir, 'glue.c');
+    writeFileSync(source, GLUE_SOURCE, { flag: 'wx' });
+    const lib = cc({ source, symbols: SYMBOLS });
+    const toNumber = (value: unknown): number => Number(value ?? 0);
+    cached = {
+      initBase: (struct, size) => lib.symbols.bm_init_base(struct, BigInt(size)),
+      slotGetter: (index) => toNumber(lib.symbols.bm_slot_getter(index)),
+      pumpInit: () => lib.symbols.bm_pump_init(),
+      scheduleFn: () => toNumber(lib.symbols.bm_schedule_fn()),
+    };
+    return cached;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 };

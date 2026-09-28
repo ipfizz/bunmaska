@@ -1,5 +1,5 @@
 import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BunmaskaError } from '../../../common/errors';
@@ -117,13 +117,16 @@ export const installCefApplicationClass = (): void => {
  * An unbundled process (`bun main.ts`) has no main bundle, and Chromium derives
  * the Mach rendezvous service name from it in the parent AND (via
  * `--main-bundle-path`) in every helper; without one they never meet. A packaged
- * .app already is one.
+ * .app already is one. The stub lives in a private per-process dir: helpers read it
+ * whenever they spawn, so a shared one rewritten by another launch can be caught empty.
  */
-const mainBundlePath = (): string => {
+export const mainBundlePath = (): string => {
   if (process.execPath.includes('.app/Contents/MacOS/')) {
     return '';
   }
-  const bundle = join(tmpdir(), 'bunmaska-cef', 'DevHost.app');
+  const dir = mkdtempSync(join(tmpdir(), 'bunmaska-cef-'));
+  process.once('exit', () => rmSync(dir, { recursive: true, force: true }));
+  const bundle = join(dir, 'DevHost.app');
   mkdirSync(join(bundle, 'Contents'), { recursive: true });
   writeFileSync(
     join(bundle, 'Contents', 'Info.plist'),
