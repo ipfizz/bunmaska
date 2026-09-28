@@ -147,6 +147,11 @@ const graphs = [website, ...(isHome ? [organization, softwareApp, sourceCode] : 
     </script>
   </head>
   <body>
+    <a
+      href="#main"
+      class="fixed top-2 left-2 z-[60] rounded-sm border border-border-strong bg-bg px-4 py-2 text-sm not-focus:sr-only"
+      >Skip to content</a
+    >
     <slot />
     <script>
       // Scroll reveals: hide-then-show only when we can actually observe.
