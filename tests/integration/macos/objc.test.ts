@@ -13,4 +13,10 @@ describe.skipIf(currentPlatform() !== 'macos')('dataSymbolAddress', () => {
     const yes = msgSendU8(rt.classes.get('NSNumber'), rt.selectors.get('numberWithBool:'), 1);
     expect(read.u64(dataSymbolAddress(CORE_FOUNDATION, 'kCFBooleanTrue'), 0)).toBe(yes);
   });
+
+  test('names the image, not the symbol, when the image cannot be opened', () => {
+    expect(() => dataSymbolAddress('/nonexistent/Missing.framework/Missing', 'kMissing')).toThrow(
+      /dlopen\('\/nonexistent\/Missing.framework\/Missing'\) failed/,
+    );
+  });
 });

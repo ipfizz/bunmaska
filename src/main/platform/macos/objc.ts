@@ -1,5 +1,5 @@
 import { FFIType, type Pointer } from 'bun:ffi';
-import { UnsupportedPlatformError } from '../../../common/errors';
+import { FFIError, UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import { cstr } from '../cstr';
 import { dlopen } from '../dlopen';
@@ -70,9 +70,13 @@ const loadDl = macOSLibraryAccessor('libSystem dlsym', () =>
 /** The address of data symbol `name` in the image at `path`: bun's dlopen binds only functions. */
 export const dataSymbolAddress = (path: string, name: string): Pointer => {
   const dl = loadDl().symbols;
-  const address = dl.dlsym(dl.dlopen(cstr(path), RTLD_NOW), cstr(name));
+  const image = dl.dlopen(cstr(path), RTLD_NOW);
+  if (image === null) {
+    throw new FFIError(`dlopen('${path}') failed`);
+  }
+  const address = dl.dlsym(image, cstr(name));
   if (address === null) {
-    throw new Error(`dlsym('${name}') in ${path} returned null`);
+    throw new FFIError(`dlsym('${name}') in ${path} returned null`);
   }
   return address;
 };
