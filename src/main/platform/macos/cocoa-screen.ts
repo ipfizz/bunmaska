@@ -1,31 +1,21 @@
 import { FFIType, ptr } from 'bun:ffi';
 import { dlopen } from '../dlopen';
-import { UnsupportedPlatformError } from '../../../common/errors';
-import { currentPlatform } from '../../../common/platform';
 import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import type { Rect } from '../native';
+import { nsString } from './cocoa-foundation';
+import {
+  msgSendI64,
+  msgSendPtr,
+  msgSendPtrI64,
+  msgSendReturnsF64,
+  msgSendReturnsI64,
+} from './cocoa-msgsend-variants';
+import { cocoa } from './cocoa-runtime';
+import { type Handle, macOSLibraryAccessor } from './objc';
 
 /**
- * macOS display enumeration via CoreGraphics scalar getters.
- *
- * WHY NOT NSScreen.frame / CGDisplayBounds (the struct-return path): bun:ffi
- * 1.3.14 has no struct return type — `FFIType` exposes no `struct` member and
- * `dlopen` rejects both an array layout (`[f64,f64,f64,f64]`) and an object
- * layout as a `returns` type ("Unknown return type"). On arm64 a CGRect/NSRect
- * is a homogeneous-float aggregate returned in v0..v3; declaring the call as
- * `returns: f64` recovers ONLY the first field (origin.x). The remaining three
- * doubles (y/width/height) are unreachable without struct support, and the
- * inline C compiler (`cc`) is off-limits (zero-compiled-native-code rule). So
- * the geometry comes entirely from CoreGraphics scalar getters, which were
- * empirically verified on a real arm64 host to return sane values.
- *
- * v1 LIMITATION — display ORIGIN (bounds.x/y): CoreGraphics has no scalar
- * getter for a display's global origin; only the struct-return CGDisplayBounds
- * exposes it. The primary display's origin is (0,0) by definition, so single-
- * display and primary geometry are exact. For SECONDARY displays the origin is
- * reported as (0,0) too (documented), which makes multi-monitor bounds.x/y and
- * cross-display nearest-point placement approximate until struct return lands.
- * workArea == bounds on macOS v1 (the menu-bar/dock inset needs NSScreen
- * visibleFrame, another struct return), documented.
+ * macOS displays. bun:ffi cannot return an NSRect/NSPoint struct, so geometry is read
+ * through KVC (`valueForKey:` boxes it in an NSValue) and copied out with `getValue:size:`.
  */
 
 const CG_PATH = '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics';
@@ -47,35 +37,16 @@ const CG_SYMBOLS = {
   CGDisplayModeRelease: { args: [FFIType.pointer], returns: FFIType.void },
 } as const;
 
-const cache: { ffi: ReturnType<typeof dlopen<typeof CG_SYMBOLS>> | undefined } = { ffi: undefined };
+export const loadCoreGraphicsFFI = macOSLibraryAccessor('CoreGraphics screen', () =>
+  dlopen(CG_PATH, CG_SYMBOLS),
+);
 
-/**
- * Open CoreGraphics and expose the display scalar getters. Only callable on
- * macOS — throws {@link UnsupportedPlatformError} elsewhere so the module stays
- * importable on Linux for unit testing.
- */
-export const loadCoreGraphicsFFI = () => {
-  const platform = currentPlatform();
-  if (platform !== 'macos') {
-    throw new UnsupportedPlatformError(
-      `loadCoreGraphicsFFI() is only supported on macOS; current platform is ${platform}`,
-    );
-  }
-  if (cache.ffi) {
-    return cache.ffi;
-  }
-  const ffi = dlopen(CG_PATH, CG_SYMBOLS);
-  cache.ffi = ffi;
-  return ffi;
-};
+type CGSymbols = ReturnType<typeof loadCoreGraphicsFFI>['symbols'];
 
 const MAX_DISPLAYS = 32;
 
 /** scaleFactor = physical / logical width of the display's current mode (>= 1). */
-const scaleFactorFor = (
-  symbols: ReturnType<typeof loadCoreGraphicsFFI>['symbols'],
-  id: number,
-): number => {
+const scaleFactorFor = (symbols: CGSymbols, id: number): number => {
   const mode = symbols.CGDisplayCopyDisplayMode(id);
   if (mode === null) {
     return 1;
@@ -86,15 +57,14 @@ const scaleFactorFor = (
   return logical > 0 ? physical / logical : 1;
 };
 
-const rawDisplayFor = (
-  symbols: ReturnType<typeof loadCoreGraphicsFFI>['symbols'],
-  id: number,
-): RawDisplay => {
-  const width = Number(symbols.CGDisplayPixelsWide(id));
-  const height = Number(symbols.CGDisplayPixelsHigh(id));
-  // Origin x/y has no scalar getter; (0,0) is exact for the primary display and
-  // a documented v1 approximation for secondary displays. See module header.
-  const bounds = { x: 0, y: 0, width, height };
+/** CoreGraphics-only fallback for when AppKit lists no screens: origin (0,0), workArea = bounds. */
+const cgDisplayFor = (symbols: CGSymbols, id: number): RawDisplay => {
+  const bounds = {
+    x: 0,
+    y: 0,
+    width: Number(symbols.CGDisplayPixelsWide(id)),
+    height: Number(symbols.CGDisplayPixelsHigh(id)),
+  };
   return {
     id,
     bounds,
@@ -106,37 +76,95 @@ const rawDisplayFor = (
   };
 };
 
-/** Enumerate the active displays via CoreGraphics scalar getters. */
+const cgDisplays = (symbols: CGSymbols): RawDisplay[] => {
+  const ids = new Uint32Array(MAX_DISPLAYS);
+  const count = new Uint32Array(1);
+  const err = symbols.CGGetActiveDisplayList(MAX_DISPLAYS, ptr(ids), ptr(count));
+  const found = count[0] ?? 0;
+  if (err !== 0 || found === 0) {
+    return [cgDisplayFor(symbols, symbols.CGMainDisplayID())];
+  }
+  return Array.from(ids.subarray(0, found), (id) => cgDisplayFor(symbols, id));
+};
+
+/** Copy `count` doubles out of the NSValue that `[object valueForKey:key]` boxes. */
+const readBoxed = (object: Handle, key: string, count: number): Float64Array => {
+  const rt = cocoa();
+  const value = msgSendPtr(object, rt.selectors.get('valueForKey:'), nsString(key));
+  const out = new Float64Array(count);
+  msgSendPtrI64(value, rt.selectors.get('getValue:size:'), BigInt(ptr(out)), BigInt(count * 8));
+  return out;
+};
+
+/** A Cocoa bottom-left rect as top-left global coordinates; `primaryHeight` is the flip pivot. */
+const flipRect = (
+  [x = 0, y = 0, width = 0, height = 0]: Float64Array,
+  primaryHeight: number,
+): Rect => ({
+  x,
+  y: primaryHeight - (y + height),
+  width,
+  height,
+});
+
+const screens = (): Handle[] => {
+  const rt = cocoa();
+  const list = rt.msgSend(rt.classes.get('NSScreen'), rt.selectors.get('screens'));
+  const count = Number(msgSendReturnsI64(list, rt.selectors.get('count')));
+  return Array.from({ length: count }, (_, i) =>
+    msgSendI64(list, rt.selectors.get('objectAtIndex:'), BigInt(i)),
+  );
+};
+
+/** Height of the menu-bar screen, which AppKit always lists first at the global origin. */
+const primaryHeightOf = (all: readonly Handle[]): number => {
+  const [primary] = all;
+  return primary === undefined ? 0 : (readBoxed(primary, 'frame', 4)[3] ?? 0);
+};
+
+const screenNumber = (screen: Handle): number => {
+  const rt = cocoa();
+  const description = rt.msgSend(screen, rt.selectors.get('deviceDescription'));
+  const number = msgSendPtr(
+    description,
+    rt.selectors.get('objectForKey:'),
+    nsString('NSScreenNumber'),
+  );
+  return Number(msgSendReturnsI64(number, rt.selectors.get('unsignedIntValue')) & 0xffffffffn);
+};
+
 /** Primary display height (pt) - the top-left <-> bottom-left flip pivot. */
 export const primaryDisplayHeight = (): number => {
   const symbols = loadCoreGraphicsFFI().symbols;
   return Number(symbols.CGDisplayPixelsHigh(symbols.CGMainDisplayID()));
 };
 
+/** The active displays in top-left global coordinates. */
 export const getDisplays = (): readonly RawDisplay[] => {
   const { symbols } = loadCoreGraphicsFFI();
-  const ids = new Uint32Array(MAX_DISPLAYS);
-  const count = new Uint32Array(1);
-  const err = symbols.CGGetActiveDisplayList(MAX_DISPLAYS, ptr(ids), ptr(count));
-  const found = count[0] ?? 0;
-  if (err !== 0 || found === 0) {
-    // Fall back to the main display so callers always get at least one entry.
-    return [rawDisplayFor(symbols, symbols.CGMainDisplayID())];
+  const all = screens();
+  if (all.length === 0) {
+    return cgDisplays(symbols);
   }
-  const displays: RawDisplay[] = [];
-  for (let i = 0; i < found; i++) {
-    displays.push(rawDisplayFor(symbols, ids[i] ?? 0));
-  }
-  return displays;
+  const primaryHeight = primaryHeightOf(all);
+  return all.map((screen) => {
+    const id = screenNumber(screen);
+    return {
+      id,
+      bounds: flipRect(readBoxed(screen, 'frame', 4), primaryHeight),
+      workArea: flipRect(readBoxed(screen, 'visibleFrame', 4), primaryHeight),
+      scaleFactor: msgSendReturnsF64(screen, cocoa().selectors.get('backingScaleFactor')),
+      rotation: symbols.CGDisplayRotation(id),
+      internal: symbols.CGDisplayIsBuiltin(id) === 1,
+      primary: symbols.CGDisplayIsMain(id) === 1,
+    };
+  });
 };
 
-/**
- * Cursor position. NSEvent.mouseLocation returns an NSPoint (2-f64 struct) —
- * the same struct-return wall as the frame rects — so v1 returns {0,0}. The
- * bottom-left-origin flip would also be needed even if the struct were
- * readable, so this is deferred behind the struct-return work. Documented.
- */
-export const getCursorScreenPoint = (): Point => ({ x: 0, y: 0 });
+export const getCursorScreenPoint = (): Point => {
+  const [x = 0, y = 0] = readBoxed(cocoa().classes.get('NSEvent'), 'mouseLocation', 2);
+  return { x, y: primaryHeightOf(screens()) - y };
+};
 
 export const cocoaScreenBackend: ScreenBackend = {
   getDisplays,
