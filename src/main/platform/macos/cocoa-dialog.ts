@@ -61,6 +61,8 @@ export type OpenDialogSpec = {
 
 export type SaveDialogSpec = {
   readonly defaultName: string;
+  /** Directory the panel opens at; absent = system default / last location. */
+  readonly defaultDirectory?: string;
   /** Allowed file extensions (without dots); empty means any file. */
   readonly extensions: ReadonlyArray<string>;
 };
@@ -73,6 +75,16 @@ const nsArrayOfStrings = (strings: ReadonlyArray<string>): Handle => {
     msgSendPtr(array, rt.selectors.get('addObject:'), nsString(s));
   }
   return array;
+};
+
+const setDirectory = (panel: Handle, path: string): void => {
+  const rt = cocoa();
+  const url = msgSendPtr(
+    rt.classes.get('NSURL'),
+    rt.selectors.get('fileURLWithPath:'),
+    nsString(path),
+  );
+  msgSendPtr(panel, rt.selectors.get('setDirectoryURL:'), url);
 };
 
 /** Build (but do not run) an `NSAlert` for a message box. Returns its handle. */
@@ -116,12 +128,7 @@ export const buildOpenPanel = (spec: OpenDialogSpec): Handle => {
   );
   msgSendU8(panel, rt.selectors.get('setCanCreateDirectories:'), spec.canCreateDirectories ? 1 : 0);
   if (spec.defaultPath.length > 0) {
-    const url = msgSendPtr(
-      rt.classes.get('NSURL'),
-      rt.selectors.get('fileURLWithPath:'),
-      nsString(spec.defaultPath),
-    );
-    msgSendPtr(panel, rt.selectors.get('setDirectoryURL:'), url);
+    setDirectory(panel, spec.defaultPath);
   }
   if (spec.extensions.length > 0) {
     msgSendPtr(panel, rt.selectors.get('setAllowedFileTypes:'), nsArrayOfStrings(spec.extensions));
@@ -152,6 +159,9 @@ export const showOpenDialog = (spec: OpenDialogSpec): string[] => {
 export const buildSavePanel = (spec: SaveDialogSpec): Handle => {
   const rt = cocoa();
   const panel = rt.msgSend(rt.classes.get('NSSavePanel'), rt.selectors.get('savePanel'));
+  if (spec.defaultDirectory !== undefined && spec.defaultDirectory.length > 0) {
+    setDirectory(panel, spec.defaultDirectory);
+  }
   if (spec.defaultName.length > 0) {
     msgSendPtr(panel, rt.selectors.get('setNameFieldStringValue:'), nsString(spec.defaultName));
   }
