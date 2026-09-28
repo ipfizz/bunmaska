@@ -1,6 +1,6 @@
 import { FFIType, JSCallback, ptr } from 'bun:ffi';
 import { FFIError } from '../../../common/errors';
-import { wstr } from './win32';
+import { registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadUser32 } from './win32-ffi';
 
 /**
@@ -9,7 +9,6 @@ import { loadKernel32, loadUser32 } from './win32-ffi';
  * WebKit, so a JSCallback WndProc is safe here (unlike `windows-native-window.ts`).
  */
 
-const WNDCLASSEXW_SIZE = 80;
 const CLASS_NAME = 'BunmaskaMessageWindow';
 /** `WS_EX_TOOLWINDOW` — keep the (never-shown) window out of the taskbar/alt-tab. */
 const WS_EX_TOOLWINDOW = 0x00000080;
@@ -57,16 +56,7 @@ const ensureClassRegistered = (): void => {
   }
 
   const hInstance = loadKernel32().symbols.GetModuleHandleW(null);
-  const className = wstr(CLASS_NAME);
-  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
-  const view = new DataView(wc.buffer);
-  view.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
-  view.setBigUint64(8, BigInt(wndProcPtr), true); // lpfnWndProc
-  view.setBigUint64(24, hInstance, true); // hInstance
-  view.setBigUint64(64, BigInt(ptr(className)), true); // lpszClassName
-  if (user32.RegisterClassExW(ptr(wc)) === 0) {
-    throw new FFIError('RegisterClassExW failed for the Bunmaska message window class');
-  }
+  registerWindowClass(user32, CLASS_NAME, BigInt(wndProcPtr), hInstance);
   // Retain the JSCallback for the whole process (the class references it forever).
   registered = { wndProc };
 };
@@ -81,10 +71,9 @@ export const createMessageWindow = (handler: MessageHandler): MessageWindow => {
   ensureClassRegistered();
   const user32 = loadUser32().symbols;
   const hInstance = loadKernel32().symbols.GetModuleHandleW(null);
-  const className = wstr(CLASS_NAME);
   const hwnd = user32.CreateWindowExW(
     WS_EX_TOOLWINDOW,
-    ptr(className),
+    ptr(wstr(CLASS_NAME)),
     null,
     WS_OVERLAPPED,
     0,

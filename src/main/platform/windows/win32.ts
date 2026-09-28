@@ -7,8 +7,8 @@
  * pointers (struct buffers, wide strings) are passed with `ptr()` as usual.
  */
 
-import { type Pointer, read } from 'bun:ffi';
-import { UnsupportedPlatformError } from '../../../common/errors';
+import { type Pointer, ptr, read } from 'bun:ffi';
+import { FFIError, UnsupportedPlatformError } from '../../../common/errors';
 import { currentPlatform } from '../../../common/platform';
 import type { Rect } from '../native';
 
@@ -42,6 +42,29 @@ export const readRect = (pointer: Pointer, offset: number): Rect => {
     width: read.i32(pointer, offset + 8) - left,
     height: read.i32(pointer, offset + 12) - top,
   };
+};
+
+const WNDCLASSEXW_SIZE = 80;
+
+/** Register a window class, throwing `FFIError` on failure; the name is copied into an atom. */
+export const registerWindowClass = (
+  user32: { readonly RegisterClassExW: (wc: Pointer) => number },
+  name: string,
+  wndProc: bigint,
+  hInstance: bigint,
+  hCursor = 0n,
+): void => {
+  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
+  const dv = new DataView(wc.buffer);
+  dv.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
+  dv.setBigUint64(8, wndProc, true); // lpfnWndProc
+  dv.setBigUint64(24, hInstance, true); // hInstance
+  dv.setBigUint64(40, hCursor, true); // hCursor
+  const className = wstr(name);
+  dv.setBigUint64(64, BigInt(ptr(className)), true); // lpszClassName
+  if (user32.RegisterClassExW(ptr(wc)) === 0) {
+    throw new FFIError(`RegisterClassExW failed for ${name}`);
+  }
 };
 
 /**

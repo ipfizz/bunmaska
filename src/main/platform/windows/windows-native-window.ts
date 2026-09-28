@@ -3,7 +3,7 @@ import { isDevRestart } from '../../dev-reload';
 import { FFIError } from '../../../common/errors';
 import { cstr } from '../cstr';
 import type { Rect, WindowEventType } from '../native';
-import { readRect, wstr } from './win32';
+import { readRect, registerWindowClass, wstr } from './win32';
 import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
 /**
@@ -17,7 +17,6 @@ import { loadKernel32, loadOle32, loadUser32 } from './win32-ffi';
 
 const NATIVE_WINDOW_CLASS_NAME = 'BunmaskaNativeWindow';
 const FRAME_WINDOW_CLASS_NAME = 'BunmaskaFrameWindow';
-const WNDCLASSEXW_SIZE = 80;
 const RECT_SIZE = 16;
 /** `sizeof(WINDOWPLACEMENT)`: length, flags, showCmd, two POINTs, then rcNormalPosition@28. */
 const WINDOWPLACEMENT_SIZE = 44;
@@ -50,8 +49,6 @@ const HTCAPTION = 2;
 
 let oleInitialized = false;
 let classRegistered = false;
-// Pinned for the process lifetime: the window class references the name buffer.
-let classNameBuffer: Uint8Array | undefined;
 
 /** Initialise COM on this thread once — WinCairo WebKit requires it. */
 export const ensureOleInitialized = (): void => {
@@ -78,19 +75,9 @@ const ensureNativeWindowClass = (): bigint => {
   if (defWindowProc === 0n) {
     throw new FFIError('GetProcAddress(DefWindowProcW) failed');
   }
-  classNameBuffer = wstr(NATIVE_WINDOW_CLASS_NAME);
-  const user32 = loadUser32();
-  const hCursor = user32.symbols.LoadCursorW(0n, BigInt(IDC_ARROW));
-  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
-  const dv = new DataView(wc.buffer);
-  dv.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
-  dv.setBigUint64(8, defWindowProc, true); // lpfnWndProc = native DefWindowProcW
-  dv.setBigUint64(24, hInstance, true); // hInstance
-  dv.setBigUint64(40, hCursor, true); // hCursor
-  dv.setBigUint64(64, BigInt(ptr(classNameBuffer)), true); // lpszClassName
-  if (user32.symbols.RegisterClassExW(ptr(wc)) === 0) {
-    throw new FFIError('RegisterClassExW failed for the Bunmaska window class');
-  }
+  const user32 = loadUser32().symbols;
+  const hCursor = user32.LoadCursorW(0n, BigInt(IDC_ARROW));
+  registerWindowClass(user32, NATIVE_WINDOW_CLASS_NAME, defWindowProc, hInstance, hCursor);
   classRegistered = true;
   return hInstance;
 };
@@ -98,7 +85,6 @@ const ensureNativeWindowClass = (): bigint => {
 // Frame-class shared state: the registered class + its retained JSCallback proc.
 let frameClassRegistered = false;
 let frameWndProc: JSCallback | undefined;
-let frameClassNameBuffer: Uint8Array | undefined;
 
 /**
  * Register the top-level FRAME window class once, wiring a shared JSCallback
@@ -131,18 +117,14 @@ const ensureFrameWindowClass = (): bigint => {
   if (frameWndProcPtr === null) {
     throw new FFIError('frame window: failed to allocate the WndProc trampoline');
   }
-  frameClassNameBuffer = wstr(FRAME_WINDOW_CLASS_NAME);
   const hCursor = user32.symbols.LoadCursorW(0n, BigInt(IDC_ARROW));
-  const wc = new Uint8Array(WNDCLASSEXW_SIZE);
-  const dv = new DataView(wc.buffer);
-  dv.setUint32(0, WNDCLASSEXW_SIZE, true); // cbSize
-  dv.setBigUint64(8, BigInt(frameWndProcPtr), true); // lpfnWndProc = JSCallback frame proc
-  dv.setBigUint64(24, hInstance, true); // hInstance
-  dv.setBigUint64(40, hCursor, true); // hCursor
-  dv.setBigUint64(64, BigInt(ptr(frameClassNameBuffer)), true); // lpszClassName
-  if (user32.symbols.RegisterClassExW(ptr(wc)) === 0) {
-    throw new FFIError('RegisterClassExW failed for the Bunmaska frame class');
-  }
+  registerWindowClass(
+    user32.symbols,
+    FRAME_WINDOW_CLASS_NAME,
+    BigInt(frameWndProcPtr),
+    hInstance,
+    hCursor,
+  );
   frameClassRegistered = true;
   return hInstance;
 };
@@ -153,13 +135,9 @@ export const createNativeChildHost = (
   height: number,
 ): bigint => {
   const hInstance = ensureNativeWindowClass();
-  const className = classNameBuffer;
-  if (className === undefined) {
-    throw new FFIError('native window class buffer was not initialised');
-  }
   const hwnd = loadUser32().symbols.CreateWindowExW(
     0,
-    ptr(className),
+    ptr(wstr(NATIVE_WINDOW_CLASS_NAME)),
     ptr(wstr('')),
     (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN) >>> 0,
     0,
@@ -392,13 +370,9 @@ export class NativeWin32Window {
     // The TOP-LEVEL frame uses the JSCallback frame class (so a menu bar's
     // WM_COMMAND is dispatchable); the WebKit view lives in a native child.
     const hInstance = ensureFrameWindowClass();
-    const className = frameClassNameBuffer;
-    if (className === undefined) {
-      throw new FFIError('frame window class buffer was not initialised');
-    }
     const hwnd = loadUser32().symbols.CreateWindowExW(
       0,
-      ptr(className),
+      ptr(wstr(FRAME_WINDOW_CLASS_NAME)),
       ptr(wstr(options.title)),
       computeStyle(options.frame, options.resizable),
       CW_USEDEFAULT,
