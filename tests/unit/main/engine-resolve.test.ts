@@ -65,6 +65,11 @@ describe('resolveEngineWith', () => {
     expect(slash(r.libDir ?? '')).toBe(`${ROOT}/${other}/lib`);
   });
 
+  test('an empty BUNMASKA_WEBKIT_ID leaves the baked id in charge', () => {
+    const r = resolve({ env: { BUNMASKA_WEBKIT_ID: ' ' }, readBakedId: () => ID });
+    expect(r.id).toBe(ID);
+  });
+
   test('a malformed id -> system fallback with a warning', () => {
     const r = resolve({ env: { BUNMASKA_WEBKIT_ID: 'not-an-engine-id' } });
     expect(r.mode).toBe('system');

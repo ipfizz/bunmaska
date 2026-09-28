@@ -89,7 +89,7 @@ export const resolveEngineWith = (deps: ResolveDeps = {}): EngineResolution => {
   }
 
   const readBakedId = deps.readBakedId ?? (() => defaultReadBakedId(env));
-  const id = (env['BUNMASKA_WEBKIT_ID'] ?? readBakedId() ?? 'system').trim();
+  const id = env['BUNMASKA_WEBKIT_ID']?.trim() || readBakedId()?.trim() || 'system';
 
   if (isSystemEngine(id)) {
     return { mode: 'system', warnings: [] };
