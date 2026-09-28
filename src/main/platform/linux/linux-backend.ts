@@ -451,8 +451,14 @@ class LinuxWindow implements NativeWindow {
           return;
         }
         this.#maximized = maximized;
+        this.#emitEvent('resize');
         this.#emitEvent(maximized ? 'maximize' : 'unmaximize');
       }),
+    );
+    this.#registry.connect(
+      this.#window,
+      'notify::fullscreened',
+      makeNotifyCallback(() => this.#emitEvent('resize')),
     );
 
     // Resize: the default-size props change when the window is resized. Two
