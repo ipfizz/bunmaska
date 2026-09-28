@@ -139,9 +139,11 @@ describe('autoUpdater.setFeedURL / getFeedURL', () => {
 });
 
 describe('autoUpdater.checkForUpdates', () => {
-  test('throws when the feed URL is not set', () => {
-    const { updater } = makeUpdater({});
-    expect(updater.checkForUpdates()).rejects.toThrow(/feed URL is not set/);
+  test('rejects and emits error when the feed URL is not set', async () => {
+    const h = makeUpdater({});
+    await expect(h.updater.checkForUpdates()).rejects.toThrow(/feed URL is not set/);
+    await expect(h.updater.downloadUpdate()).rejects.toThrow(/feed URL is not set/);
+    expect(h.events.filter((e) => e === 'error')).toHaveLength(2);
   });
 
   test('emits update-available and returns the result for a newer version', async () => {

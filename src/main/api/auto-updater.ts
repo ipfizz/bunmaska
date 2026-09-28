@@ -186,7 +186,7 @@ export class AutoUpdaterImpl extends EventEmitter {
 
   #requireFeedURL(): string {
     if (this.#feedURL === undefined) {
-      throw new Error('autoUpdater: feed URL is not set; call setFeedURL first');
+      throw this.#emitError(new Error('autoUpdater: feed URL is not set; call setFeedURL first'));
     }
     return this.#feedURL;
   }
