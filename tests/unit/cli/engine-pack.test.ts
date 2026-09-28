@@ -71,6 +71,19 @@ describe('packEngineDir', () => {
     await expect(packEngineDir(empty, privateKey)).rejects.toThrow(/engine\.json/i);
   });
 
+  test('rejects an engine.json id that is not a valid engine-id, before signing', async () => {
+    const { privateKey } = generateSigningKeyPair();
+    const dir = makeEngineDir();
+    writeFileSync(join(dir, 'engine.json'), JSON.stringify({ id: 'webkit-local', soname: 'x' }));
+    let compressed = false;
+    const compress = async () => {
+      compressed = true;
+      return new Uint8Array();
+    };
+    await expect(packEngineDir(dir, privateKey, { compress })).rejects.toThrow(/engine-id/);
+    expect(compressed).toBe(false);
+  });
+
   test('does not ship the store-local INSTALLATION_COMPLETE marker inside the artifact', async () => {
     const { privateKey } = generateSigningKeyPair();
     const dir = makeEngineDir();

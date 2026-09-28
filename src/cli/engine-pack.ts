@@ -4,6 +4,7 @@
  * a plain object upload.
  */
 
+import { parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
 import { contentHash } from '../common/manifest';
 import { signArtifact } from './engine-signature';
@@ -51,6 +52,7 @@ export const packEngineDir = async (
   deps: PackDeps = {},
 ): Promise<PackedEngine> => {
   const manifest = readEngineManifest(engineDir);
+  parseEngineId(manifest.id);
   const compress = deps.compress ?? zstdTarCompress;
   const artifact = await compress(engineDir);
   const hash = contentHash(artifact);
