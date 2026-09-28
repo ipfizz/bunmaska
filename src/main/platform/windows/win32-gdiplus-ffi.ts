@@ -2,18 +2,12 @@ import { FFIType } from 'bun:ffi';
 import { dlopen } from '../dlopen';
 import { winLibraryAccessor } from './win32';
 
-/**
- * GDI+ (gdiplus.dll) image FFI, plus the shlwapi memory-stream helper that feeds it. Only
- * the `IStream` GDI+ reads/writes is COM, and it is handled with flat ole32
- * (`CreateStreamOnHGlobal`/`GetHGlobalFromStream`) so the bytes come out via `GlobalLock`
- * rather than `IStream::Read`.
- */
 const GDIPLUS_SYMBOLS = {
   // (ULONG_PTR* token, GdiplusStartupInput* input, GdiplusStartupOutput* output) -> Status
   GdiplusStartup: { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
   // (IStream*, GpImage** out) -> Status
   GdipLoadImageFromStream: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
-  // (GpImage*, GpImage** out) -> Status — an independent copy (decouples from the source stream).
+  // (GpImage*, GpImage** out) -> Status
   GdipCloneImage: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   // (GpImage*) -> Status
   GdipDisposeImage: { args: [FFIType.u64], returns: FFIType.i32 },
@@ -35,7 +29,7 @@ const GDIPLUS_SYMBOLS = {
   GdipGetImageGraphicsContext: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   // (GpGraphics*, InterpolationMode) -> Status
   GdipSetInterpolationMode: { args: [FFIType.u64, FFIType.i32], returns: FFIType.i32 },
-  // (GpGraphics*, GpImage*, INT x, INT y, INT w, INT h) -> Status — draw scaled into the rect.
+  // (GpGraphics*, GpImage*, INT x, INT y, INT w, INT h) -> Status: draw scaled into the rect
   GdipDrawImageRectI: {
     args: [FFIType.u64, FFIType.u64, FFIType.i32, FFIType.i32, FFIType.i32, FFIType.i32],
     returns: FFIType.i32,
@@ -55,31 +49,26 @@ const GDIPLUS_SYMBOLS = {
     ],
     returns: FFIType.i32,
   },
-  // (const BITMAPINFO* gdiBitmapInfo, void* gdiBitmapData, GpBitmap** out) -> Status —
-  // wrap a packed DIB (the CF_DIB clipboard format) as a GDI+ bitmap. Used by the
-  // clipboard backend's image read.
+  // (const BITMAPINFO* gdiBitmapInfo, void* gdiBitmapData, GpBitmap** out) -> Status: the
+  // bitmap reads gdiBitmapData in place, so it must outlive the bitmap.
   GdipCreateBitmapFromGdiDib: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
     returns: FFIType.i32,
   },
-  // (GpBitmap*, const GpRect* rect, UINT flags, PixelFormat, BitmapData* out) -> Status —
-  // expose a bitmap's raw pixels for reading. Used by the clipboard backend's image write.
+  // (GpBitmap*, const GpRect* rect, UINT flags, PixelFormat, BitmapData* out) -> Status
   GdipBitmapLockBits: {
     args: [FFIType.u64, FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.ptr],
     returns: FFIType.i32,
   },
-  // (GpBitmap*, BitmapData*) -> Status — release a lock taken by GdipBitmapLockBits.
+  // (GpBitmap*, BitmapData*) -> Status
   GdipBitmapUnlockBits: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
-  // (GpBitmap*, HICON* out) -> Status; the caller owns the icon (DestroyIcon).
+  // (GpBitmap*, HICON* out) -> Status: the caller owns the icon (DestroyIcon)
   GdipCreateHICONFromBitmap: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
-/** `Ok` GDI+ status. */
 export const GDIP_OK = 0;
-/** `ImageLockModeRead` — lock pixels for reading only. */
 export const IMAGE_LOCK_MODE_READ = 1;
 export const PIXEL_FORMAT_32BPP_ARGB = 0x0026200a;
-/** `InterpolationModeHighQualityBicubic` — smooth downscaling. */
 export const INTERPOLATION_HIGH_QUALITY_BICUBIC = 7;
 
 /** GDI+ image-encoder CLSIDs (GUID bytes, little-endian for the first three fields). */
@@ -95,9 +84,8 @@ export const loadGdiplus = winLibraryAccessor('gdiplus', () =>
   dlopen('gdiplus.dll', GDIPLUS_SYMBOLS),
 );
 
-/** shlwapi.dll `SHCreateMemStream` — an `IStream` over a copy of in-memory bytes. */
 const SHLWAPI_SYMBOLS = {
-  // (const BYTE* pInit, UINT cbInit) -> IStream*
+  // (const BYTE* pInit, UINT cbInit) -> IStream* over a COPY of the bytes
   SHCreateMemStream: { args: [FFIType.ptr, FFIType.u32], returns: FFIType.u64 },
 } as const;
 
