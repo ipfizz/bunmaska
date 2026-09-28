@@ -8,7 +8,6 @@ import {
   CHANNEL_GLOBAL_KEY,
   type CustomEventCtor,
   type EventScope,
-  generateIsolatedHostSource,
   generatePageWorldStub,
   installCrossWorldHost,
   replyChannel,
@@ -84,32 +83,8 @@ const makePageWorld = (
   return { read: <T>(key: string): T => win[key] as T };
 };
 
-/**
- * Run the canonical isolated-host source against the shared mock document and
- * return its `exposeInMainWorld`. This is the SAME baked source injected into
- * the isolated world, so it exercises the real protocol (no hand-rolling).
- */
-const makeIsolatedHost = (
-  doc: MockDocument,
-  channel: string = CHANNEL,
-): ((key: string, api: Record<string, unknown>) => void) => {
-  const g: Record<string, unknown> = {
-    CustomEvent: MockCustomEvent,
-    structuredClone: globalThis.structuredClone,
-    Map,
-    Object,
-    Promise,
-    Array,
-    JSON,
-    String,
-  };
-  const factory = new Function(
-    'globalThis',
-    'document',
-    `${generateIsolatedHostSource(channel)}\nreturn globalThis.__bunmaska.exposeInMainWorld;`,
-  );
-  return factory(g, doc) as (key: string, api: Record<string, unknown>) => void;
-};
+const makeIsolatedHost = (doc: MockDocument) =>
+  installCrossWorldHost(CHANNEL, doc, MockCustomEvent);
 
 const transport = (doc: MockDocument): ContextBridgeTransport => ({
   channelId: CHANNEL,
@@ -132,7 +107,7 @@ describe('contextBridge.exposeInMainWorld (cross-world)', () => {
   test('shares the injected host, so a key exposed through both paths collides', () => {
     const doc = new MockDocument();
     const globals = {
-      __bunmaska: { exposeInMainWorld: installCrossWorldHost(CHANNEL, doc, MockCustomEvent) },
+      __bunmaska: { exposeInMainWorld: makeIsolatedHost(doc) },
       [CHANNEL_GLOBAL_KEY]: CHANNEL,
       document: doc,
       CustomEvent: MockCustomEvent,
@@ -337,7 +312,7 @@ describe('page object hardening', () => {
   test('a forged call to an inherited, unannounced method is refused', async () => {
     const doc = new MockDocument();
     const api = Object.assign(Object.create({ secret: () => 'SECRET' }), { ping: () => 'pong' });
-    installCrossWorldHost(CHANNEL, doc, MockCustomEvent)('api', api);
+    makeIsolatedHost(doc)('api', api);
     const replies: unknown[] = [];
     doc.addEventListener(replyChannel(CHANNEL), (e) => replies.push(e.detail));
     doc.dispatchEvent({ type: CHANNEL, detail: { callId: 99, key: 'api', method: 'secret' } });
@@ -348,7 +323,7 @@ describe('page object hardening', () => {
   });
 
   test('a non-object api is rejected at expose time', () => {
-    const expose = installCrossWorldHost(CHANNEL, new MockDocument(), MockCustomEvent);
+    const expose = makeIsolatedHost(new MockDocument());
     for (const api of [false, '1.2', () => 5, [1, 2], null]) {
       expect(() => expose('api', api as unknown as Record<string, unknown>)).toThrow(
         /must be an object/,
@@ -357,7 +332,7 @@ describe('page object hardening', () => {
   });
 
   test('a nested function is rejected at expose time, naming the member', () => {
-    const expose = installCrossWorldHost(CHANNEL, new MockDocument(), MockCustomEvent);
+    const expose = makeIsolatedHost(new MockDocument());
     expect(() => expose('api', { ipc: { send: () => undefined } })).toThrow(
       /"ipc".*nested functions are not supported/,
     );
