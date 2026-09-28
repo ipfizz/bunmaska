@@ -193,7 +193,7 @@ const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle =>
     : { ...STANDARD_WINDOW_STYLE, resizable: options.resizable !== false };
 
 class MacOSWebContents implements NativeWebContents {
-  readonly #webview: Handle;
+  #webview: Handle;
   readonly #isolatedWorld: Handle;
   #envelopeCallback: ((envelopeJson: string) => void) | undefined;
   #didFinishLoad = false;
@@ -252,6 +252,8 @@ class MacOSWebContents implements NativeWebContents {
    */
   rejectPendingExecs(): void {
     this.#destroyed = true;
+    // Messaging nil is a no-op, so every later call is safe once the view is released.
+    this.#webview = 0n;
     for (const [, pending] of this.#pendingExecs) {
       clearTimeout(pending.timer);
       pending.resolve(undefined);
@@ -491,6 +493,9 @@ class MacOSWebContents implements NativeWebContents {
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
+    if (this.#destroyed) {
+      return;
+    }
     if (!this.#didFinishLoad) {
       this.#pendingEnvelopes.push(envelopeJson);
       return;
@@ -530,7 +535,7 @@ class MacOSWebContents implements NativeWebContents {
 }
 
 class MacOSWindow implements NativeWindow {
-  readonly #window: Handle;
+  #window: Handle;
   readonly #contents: MacOSWebContents;
   readonly #teardown: () => void;
   readonly #releaseNative: () => void;
@@ -581,6 +586,8 @@ class MacOSWindow implements NativeWindow {
       return;
     }
     this.#tornDown = true;
+    // Messaging nil is a no-op, so every later call is safe once the window is released.
+    this.#window = 0n;
     this.#teardown();
     this.#onClosed?.();
     // Balance our alloc of the NSWindow + WKWebView (both kept alive by
@@ -599,6 +606,9 @@ class MacOSWindow implements NativeWindow {
   #zoomed = false;
 
   emitEvent(type: WindowEventType): void {
+    if (this.#tornDown) {
+      return;
+    }
     // AppKit posts no zoom notification, so maximize/unmaximize are derived by
     // diffing isZoomed across resizes - the only hook that fires on both.
     if (type === 'resize') {
@@ -702,6 +712,9 @@ class MacOSWindow implements NativeWindow {
   }
 
   show(): void {
+    if (this.#tornDown) {
+      return;
+    }
     const rt = cocoa();
     if (isDevRestart()) {
       // A dev respawn orders the window in behind the editor instead of on top.

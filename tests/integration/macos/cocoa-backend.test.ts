@@ -4,6 +4,13 @@ import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-b
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+const waitFor = async (predicate: () => boolean, ms = 3_000): Promise<void> => {
+  const deadline = performance.now() + ms;
+  while (!predicate() && performance.now() < deadline) {
+    await Bun.sleep(20);
+  }
+};
+
 if (currentPlatform() === 'macos') {
   describe('MacOSApplication', () => {
     test('onReady fires synchronously once started', () => {
@@ -165,6 +172,72 @@ if (currentPlatform() === 'macos') {
         expect(win.isVisible()).toBe(true);
         win.hide();
         expect(win.isVisible()).toBe(false);
+      } finally {
+        app.quit();
+      }
+    });
+
+    test('every window and contents call after close is a safe no-op', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({ width: 320, height: 240, title: 'closing', show: true });
+        win.webContents.loadHTML('<p>x</p>', 'about:blank');
+        await waitFor(() => win.webContents.getURL() === 'about:blank');
+        const events: string[] = [];
+        for (const type of ['show', 'hide', 'blur', 'focus', 'resize'] as const) {
+          win.onWindowEvent(type, () => events.push(type));
+        }
+        win.close();
+        const callEverything = (): void => {
+          win.show();
+          win.hide();
+          win.focus();
+          win.setTitle('after');
+          win.setBounds({ x: 10, y: 10, width: 200, height: 100 });
+          win.setSize(300, 200);
+          win.setPosition(5, 5);
+          win.setResizable(false);
+          win.setOpacity(0.5);
+          win.setMinimumSize(100, 100);
+          win.center();
+          win.minimize();
+          win.restore();
+          win.maximize();
+          win.unmaximize();
+          win.setFullScreen(true);
+          win.setAlwaysOnTop(true);
+          win.close();
+          win.destroy();
+          const contents = win.webContents;
+          contents.loadURL('about:blank');
+          contents.loadHTML('<p>y</p>');
+          contents.reload();
+          contents.reloadIgnoringCache();
+          contents.stop();
+          contents.goBack();
+          contents.goForward();
+          contents.setZoomFactor(2);
+          contents.setUserAgent('ua');
+          contents.openDevTools();
+          contents.closeDevTools();
+          contents.sendEnvelopeToRenderer('{}');
+          expect(win.getTitle()).toBe('');
+          expect(win.isVisible()).toBe(false);
+          expect(win.isFocused()).toBe(false);
+          expect(win.isMaximized()).toBe(false);
+          expect(win.isMinimized()).toBe(false);
+          expect(win.isFullScreen()).toBe(false);
+          expect(contents.getURL()).toBe('');
+          expect(contents.getTitle()).toBe('');
+          expect(contents.canGoBack()).toBe(false);
+          expect(contents.canGoForward()).toBe(false);
+        };
+        callEverything();
+        // The native objects are released on a later tick; call again once they are gone.
+        await Bun.sleep(100);
+        callEverything();
+        expect(events).toEqual([]);
       } finally {
         app.quit();
       }
