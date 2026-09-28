@@ -13,8 +13,6 @@ import { winLibraryAccessor } from './win32';
 const USER32_SYMBOLS = {
   // (const WNDCLASSEXW *) -> ATOM
   RegisterClassExW: { args: [FFIType.ptr], returns: FFIType.u16 },
-  // (LPCWSTR className, HINSTANCE) -> BOOL
-  UnregisterClassW: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.i32 },
   // (DWORD exStyle, LPCWSTR className, LPCWSTR windowName, DWORD style,
   //  int x, int y, int w, int h, HWND parent, HMENU menu, HINSTANCE, LPVOID param) -> HWND
   CreateWindowExW: {
@@ -63,8 +61,6 @@ const USER32_SYMBOLS = {
   TranslateMessage: { args: [FFIType.ptr], returns: FFIType.i32 },
   // (const MSG *) -> LRESULT
   DispatchMessageW: { args: [FFIType.ptr], returns: FFIType.i64 },
-  // (int exitCode) -> void
-  PostQuitMessage: { args: [FFIType.i32], returns: FFIType.void },
   // (HINSTANCE, LPCWSTR lpCursorName) -> HCURSOR
   LoadCursorW: { args: [FFIType.u64, FFIType.u64], returns: FFIType.u64 },
   // (HWND, UINT msg, WPARAM, LPARAM) -> LRESULT (synchronous dispatch to the WndProc)
