@@ -145,7 +145,7 @@ export const buildLinuxApp = async (opts: BuildLinuxAppOptions): Promise<BuildLi
 
   const assetsDir = dirname(layout.binPath);
   bundlePreloadAssets(opts.entry, assetsDir, copyAppAssets(opts.entry, assetsDir));
-  writeAppManifest(assetsDir, opts.name, version);
+  writeAppManifest(assetsDir, opts.entry, opts.name, version);
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(assetsDir, 'renderer'), { recursive: true });
   }

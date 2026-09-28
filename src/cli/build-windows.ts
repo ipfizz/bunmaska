@@ -176,7 +176,7 @@ export const buildWindowsApp = async (
   await compileWindowsBinary(opts.entry, layout.exePath, meta);
 
   bundlePreloadAssets(opts.entry, layout.appDir, copyAppAssets(opts.entry, layout.appDir));
-  writeAppManifest(layout.appDir, opts.name, opts.version ?? BUNMASKA_VERSION);
+  writeAppManifest(layout.appDir, opts.entry, opts.name, opts.version ?? BUNMASKA_VERSION);
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.appDir, 'renderer'), { recursive: true });
   }

@@ -48,15 +48,30 @@ describe('isRuntimeAsset', () => {
 });
 
 describe('writeAppManifest', () => {
-  test("writes the name and version a compiled app's runtime reads back", () => {
-    const dir = mkdtempSync(join(tmpdir(), 'bunmaska-manifest-'));
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'project', version: '9.9.9' }));
-    writeAppManifest(dir, 'Notes App', '2.0.1');
-    const read = (path: string): string | undefined =>
-      existsSync(path) ? readFileSync(path, 'utf8') : undefined;
-    const manifest = readManifest(dir, read);
-    expect(resolveAppName(manifest)).toBe('Notes App');
-    expect(resolveAppVersion(manifest)).toBe('2.0.1');
+  const read = (path: string): string | undefined =>
+    existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+
+  /** What a compiled app built as 'Notes App' 2.0.1 from `project`'s package.json reads back. */
+  const built = (project?: object) => {
+    const root = mkdtempSync(join(tmpdir(), 'bunmaska-manifest-'));
+    const destination = join(root, 'out');
+    mkdirSync(destination);
+    if (project !== undefined) {
+      writeFileSync(join(root, 'package.json'), JSON.stringify(project));
+    }
+    writeAppManifest(destination, join(root, 'main.ts'), 'Notes App', '2.0.1');
+    return readManifest(destination, read);
+  };
+
+  test("keeps the project's own name, so app.getName() and userData match dev", () => {
+    expect(resolveAppName(built({ name: 'notes', version: '9.9.9' }))).toBe('notes');
+    expect(resolveAppName(built({ name: 'notes', productName: 'Notes' }))).toBe('Notes');
+    expect(resolveAppVersion(built({ name: 'notes', version: '9.9.9' }))).toBe('2.0.1');
+  });
+
+  test('falls back to the build name when the project names nothing', () => {
+    expect(resolveAppName(built())).toBe('Notes App');
+    expect(resolveAppVersion(built())).toBe('2.0.1');
   });
 });
 

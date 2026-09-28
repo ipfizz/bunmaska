@@ -360,7 +360,7 @@ export const buildMacApp = async (opts: BuildMacAppOptions): Promise<string> => 
   chmodSync(layout.executablePath, 0o755);
 
   bundlePreloadAssets(opts.entry, layout.macosDir, copyAppAssets(opts.entry, layout.macosDir));
-  writeAppManifest(layout.macosDir, opts.name, version);
+  writeAppManifest(layout.macosDir, opts.entry, opts.name, version);
   if (opts.rendererDir !== undefined) {
     cpSync(opts.rendererDir, join(layout.macosDir, 'renderer'), { recursive: true });
   }

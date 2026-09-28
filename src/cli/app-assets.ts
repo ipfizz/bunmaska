@@ -5,6 +5,7 @@ import {
   type PreloadBundler,
   usesModuleSyntax,
 } from '../common/preload-bundle';
+import { findManifest } from '../main/api/app-metadata';
 
 // An allowlist, not a denylist: the entry's directory can hold the update-signing key.
 const RUNTIME_ASSET_EXTENSIONS = new Set(
@@ -52,12 +53,25 @@ export const copyAppAssets = (entry: string, destination: string): string[] => {
   return copied;
 };
 
-/** The runtime reads a compiled app's name and version only from `package.json` beside it. */
-export const writeAppManifest = (destination: string, name: string, version: string): void => {
-  writeFileSync(
-    join(destination, 'package.json'),
-    `${JSON.stringify({ productName: name, version })}\n`,
-  );
+const readIfPresent = (path: string): string | undefined =>
+  existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+
+/**
+ * The runtime reads a compiled app's name and version only from `package.json` beside it. The
+ * name is the one dev reads from the entry's project (so `userData` stays put), else `name`.
+ */
+export const writeAppManifest = (
+  destination: string,
+  entry: string,
+  name: string,
+  version: string,
+): void => {
+  const project = findManifest(dirname(resolve(entry)), readIfPresent)?.manifest;
+  const named = project?.productName !== undefined || project?.name !== undefined;
+  const manifest = named
+    ? { name: project?.name, productName: project?.productName, version }
+    : { productName: name, version };
+  writeFileSync(join(destination, 'package.json'), `${JSON.stringify(manifest)}\n`);
 };
 
 const PRELOAD_ASSET = /^preload\.(?:js|mjs|cjs)$/i;
