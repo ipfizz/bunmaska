@@ -183,27 +183,41 @@ const crop = (
   return redraw(handle, width, height, -x, -(srcH - y - height), srcW, srcH);
 };
 
+/** `representationUsingType:properties:` bytes; empty for a nil handle or a failed encode. */
+const encode = (handle: NativeImageHandle, type: bigint, properties: Handle): Uint8Array => {
+  if (handle === 0n) {
+    return new Uint8Array(0);
+  }
+  const rt = cocoa();
+  const represent = (rep: Handle): Uint8Array =>
+    nsDataToBytes(
+      msgSendI64Ptr(rep, rt.selectors.get('representationUsingType:properties:'), type, properties),
+    );
+  const bytes = represent(handle);
+  if (bytes.length > 0) {
+    return bytes;
+  }
+  // ImageIO rejects some decoded layouts (e.g. 8-bit gray+alpha); encode an RGBA redraw instead.
+  const width = Number(msgSendReturnsI64(handle, rt.selectors.get('pixelsWide')));
+  const height = Number(msgSendReturnsI64(handle, rt.selectors.get('pixelsHigh')));
+  const rgba = redraw(handle, width, height, 0, 0, width, height);
+  if (rgba.empty) {
+    return bytes;
+  }
+  const redrawn = represent(rgba.handle);
+  rt.msgSend(rgba.handle, rt.selectors.get('release'));
+  return redrawn;
+};
+
 export const cocoaNativeImageBackend: NativeImageBackend = {
   decode: (source) => (typeof source === 'string' ? decodePath(source) : decodeBuffer(source)),
-  encodePng: (handle: NativeImageHandle): Uint8Array => {
-    if (handle === 0n) {
-      return new Uint8Array(0);
-    }
-    const rt = cocoa();
-    const data = msgSendI64Ptr(
-      handle,
-      rt.selectors.get('representationUsingType:properties:'),
-      NS_BITMAP_IMAGE_FILE_TYPE_PNG,
-      0n,
-    );
-    return nsDataToBytes(data);
-  },
+  encodePng: (handle: NativeImageHandle): Uint8Array =>
+    encode(handle, NS_BITMAP_IMAGE_FILE_TYPE_PNG, 0n),
   encodeJpeg: (handle: NativeImageHandle, quality: number): Uint8Array => {
     if (handle === 0n) {
       return new Uint8Array(0);
     }
     const rt = cocoa();
-    // Properties dict { NSImageCompressionFactor: quality/100 } (0.0–1.0).
     const factor = Math.max(0, Math.min(100, quality)) / 100;
     const number = msgSendF64(
       rt.classes.get('NSNumber'),
@@ -216,13 +230,7 @@ export const cocoaNativeImageBackend: NativeImageBackend = {
       number,
       nsString('NSImageCompressionFactor'),
     );
-    const data = msgSendI64Ptr(
-      handle,
-      rt.selectors.get('representationUsingType:properties:'),
-      NS_BITMAP_IMAGE_FILE_TYPE_JPEG,
-      properties,
-    );
-    return nsDataToBytes(data);
+    return encode(handle, NS_BITMAP_IMAGE_FILE_TYPE_JPEG, properties);
   },
   resize,
   crop,

@@ -9,6 +9,10 @@ import {
   writeTinyPngFile,
 } from '../../fixtures/tiny-png';
 
+/** 1x1 8-bit gray+alpha PNG; AppKit's PNG encoder fails on such a rep directly. */
+const GRAY_ALPHA_1X1_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
 /**
  * Real `nativeImage` on a macOS host, driving the live `NSBitmapImageRep`/`NSData`
  * FFI. The headline assertion is that `getSize()` returns the EXACT known
@@ -56,6 +60,12 @@ if (currentPlatform() === 'macos') {
       expect(png[1]).toBe(0x50);
       expect(png[2]).toBe(0x4e);
       expect(png[3]).toBe(0x47);
+    });
+
+    test('toPNG encodes a gray+alpha source (PNG color type 4)', () => {
+      const image = nativeImage.createFromDataURL(`data:image/png;base64,${GRAY_ALPHA_1X1_PNG}`);
+      expect(image.isEmpty()).toBe(false);
+      expect(image.toPNG()[0]).toBe(0x89);
     });
 
     test('toJPEG returns non-empty bytes starting with the JPEG SOI marker', () => {
