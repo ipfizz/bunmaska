@@ -167,6 +167,8 @@ export const buildCodesignArgs = (
   '--deep',
   '--options',
   'runtime',
+  // Notarization rejects a signature without a secure timestamp; ad-hoc cannot have one.
+  ...(identity === '-' ? [] : ['--timestamp']),
   '--entitlements',
   entitlementsPath,
   '--sign',
