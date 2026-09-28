@@ -68,6 +68,7 @@ describe('bootstrap native wiring', () => {
 
   test('an OS quit request runs app.quit on a later tick, never inside the native callback', async () => {
     app.resetForTesting();
+    resetBootstrapForTesting();
     installSafeAppExit();
     const triggers = makeNative();
     setNativeAppForTesting(triggers.native);
