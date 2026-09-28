@@ -2,47 +2,7 @@ import { posix, win32 } from 'node:path';
 import { InvalidArgumentError } from '../../common/errors';
 import type { Platform } from '../../common/platform';
 
-/**
- * Pure resolution of Electron's `app.getPath(name)` special directories.
- *
- * Each resolver joins with its TARGET platform's separator (`path.posix` for
- * macOS/Linux, `path.win32` for Windows) rather than the host's `path.join`, so
- * a macOS path resolves with `/` even when this runs on a Windows CI host, and
- * vice versa.
- */
-
-export type AppPathName =
-  | 'home'
-  | 'appData'
-  | 'userData'
-  | 'sessionData'
-  | 'temp'
-  | 'exe'
-  | 'module'
-  | 'desktop'
-  | 'documents'
-  | 'downloads'
-  | 'music'
-  | 'pictures'
-  | 'videos'
-  | 'logs'
-  | 'crashDumps';
-
-export type PathEnvironment = {
-  readonly platform: Platform;
-  /** `os.homedir()`. */
-  readonly home: string;
-  /** `os.tmpdir()`. */
-  readonly temp: string;
-  /** Names the per-app `userData` subdirectory. */
-  readonly appName: string;
-  /** `process.execPath`. */
-  readonly execPath: string;
-  /** Consulted for the Linux XDG overrides. */
-  readonly env: Readonly<Record<string, string | undefined>>;
-};
-
-const KNOWN_NAMES: ReadonlySet<string> = new Set<AppPathName>([
+const APP_PATH_NAMES = [
   'home',
   'appData',
   'userData',
@@ -58,138 +18,81 @@ const KNOWN_NAMES: ReadonlySet<string> = new Set<AppPathName>([
   'videos',
   'logs',
   'crashDumps',
-]);
+] as const;
+
+export type AppPathName = (typeof APP_PATH_NAMES)[number];
+
+export type PathEnvironment = {
+  readonly platform: Platform;
+  readonly home: string;
+  readonly temp: string;
+  /** Names the per-app `userData` subdirectory. */
+  readonly appName: string;
+  readonly execPath: string;
+  /** Linux `XDG_*` values (from the environment or `user-dirs.dirs`) and Windows `APPDATA`. */
+  readonly env: Readonly<Record<string, string | undefined>>;
+};
+
+const KNOWN_NAMES: ReadonlySet<string> = new Set(APP_PATH_NAMES);
 
 export const isAppPathName = (name: string): name is AppPathName => KNOWN_NAMES.has(name);
+
+/** Home-relative user folders; Linux consults `xdg` first. */
+const USER_FOLDERS = {
+  desktop: { dir: 'Desktop', xdg: 'XDG_DESKTOP_DIR' },
+  documents: { dir: 'Documents', xdg: 'XDG_DOCUMENTS_DIR' },
+  downloads: { dir: 'Downloads', xdg: 'XDG_DOWNLOAD_DIR' },
+  music: { dir: 'Music', xdg: 'XDG_MUSIC_DIR' },
+  pictures: { dir: 'Pictures', xdg: 'XDG_PICTURES_DIR' },
+  videos: { dir: 'Videos', xdg: 'XDG_VIDEOS_DIR' },
+} as const;
 
 const envDir = (env: PathEnvironment['env'], variable: string, fallback: string): string => {
   const value = env[variable];
   return value !== undefined && value.length > 0 ? value : fallback;
 };
 
-/** Linux XDG user-dir lookup: `$VAR` if set and non-empty, else `home/fallback`. */
-const xdgDir = (env: PathEnvironment['env'], variable: string, home: string, fallback: string) =>
-  envDir(env, variable, posix.join(home, fallback));
-
-const resolveMacOS = (name: AppPathName, e: PathEnvironment): string => {
-  const { join } = posix;
-  const appSupport = join(e.home, 'Library', 'Application Support');
-  const userData = join(appSupport, e.appName);
-  switch (name) {
-    case 'home':
-      return e.home;
-    case 'appData':
-      return appSupport;
-    case 'userData':
-    case 'sessionData':
-      return userData;
-    case 'temp':
-      return e.temp;
-    case 'exe':
-    case 'module':
-      return e.execPath;
-    case 'desktop':
-      return join(e.home, 'Desktop');
-    case 'documents':
-      return join(e.home, 'Documents');
-    case 'downloads':
-      return join(e.home, 'Downloads');
-    case 'music':
-      return join(e.home, 'Music');
-    case 'pictures':
-      return join(e.home, 'Pictures');
-    case 'videos':
-      return join(e.home, 'Movies');
-    case 'logs':
-      return join(e.home, 'Library', 'Logs', e.appName);
-    case 'crashDumps':
-      return join(userData, 'Crashpad');
-  }
-};
-
-const resolveLinux = (name: AppPathName, e: PathEnvironment): string => {
-  const { join } = posix;
-  const appData = xdgDir(e.env, 'XDG_CONFIG_HOME', e.home, '.config');
-  const userData = join(appData, e.appName);
-  switch (name) {
-    case 'home':
-      return e.home;
-    case 'appData':
-      return appData;
-    case 'userData':
-    case 'sessionData':
-      return userData;
-    case 'temp':
-      return e.temp;
-    case 'exe':
-    case 'module':
-      return e.execPath;
-    case 'desktop':
-      return xdgDir(e.env, 'XDG_DESKTOP_DIR', e.home, 'Desktop');
-    case 'documents':
-      return xdgDir(e.env, 'XDG_DOCUMENTS_DIR', e.home, 'Documents');
-    case 'downloads':
-      return xdgDir(e.env, 'XDG_DOWNLOAD_DIR', e.home, 'Downloads');
-    case 'music':
-      return xdgDir(e.env, 'XDG_MUSIC_DIR', e.home, 'Music');
-    case 'pictures':
-      return xdgDir(e.env, 'XDG_PICTURES_DIR', e.home, 'Pictures');
-    case 'videos':
-      return xdgDir(e.env, 'XDG_VIDEOS_DIR', e.home, 'Videos');
-    case 'logs':
-      return join(userData, 'logs');
-    case 'crashDumps':
-      return join(userData, 'Crashpad');
-  }
-};
-
-const resolveWindows = (name: AppPathName, e: PathEnvironment): string => {
-  const { join } = win32;
-  const appData = envDir(e.env, 'APPDATA', join(e.home, 'AppData', 'Roaming'));
-  const userData = join(appData, e.appName);
-  switch (name) {
-    case 'home':
-      return e.home;
-    case 'appData':
-      return appData;
-    case 'userData':
-    case 'sessionData':
-      return userData;
-    case 'temp':
-      return e.temp;
-    case 'exe':
-    case 'module':
-      return e.execPath;
-    case 'desktop':
-      return join(e.home, 'Desktop');
-    case 'documents':
-      return join(e.home, 'Documents');
-    case 'downloads':
-      return join(e.home, 'Downloads');
-    case 'music':
-      return join(e.home, 'Music');
-    case 'pictures':
-      return join(e.home, 'Pictures');
-    case 'videos':
-      return join(e.home, 'Videos');
-    case 'logs':
-      return join(userData, 'logs');
-    case 'crashDumps':
-      return join(userData, 'Crashpad');
-  }
-};
-
 /** Throws {@link InvalidArgumentError} on an unrecognized name, matching Electron. */
-export const resolveAppPath = (name: AppPathName, environment: PathEnvironment): string => {
+export const resolveAppPath = (name: AppPathName, e: PathEnvironment): string => {
   if (!isAppPathName(name)) {
     throw new InvalidArgumentError(`Failed to get '${name}' path: unknown path name`);
   }
-  switch (environment.platform) {
-    case 'macos':
-      return resolveMacOS(name, environment);
-    case 'windows':
-      return resolveWindows(name, environment);
-    default:
-      return resolveLinux(name, environment);
+  // The TARGET platform's separator, not the host's, so every platform resolves on any CI host.
+  const { join } = e.platform === 'windows' ? win32 : posix;
+  const appData =
+    e.platform === 'macos'
+      ? join(e.home, 'Library', 'Application Support')
+      : e.platform === 'windows'
+        ? envDir(e.env, 'APPDATA', join(e.home, 'AppData', 'Roaming'))
+        : envDir(e.env, 'XDG_CONFIG_HOME', join(e.home, '.config'));
+  const userData = join(appData, e.appName);
+  switch (name) {
+    case 'home':
+      return e.home;
+    case 'appData':
+      return appData;
+    case 'userData':
+    case 'sessionData':
+      return userData;
+    case 'temp':
+      return e.temp;
+    case 'exe':
+    case 'module':
+      return e.execPath;
+    case 'logs':
+      return e.platform === 'macos'
+        ? join(e.home, 'Library', 'Logs', e.appName)
+        : join(userData, 'logs');
+    case 'crashDumps':
+      return join(userData, 'Crashpad');
+    default: {
+      const folder = USER_FOLDERS[name];
+      if (e.platform === 'macos') {
+        return join(e.home, name === 'videos' ? 'Movies' : folder.dir);
+      }
+      // ponytail: Windows ignores Known Folder redirection (OneDrive); SHGetKnownFolderPath if it bites.
+      const fallback = join(e.home, folder.dir);
+      return e.platform === 'linux' ? envDir(e.env, folder.xdg, fallback) : fallback;
+    }
   }
 };
