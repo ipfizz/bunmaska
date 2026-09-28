@@ -33,7 +33,7 @@ import {
   makeNotifyCallback,
   SignalRegistry,
 } from './gtk-signals';
-import { createWebViewWithIpc, sendToRenderer } from './webkit-ipc';
+import { createWebViewWithIpc, evalInPageWorld, sendToRenderer } from './webkit-ipc';
 import { capturePage as webkitCapturePage } from './webkit-snapshot';
 import { registerAllSchemes } from './webkit-uri-scheme';
 import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
@@ -60,7 +60,7 @@ const GTK_ORIENTATION_VERTICAL = 1;
 class LinuxWebContents implements NativeWebContents {
   readonly #view: Pointer;
   readonly #registry: SignalRegistry;
-  readonly #exec: ExecResultChannel;
+  readonly #exec = new ExecResultChannel((source) => evalInPageWorld(this.#view, source));
   #didFinishLoad = false;
   readonly #pendingEnvelopes: string[] = [];
   readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
@@ -84,8 +84,6 @@ class LinuxWebContents implements NativeWebContents {
           callback(json);
         }
       },
-      // The page-world `bunmaskaExec` return channel for `executeJavaScript`. The
-      // exec channel is constructed below (it needs the view), so forward late.
       onExecMessage: (json: string) => {
         this.#exec.deliverExecResult(json);
       },
@@ -95,7 +93,6 @@ class LinuxWebContents implements NativeWebContents {
     });
     this.#view = wired.view;
     this.#registry = wired.registry;
-    this.#exec = new ExecResultChannel(this.#view);
     // Wire every custom scheme registered via `protocol.handle` onto THIS view's
     // WebKitWebContext before any load, so `app://…` loads are served. Each
     // scheme registers once per process (the dedup guard inside); the request
@@ -244,7 +241,7 @@ class LinuxWebContents implements NativeWebContents {
 
   /** @internal Reject every still-pending exec; called on window close. */
   rejectPendingExecs(): void {
-    this.#exec.rejectPending();
+    this.#exec.destroy();
   }
 
   openDevTools(): void {
