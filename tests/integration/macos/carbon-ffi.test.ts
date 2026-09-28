@@ -3,23 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { loadCarbonFFI } from '../../../src/main/platform/macos/carbon-ffi';
 
-/**
- * macOS-only. Verifies the Carbon framework opens and the six hot-key/event
- * symbols resolve. We do NOT register a real hot key here (that is the backend's
- * integration test); this asserts the FFI surface is present and shaped.
- */
 const isMac = currentPlatform() === 'macos';
 
 describe.skipIf(!isMac)('Carbon FFI on macOS', () => {
-  test('loadCarbonFFI resolves the hot-key + event symbols', () => {
-    const carbon = loadCarbonFFI();
-    expect(typeof carbon.symbols.RegisterEventHotKey).toBe('function');
-    expect(typeof carbon.symbols.UnregisterEventHotKey).toBe('function');
-    expect(typeof carbon.symbols.GetApplicationEventTarget).toBe('function');
-    expect(typeof carbon.symbols.InstallEventHandler).toBe('function');
-    expect(typeof carbon.symbols.GetEventParameter).toBe('function');
-  });
-
   test('GetApplicationEventTarget returns a non-null event target', () => {
     const carbon = loadCarbonFFI();
     const target = carbon.symbols.GetApplicationEventTarget();

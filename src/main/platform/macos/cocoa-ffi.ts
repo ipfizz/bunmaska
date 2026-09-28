@@ -1,8 +1,6 @@
 import { FFIType } from 'bun:ffi';
 import { dlopen } from '../dlopen';
-import { UnsupportedPlatformError } from '../../../common/errors';
-import { currentPlatform } from '../../../common/platform';
-import { LIBOBJC_PATH } from './objc';
+import { LIBOBJC_PATH, macOSLibraryAccessor } from './objc';
 
 const FOUNDATION_PATH = '/System/Library/Frameworks/Foundation.framework/Foundation';
 const APPKIT_PATH = '/System/Library/Frameworks/AppKit.framework/AppKit';
@@ -21,46 +19,18 @@ const APPKIT_SYMBOLS = {
   },
 };
 
-let foundationLib: unknown;
-let appKitLib: unknown;
-
 /**
- * Open `libobjc.A.dylib` plus `Foundation.framework` and `AppKit.framework`.
- *
- * `objc_msgSend` is variadic in C; Bun's FFI cannot express that directly, so
- * we declare the simplest two-arg form here and add typed variants in later
- * modules as the call sites require them.
- *
- * Foundation + AppKit are loaded for the side-effect of registering their
- * classes (`NSString`, `NSWindow`, `NSApplication`, etc.) with the Objective-C
- * runtime so subsequent `objc_getClass(...)` calls resolve them. Bun requires
- * at least one symbol per `dlopen`, so we declare anchor symbols
- * (`NSGetSizeAndAlignment`, `NSApplicationMain`) without invoking them. The
- * handles are kept at module scope to prevent GC from closing the libraries.
- *
- * Throws {@link BunmaskaError} on non-macOS at call time, not at module load, so
- * this module stays safely *importable* on Linux/Windows.
+ * Open libobjc, and Foundation + AppKit so their classes register. Bun needs one declared
+ * symbol per dlopen, so the framework anchors are never called; shared-cache images never
+ * unload, so their handles are dropped.
  */
-export const loadCocoaFFI = () => {
-  const platform = currentPlatform();
-  if (platform !== 'macos') {
-    throw new UnsupportedPlatformError(
-      `loadCocoaFFI() is only supported on macOS; current platform is ${platform}`,
-    );
-  }
+export const loadCocoaFFI = macOSLibraryAccessor('loadCocoaFFI()', () => {
+  dlopen(FOUNDATION_PATH, FOUNDATION_SYMBOLS);
+  dlopen(APPKIT_PATH, APPKIT_SYMBOLS);
 
-  if (foundationLib === undefined) {
-    foundationLib = dlopen(FOUNDATION_PATH, FOUNDATION_SYMBOLS);
-  }
-
-  if (appKitLib === undefined) {
-    appKitLib = dlopen(APPKIT_PATH, APPKIT_SYMBOLS);
-  }
-
-  // ObjC handles (id/SEL/Class) are declared u64, not pointer: tagged-pointer
-  // objects (short NSString/NSNumber/NSDate) set high bits that exceed 2^53,
-  // which FFIType.pointer would truncate to a corrupt f64. u64 preserves the
-  // full 64-bit handle as a bigint. See D029.
+  // D029, stated once here: every ObjC handle slot (id/SEL/Class/IMP) is u64, never
+  // pointer. A tagged pointer (short NSString/NSNumber/NSDate) sets bits above 2^53
+  // that pointer truncates to a corrupt f64; sending to that handle segfaults.
   return dlopen(LIBOBJC_PATH, {
     sel_registerName: {
       args: [FFIType.cstring],
@@ -75,4 +45,4 @@ export const loadCocoaFFI = () => {
       returns: FFIType.u64,
     },
   });
-};
+});

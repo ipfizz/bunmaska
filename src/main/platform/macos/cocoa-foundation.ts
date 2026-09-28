@@ -3,15 +3,13 @@ import { msgSendCStr } from './cocoa-msgsend-variants';
 import { type Handle, ptrIn } from './objc';
 import { cocoa } from './cocoa-runtime';
 
-/** Bridging helpers between JS strings and Foundation `NSString` objects. */
-
-/** Create an autoreleased `NSString` from a JS string. Returns its handle. */
+/** Create an autoreleased `NSString`: it lives until the enclosing autorelease pool drains. */
 export const nsString = (value: string): Handle => {
   const rt = cocoa();
   return msgSendCStr(rt.classes.get('NSString'), rt.selectors.get('stringWithUTF8String:'), value);
 };
 
-/** Read an `NSString` handle back into a JS string. Returns `''` for a null handle. */
+/** Read an `NSString` back into a JS string; `''` for nil. */
 export const nsStringToString = (handle: Handle): string => {
   if (handle === 0n) {
     return '';

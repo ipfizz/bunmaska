@@ -59,7 +59,7 @@ describe('ClassCache.get', () => {
     expect(() => cache.get('MissingClass')).toThrow(/Objective-C class not found: MissingClass/);
   });
 
-  test('does not cache NULL results — a later successful lookup wins', () => {
+  test('does not cache NULL results - a later successful lookup wins', () => {
     let count = 0;
     const resolver: ClassResolver = () => {
       count += 1;

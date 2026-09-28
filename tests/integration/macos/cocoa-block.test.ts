@@ -10,14 +10,7 @@ import { nsString } from '../../../src/main/platform/macos/cocoa-foundation';
 import { msgSendPtr } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
-/**
- * Proves D022 is solved: a hand-built global ObjC Block (built by
- * {@link makeOneShotBlock}) is invoked by the ObjC runtime without crashing.
- * Uses `-[NSArray enumerateObjectsUsingBlock:]` — a synchronous, one-shot block
- * caller (a single-element array invokes the block exactly once). The async
- * run-loop-delivery path uses the identical block and is exercised by the
- * completion-handler features built on top of this primitive.
- */
+// A single-element NSArray invokes a block synchronously, exactly once (D022b).
 if (currentPlatform() === 'macos') {
   describe('cocoa-block (hand-built ObjC Blocks)', () => {
     const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
