@@ -1,5 +1,6 @@
-import { type Pointer, ptr } from 'bun:ffi';
+import { FFIType, type Pointer, ptr } from 'bun:ffi';
 import type { Point, RawDisplay, ScreenBackend } from '../../api/screen';
+import { dlopen } from '../dlopen';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
@@ -26,6 +27,25 @@ import { loadGObjectFFI } from './gobject-ffi';
  * - getCursorScreenPoint == {0,0}: the GTK4 pointer position needs a surface +
  *   seat + device, which this read-only enumeration backend does not hold.
  */
+
+const loadFractionalScale = () =>
+  dlopen('libgtk-4.so.1', {
+    gdk_monitor_get_scale: { args: [FFIType.pointer], returns: FFIType.f64 },
+  });
+
+let fractionalScale: ReturnType<typeof loadFractionalScale> | null | undefined;
+
+/** `gdk_monitor_get_scale` (GTK 4.14+) reports fractional scaling; older GTK has only the integer ceiling. */
+const monitorScale = (monitor: Pointer, integerScale: number): number => {
+  if (fractionalScale === undefined) {
+    try {
+      fractionalScale = loadFractionalScale();
+    } catch {
+      fractionalScale = null;
+    }
+  }
+  return fractionalScale?.symbols.gdk_monitor_get_scale(monitor) ?? integerScale;
+};
 
 const readGeometry = (
   symbols: ReturnType<typeof loadGdkFFI>['symbols'],
@@ -59,7 +79,7 @@ export const getDisplays = (): readonly RawDisplay[] => {
       continue;
     }
     const geometry = readGeometry(gdk.symbols, monitor);
-    const scaleFactor = gdk.symbols.gdk_monitor_get_scale_factor(monitor);
+    const scaleFactor = monitorScale(monitor, gdk.symbols.gdk_monitor_get_scale_factor(monitor));
     gobject.symbols.g_object_unref(monitor);
 
     const bounds = { x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height };

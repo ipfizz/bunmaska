@@ -36,6 +36,7 @@ if (currentPlatform() === 'linux') {
         expect(d.bounds.width).toBeGreaterThan(0);
         expect(d.bounds.height).toBeGreaterThan(0);
         expect(d.scaleFactor).toBeGreaterThanOrEqual(1);
+        expect(Number.isFinite(d.scaleFactor)).toBe(true);
         // workArea mirrors bounds on Linux v1 (no GdkMonitor work-area API).
         expect(d.workArea).toEqual(d.bounds);
       }
