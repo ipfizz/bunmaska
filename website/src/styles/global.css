@@ -241,8 +241,6 @@
       transform 0.15s ease;
     cursor: pointer;
   }
-  /* `.btn.x` out-specifies `.prose a`, which otherwise recolors and underlines a
-     button placed inside prose - a gold label on a gold button. */
   .btn.btn-accent {
     background-color: var(--accent);
     color: #1a1408;
@@ -513,6 +511,15 @@
 .prose ul,
 .prose ol {
   color: var(--text);
+}
+
+/* `.prose .lead` outranks the unlayered `.prose p` above. */
+.lead,
+.prose .lead {
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 66ch;
 }
 
 .prose a {
