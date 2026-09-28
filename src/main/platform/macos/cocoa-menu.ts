@@ -5,6 +5,7 @@ import {
   msgSendPtr3,
   msgSendPtrPointPtrReturnsU8,
   msgSendReturnsI64,
+  msgSendReturnsU8,
   msgSendU8,
 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
@@ -63,6 +64,14 @@ const ensureTarget = (): Handle => {
         clickRegistry.get(sender)?.();
       },
     },
+    {
+      // AppKit autoenabling overwrites setEnabled: with this answer on every menu update.
+      selector: 'validateMenuItem:',
+      typeEncoding: 'c@:@',
+      args: ['object'],
+      returns: 'bool',
+      impl: (_self, _cmd, item) => msgSendReturnsU8(item, rt.selectors.get('isEnabled')),
+    },
   ]);
   sharedTarget = rt.msgSend(
     rt.msgSend(targetClass, rt.selectors.get('alloc')),
@@ -81,12 +90,14 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
   // A role item's action is the native first-responder selector with a NIL target,
   // so AppKit routes it up the responder chain (no BunmaskaMenuTarget / clickRegistry).
   const isRole = spec.roleSelector !== undefined;
-  const hasClick = !isRole && (spec.type === 'normal' || checkable) && spec.onClick !== undefined;
-  const action = isRole
-    ? rt.selectors.get(spec.roleSelector as string)
-    : hasClick
-      ? rt.selectors.get('bunmaskaMenuAction:')
-      : 0n;
+  const targeted = !isRole && (spec.type === 'normal' || checkable);
+  // A nil action is the only way to keep a responder-chain role disabled under autoenabling.
+  const action =
+    isRole && spec.enabled
+      ? rt.selectors.get(spec.roleSelector as string)
+      : targeted
+        ? rt.selectors.get('bunmaskaMenuAction:')
+        : 0n;
   const item = msgSendPtr3(
     rt.msgSend(rt.classes.get('NSMenuItem'), rt.selectors.get('alloc')),
     rt.selectors.get('initWithTitle:action:keyEquivalent:'),
@@ -95,7 +106,7 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
     nsString(spec.keyEquivalent),
   );
 
-  if (hasClick) {
+  if (targeted) {
     msgSendPtr(item, rt.selectors.get('setTarget:'), ensureTarget());
     if (spec.onClick !== undefined) {
       clickRegistry.set(item, spec.onClick);
