@@ -318,8 +318,8 @@ export class WindowsWebContents implements NativeWebContents {
   }
 
   setWindowOpenHandler(_callback: (url: string) => void): void {
-    // WKPageUIClient createNewPage forwarding; wired in the seam-fill phase
-    // (today window.open is blocked, the v1 default).
+    // ponytail: popups stay blocked but the URL is dropped; forward it via WKPageUIClient createNewPage.
+    log.warn('setWindowOpenHandler is not supported on Windows yet: the handler is never called');
   }
 
   /** @internal Reject pending execs and release the view. Called on window close. */
