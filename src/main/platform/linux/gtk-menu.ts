@@ -172,12 +172,15 @@ type WalkContext = {
 
 const appendItems = (
   ctx: WalkContext,
-  model: bigint,
+  root: bigint,
   items: ReadonlyArray<NativeMenuItemSpec>,
 ): void => {
+  let model = root;
   for (const spec of items) {
     if (spec.type === 'separator') {
-      ctx.b.gMenuAppendSection(model, ctx.b.gMenuNew());
+      // GTK draws a divider only above a NON-empty section, so later items go inside it.
+      model = ctx.b.gMenuNew();
+      ctx.b.gMenuAppendSection(root, model);
       continue;
     }
     if (spec.type === 'submenu' && spec.submenu !== undefined) {

@@ -216,15 +216,21 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(calls.filter((c) => c.fn === 'gMenuAppend')).toHaveLength(1);
   });
 
-  it('renders a separator as a fresh empty section', () => {
+  it('puts the items after a separator into a new section (GTK draws no empty section)', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
-    linuxMenuRealizer.realize([
+    const handle = linuxMenuRealizer.realize([
       { label: 'A', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
       { label: '', type: 'separator', enabled: true, keyEquivalent: '' },
       { label: 'B', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
     ]);
-    expect(calls.filter((c) => c.fn === 'gMenuAppendSection')).toHaveLength(1);
+    const sections = calls.filter((c) => c.fn === 'gMenuAppendSection');
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.args[0]).toBe(handle);
+    const appendedTo = (label: string): unknown =>
+      calls.find((c) => c.fn === 'gMenuAppend' && c.args[1] === label)?.args[0];
+    expect(appendedTo('A')).toBe(handle);
+    expect(appendedTo('B')).toBe(sections[0]?.args[1]);
   });
 
   it('realizes a submenu into a child model sharing the same action group', () => {
