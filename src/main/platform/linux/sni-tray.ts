@@ -41,10 +41,8 @@ import {
  * LIFETIME (load-bearing, blind — verified by review, not CI): `register_object` COPIES the
  * vtable, so the live wires are the THREE JSCallbacks (the copied vtable holds their raw
  * fn-pointers) — they are retained FOREVER (never closed, mirroring the signal-subscription
- * discipline; closing would risk the in-flight-reply / own-invocation SIGSEGV class). The
- * `IconPixmap` is `g_variant_new_from_data(notify=NULL)`, so its backing ARGB `Uint8Array`
- * MUST outlive every reply that references it — every icon buffer is retained for the
- * process lifetime. Property getters MUST be on the pumped main thread (the THREAD INVARIANT
+ * discipline; closing would risk the in-flight-reply / own-invocation SIGSEGV class).
+ * Property getters MUST be on the pumped main thread (the THREAD INVARIANT
  * in linux-dbus.ts) or the host's queries dispatch to a context nothing iterates.
  */
 
@@ -81,13 +79,11 @@ export const SNI_XML = `<node>
 const liveTrayEnabled = (): boolean => process.env['BUNMASKA_ENABLE_LINUX_TRAY'] === '1';
 
 // Process-lifetime retains (never freed — see the module note): the vtable JSCallbacks
-// (the copied vtable holds their raw fn-pointers) + every icon ARGB buffer (referenced by
-// from_data variants with notify=NULL) + the node infos + vtable arrays.
+// (the copied vtable holds their raw fn-pointers) + the node infos + vtable arrays.
 const retained: {
   callbacks: JSCallback[];
-  buffers: Uint8Array[];
   misc: unknown[];
-} = { callbacks: [], buffers: [], misc: [] };
+} = { callbacks: [], misc: [] };
 
 /** Cached `GVariantType*` per type string (allocated once, retained for the process). */
 const variantTypes = new Map<string, Pointer>();
@@ -160,10 +156,14 @@ const decodeIcon = (path: string): Icon | null => {
   return icon;
 };
 
-/** Build a floating `a(iiay)` with the one icon frame (retains `icon.argb` for from_data). */
+/**
+ * Build a floating `a(iiay)` with the one icon frame. The `ay` BORROWS `icon.argb`
+ * (from_data, notify=NULL): the tray state owns the buffer, and GDBus serializes the reply
+ * inside the getter's dispatch, so a later setImage may drop the old buffer.
+ */
 const buildIconPixmap = (icon: Icon): Pointer | null => {
   const g = loadGlibFFI().symbols;
-  retained.buffers.push(icon.argb); // referenced by from_data (notify=NULL) → must outlive the variant.
+  // ponytail: G_DBUS_DEBUG=message prints queued replies on the worker thread and could read a replaced buffer; copy via g_variant_new_fixed_array to close it.
   const builder = g.g_variant_builder_new(variantType('a(iiay)'));
   g.g_variant_builder_open(builder, variantType('(iiay)'));
   g.g_variant_builder_add_value(builder, g.g_variant_new_int32(icon.width));
@@ -349,7 +349,7 @@ const createLive = (conn: Pointer, initialImage: string): TrayInstance | null =>
       emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewTitle', null);
     },
     setImage: (image) => {
-      state.icon = decodeIcon(image); // old argb stays retained (an in-flight reply may use it).
+      state.icon = decodeIcon(image);
       emitSignal(conn, OBJECT_PATH, SNI_IFACE, 'NewIcon', null); // argument-less; host re-fetches.
     },
     setContextMenu: () => undefined, // deferred: dbusmenu is a follow-up (soft no-op, never throws).
