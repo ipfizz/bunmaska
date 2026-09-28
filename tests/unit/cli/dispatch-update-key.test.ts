@@ -113,6 +113,28 @@ describe('dispatch build rejects unusable update options before building', () =>
 });
 
 describe('dispatch build --update manifest', () => {
+  test("uses the config's updates.channel when --channel is absent", async () => {
+    const { root, bundle } = setupProject();
+    writeFileSync(
+      join(root, 'bunmaska.config.ts'),
+      "export default { updates: { channel: 'beta' } };\n",
+    );
+    let code = -1;
+    await captureStdio(async () => {
+      code = await dispatch(
+        {
+          kind: 'build',
+          entry: 'app.ts',
+          options: { target: 'linux', name: 'Demo', update: true },
+        },
+        { buildLinux: async () => ({ appDir: bundle, tarball: '', deb: '' }) },
+      );
+    });
+    expect(code).toBe(0);
+    const manifest = JSON.parse(readFileSync(join(root, 'update.json'), 'utf8'));
+    expect(manifest.channel).toBe('beta');
+  });
+
   test('a Windows feed is labelled x64 whatever the host arch', async () => {
     const { root, bundle } = setupProject();
     let code = -1;

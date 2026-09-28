@@ -8,8 +8,11 @@
 import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { type BunmaskaRendererConfig, rendererOutDir } from '../common/config-schema';
-import { DEFAULT_CHANNEL } from '../common/manifest';
+import {
+  type BunmaskaRendererConfig,
+  configChannel,
+  rendererOutDir,
+} from '../common/config-schema';
 import { currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
@@ -95,7 +98,8 @@ build options:
                      the .tar.zst with this Ed25519 private key (generate one
                      with 'bunmaska keygen'). Without it the feed is unsigned
                      and the runtime autoUpdater will refuse it.
-  --channel <name>   Release channel for --update (default: stable).
+  --channel <name>   Release channel for --update (default: the config's
+                     updates.channel, else stable).
   --embed-engine <dir>  Windows only: bundle a WinCairo WebKit engine directory
                      into the app's webkit/ folder so the built .exe runs with no
                      environment variables (otherwise launch needs the engine
@@ -261,7 +265,8 @@ const runBuild = async (
       return 1;
     }
   }
-  const feed = update === true ? { channel: channel ?? DEFAULT_CHANNEL, signingKeyPem } : undefined;
+  const feed =
+    update === true ? { channel: channel ?? configChannel(config), signingKeyPem } : undefined;
 
   // A configured renderer builds first and ships as `renderer/` beside the
   // executable; nothing else in the build copies it (assets are entry siblings).
