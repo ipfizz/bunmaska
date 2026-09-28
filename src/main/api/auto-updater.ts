@@ -113,6 +113,12 @@ const httpFetchBytes = async (url: string): Promise<Uint8Array> => {
   return new Uint8Array(await response.arrayBuffer());
 };
 
+/** Electron callers fire and forget, relying on the `error` event; awaiting callers still see the rejection. */
+const markHandled = <T>(promise: Promise<T>): Promise<T> => {
+  promise.catch(() => undefined);
+  return promise;
+};
+
 const stageToTmp = async (tarBytes: Uint8Array, manifest: UpdateManifest): Promise<string> => {
   const tarPath = join(tmpdir(), `bunmaska-update-${manifest.hash}.tar`);
   writeFileSync(tarPath, tarBytes);
@@ -222,7 +228,11 @@ export class AutoUpdaterImpl extends EventEmitter {
   }
 
   /** Returns `null` when no newer version is offered. Rejects on network/manifest failure. */
-  async checkForUpdates(): Promise<UpdateCheckResult | null> {
+  checkForUpdates(): Promise<UpdateCheckResult | null> {
+    return markHandled(this.#check());
+  }
+
+  async #check(): Promise<UpdateCheckResult | null> {
     const feedURL = this.#requireFeedURL();
     this.emit('checking-for-update');
     let text: string;
@@ -267,7 +277,11 @@ export class AutoUpdaterImpl extends EventEmitter {
    * feed/MITM controls the manifest, so its size + hash are self-referential;
    * only the publisher's key can produce a valid `.sig`.
    */
-  async downloadUpdate(): Promise<StagedUpdate> {
+  downloadUpdate(): Promise<StagedUpdate> {
+    return markHandled(this.#download());
+  }
+
+  async #download(): Promise<StagedUpdate> {
     const feedURL = this.#requireFeedURL();
     const available = this.#available;
     if (available === undefined) {

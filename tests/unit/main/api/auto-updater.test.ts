@@ -281,6 +281,31 @@ describe('assertSizeWithin (zip-bomb guard)', () => {
   });
 });
 
+describe('autoUpdater fire-and-forget calls (Electron style)', () => {
+  test('a failure reaches the error listener without an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const h = makeUpdater({
+        fetchText: async () => {
+          throw new Error('offline');
+        },
+      });
+      h.updater.setFeedURL(FEED);
+      h.updater.checkForUpdates();
+      h.updater.downloadUpdate();
+      await Bun.sleep(10);
+      expect(h.events.filter((e) => e === 'error')).toHaveLength(2);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
+
 describe('autoUpdater.quitAndInstall', () => {
   test('throws when nothing is staged', () => {
     const { updater } = makeUpdater({});
