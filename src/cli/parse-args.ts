@@ -75,12 +75,21 @@ const BUILD_TARGETS: ReadonlySet<BuildTarget> = new Set<BuildTarget>(['macos', '
 const isBuildTarget = (value: string): value is BuildTarget =>
   BUILD_TARGETS.has(value as BuildTarget);
 
+/** The error for the first flag-like or past-`max` argument of a positional-only command. */
+const unexpected = (command: string, args: readonly string[], max: number): Command | undefined => {
+  const bad = args.find((arg, i) => i >= max || arg.startsWith('-'));
+  return bad === undefined
+    ? undefined
+    : { kind: 'error', message: `bunmaska ${command}: unexpected argument ${bad}` };
+};
+
 /** `init [dir]` scaffolds into dir; `init <name> <dir>` also names the app. */
 const parseInit = (rest: readonly string[]): Command => {
-  const [first, second, ...extra] = rest;
-  if (extra.length > 0) {
-    return { kind: 'error', message: `bunmaska init: unexpected argument ${extra[0]}` };
+  const error = unexpected('init', rest, 2);
+  if (error !== undefined) {
+    return error;
   }
+  const [first, second] = rest;
   if (first !== undefined && second !== undefined) {
     return { kind: 'init', dir: second, name: first };
   }
@@ -88,11 +97,10 @@ const parseInit = (rest: readonly string[]): Command => {
 };
 
 const parseDev = (rest: readonly string[]): Command => {
-  const [entry, ...extra] = rest;
-  if (extra.length > 0) {
-    return { kind: 'error', message: `bunmaska dev: unexpected argument ${extra[0]}` };
-  }
-  return entry === undefined ? { kind: 'dev' } : { kind: 'dev', entry };
+  const [entry] = rest;
+  return (
+    unexpected('dev', rest, 1) ?? (entry === undefined ? { kind: 'dev' } : { kind: 'dev', entry })
+  );
 };
 
 const parseRun = (rest: readonly string[]): Command => {
@@ -187,29 +195,36 @@ const parseEngine = (rest: readonly string[]): Command => {
   if (action === undefined) {
     return { kind: 'error', message: 'bunmaska engine: missing subcommand' };
   }
+  const positional = (max: number): Command | undefined =>
+    unexpected(`engine ${action}`, args, max);
   switch (action) {
     case 'list':
-      return { kind: 'engine', sub: { action: 'list' } };
+      return positional(0) ?? { kind: 'engine', sub: { action: 'list' } };
     case 'available':
-      return { kind: 'engine', sub: { action: 'available' } };
+      return positional(0) ?? { kind: 'engine', sub: { action: 'available' } };
     case 'which': {
       const target = args[0];
-      return {
-        kind: 'engine',
-        sub: target === undefined ? { action: 'which' } : { action: 'which', target },
-      };
+      return (
+        positional(1) ?? {
+          kind: 'engine',
+          sub: target === undefined ? { action: 'which' } : { action: 'which', target },
+        }
+      );
     }
     case 'install': {
       const source = args[0];
       if (source === undefined) {
         return { kind: 'error', message: 'bunmaska engine install: missing <id|path>' };
       }
-      return { kind: 'engine', sub: { action: 'install', source } };
+      return positional(1) ?? { kind: 'engine', sub: { action: 'install', source } };
     }
     case 'use': {
       const id = args[0];
       if (id === undefined) {
         return { kind: 'error', message: 'bunmaska engine use: missing <engine-id>' };
+      }
+      if (id.startsWith('-')) {
+        return { kind: 'error', message: `bunmaska engine use: unexpected argument ${id}` };
       }
       let forDir: string | undefined;
       for (let i = 1; i < args.length; i += 1) {
@@ -230,7 +245,12 @@ const parseEngine = (rest: readonly string[]): Command => {
         sub: forDir === undefined ? { action: 'use', id } : { action: 'use', id, for: forDir },
       };
     }
-    case 'prune':
+    case 'prune': {
+      // A typo such as --dryrun must not fall through to a real prune.
+      const bad = args.find((arg) => arg !== '--dry-run' && arg !== '--force');
+      if (bad !== undefined) {
+        return { kind: 'error', message: `bunmaska engine prune: unexpected argument ${bad}` };
+      }
       return {
         kind: 'engine',
         sub: {
@@ -239,12 +259,13 @@ const parseEngine = (rest: readonly string[]): Command => {
           force: args.includes('--force'),
         },
       };
+    }
     case 'verify': {
       const id = args[0];
       if (id === undefined) {
         return { kind: 'error', message: 'bunmaska engine verify: missing <engine-id>' };
       }
-      return { kind: 'engine', sub: { action: 'verify', id } };
+      return positional(1) ?? { kind: 'engine', sub: { action: 'verify', id } };
     }
     default:
       return { kind: 'error', message: `bunmaska engine: unknown subcommand '${action}'` };
@@ -286,7 +307,10 @@ export const parseArgs = (argv: readonly string[]): Command => {
   }
   if (head === 'doctor') {
     const target = rest[0];
-    return target === undefined ? { kind: 'doctor' } : { kind: 'doctor', target };
+    return (
+      unexpected('doctor', rest, 1) ??
+      (target === undefined ? { kind: 'doctor' } : { kind: 'doctor', target })
+    );
   }
   return { kind: 'error', message: `bunmaska: unknown command '${head}'` };
 };

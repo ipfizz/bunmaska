@@ -109,6 +109,31 @@ describe('parseArgs', () => {
   });
 });
 
+describe('parseArgs rejects arguments a command does not take', () => {
+  test.each(
+    [
+      'init --react',
+      'init a --react',
+      'dev --inspect',
+      'doctor --json',
+      'doctor a b',
+      'engine list extra',
+      'engine which --json',
+      'engine install a b',
+      'engine use --global',
+      'engine verify --force',
+      'engine prune --dryrun',
+    ].map((line) => [line]),
+  )('%s', (line) => {
+    const argv = line.split(' ');
+    const command = parseArgs(argv);
+    expect(command.kind).toBe('error');
+    if (command.kind === 'error') {
+      expect(command.message).toContain(`unexpected argument ${argv[argv.length - 1]}`);
+    }
+  });
+});
+
 describe('parseArgs --help under a command', () => {
   test('prints usage instead of rejecting the flag', () => {
     expect(parseArgs(['build', '--help'])).toEqual({ kind: 'help' });
