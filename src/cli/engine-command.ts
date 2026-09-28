@@ -165,9 +165,8 @@ const isBareEngineId = (source: string): boolean => {
 
 const runInstall = async (source: string, deps: EngineCommandDeps): Promise<number> => {
   const isUrl = /^https?:\/\//.test(source);
-  // A local, already-extracted engine directory wins over feed routing — a dir
-  // whose name happens to be a valid engine-id must not be shadowed by the feed,
-  // and a local install never reads (or is broken by) bunmaska.config.
+  // A local dir wins over feed routing (even one named like an engine-id), and a
+  // local install never reads, or is broken by, bunmaska.config.
   if (!isUrl && existsSync(source) && statSync(source).isDirectory()) {
     const install = deps.installDir ?? installFromDir;
     deps.out(installedMessage(await install(deps.root, source)));
@@ -228,9 +227,8 @@ const runPrune = async (
   force: boolean,
   deps: EngineCommandDeps,
 ): Promise<number> => {
-  // Refcounts are populated by apps at launch. Before any app has registered,
-  // every engine looks unreferenced — so a plain prune would wipe the whole
-  // store. Refuse that case unless explicitly forced (or just previewing).
+  // Apps register links at launch, so before any has, every engine looks
+  // unreferenced and a plain prune would wipe the whole store.
   const installed = listInstalled(deps.root);
   if (!dryRun && !force && installed.length > 0 && readLinks(deps.root).length === 0) {
     deps.out(
@@ -348,7 +346,7 @@ const doctor = async (target: string | undefined, deps: EngineCommandDeps): Prom
   }
 };
 
-/** Exits 1 when the project pins an uninstalled engine for this machine, or doctor itself fails. */
+/** Exits 1 when the project pins an uninstalled engine for this machine, or doctor fails. */
 export const runDoctor = async (
   target: string | undefined,
   deps: EngineCommandDeps,

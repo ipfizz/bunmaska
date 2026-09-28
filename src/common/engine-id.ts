@@ -1,13 +1,5 @@
-/**
- * The content address of one pinned engine build. Many engine versions coexist in
- * the store and the WebKitGTK 6.0 soname (`libwebkitgtk-6.0.so.4`) is shared across
- * every upstream release, so the id — not the soname — carries the version.
- *
- * Format: `<engine>-<api>-<upstream>-<rev>-<os>-<arch>` (e.g.
- * `webkitgtk-6.0-2.52.4-bunmaska1-linux-x64`) where NO field may contain a dash, so
- * it splits unambiguously. `'system'` is a reserved sentinel meaning "use the OS
- * WebView" and is never a parseable id.
- */
+// `<engine>-<api>-<upstream>-<rev>-<os>-<arch>`, no dash inside a field. The soname is shared
+// across releases, so the id carries the version; `system` is reserved and never parses.
 
 import { InvalidArgumentError } from './errors';
 import { compareVersions } from './manifest';
@@ -41,10 +33,7 @@ const ENGINE_ARCHES: ReadonlySet<string> = new Set(['x64', 'arm64']);
 /** Whether `id` is the reserved system sentinel (case-insensitive). */
 export const isSystemEngine = (id: string): boolean => id.trim().toLowerCase() === SYSTEM_ENGINE;
 
-/**
- * Parse a flat engine-id back into an {@link EngineRef}, validating every field.
- * Throws {@link InvalidArgumentError} on the system sentinel or any malformed id.
- */
+/** Throws {@link InvalidArgumentError} on `system` or any malformed field. */
 export const parseEngineId = (id: string): EngineRef => {
   const parts = id.split('-');
   if (parts.length !== 6) {
@@ -74,7 +63,7 @@ export const parseEngineId = (id: string): EngineRef => {
       `engine-id: upstream must be a dotted numeric version (got ${JSON.stringify(upstream)})`,
     );
   }
-  // Ids become URLs, store paths, and baked files — api/rev must be plain tokens
+  // Ids become URLs, store paths and baked files: api/rev must be plain tokens
   // (alphanumeric-bounded, dots/underscores inside), never separators or escapes.
   const token = /^[A-Za-z0-9](?:[A-Za-z0-9._]*[A-Za-z0-9])?$/;
   if (!token.test(api) || !token.test(rev)) {
@@ -98,10 +87,7 @@ const revOrder = (rev: string): number => {
   return match ? Number(match[1]) : Number.NaN;
 };
 
-/**
- * Compare two engine-ids for a deterministic ascending sort: by upstream version
- * (SemVer-aware), tie-broken by build-revision counter then the raw id string.
- */
+/** Ascending: upstream version, then build-revision counter, then the raw id. */
 export const compareEngineIds = (a: string, b: string): -1 | 0 | 1 => {
   const ra = parseEngineId(a);
   const rb = parseEngineId(b);

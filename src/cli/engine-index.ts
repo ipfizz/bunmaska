@@ -1,8 +1,5 @@
-/**
- * os/arch/upstream/family are DERIVED from each entry's id at parse time, so the
- * stored index cannot disagree with the id. Layout at a feed:
- * `<base>/index.json`, beside each `<id>.tar.zst`.
- */
+// The feed's `<base>/index.json`. os/arch/upstream/family are derived from each id at
+// parse time, so the index can never disagree with its ids.
 
 import { type EngineRef, parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
@@ -15,7 +12,7 @@ export type EngineIndexEntry = EngineRef & {
   readonly soname?: string;
 };
 
-/** The raw, stored shape of one index entry (before id-derivation). */
+/** One entry as stored, before id-derivation. */
 type StoredEntry = {
   readonly id: string;
   readonly size?: number;
@@ -60,7 +57,7 @@ const readStoredEntries = (text: string): StoredEntry[] => {
   });
 };
 
-/** The entries this client understands; an id it cannot parse (newer family, os, arch) is skipped. */
+/** The entries this client understands; an id it cannot parse (newer family/os/arch) is skipped. */
 export const parseEngineIndex = (text: string): EngineIndexEntry[] =>
   readStoredEntries(text).flatMap((entry) => {
     try {

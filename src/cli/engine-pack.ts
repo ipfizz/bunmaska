@@ -1,8 +1,4 @@
-/**
- * The producer side of {@link installFromUrl}. The three outputs map one-to-one
- * to the feed's three files (`<id>.tar.zst`, `.json`, `.sig`), so publishing is
- * a plain object upload.
- */
+// The producer side of `installFromUrl`: one output per feed file (`<id>.tar.zst`, .json, .sig).
 
 import { parseEngineId } from '../common/engine-id';
 import { BunmaskaError } from '../common/errors';
@@ -11,11 +7,10 @@ import { signArtifact } from './engine-signature';
 import { type RemoteManifest, zstdTarExtract } from './engine-remote';
 import { readEngineManifest } from './engine-store';
 
-/** Compress a directory tree to `.tar.zst` bytes — the inverse of {@link zstdTarExtract}. */
+/** The inverse of {@link zstdTarExtract}. */
 export const zstdTarCompress = async (srcDir: string): Promise<Uint8Array> => {
-  // tar from cwd:srcDir (not `-C <dir>`) — Windows bsdtar mangles a backslash path arg.
-  // Exclude INSTALLATION_COMPLETE: it is a store-LOCAL marker written last by a
-  // verified install, never shipped inside the artifact (would void the invariant).
+  // tar from cwd:srcDir, never `-C <dir>`: Windows bsdtar mangles a backslash path arg.
+  // Never pack INSTALLATION_COMPLETE: a store marks an engine installed only after verifying it.
   const proc = Bun.spawn(['tar', '--exclude', './INSTALLATION_COMPLETE', '-cf', '-', '.'], {
     cwd: srcDir,
     stdout: 'pipe',
@@ -42,10 +37,7 @@ export type PackDeps = {
   readonly compress?: (srcDir: string) => Promise<Uint8Array>;
 };
 
-/**
- * The signature is detached base64 Ed25519 over the artifact bytes. Throws if
- * the dir has no readable `engine.json`.
- */
+/** Signs with a detached base64 Ed25519 signature over the artifact bytes. */
 export const packEngineDir = async (
   engineDir: string,
   privateKeyPem: string,
