@@ -1,8 +1,3 @@
-/**
- * `bunmaska run <entry>`: spawns `bun run <entry>` with inherited stdio so the
- * app owns the terminal.
- */
-
 export type SpawnedChild = {
   readonly exited: Promise<number>;
   readonly kill: (signal: NodeJS.Signals) => void;
@@ -21,7 +16,7 @@ const defaultSpawner: Spawner = (command, options) =>
 
 const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
-/** Resolves to the child's exit code. */
+/** Runs `bun run <entry>` on this terminal; resolves to its exit code (143 after a SIGTERM). */
 export const runApp = async (
   entry: string,
   args: readonly string[],

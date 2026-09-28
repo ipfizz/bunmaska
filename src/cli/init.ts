@@ -1,14 +1,9 @@
-/**
- * `bunmaska init`: scaffolds a minimal but real app — a `BrowserWindow`, an
- * isolated preload, a matching `ipcMain.handle`, and a `bunmaska.config.ts`.
- */
-
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { slugifyName } from '../common/manifest';
 import { BUNMASKA_VERSION } from '../common/version';
 
-/** A single file the scaffold writes, addressed relative to the project root. */
+/** A scaffold file; `path` is relative to the project root. */
 export type ScaffoldFile = { readonly path: string; readonly contents: string };
 
 export type TemplateVars = { readonly name: string; readonly id: string };
@@ -229,10 +224,7 @@ const defaultDeps: ScaffoldDeps = {
   },
 };
 
-/**
- * All-or-nothing: if ANY target already exists, nothing is written and an error
- * naming that file is thrown. Returns the absolute paths written, in order.
- */
+/** All-or-nothing: throws before writing if any target exists; returns the paths written. */
 export const scaffoldProject = (
   dir: string,
   files: readonly ScaffoldFile[],
@@ -264,10 +256,7 @@ export type InitResult = {
   readonly written: readonly string[];
 };
 
-/**
- * The bundle id defaults to `com.example.<slug>`. Throws if any target file
- * already exists.
- */
+/** Scaffolds a project with bundle id `com.example.<slug>`; throws if any target exists. */
 export const runInit = (
   targetDir: string,
   deps: ScaffoldDeps = defaultDeps,

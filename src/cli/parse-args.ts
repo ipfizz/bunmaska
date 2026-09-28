@@ -1,8 +1,3 @@
-/**
- * Maps a raw argv tail (no node/bun/script prefix) to a {@link Command}
- * discriminated union.
- */
-
 import { currentPlatform } from '../common/platform';
 
 export type BuildTarget = 'macos' | 'linux' | 'windows';
@@ -13,19 +8,16 @@ export type BuildOptions = {
   readonly out?: string;
   readonly icon?: string;
   readonly target?: BuildTarget;
-  /** macOS code-signing identity (`-` = ad-hoc). Real Developer-ID needs the cert in the keychain. */
+  /** macOS code-signing identity; `-` is ad hoc, a Developer ID needs its cert in the keychain. */
   readonly sign?: string;
-  /** Request notarization (a documented hook; requires Apple credentials to actually run). */
+  /** Notarize the macOS .app (needs APPLE_ID, TEAM_ID, BUNMASKA_NOTARIZE_PASSWORD). */
   readonly notarize?: boolean;
-  /** Also produce a `.dmg` containing the built `.app` (macOS-only; uses hdiutil). */
   readonly dmg?: boolean;
-  /** Release channel for the update feed (default: `stable`). */
   readonly channel?: string;
-  /** Also emit the auto-update feed: a `.tar.zst` of the bundle + `update.json`. */
   readonly update?: boolean;
-  /** PEM private key file that signs the `--update` artifact (`.sig` beside the `.tar.zst`). */
+  /** PEM private key that signs the `--update` artifact. */
   readonly updateKey?: string;
-  /** Windows: directory of a WinCairo WebKit engine to bundle so the `.exe` self-contains it. */
+  /** Windows: a WinCairo engine directory to bundle beside the `.exe`. */
   readonly embedEngine?: string;
 };
 
@@ -262,7 +254,7 @@ const parseEngine = (rest: readonly string[]): Command => {
   }
 };
 
-/** Parse the argv tail into a {@link Command}. Never throws. */
+/** Parse the argv tail (no bun/script prefix) into a {@link Command}. Never throws. */
 export const parseArgs = (argv: readonly string[]): Command => {
   const [head, ...rest] = argv;
   if (head === undefined || head === '--help' || head === '-h' || head === 'help') {
@@ -305,9 +297,6 @@ export const parseArgs = (argv: readonly string[]): Command => {
   return { kind: 'error', message: `bunmaska: unknown command '${head}'` };
 };
 
-/**
- * `--target` when given, else the host platform. The platform tags and the
- * build-target tags coincide, so the host maps straight through.
- */
+/** `--target`, else the host platform. */
 export const resolveTarget = (target: BuildTarget | undefined): BuildTarget =>
   target ?? currentPlatform();

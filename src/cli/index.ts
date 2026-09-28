@@ -1,10 +1,5 @@
 #!/usr/bin/env bun
 
-/**
- * The `bunmaska` command-line interface. Output goes through
- * `process.stdout`/`process.stderr` because Biome bans `console.*`.
- */
-
 import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -117,7 +112,7 @@ const deriveName = (entry: string): string => {
   return stem.length > 0 ? stem : 'BunmaskaApp';
 };
 
-/** Argv builder + runner for the `xcrun notarytool submit` release hook. */
+/** Notarizes a built .app (zip, submit --wait, staple). */
 type NotarizeHook = (appPath: string) => Promise<void>;
 
 export type DispatchDeps = {
@@ -208,7 +203,6 @@ const runBuild = async (
   command: Extract<Command, { kind: 'build' }>,
   deps: DispatchDeps,
 ): Promise<number> => {
-  // The explicit argument wins, then the config - mirroring `bunmaska dev`.
   const { config } = await loadConfig(process.cwd());
   const entry = command.entry ?? config.entry;
   if (entry === undefined) {
@@ -218,15 +212,12 @@ const runBuild = async (
     return 1;
   }
   const target = resolveTarget(command.options.target);
-  // Only macOS hosts can produce a macOS .app; Linux distributables cross-build
-  // from macOS (and build natively on Linux).
   if (target === 'macos' && currentPlatform() !== 'macos') {
     err(
       `bunmaska build: --target macos requires a macOS host (this host is ${currentPlatform()}).`,
     );
     return 1;
   }
-  // codesign/notarytool are macOS tools and only meaningful for the macOS .app.
   if (command.options.sign !== undefined && (target !== 'macos' || currentPlatform() !== 'macos')) {
     err('bunmaska build: --sign is macOS-only (codesign), with a macOS target on a macOS host.');
     return 1;
@@ -241,7 +232,6 @@ const runBuild = async (
     err('bunmaska build: --notarize requires --sign (Apple rejects an unsigned app).');
     return 1;
   }
-  // hdiutil is a macOS tool and the .dmg only wraps the macOS .app.
   if (command.options.dmg === true && (target !== 'macos' || currentPlatform() !== 'macos')) {
     err('bunmaska build: --dmg is macOS-only (hdiutil), with a macOS target on a macOS host.');
     return 1;
@@ -252,7 +242,6 @@ const runBuild = async (
     return 1;
   }
 
-  // Flag > bunmaska.config.ts > derived from the entry file name.
   const name = command.options.name ?? config.name ?? deriveName(entry);
   const id = command.options.id ?? config.id;
   const icon = command.options.icon ?? config.icon;
@@ -292,8 +281,8 @@ const runBuild = async (
   if (target === 'linux') {
     const { engineId, embed } = resolveProjectEngine(config, 'build');
     if (embed) {
-      // Dropping the .deb dependency without shipping an engine would crash on a
-      // clean box; refuse until Linux embedding exists.
+      // Embedding drops the .deb's WebKitGTK Depends, so no engine crashes a clean box.
+      // ponytail: Linux refuses engine.embed; copy the store engine in, as Windows does.
       err('bunmaska build: engine.embed is not supported on Linux yet; remove it or set it false.');
       return 1;
     }
@@ -362,8 +351,6 @@ const runBuild = async (
   });
   out(appPath);
 
-  // Without Apple credentials we print guidance and do NOT submit to Apple;
-  // with them the default hook zips, submits (--wait) and staples.
   if (command.options.notarize === true) {
     const creds = notarizeCredentials();
     if (creds === undefined) {
