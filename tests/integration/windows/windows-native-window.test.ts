@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import {
-  dispatchPostedWindowMessage,
   NativeWin32Window,
   pollWindows,
 } from '../../../src/main/platform/windows/windows-native-window';
@@ -18,6 +17,7 @@ const SWP_NOMOVE_NOZORDER_NOACTIVATE = 0x0002 | 0x0004 | 0x0010;
  * (a posted `WM_SYSCOMMAND`/`SC_CLOSE`), not a JSCallback WndProc.
  */
 const isWindows = currentPlatform() === 'windows';
+const WM_CLOSE = 0x0010;
 const WM_SYSCOMMAND = 0x0112;
 const SC_CLOSE = 0xf060;
 
@@ -73,7 +73,7 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
   });
 
   test('a posted title-bar close is vetoable, then commits with onClosed firing once', () => {
-    const drain = createWindowsDrain(dispatchPostedWindowMessage);
+    const drain = createWindowsDrain();
     const win = new NativeWin32Window({ title: 'Close', width: 320, height: 240, show: false });
     let closeRequests = 0;
     let closed = 0;
@@ -99,6 +99,43 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     drain();
     expect(closeRequests).toBe(2);
     expect(closed).toBe(1);
+  });
+
+  test('a sent WM_CLOSE or SC_CLOSE goes through the veto and never destroys a WebKit host', () => {
+    const win = new NativeWin32Window({
+      title: 'SentClose',
+      width: 320,
+      height: 240,
+      show: true,
+      destroyOnClose: false,
+    });
+    const user32 = loadUser32().symbols;
+    let closeRequests = 0;
+    let closed = 0;
+    let veto = true;
+    win.onClose(() => {
+      closeRequests += 1;
+      return veto;
+    });
+    win.onClosed(() => {
+      closed += 1;
+    });
+    try {
+      user32.SendMessageW(win.hwnd(), WM_CLOSE, 0n, 0n);
+      expect(closeRequests).toBe(1);
+      expect(win.isVisible()).toBe(true);
+      veto = false;
+      user32.SendMessageW(win.hwnd(), WM_SYSCOMMAND, BigInt(SC_CLOSE), 0n);
+      expect(closeRequests).toBe(2);
+      expect(closed).toBe(1);
+      expect(win.isVisible()).toBe(false);
+      user32.SendMessageW(win.hwnd(), WM_CLOSE, 0n, 0n);
+      expect(closed).toBe(1);
+      // Still a live HWND: GetClientRect reads 0x0 once a window is destroyed.
+      expect(win.getClientSize().width).toBeGreaterThan(0);
+    } finally {
+      win.destroy();
+    }
   });
 
   test('programmatic close() honours the veto; destroy() forces it and is idempotent', () => {

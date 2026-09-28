@@ -11,12 +11,7 @@ import type {
 import { loadUser32 } from './win32-ffi';
 import { windowsGlobalShortcutBackend } from './windows-global-shortcut';
 import { type AppMenuWindow, windowsMenuRealizer } from './windows-menu';
-import {
-  dispatchPostedWindowMessage,
-  ensureOleInitialized,
-  NativeWin32Window,
-  pollWindows,
-} from './windows-native-window';
+import { ensureOleInitialized, NativeWin32Window, pollWindows } from './windows-native-window';
 import { createWindowsDrain } from './windows-run-loop';
 import { WindowsWebContents } from './windows-web-contents';
 
@@ -409,13 +404,9 @@ export class WindowsApplication implements NativeApplication {
       callback();
     }
     this.#readyCallbacks.length = 0;
-    // Each tick: drain the message queue (routing the preventable close and the
-    // global-shortcut WM_HOTKEY), then poll window state to surface the sent-only
-    // lifecycle events.
-    const drainMessages = createWindowsDrain(
-      (hwnd, message, wParam) =>
-        dispatchPostedWindowMessage(hwnd, message, wParam) ||
-        windowsGlobalShortcutBackend.dispatchHotkeyMessage(message, wParam),
+    // WM_HOTKEY is a thread message with no window proc, so only the drain sees it.
+    const drainMessages = createWindowsDrain((_hwnd, message, wParam) =>
+      windowsGlobalShortcutBackend.dispatchHotkeyMessage(message, wParam),
     );
     this.#pump = new CooperativePump(() => {
       drainMessages();

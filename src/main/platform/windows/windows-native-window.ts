@@ -22,6 +22,7 @@ const RECT_SIZE = 16;
 const IDC_ARROW = 32512;
 /** `WM_COMMAND` — a menu selection (or control/accelerator) notification. */
 const WM_COMMAND = 0x0111;
+const WM_CLOSE = 0x0010;
 
 const CW_USEDEFAULT = -0x80000000;
 const WS_OVERLAPPEDWINDOW = 0x00cf0000;
@@ -40,12 +41,6 @@ const SW_SHOW = 5;
  *  (used to drag a frameless window from a custom `-webkit-app-region`-style bar). */
 const WM_NCLBUTTONDOWN = 0x00a1;
 const HTCAPTION = 2;
-
-const WM_SYSCOMMAND = 0x0112;
-/** `wParam` low bits for the title-bar Close command. */
-const SC_CLOSE = 0xf060;
-/** System-command type bits (the low 4 bits are reserved by Windows). */
-const SC_MASK = 0xfff0;
 
 let oleInitialized = false;
 let classRegistered = false;
@@ -111,19 +106,14 @@ const ensureFrameWindowClass = (): bigint => {
   const user32 = loadUser32();
   frameWndProc = new JSCallback(
     (hwnd: bigint, message: number, wParam: bigint, lParam: bigint): bigint => {
-      // A menu selection: HIWORD(wParam)=0 and lParam=0 (controls/accelerators differ).
-      if (message === WM_COMMAND && lParam === 0n && wParam >> 16n === 0n) {
-        const handlers = windowRegistry.get(hwnd);
-        if (handlers?.menuCommand !== undefined) {
-          try {
-            handlers.menuCommand(Number(wParam & 0xffffn));
-          } catch {
-            // A throwing JS handler must never propagate into the native WndProc.
-          }
-          return 0n;
-        }
+      let handled: boolean;
+      try {
+        handled = handleFrameMessage(hwnd, message, wParam, lParam);
+      } catch {
+        // A throwing JS handler must never propagate into the native WndProc.
+        handled = true;
       }
-      return user32.symbols.DefWindowProcW(hwnd, message, wParam, lParam);
+      return handled ? 0n : user32.symbols.DefWindowProcW(hwnd, message, wParam, lParam);
     },
     { args: [FFIType.u64, FFIType.u32, FFIType.u64, FFIType.i64], returns: FFIType.i64 },
   );
@@ -215,6 +205,42 @@ const newHandlers = (destroyOnClose: boolean): NativeWindowHandlers => ({
 
 const windowRegistry = new Map<bigint, NativeWindowHandlers>();
 
+/** Frame-proc messages handled here; `false` falls through to `DefWindowProcW`. */
+const handleFrameMessage = (
+  hwnd: bigint,
+  message: number,
+  wParam: bigint,
+  lParam: bigint,
+): boolean => {
+  const handlers = windowRegistry.get(hwnd);
+  if (message === WM_CLOSE) {
+    // Never forward: DefWindowProcW would DestroyWindow a live WebKit host (D043).
+    if (handlers !== undefined) {
+      requestClose(hwnd, handlers);
+    }
+    return true;
+  }
+  // A menu selection: HIWORD(wParam)=0 and lParam=0 (controls/accelerators differ).
+  if (
+    message === WM_COMMAND &&
+    lParam === 0n &&
+    wParam >> 16n === 0n &&
+    handlers?.menuCommand !== undefined
+  ) {
+    handlers.menuCommand(Number(wParam & 0xffffn));
+    return true;
+  }
+  return false;
+};
+
+/** Consult the veto, then commit; a no-op once closed. */
+const requestClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
+  if (handlers.closed || handlers.onClose?.() === true) {
+    return;
+  }
+  commitClose(hwnd, handlers);
+};
+
 /** Run the committed-close path once: tear down the view, then destroy the window. */
 const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
   if (handlers.closed) {
@@ -240,30 +266,6 @@ const commitClose = (hwnd: bigint, handlers: NativeWindowHandlers): void => {
     loadUser32().symbols.ShowWindow(hwnd, SW_HIDE);
   }
   windowRegistry.delete(hwnd);
-};
-
-/**
- * Route a POSTED message to its window's lifecycle handlers. Called by the pump
- * for every message before it is dispatched; returns `true` when it fully handled
- * the message (the pump then skips the default dispatch).
- */
-export const dispatchPostedWindowMessage = (
-  hwnd: bigint,
-  message: number,
-  wParam: bigint,
-): boolean => {
-  if (message !== WM_SYSCOMMAND || (Number(wParam) & SC_MASK) !== SC_CLOSE) {
-    return false;
-  }
-  const handlers = windowRegistry.get(hwnd);
-  if (handlers === undefined || handlers.closed) {
-    return false;
-  }
-  if (handlers.onClose?.() === true) {
-    return true; // vetoed — swallow the close so DefWindowProc never destroys it
-  }
-  commitClose(hwnd, handlers);
-  return true;
 };
 
 /**
@@ -490,15 +492,9 @@ export class NativeWin32Window {
     return loadUser32().symbols.IsWindowVisible(this.#hwnd) !== 0;
   }
 
-  /** Preventable close: consults the veto, then destroys (mirrors the title-bar path). */
+  /** Preventable close: consults the veto, then commits (the same path as `WM_CLOSE`). */
   close(): void {
-    if (this.#handlers.closed) {
-      return;
-    }
-    if (this.#handlers.onClose?.() === true) {
-      return;
-    }
-    commitClose(this.#hwnd, this.#handlers);
+    requestClose(this.#hwnd, this.#handlers);
   }
 
   /** Force-close, bypassing the veto. Idempotent. */

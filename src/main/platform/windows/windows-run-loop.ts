@@ -23,12 +23,7 @@ const MSG_SIZE = 48;
 /** Max messages dispatched per tick before yielding back to Bun's loop. */
 const DRAIN_BUDGET = 256;
 
-/**
- * Inspect a posted message before it is dispatched. Returns `true` when the
- * message was fully handled (the drain then SKIPS the default dispatch). This is
- * how the Windows backend routes window lifecycle (e.g. the preventable close)
- * without a JSCallback WndProc — see `windows-native-window.ts`.
- */
+/** Sees each posted message before dispatch; `true` means handled, so the drain skips it. */
 export type MessageInspector = (hwnd: bigint, message: number, wParam: bigint) => boolean;
 
 /**
