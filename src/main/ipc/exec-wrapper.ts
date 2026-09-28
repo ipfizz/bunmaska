@@ -3,9 +3,8 @@ export const EXEC_TIMEOUT_MS = 120_000;
 
 /**
  * The page-world wrapper for `executeJavaScript`. It posts `{ execId, ok, result | error }` as
- * JSON to `handlerName` so every backend shares one out-of-band path (on Linux a per-call
- * GAsyncReadyCallback JSCallback would be closed mid-invocation; D022b blocks would work on
- * macOS). Indirect `(0, eval)` resolves a bare expression to its completion value, as Electron.
+ * JSON to `handlerName` so every backend shares one out-of-band path. Indirect `(0, eval)`
+ * resolves a bare expression to its completion value, as Electron.
  */
 export const buildExecWrapper = (execId: number, handlerName: string, code: string): string => {
   const id = JSON.stringify(execId);

@@ -10,7 +10,7 @@ export type ProtocolRequest = {
   readonly url: string;
 };
 
-/** Returns `undefined` for a 404-ish failed/empty response. */
+/** Returns `undefined` to decline: the backend fails the request with a network error. */
 export type ProtocolHandler = (request: ProtocolRequest) => ProtocolResponse | undefined;
 
 export type BuiltProtocolResponse = {
@@ -36,7 +36,7 @@ export const schemeOfUrl = (url: string): string | undefined => {
 const toBytes = (data: string | Uint8Array): Uint8Array =>
   typeof data === 'string' ? new TextEncoder().encode(data) : data;
 
-/** Returns `undefined` when the handler declines (backend serves a 404-ish empty response). */
+/** `undefined` when the handler declines. */
 export const buildProtocolResponse = (
   handler: ProtocolHandler,
   request: ProtocolRequest,
