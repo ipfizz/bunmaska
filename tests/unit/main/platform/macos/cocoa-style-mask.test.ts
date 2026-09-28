@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  BORDERLESS_WINDOW_STYLE,
   computeWindowStyleMask,
   STANDARD_WINDOW_STYLE,
 } from '../../../../../src/main/platform/macos/cocoa-style-mask';
@@ -65,11 +64,5 @@ describe('STANDARD_WINDOW_STYLE', () => {
     expect(computeWindowStyleMask(STANDARD_WINDOW_STYLE)).toBe(
       (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3),
     );
-  });
-});
-
-describe('BORDERLESS_WINDOW_STYLE', () => {
-  test('composes to mask 0', () => {
-    expect(computeWindowStyleMask(BORDERLESS_WINDOW_STYLE)).toBe(0);
   });
 });

@@ -28,8 +28,6 @@ export const STANDARD_WINDOW_STYLE: CocoaWindowStyle = Object.freeze({
   resizable: true,
 });
 
-export const BORDERLESS_WINDOW_STYLE: CocoaWindowStyle = Object.freeze({});
-
 export const computeWindowStyleMask = (style: CocoaWindowStyle): number => {
   let mask = 0;
   if (style.titled === true) {

@@ -2,8 +2,30 @@ import { describe, expect, jest, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { createMacOSApplication } from '../../../src/main/platform/macos/cocoa-backend';
 import { retainedBlockCount } from '../../../src/main/platform/macos/cocoa-block';
+import { nsStringToString } from '../../../src/main/platform/macos/cocoa-foundation';
+import {
+  msgSendI64,
+  msgSendReturnsI64,
+  msgSendReturnsU8,
+} from '../../../src/main/platform/macos/cocoa-msgsend-variants';
+import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The NSWindow in NSApp's window list with this title, or 0n. */
+const nsWindowTitled = (title: string): bigint => {
+  const rt = cocoa();
+  const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
+  const windows = rt.msgSend(app, rt.selectors.get('windows'));
+  const count = rt.msgSend(windows, rt.selectors.get('count'));
+  for (let i = 0n; i < count; i += 1n) {
+    const window = msgSendI64(windows, rt.selectors.get('objectAtIndex:'), i);
+    if (nsStringToString(rt.msgSend(window, rt.selectors.get('title'))) === title) {
+      return window;
+    }
+  }
+  return 0n;
+};
 
 const waitFor = async (predicate: () => boolean, ms = 3_000): Promise<void> => {
   const deadline = performance.now() + ms;
@@ -273,6 +295,60 @@ if (currentPlatform() === 'macos') {
         await Bun.sleep(100);
         callEverything();
         expect(events).toEqual([]);
+      } finally {
+        app.quit();
+      }
+    });
+
+    test('a frameless window can become key, minimizes, resizes and closes', async () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({
+          width: 320,
+          height: 240,
+          title: 'frameless',
+          show: true,
+          frame: false,
+        });
+        const window = nsWindowTitled('frameless');
+        const sel = cocoa().selectors;
+        expect(msgSendReturnsU8(window, sel.get('canBecomeKeyWindow'))).toBe(1);
+        expect(msgSendReturnsU8(window, sel.get('canBecomeMainWindow'))).toBe(1);
+        expect(msgSendReturnsI64(window, sel.get('styleMask')) & 8n).toBe(8n);
+        win.minimize();
+        await waitFor(() => win.isMinimized());
+        expect(win.isMinimized()).toBe(true);
+        let closed = 0;
+        win.onClose(() => closed === 0);
+        win.onClosed(() => {
+          closed += 1;
+        });
+        win.close();
+        expect(closed).toBe(0);
+        win.onClose(() => false);
+        win.close();
+        expect(closed).toBe(1);
+      } finally {
+        app.quit();
+      }
+    });
+
+    test('a frameless window honours resizable: false', () => {
+      const app = createMacOSApplication();
+      app.start();
+      try {
+        const win = app.createWindow({
+          width: 320,
+          height: 240,
+          title: 'frameless-fixed',
+          show: false,
+          frame: false,
+          resizable: false,
+        });
+        const window = nsWindowTitled('frameless-fixed');
+        expect(msgSendReturnsI64(window, cocoa().selectors.get('styleMask')) & 8n).toBe(0n);
+        win.destroy();
       } finally {
         app.quit();
       }

@@ -41,6 +41,7 @@ import {
   msgSendPtr4,
   msgSendPtrI64U8Ptr,
   msgSendPtrPtr,
+  msgSendPtrReturnsU8,
   msgSendReturnsI64,
   msgSendReturnsU8,
   msgSendSize,
@@ -52,10 +53,10 @@ import { createMacOSDrain } from './cocoa-run-loop';
 import { primaryDisplayHeight } from './cocoa-screen';
 import { msgSendRectU8 } from './cocoa-msgsend-variants';
 import { readWindowBounds } from './cocoa-window-bounds';
-import { cocoa } from './cocoa-runtime';
 import { createScriptMessageHandler } from './cocoa-script-message-handler';
+import { cocoa } from './cocoa-runtime';
+import { defineObjcClass } from './cocoa-runtime-class';
 import {
-  BORDERLESS_WINDOW_STYLE,
   type CocoaWindowStyle,
   computeWindowStyleMask,
   STANDARD_WINDOW_STYLE,
@@ -187,10 +188,52 @@ const registerCustomSchemes = (configuration: Handle): void => {
   }
 };
 
-const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle =>
-  options.frame === false
-    ? BORDERLESS_WINDOW_STYLE
-    : { ...STANDARD_WINDOW_STYLE, resizable: options.resizable !== false };
+const styleFromOptions = (options: NativeWindowOptions): CocoaWindowStyle => ({
+  ...STANDARD_WINDOW_STYLE,
+  titled: options.frame !== false,
+  resizable: options.resizable !== false,
+});
+
+let framelessWindowClass: Handle | undefined;
+
+/**
+ * An NSWindow for frame: false. Without a title bar AppKit answers NO to becoming
+ * key or main, and -performClose: only beeps, so both are overridden.
+ */
+const ensureFramelessWindowClass = (): Handle => {
+  framelessWindowClass ??= defineObjcClass('BunmaskaFramelessWindow', 'NSWindow', [
+    {
+      selector: 'canBecomeKeyWindow',
+      typeEncoding: 'c@:',
+      args: [],
+      returns: 'bool',
+      impl: () => 1,
+    },
+    {
+      selector: 'canBecomeMainWindow',
+      typeEncoding: 'c@:',
+      args: [],
+      returns: 'bool',
+      impl: () => 1,
+    },
+    {
+      selector: 'performClose:',
+      typeEncoding: 'v@:@',
+      args: ['object'],
+      impl: (self) => {
+        const rt = cocoa();
+        const delegate = rt.msgSend(self, rt.selectors.get('delegate'));
+        const allowed =
+          delegate === 0n ||
+          msgSendPtrReturnsU8(delegate, rt.selectors.get('windowShouldClose:'), self) === 1;
+        if (allowed) {
+          rt.msgSend(self, rt.selectors.get('close'));
+        }
+      },
+    },
+  ]);
+  return framelessWindowClass;
+};
 
 class MacOSWebContents implements NativeWebContents {
   #webview: Handle;
@@ -969,8 +1012,10 @@ class MacOSApplication implements NativeApplication {
     const rt = cocoa();
     const frame: readonly [number, number, number, number] = [0, 0, options.width, options.height];
 
+    const windowClass =
+      options.frame === false ? ensureFramelessWindowClass() : rt.classes.get('NSWindow');
     const window = msgSendInitWithContentRect(
-      rt.msgSend(rt.classes.get('NSWindow'), rt.selectors.get('alloc')),
+      rt.msgSend(windowClass, rt.selectors.get('alloc')),
       rt.selectors.get('initWithContentRect:styleMask:backing:defer:'),
       frame,
       BigInt(computeWindowStyleMask(styleFromOptions(options))),
