@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { ptr } from 'bun:ffi';
 import { currentPlatform } from '../../../src/common/platform';
+import { wstr } from '../../../src/main/platform/windows/win32';
 import { loadUser32 } from '../../../src/main/platform/windows/win32-ffi';
 import {
   NativeWin32Window,
@@ -326,6 +328,31 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
       expect(win.getBounds()).toEqual({ x: 120, y: 90, width: 500, height: 380 });
       loadUser32().symbols.ShowWindow(win.hwnd(), SW_MINIMIZE);
       expect(win.getBounds()).toEqual({ x: 120, y: 90, width: 500, height: 380 });
+    } finally {
+      win.destroy();
+    }
+  });
+
+  test('attaching a menu bar resizes the view at once, without a resize event', () => {
+    const win = new NativeWin32Window({ title: 'Bar', width: 400, height: 300, show: false });
+    const user32 = loadUser32().symbols;
+    let resizes = 0;
+    let hookHeight = 0;
+    win.onWindowEvent('resize', () => {
+      resizes += 1;
+    });
+    win.setResizeHook((_width, height) => {
+      hookHeight = height;
+    });
+    try {
+      const before = win.getClientSize().height;
+      const bar = user32.CreateMenu();
+      user32.AppendMenuW(bar, 0, 1n, ptr(wstr('File')));
+      win.setMenuBar(bar);
+      expect(hookHeight).toBe(win.getClientSize().height);
+      expect(hookHeight).toBeLessThan(before);
+      pollWindows();
+      expect(resizes).toBe(0);
     } finally {
       win.destroy();
     }

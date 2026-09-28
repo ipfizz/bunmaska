@@ -485,8 +485,7 @@ export class NativeWin32Window {
   /**
    * Attach `menuBar` (an HMENU) as this window's menu bar, or remove it with
    * `null`. Takes ownership: the previous bar is destroyed, and so is this one when
-   * the window closes. Adding/removing a bar changes the client area, which the
-   * pump's resize poll then propagates to the hosted view.
+   * the window closes.
    */
   setMenuBar(menuBar: bigint | null): void {
     const user32 = loadUser32().symbols;
@@ -500,6 +499,13 @@ export class NativeWin32Window {
       delete this.#handlers.menuBar;
     } else {
       this.#handlers.menuBar = menuBar;
+    }
+    // The bar resizes the client area, not the window: refit the view without a 'resize'.
+    if (user32.IsIconic(this.#hwnd) === 0) {
+      const { width, height } = this.getClientSize();
+      this.#handlers.width = width;
+      this.#handlers.height = height;
+      this.#handlers.resizeHook?.(width, height);
     }
   }
 
