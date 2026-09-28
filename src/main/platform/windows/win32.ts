@@ -21,16 +21,7 @@ import type { Rect } from '../native';
  * little-endian bytes (surrogate pairs become their two units) followed by a
  * 16-bit NUL. The caller pins the buffer (e.g. `ptr(wstr(s))`) for the call.
  */
-export const wstr = (input: string): Uint8Array => {
-  const terminated = `${input}\0`;
-  const out = new Uint8Array(terminated.length * 2);
-  for (let i = 0; i < terminated.length; i += 1) {
-    const unit = terminated.charCodeAt(i);
-    out[i * 2] = unit & 0xff;
-    out[i * 2 + 1] = (unit >> 8) & 0xff;
-  }
-  return out;
-};
+export const wstr = (input: string): Uint8Array => Buffer.from(`${input}\0`, 'utf16le');
 
 /** Read a native `RECT` (left, top, right, bottom as LONGs) at `offset` as a {@link Rect}. */
 export const readRect = (pointer: Pointer, offset: number): Rect => {
