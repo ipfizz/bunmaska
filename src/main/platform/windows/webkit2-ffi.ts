@@ -152,7 +152,7 @@ export const resolveWindowsEngineDir = (
 /** Memoised `WebKit2.dll` symbols; the engine dir goes on the DLL search path for its closure. */
 export const loadWebKit2 = winLibraryAccessor('WebKit2', () => {
   // Links a store pin (so prune keeps it) and prints resolver warnings, bundled engine or not.
-  prepareEngineForLoad(resolveEngine(), process.env, (text) => process.stderr.write(text));
+  prepareEngineForLoad(resolveEngine(), (text) => process.stderr.write(text));
   // Never resolveEngineWith alone: it misses the engine bundled next to the executable.
   const dir = resolveWindowsEngineDir();
   if (dir === undefined) {

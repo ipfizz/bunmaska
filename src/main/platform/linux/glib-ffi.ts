@@ -43,7 +43,7 @@ export const dlopenLinux = <Fns extends Record<string, FFIFunction>>(
   symbols: Fns,
 ): NarrowLibrary<Fns> => {
   const engine = resolveEngine();
-  prepareEngineForLoad(engine, process.env, (text) => process.stderr.write(text));
+  prepareEngineForLoad(engine, (text) => process.stderr.write(text));
   return dlopen(linuxLibPath(engine, soname), symbols);
 };
 

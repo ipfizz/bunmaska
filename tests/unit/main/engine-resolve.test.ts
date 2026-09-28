@@ -175,27 +175,23 @@ describe('prepareEngineForLoad', () => {
       warnings: ['heads up'],
     };
     const writes: string[] = [];
-    prepareEngineForLoad(pinned, {}, (s) => writes.push(s));
+    prepareEngineForLoad(pinned, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
 
     // A second call (e.g. the other loader) is a no-op: single shared engine.
-    prepareEngineForLoad(pinned, { LD_LIBRARY_PATH: '/other' }, (s) => writes.push(s));
+    prepareEngineForLoad(pinned, (s) => writes.push(s));
     expect(writes).toEqual(['heads up\n']);
   });
 
   test('pinned: leaves the env alone, so child_process children never inherit the engine libs', () => {
-    const target: Record<string, string | undefined> = { LD_LIBRARY_PATH: '/usr/lib' };
-    prepareEngineForLoad(
-      { mode: 'pinned', libDir: '/store/x/lib', warnings: [] },
-      target,
-      () => undefined,
-    );
-    expect(target).toEqual({ LD_LIBRARY_PATH: '/usr/lib' });
+    const before = { ...process.env };
+    prepareEngineForLoad({ mode: 'pinned', libDir: '/store/x/lib', warnings: [] }, () => undefined);
+    expect({ ...process.env }).toEqual(before);
   });
 
   test('system: prints nothing', () => {
     const writes: string[] = [];
-    prepareEngineForLoad({ mode: 'system', warnings: [] }, {}, (s) => writes.push(s));
+    prepareEngineForLoad({ mode: 'system', warnings: [] }, (s) => writes.push(s));
     expect(writes).toEqual([]);
   });
 
@@ -214,30 +210,25 @@ describe('prepareEngineForLoad', () => {
         links.push([root, app, id]);
       },
     };
-    prepareEngineForLoad(pinned, {}, () => undefined, deps);
-    prepareEngineForLoad(pinned, {}, () => undefined, deps); // second loader call = no-op
+    prepareEngineForLoad(pinned, () => undefined, deps);
+    prepareEngineForLoad(pinned, () => undefined, deps); // second loader call = no-op
     expect(links).toEqual([[ROOT, '/opt/MyApp', ID]]);
   });
 
   test('explicit-dir pin (no id/root) does not link: nothing to refcount', () => {
     const links: unknown[] = [];
-    prepareEngineForLoad(
-      { mode: 'pinned', libDir: '/opt/lib', warnings: [] },
-      {},
-      () => undefined,
-      {
-        appPath: '/a',
-        link: (...a) => {
-          links.push(a);
-        },
+    prepareEngineForLoad({ mode: 'pinned', libDir: '/opt/lib', warnings: [] }, () => undefined, {
+      appPath: '/a',
+      link: (...a) => {
+        links.push(a);
       },
-    );
+    });
     expect(links).toEqual([]);
   });
 
   test('system mode does not link', () => {
     const links: unknown[] = [];
-    prepareEngineForLoad({ mode: 'system', warnings: [] }, {}, () => undefined, {
+    prepareEngineForLoad({ mode: 'system', warnings: [] }, () => undefined, {
       appPath: '/a',
       link: (...a) => {
         links.push(a);

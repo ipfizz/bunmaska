@@ -162,7 +162,6 @@ export type PrepareDeps = {
  */
 export const prepareEngineForLoad = (
   resolution: EngineResolution,
-  _env: StoreEnv, // ponytail: unused; drop with the gtk/webkitgtk/soup loader call sites
   write: (text: string) => void,
   deps: PrepareDeps = {},
 ): void => {
