@@ -9,6 +9,10 @@ import { defineObjcClass } from '../../../src/main/platform/macos/cocoa-runtime-
 
 if (currentPlatform() === 'macos') {
   describe('defineObjcClass', () => {
+    test('throws for an already-registered class name', () => {
+      expect(() => defineObjcClass('NSObject', 'NSObject', [])).toThrow(/already registered/);
+    });
+
     test('creates a registered subclass of NSObject', () => {
       expect(defineObjcClass('BunmaskaTestClassA', 'NSObject', [])).not.toBe(0n);
     });

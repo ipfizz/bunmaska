@@ -16,7 +16,7 @@ if (currentPlatform() === 'macos') {
       expect(result).not.toBe(nsNumber);
     });
 
-    test('[NSNumber numberWithBool:0] and [NSNumber numberWithBool:1] both return non-zero', () => {
+    test('the BOOL arg reaches the callee: YES and NO give distinct NSNumbers', () => {
       const rt = cocoa();
       const nsNumber = rt.classes.get('NSNumber');
       const sel = rt.selectors.get('numberWithBool:');
@@ -24,8 +24,8 @@ if (currentPlatform() === 'macos') {
       const yes = msgSendU8(nsNumber, sel, 1);
       const no = msgSendU8(nsNumber, sel, 0);
 
-      expect(yes).not.toBe(0n);
       expect(no).not.toBe(0n);
+      expect(yes).not.toBe(no);
     });
   });
 }

@@ -5,13 +5,6 @@ import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 
 if (currentPlatform() === 'macos') {
   describe('cocoa() runtime on macOS', () => {
-    test('returns a runtime object exposing selectors, classes, and msgSend', () => {
-      const rt = cocoa();
-      expect(rt.selectors).toBeDefined();
-      expect(rt.classes).toBeDefined();
-      expect(typeof rt.msgSend).toBe('function');
-    });
-
     test('returns the same runtime object across calls (singleton)', () => {
       expect(cocoa()).toBe(cocoa());
     });

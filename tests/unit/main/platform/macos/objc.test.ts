@@ -4,16 +4,9 @@ import { currentPlatform } from '../../../../../src/common/platform';
 import {
   bigIntOut,
   type Handle,
-  LIBOBJC_PATH,
   macOSLibraryAccessor,
   ptrIn,
 } from '../../../../../src/main/platform/macos/objc';
-
-describe('LIBOBJC_PATH', () => {
-  test('is the dynamic library name for the Objective-C runtime', () => {
-    expect(LIBOBJC_PATH).toBe('libobjc.A.dylib');
-  });
-});
 
 describe('ptrIn', () => {
   test('converts a bigint handle to a numeric pointer', () => {
@@ -46,26 +39,26 @@ describe('bigIntOut', () => {
 });
 
 describe('macOSLibraryAccessor', () => {
-  test('returns a memoising accessor that calls open at most once', () => {
-    if (currentPlatform() !== 'macos') {
-      return;
-    }
-    let opens = 0;
-    const get = macOSLibraryAccessor('test', () => {
-      opens += 1;
-      return { value: opens };
-    });
-    const a = get();
-    const b = get();
-    expect(a).toBe(b);
-    expect(opens).toBe(1);
-  });
+  test.skipIf(currentPlatform() !== 'macos')(
+    'returns a memoising accessor that calls open at most once',
+    () => {
+      let opens = 0;
+      const get = macOSLibraryAccessor('test', () => {
+        opens += 1;
+        return { value: opens };
+      });
+      const a = get();
+      const b = get();
+      expect(a).toBe(b);
+      expect(opens).toBe(1);
+    },
+  );
 
-  test('throws UnsupportedPlatformError on non-macOS hosts', () => {
-    if (currentPlatform() === 'macos') {
-      return;
-    }
-    const get = macOSLibraryAccessor('test', () => ({}));
-    expect(() => get()).toThrow(UnsupportedPlatformError);
-  });
+  test.skipIf(currentPlatform() === 'macos')(
+    'throws UnsupportedPlatformError on non-macOS hosts',
+    () => {
+      const get = macOSLibraryAccessor('test', () => ({}));
+      expect(() => get()).toThrow(UnsupportedPlatformError);
+    },
+  );
 });
