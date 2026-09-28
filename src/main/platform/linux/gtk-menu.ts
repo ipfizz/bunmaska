@@ -2,6 +2,7 @@ import { JSCallback, type Pointer } from 'bun:ffi';
 import type { MenuRealizer } from '../../api/menu';
 import type { NativeMenuItemSpec } from '../macos/cocoa-menu';
 import { cstr } from '../cstr';
+import { loadGlibFFI } from './glib-ffi';
 import { G_CONNECT_DEFAULT, loadGObjectFFI } from './gobject-ffi';
 import { loadGMenuFFI } from './gtk-menu-ffi';
 
@@ -96,7 +97,7 @@ const realBindings = (): Bindings => {
         gio.symbols.g_simple_action_new_stateful(
           cstr(name),
           null,
-          gio.symbols.g_variant_new_boolean(state ? 1 : 0),
+          loadGlibFFI().symbols.g_variant_new_boolean(state ? 1 : 0),
         ),
       ),
     gSimpleActionSetEnabled: (action, enabled) =>
