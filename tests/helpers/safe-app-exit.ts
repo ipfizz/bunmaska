@@ -1,16 +1,8 @@
 import { app } from '../../src/main/api/app';
 import { buildAppEnvironment } from '../../src/main/api/app-environment';
 
-/**
- * Test guard against the app singleton terminating the shared test process.
- *
- * `app.quit()` / `app.exit()` (and the `window-all-closed` default-quit) call
- * the environment's `exit`, which in production is `process.exit`. Any test that
- * closes the last `BrowserWindow` would therefore kill the whole test run.
- * {@link installSafeAppExit} swaps in an environment whose `exit` records the
- * code instead, so suites that open/close real windows stay isolated; assert on
- * {@link appExitCodes} when a test cares that a quit happened.
- */
+// The app's quit paths call `process.exit`, so closing the last window in a test
+// would end the whole shared test run; these swap in an exit that only records.
 
 let exits: number[] = [];
 

@@ -63,7 +63,7 @@ describe('startDevReload', () => {
     expect(unrefed).toBe(true);
     listener?.('reload\n');
     expect(reloads).toBe(1);
-    // Buffers arrive too — they must be handled the same as strings.
+    // Buffers arrive too; they must be handled the same as strings.
     listener?.(Buffer.from('reload\n'));
     expect(reloads).toBe(2);
   });
