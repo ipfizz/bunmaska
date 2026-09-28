@@ -66,7 +66,6 @@ const mainTs = (vars: TemplateVars): string =>
 import { dirname, join } from 'node:path';
 import { app, BrowserWindow, ipcMain } from 'bunmaska';
 
-// A demo handler the preload exposes to the page as window.api.ping().
 ipcMain.handle('ping', () => 'pong');
 
 // Under \`bunmaska dev\` the assets sit next to this file; a built app ships them
@@ -103,12 +102,7 @@ app.on('activate', (_event, hasVisibleWindows) => {
 `;
 
 const preloadJs = (): string =>
-  `// Runs in Bunmaska's isolated preload world (Electron contextIsolation). It is
-// bundled before injection, so you can import modules here — keep it browser code
-// (no Node APIs). Two globals are available here:
-//   contextBridge.exposeInMainWorld(key, api)  — expose a safe surface to the page
-//   __bunmaska.invoke(channel, ...args)          — call an ipcMain.handle handler
-// The page can then call window.api.ping(); it cannot reach Node or the bridge.
+  `// Isolated preload world, browser code only: bunmaska.org/docs/concepts/ipc
 contextBridge.exposeInMainWorld('api', {
   ping: () => __bunmaska.invoke('ping'),
 });
@@ -178,7 +172,7 @@ dist/
 const readme = (vars: TemplateVars): string =>
   `# ${vars.name}
 
-A desktop app built with [Bunmaska](https://github.com/ipfizz/bunmaska) — a
+A desktop app built with [Bunmaska](https://github.com/ipfizz/bunmaska) - a
 drop-in Electron replacement on Bun + system WebKit.
 
 ## Develop

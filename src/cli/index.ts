@@ -207,7 +207,7 @@ const runBuild = async (
   const entry = command.entry ?? config.entry;
   if (entry === undefined) {
     err(
-      'bunmaska build: missing <entry.ts> — pass it explicitly or set `entry` in bunmaska.config.ts.',
+      'bunmaska build: missing <entry.ts> - pass it explicitly or set `entry` in bunmaska.config.ts.',
     );
     return 1;
   }
@@ -356,7 +356,7 @@ const runBuild = async (
     if (creds === undefined) {
       err(
         'bunmaska build: notarization requires APPLE_ID/TEAM_ID and an app-specific password ' +
-          '(env BUNMASKA_NOTARIZE_PASSWORD) — see docs. Skipping notarization.',
+          '(env BUNMASKA_NOTARIZE_PASSWORD) - see docs. Skipping notarization.',
       );
     } else {
       const notarize = deps.notarize ?? ((app: string): Promise<void> => notarizeApp(app, creds));
