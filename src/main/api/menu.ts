@@ -59,7 +59,7 @@ export type MenuWindowAction = 'minimize' | 'close' | 'zoom' | 'togglefullscreen
 
 /**
  * `macSelector` drives macOS (D035); `editingCommand` or `windowAction` drive Linux
- * (D039). Windows role items are inert.
+ * (D039); Windows runs only `windowAction`, its editing roles are inert.
  */
 const ROLE_DEFAULTS: Record<
   MenuRole,
