@@ -120,6 +120,29 @@ describe.skipIf(!isLinux)('Linux window lifecycle events end-to-end', () => {
     app.quit();
   });
 
+  test('calls after close never touch the freed window or view', () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const app = createLinuxApplication();
+    app.start();
+    const window = app.createWindow({ width: 200, height: 120, title: 'After Close', show: true });
+    window.webContents.loadHTML('<p>x</p>');
+    window.close();
+
+    window.setTitle('ignored');
+    window.show();
+    window.webContents.loadURL('about:blank');
+    window.webContents.sendEnvelopeToRenderer('{"kind":"send","channel":"late","args":[]}');
+
+    expect(window.isVisible()).toBe(false);
+    expect(window.isFocused()).toBe(false);
+    expect(window.getBounds()).toEqual({ x: 0, y: 0, width: 200, height: 120 });
+    expect(window.webContents.getURL()).toBe('');
+    expect(window.webContents.canGoBack()).toBe(false);
+    app.quit();
+  });
+
   test('a close listener that destroys the window does not destroy it twice', () => {
     if (loadGtkFFI().symbols.gtk_init_check() === 0) {
       return;

@@ -64,6 +64,7 @@ class LinuxWebContents implements NativeWebContents {
   readonly #view: Pointer;
   readonly #registry: SignalRegistry;
   readonly #exec = new ExecResultChannel((source) => evalInPageWorld(this.#view, source));
+  #destroyed = false;
   #didFinishLoad = false;
   readonly #pendingEnvelopes: string[] = [];
   readonly #navigationCallbacks: Array<(event: NativeNavigationEvent) => void> = [];
@@ -139,79 +140,78 @@ class LinuxWebContents implements NativeWebContents {
     return this.#view;
   }
 
-  /** The signal registry to disconnect when the owning window closes. */
-  registry(): SignalRegistry {
-    return this.#registry;
+  /** WebKit symbols while the view lives; `undefined` once the window closed and freed it. */
+  #live(): ReturnType<typeof loadWebKitGtkFFI>['symbols'] | undefined {
+    return this.#destroyed ? undefined : loadWebKitGtkFFI().symbols;
+  }
+
+  /** @internal Tear down on window close; every later call is a no-op on the freed view. */
+  teardown(): void {
+    this.#destroyed = true;
+    this.#exec.destroy();
+    this.#registry.disconnectAll();
   }
 
   loadURL(url: string): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_load_uri(this.#view, cstr(url));
+    this.#live()?.webkit_web_view_load_uri(this.#view, cstr(url));
   }
 
   loadHTML(html: string, baseUrl?: string): void {
-    const webkit = loadWebKitGtkFFI();
     // base_uri is nullable; cstring cannot encode NULL, so pass a pinned
     // NUL-terminated buffer for a real base or null for NULL.
     const baseUri = baseUrl === undefined ? null : cstr(baseUrl);
-    webkit.symbols.webkit_web_view_load_html(this.#view, cstr(html), baseUri);
+    this.#live()?.webkit_web_view_load_html(this.#view, cstr(html), baseUri);
   }
 
   getURL(): string {
-    const webkit = loadWebKitGtkFFI();
-    return readGetUriResult(webkit.symbols.webkit_web_view_get_uri(this.#view));
+    const webkit = this.#live();
+    return webkit === undefined ? '' : readGetUriResult(webkit.webkit_web_view_get_uri(this.#view));
   }
 
   getTitle(): string {
-    const webkit = loadWebKitGtkFFI();
-    return readGetUriResult(webkit.symbols.webkit_web_view_get_title(this.#view));
+    const webkit = this.#live();
+    return webkit === undefined
+      ? ''
+      : readGetUriResult(webkit.webkit_web_view_get_title(this.#view));
   }
 
   reload(): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_reload(this.#view);
+    this.#live()?.webkit_web_view_reload(this.#view);
   }
 
   reloadIgnoringCache(): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_reload_bypass_cache(this.#view);
+    this.#live()?.webkit_web_view_reload_bypass_cache(this.#view);
   }
 
   stop(): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_stop_loading(this.#view);
+    this.#live()?.webkit_web_view_stop_loading(this.#view);
   }
 
   goBack(): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_go_back(this.#view);
+    this.#live()?.webkit_web_view_go_back(this.#view);
   }
 
   goForward(): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_go_forward(this.#view);
+    this.#live()?.webkit_web_view_go_forward(this.#view);
   }
 
   canGoBack(): boolean {
-    const webkit = loadWebKitGtkFFI();
-    return webkit.symbols.webkit_web_view_can_go_back(this.#view) !== 0;
+    return (this.#live()?.webkit_web_view_can_go_back(this.#view) ?? 0) !== 0;
   }
 
   canGoForward(): boolean {
-    const webkit = loadWebKitGtkFFI();
-    return webkit.symbols.webkit_web_view_can_go_forward(this.#view) !== 0;
+    return (this.#live()?.webkit_web_view_can_go_forward(this.#view) ?? 0) !== 0;
   }
 
   setZoomFactor(factor: number): void {
-    const webkit = loadWebKitGtkFFI();
-    webkit.symbols.webkit_web_view_set_zoom_level(this.#view, factor);
+    this.#live()?.webkit_web_view_set_zoom_level(this.#view, factor);
   }
 
   setUserAgent(userAgent: string): void {
-    const webkit = loadWebKitGtkFFI();
+    const webkit = this.#live();
     // Set on the view's WebKitSettings; takes effect on the next navigation.
-    webkit.symbols.webkit_settings_set_user_agent(
-      webkit.symbols.webkit_web_view_get_settings(this.#view),
+    webkit?.webkit_settings_set_user_agent(
+      webkit.webkit_web_view_get_settings(this.#view),
       cstr(userAgent),
     );
   }
@@ -235,6 +235,9 @@ class LinuxWebContents implements NativeWebContents {
   }
 
   capturePage(): Promise<Uint8Array> {
+    if (this.#destroyed) {
+      return Promise.reject(new Error('capturePage failed: web contents destroyed'));
+    }
     return webkitCapturePage(this.#view);
   }
 
@@ -242,30 +245,26 @@ class LinuxWebContents implements NativeWebContents {
     throw new UnsupportedPlatformError('webContents.sendInputEvent is not yet supported on Linux');
   }
 
-  /** @internal Reject every still-pending exec; called on window close. */
-  rejectPendingExecs(): void {
-    this.#exec.destroy();
-  }
-
   openDevTools(): void {
-    const webkit = loadWebKitGtkFFI();
-    const inspector = webkit.symbols.webkit_web_view_get_inspector(this.#view);
-    if (inspector === null) {
-      return;
+    const webkit = this.#live();
+    const inspector = webkit?.webkit_web_view_get_inspector(this.#view) ?? null;
+    if (inspector !== null) {
+      webkit?.webkit_web_inspector_show(inspector);
     }
-    webkit.symbols.webkit_web_inspector_show(inspector);
   }
 
   closeDevTools(): void {
-    const webkit = loadWebKitGtkFFI();
-    const inspector = webkit.symbols.webkit_web_view_get_inspector(this.#view);
-    if (inspector === null) {
-      return;
+    const webkit = this.#live();
+    const inspector = webkit?.webkit_web_view_get_inspector(this.#view) ?? null;
+    if (inspector !== null) {
+      webkit?.webkit_web_inspector_close(inspector);
     }
-    webkit.symbols.webkit_web_inspector_close(inspector);
   }
 
   sendEnvelopeToRenderer(envelopeJson: string): void {
+    if (this.#destroyed) {
+      return; // an invoke reply or send() after close: the view is freed.
+    }
     if (!this.#didFinishLoad) {
       this.#pendingEnvelopes.push(envelopeJson);
       return;
@@ -517,18 +516,18 @@ class LinuxWindow implements NativeWindow {
       }
     }
     this.#releaseAppMenu?.();
-    // Reject any executeJavaScript Promise still awaiting a `bunmaskaExec` result
-    // it can no longer receive, THEN disconnect signals + close the retained
-    // JSCallbacks (including the shared exec handler) — never per-call.
-    this.#webContents.rejectPendingExecs();
-    this.#webContents.registry().disconnectAll();
+    this.#webContents.teardown();
     this.#registry.disconnectAll();
   }
 
+  /** GTK symbols while the window lives; `undefined` once it is destroyed (freed). */
+  #gtk(): ReturnType<typeof loadGtkFFI>['symbols'] | undefined {
+    return this.#closed ? undefined : loadGtkFFI().symbols;
+  }
+
   setTitle(title: string): void {
-    const gtk = loadGtkFFI();
     this.#title = title;
-    gtk.symbols.gtk_window_set_title(this.#window, cstr(title));
+    this.#gtk()?.gtk_window_set_title(this.#window, cstr(title));
   }
 
   getTitle(): string {
@@ -536,8 +535,7 @@ class LinuxWindow implements NativeWindow {
   }
 
   setSize(width: number, height: number): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_set_default_size(this.#window, width, height);
+    this.#gtk()?.gtk_window_set_default_size(this.#window, width, height);
   }
 
   setPosition(_x: number, _y: number): void {
@@ -551,18 +549,15 @@ class LinuxWindow implements NativeWindow {
   }
 
   setResizable(resizable: boolean): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_set_resizable(this.#window, resizable ? GTK_TRUE : GTK_FALSE);
+    this.#gtk()?.gtk_window_set_resizable(this.#window, resizable ? GTK_TRUE : GTK_FALSE);
   }
 
   setOpacity(opacity: number): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_widget_set_opacity(this.#window, opacity);
+    this.#gtk()?.gtk_widget_set_opacity(this.#window, opacity);
   }
 
   setMinimumSize(width: number, height: number): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_widget_set_size_request(this.#window, width, height);
+    this.#gtk()?.gtk_widget_set_size_request(this.#window, width, height);
   }
 
   center(): void {
@@ -571,9 +566,9 @@ class LinuxWindow implements NativeWindow {
   }
 
   getBounds(): Rect {
-    const gtk = loadGtkFFI();
-    const width = gtk.symbols.gtk_widget_get_width(this.#window);
-    const height = gtk.symbols.gtk_widget_get_height(this.#window);
+    const gtk = this.#gtk();
+    const width = gtk?.gtk_widget_get_width(this.#window) ?? 0;
+    const height = gtk?.gtk_widget_get_height(this.#window) ?? 0;
     return {
       x: 0,
       y: 0,
@@ -583,11 +578,14 @@ class LinuxWindow implements NativeWindow {
   }
 
   show(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_widget_set_visible(this.#window, GTK_TRUE);
+    const gtk = this.#gtk();
+    if (gtk === undefined) {
+      return;
+    }
+    gtk.gtk_widget_set_visible(this.#window, GTK_TRUE);
     // `present` requests focus; a dev respawn leaves the editor focused.
     if (!isDevRestart()) {
-      gtk.symbols.gtk_window_present(this.#window);
+      gtk.gtk_window_present(this.#window);
     }
     this.#visible = true;
     this.#minimized = false;
@@ -595,8 +593,11 @@ class LinuxWindow implements NativeWindow {
   }
 
   hide(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_widget_set_visible(this.#window, GTK_FALSE);
+    const gtk = this.#gtk();
+    if (gtk === undefined) {
+      return;
+    }
+    gtk.gtk_widget_set_visible(this.#window, GTK_FALSE);
     this.#visible = false;
     this.#emitEvent('hide');
   }
@@ -606,29 +607,24 @@ class LinuxWindow implements NativeWindow {
   }
 
   focus(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_present(this.#window);
+    this.#gtk()?.gtk_window_present(this.#window);
   }
 
   minimize(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_minimize(this.#window);
+    this.#gtk()?.gtk_window_minimize(this.#window);
     this.#minimized = true;
   }
 
   maximize(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_maximize(this.#window);
+    this.#gtk()?.gtk_window_maximize(this.#window);
   }
 
   unmaximize(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_unmaximize(this.#window);
+    this.#gtk()?.gtk_window_unmaximize(this.#window);
   }
 
   isMaximized(): boolean {
-    const gtk = loadGtkFFI();
-    return gtk.symbols.gtk_window_is_maximized(this.#window) !== 0;
+    return (this.#gtk()?.gtk_window_is_maximized(this.#window) ?? 0) !== 0;
   }
 
   isMinimized(): boolean {
@@ -636,28 +632,25 @@ class LinuxWindow implements NativeWindow {
   }
 
   restore(): void {
-    const gtk = loadGtkFFI();
-    gtk.symbols.gtk_window_unminimize(this.#window);
+    this.#gtk()?.gtk_window_unminimize(this.#window);
     this.#minimized = false;
   }
 
   isFocused(): boolean {
-    const gtk = loadGtkFFI();
-    return gtk.symbols.gtk_window_is_active(this.#window) !== 0;
+    return (this.#gtk()?.gtk_window_is_active(this.#window) ?? 0) !== 0;
   }
 
   setFullScreen(flag: boolean): void {
-    const gtk = loadGtkFFI();
+    const gtk = this.#gtk();
     if (flag) {
-      gtk.symbols.gtk_window_fullscreen(this.#window);
+      gtk?.gtk_window_fullscreen(this.#window);
     } else {
-      gtk.symbols.gtk_window_unfullscreen(this.#window);
+      gtk?.gtk_window_unfullscreen(this.#window);
     }
   }
 
   isFullScreen(): boolean {
-    const gtk = loadGtkFFI();
-    return gtk.symbols.gtk_window_is_fullscreen(this.#window) !== 0;
+    return (this.#gtk()?.gtk_window_is_fullscreen(this.#window) ?? 0) !== 0;
   }
 
   setAlwaysOnTop(_flag: boolean): void {
