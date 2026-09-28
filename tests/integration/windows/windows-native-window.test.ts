@@ -289,6 +289,26 @@ describe.skipIf(!isWindows)('NativeWin32Window on Windows', () => {
     }
   });
 
+  test('setMinimumSize stops the window shrinking below the minimum', () => {
+    const win = new NativeWin32Window({ title: 'MinSize', width: 600, height: 500, show: false });
+    try {
+      win.setMinimumSize(500, 400);
+      loadUser32().symbols.SetWindowPos(
+        win.hwnd(),
+        0n,
+        0,
+        0,
+        200,
+        100,
+        SWP_NOMOVE_NOZORDER_NOACTIVATE,
+      );
+      const { width, height } = win.getBounds();
+      expect({ width, height }).toEqual({ width: 500, height: 400 });
+    } finally {
+      win.destroy();
+    }
+  });
+
   test('a minimized window is not visible', () => {
     const win = new NativeWin32Window({ title: 'MinVis', width: 320, height: 240, show: true });
     try {

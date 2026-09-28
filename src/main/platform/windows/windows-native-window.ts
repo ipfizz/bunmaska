@@ -1,4 +1,4 @@
-import { FFIType, JSCallback, ptr, read } from 'bun:ffi';
+import { FFIType, JSCallback, type Pointer, ptr, read, toArrayBuffer } from 'bun:ffi';
 import { isDevRestart } from '../../dev-reload';
 import { FFIError } from '../../../common/errors';
 import { cstr } from '../cstr';
@@ -26,6 +26,9 @@ const IDC_ARROW = 32512;
 /** `WM_COMMAND` — a menu selection (or control/accelerator) notification. */
 const WM_COMMAND = 0x0111;
 const WM_CLOSE = 0x0010;
+const WM_GETMINMAXINFO = 0x0024;
+/** `MINMAXINFO` is five POINTs; ptMinTrackSize is the fourth (x@24, y@28). */
+const MINMAXINFO_SIZE = 40;
 
 const CW_USEDEFAULT = -0x80000000;
 const WS_OVERLAPPEDWINDOW = 0x00cf0000;
@@ -181,6 +184,9 @@ interface NativeWindowHandlers {
   readonly events: Map<WindowEventType, () => void>;
   /** Internal resize sink (resizes the hosted view) — fired before the `resize` event. */
   resizeHook?: (width: number, height: number) => void;
+  /** Minimum outer size in pixels; 0 leaves the system default. */
+  minWidth: number;
+  minHeight: number;
   /** Menu-bar command sink: fired by the frame proc with the chosen `WM_COMMAND` id. */
   menuCommand?: (commandId: number) => void;
   /** The current menu-bar HMENU (owned by this window; destroyed when replaced/closed). */
@@ -200,6 +206,8 @@ interface NativeWindowHandlers {
 const newHandlers = (destroyOnClose: boolean): NativeWindowHandlers => ({
   closed: false,
   events: new Map(),
+  minWidth: 0,
+  minHeight: 0,
   x: 0,
   y: 0,
   width: 0,
@@ -226,6 +234,16 @@ const handleFrameMessage = (
       requestClose(hwnd, handlers);
     }
     return true;
+  }
+  if (message === WM_GETMINMAXINFO && handlers !== undefined) {
+    const info = new Int32Array(toArrayBuffer(Number(lParam) as Pointer, 0, MINMAXINFO_SIZE));
+    if (handlers.minWidth > 0) {
+      info[6] = handlers.minWidth;
+    }
+    if (handlers.minHeight > 0) {
+      info[7] = handlers.minHeight;
+    }
+    return false;
   }
   // A menu selection: HIWORD(wParam)=0 and lParam=0 (controls/accelerators differ).
   if (
@@ -434,6 +452,12 @@ export class NativeWin32Window {
   /** Fire a lifecycle event to its handler (for events not surfaced by polling). */
   emit(type: WindowEventType): void {
     this.#handlers.events.get(type)?.();
+  }
+
+  /** Enforced through `WM_GETMINMAXINFO`; 0 leaves that dimension unconstrained. */
+  setMinimumSize(width: number, height: number): void {
+    this.#handlers.minWidth = width;
+    this.#handlers.minHeight = height;
   }
 
   setResizeHook(hook: (width: number, height: number) => void): void {

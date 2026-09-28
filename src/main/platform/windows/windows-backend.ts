@@ -199,9 +199,8 @@ class WindowsWindow implements NativeWindow {
     user32.SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
   }
 
-  setMinimumSize(_width: number, _height: number): void {
-    // A true minimum requires WM_GETMINMAXINFO, which a native-WndProc window
-    // cannot intercept from the pump; left for a poll-based follow-up.
+  setMinimumSize(width: number, height: number): void {
+    this.#native.setMinimumSize(width, height);
   }
 
   center(): void {
