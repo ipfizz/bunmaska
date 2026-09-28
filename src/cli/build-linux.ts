@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { isSystemEngine, parseEngineId } from '../common/engine-id';
-import { type Arch, currentArch, currentPlatform } from '../common/platform';
+import { type Arch, currentArch, currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { bundlePreloadAssets, copyAppAssets, writeAppManifest } from './app-assets';
 import { runTool } from './run-tool';
@@ -46,14 +46,17 @@ export const linuxLayout = (out: string, name: string): LinuxLayout => {
   };
 };
 
-/** A full engine id verbatim, else `system`; the caller warns about a downgraded pin. */
-export const resolveBuildEngineId = (webkitPin: string | undefined): string => {
+/** A full engine id built for `target` verbatim, else `system`; the caller warns about a downgrade. */
+export const resolveBuildEngineId = (
+  webkitPin: string | undefined,
+  target: { readonly os: Platform; readonly arch: Arch },
+): string => {
   if (webkitPin === undefined || isSystemEngine(webkitPin)) {
     return 'system';
   }
   try {
-    parseEngineId(webkitPin);
-    return webkitPin;
+    const ref = parseEngineId(webkitPin);
+    return ref.os === target.os && ref.arch === target.arch ? webkitPin : 'system';
   } catch {
     return 'system'; // ponytail: a bare version (`2.52.4`) lands here; resolve via the catalog
   }

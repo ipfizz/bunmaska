@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { BuildWindowsAppOptions } from '../../../src/cli/build-windows';
 import { INSTALLATION_COMPLETE } from '../../../src/cli/engine-store';
 import { dispatch } from '../../../src/cli/index';
+import { captureStdio } from '../../helpers/capture-stdio';
 
 const ID = 'webkit-2-2.52.4-bunmaska1-windows-x64';
 const originalCwd = process.cwd();
@@ -47,6 +48,23 @@ const buildWindows = async (): Promise<{
   );
   return { code, captured };
 };
+
+describe('dispatch --target windows with another platform pinned', () => {
+  test('bakes system and warns instead of a Linux engine id', async () => {
+    writeFileSync(
+      join(dir, 'bunmaska.config.ts'),
+      "export default { entry: 'app.ts', engine: { webkit: 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64' } };\n",
+    );
+    let code = -1;
+    let captured: BuildWindowsAppOptions | undefined;
+    const streams = await captureStdio(async () => {
+      ({ code, captured } = await buildWindows());
+    });
+    expect(code).toBe(0);
+    expect(captured?.engineId).toBe('system');
+    expect(streams.err.join('')).toContain('windows-x64');
+  });
+});
 
 describe('dispatch --target windows with engine.embed', () => {
   test('bundles the installed pinned engine', async () => {

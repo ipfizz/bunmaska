@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dispatch } from '../../../src/cli/index';
+import { currentArch, currentPlatform } from '../../../src/common/platform';
 import { captureStdio } from '../../helpers/capture-stdio';
 
-const ID = 'webkit-2-2.52.4-bunmaska1-windows-x64';
+const ID = `webkit-2-2.52.4-bunmaska1-${currentPlatform()}-${currentArch()}`;
 const originalCwd = process.cwd();
 let dir: string | undefined;
 afterEach(() => {
@@ -49,6 +50,12 @@ describe('dispatch run forwards the engine pin', () => {
   test('a bare version warns and launches on the system WebKit', async () => {
     const { env, stderr } = await runWithPin('2.52.4');
     expect(env).toEqual({});
-    expect(stderr).toContain('bunmaska run: engine pin "2.52.4" is a bare version');
+    expect(stderr).toContain('bunmaska run: engine pin "2.52.4" is not a full engine id');
+  });
+
+  test("another machine's engine warns and launches on the system WebKit", async () => {
+    const arch = currentArch() === 'x64' ? 'arm64' : 'x64';
+    const { env } = await runWithPin(`webkit-2-2.52.4-bunmaska1-${currentPlatform()}-${arch}`);
+    expect(env).toEqual({});
   });
 });

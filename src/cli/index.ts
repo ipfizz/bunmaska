@@ -9,7 +9,7 @@ import {
   configChannel,
   rendererOutDir,
 } from '../common/config-schema';
-import { currentArch, currentPlatform } from '../common/platform';
+import { type Arch, currentArch, currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
 import {
@@ -186,17 +186,21 @@ const maybeEmitUpdate = async (
   }
 };
 
-/** The project's engine pin; a bare version warns and falls back to the system WebKit. */
+/** The project's engine pin for `target`; any other pin warns and falls back to the system WebKit. */
 const resolveProjectEngine = (
   config: BunmaskaConfig,
   command: string,
+  target: { readonly os: Platform; readonly arch: Arch } = {
+    os: currentPlatform(),
+    arch: currentArch(),
+  },
 ): { engineId: string; embed: boolean } => {
   const webkitPin = config.engine?.webkit;
-  const engineId = resolveBuildEngineId(webkitPin);
+  const engineId = resolveBuildEngineId(webkitPin, target);
   if (webkitPin !== undefined && engineId === 'system' && webkitPin !== 'system') {
     err(
-      `bunmaska ${command}: engine pin ${JSON.stringify(webkitPin)} is a bare version; ` +
-        'use a full engine id (see bunmaska engine available). Using the system WebKit.',
+      `bunmaska ${command}: engine pin ${JSON.stringify(webkitPin)} is not a full engine id ` +
+        `for ${target.os}-${target.arch} (see bunmaska engine available). Using the system WebKit.`,
     );
   }
   return { engineId, embed: config.engine?.embed === true };
@@ -285,7 +289,10 @@ const runBuild = async (
   }
 
   if (target === 'linux') {
-    const { engineId, embed } = resolveProjectEngine(config, 'build');
+    const { engineId, embed } = resolveProjectEngine(config, 'build', {
+      os: 'linux',
+      arch: currentArch(),
+    });
     if (embed) {
       // Embedding drops the .deb's WebKitGTK Depends, so no engine crashes a clean box.
       // ponytail: Linux refuses engine.embed; copy the store engine in, as Windows does.
@@ -310,7 +317,10 @@ const runBuild = async (
   }
 
   if (target === 'windows') {
-    const { engineId, embed } = resolveProjectEngine(config, 'build');
+    const { engineId, embed } = resolveProjectEngine(config, 'build', {
+      os: 'windows',
+      arch: 'x64',
+    });
     let embedEngine = command.options.embedEngine;
     if (embedEngine === undefined && embed) {
       const root = enginesPath();

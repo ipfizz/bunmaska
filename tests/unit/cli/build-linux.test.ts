@@ -183,16 +183,23 @@ describe('buildLinuxApp', () => {
 });
 
 describe('resolveBuildEngineId', () => {
-  test('passes a full engine-id through', () => {
-    expect(resolveBuildEngineId(ENGINE_ID)).toBe(ENGINE_ID);
+  const linuxX64 = { os: 'linux', arch: 'x64' } as const;
+
+  test('passes a full engine-id for the build target through', () => {
+    expect(resolveBuildEngineId(ENGINE_ID, linuxX64)).toBe(ENGINE_ID);
   });
 
   test('maps absent / system to the system sentinel', () => {
-    expect(resolveBuildEngineId(undefined)).toBe('system');
-    expect(resolveBuildEngineId('system')).toBe('system');
+    expect(resolveBuildEngineId(undefined, linuxX64)).toBe('system');
+    expect(resolveBuildEngineId('system', linuxX64)).toBe('system');
   });
 
   test('downgrades a bare upstream version to system (catalog is a follow-up)', () => {
-    expect(resolveBuildEngineId('2.52.4')).toBe('system');
+    expect(resolveBuildEngineId('2.52.4', linuxX64)).toBe('system');
+  });
+
+  test('downgrades an engine built for another OS or architecture to system', () => {
+    expect(resolveBuildEngineId(ENGINE_ID, { os: 'windows', arch: 'x64' })).toBe('system');
+    expect(resolveBuildEngineId(ENGINE_ID, { os: 'linux', arch: 'arm64' })).toBe('system');
   });
 });
