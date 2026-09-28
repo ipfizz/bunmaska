@@ -1,6 +1,6 @@
 import { nsString, nsStringToString } from './cocoa-foundation';
 import { msgSendI64, msgSendPtr, msgSendPtrPtr, msgSendReturnsI64 } from './cocoa-msgsend-variants';
-import { nsDataFromBytes, nsDataToBytes } from './cocoa-native-image';
+import { cocoaNativeImageBackend, nsDataFromBytes, nsDataToBytes } from './cocoa-native-image';
 import { cocoa } from './cocoa-runtime';
 
 /**
@@ -15,6 +15,7 @@ import { cocoa } from './cocoa-runtime';
 const NS_PASTEBOARD_TYPE_STRING = 'public.utf8-plain-text';
 const NS_PASTEBOARD_TYPE_HTML = 'public.html';
 const NS_PASTEBOARD_TYPE_PNG = 'public.png';
+const NS_PASTEBOARD_TYPE_TIFF = 'public.tiff';
 
 /** Map common pasteboard UTIs to Electron-style format names; pass others through. */
 const UTI_TO_FORMAT: Readonly<Record<string, string>> = {
@@ -78,15 +79,25 @@ export const writeHTML = (markup: string): void => {
   );
 };
 
-/** Read the clipboard's image as PNG bytes, or an empty array if it holds none. */
-export const readImage = (): Uint8Array => {
-  const rt = cocoa();
-  const data = msgSendPtr(
-    generalPasteboard(),
-    rt.selectors.get('dataForType:'),
-    nsString(NS_PASTEBOARD_TYPE_PNG),
+const readData = (uti: string): Uint8Array =>
+  nsDataToBytes(
+    msgSendPtr(generalPasteboard(), cocoa().selectors.get('dataForType:'), nsString(uti)),
   );
-  return nsDataToBytes(data);
+
+/** Read the clipboard's image as PNG bytes (TIFF-only images are transcoded), or empty if none. */
+export const readImage = (): Uint8Array => {
+  const png = readData(NS_PASTEBOARD_TYPE_PNG);
+  if (png.length > 0) {
+    return png;
+  }
+  const tiff = readData(NS_PASTEBOARD_TYPE_TIFF);
+  if (tiff.length === 0) {
+    return tiff;
+  }
+  const { handle } = cocoaNativeImageBackend.decode(tiff);
+  const encoded = cocoaNativeImageBackend.encodePng(handle);
+  cocoa().msgSend(handle, cocoa().selectors.get('release')); // a nil receiver is a no-op
+  return encoded;
 };
 
 /** Replace the clipboard's contents with `png` (PNG-encoded image bytes). */
