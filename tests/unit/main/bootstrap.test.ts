@@ -83,6 +83,40 @@ describe('bootstrap native wiring', () => {
     expect(app.isReady()).toBe(true);
   });
 
+  test('retries the native start after a failed one', () => {
+    const { native } = makeNative();
+    let starts = 0;
+    resetBootstrapForTesting();
+    setNativeAppForTesting({
+      ...native,
+      start: () => {
+        starts += 1;
+        if (starts === 1) {
+          throw new Error('no display');
+        }
+      },
+    });
+    expect(() => ensureNativeStarted()).toThrow('no display');
+    ensureNativeStarted();
+    expect(starts).toBe(2);
+  });
+
+  test('a bare ready listener starts the native app after the current tick', async () => {
+    const { native } = makeNative();
+    let starts = 0;
+    resetBootstrapForTesting();
+    setNativeAppForTesting({ ...native, start: () => (starts += 1) });
+    const listener = (): void => undefined;
+    app.on('ready', listener);
+    try {
+      expect(starts).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(starts).toBe(1);
+    } finally {
+      app.removeListener('ready', listener);
+    }
+  });
+
   test('forwards native open-url to the app open-url event', () => {
     installSafeAppExit();
     const { native, openUrl } = makeNative();

@@ -38,8 +38,9 @@ describe('bunmaska/electron named exports', () => {
   });
 
   test('still ships the Proxy default whose property access is actionable', () => {
-    const surface = electronShim.default as Record<string, unknown>;
-    expect(surface['app']).toBe(electronShim.app);
-    expect(() => surface['netLog']).toThrow(/not yet implemented/);
+    expect(electronShim.default.app).toBe(electronShim.app);
+    expect(() => (electronShim.default as Record<string, unknown>)['netLog']).toThrow(
+      /not yet implemented/,
+    );
   });
 });
