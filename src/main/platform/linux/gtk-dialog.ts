@@ -4,6 +4,7 @@ import { cstr } from '../cstr';
 import { runAsyncReady } from './gasync';
 import { loadGioFFI } from './gio-ffi';
 import { loadGlibFFI } from './glib-ffi';
+import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkDialogFFI, loadGtkDialogGObjectFFI } from './gtk-dialog-ffi';
 
 /**
@@ -106,11 +107,11 @@ export const settleFilePath = (args: SettleFilePathArgs): string => {
   return file === null ? '' : args.readPath(file);
 };
 
-/** Read the local path out of a `GFile*`, freeing the transfer-full `char*`. */
+/** Read the local path out of a transfer-full `GFile*`, releasing the file and the `char*`. */
 const readGFilePath = (file: Pointer): string => {
-  const gio = loadGioFFI();
   const glib = loadGlibFFI();
-  const pathPtr = gio.symbols.g_file_get_path(file);
+  const pathPtr = loadGioFFI().symbols.g_file_get_path(file);
+  loadGObjectFFI().symbols.g_object_unref(file);
   if (pathPtr === null) {
     return '';
   }
@@ -150,7 +151,7 @@ const showMessageBox = (spec: {
         cancelId,
         finish: (r) => gtk.symbols.gtk_alert_dialog_choose_finish(dialog, r, null),
       }),
-  );
+  ).finally(() => loadGObjectFFI().symbols.g_object_unref(dialog));
 };
 
 /** A `*.ext` glob matching any letter case; GTK's add_pattern is case-sensitive off Windows. */
@@ -180,6 +181,7 @@ const applyExtensionFilter = (
     gtk.symbols.gtk_file_filter_add_pattern(filter, cstr(extensionPattern(ext)));
   }
   gtk.symbols.gtk_file_dialog_set_default_filter(fileDialog, filter);
+  loadGObjectFFI().symbols.g_object_unref(filter);
 };
 
 // The open spec's file/directory/multi flags are accepted for API parity but
@@ -210,7 +212,7 @@ const showOpenDialog = (spec: {
       });
       return path === '' ? [] : [path];
     },
-  );
+  ).finally(() => loadGObjectFFI().symbols.g_object_unref(fileDialog));
 };
 
 const showSaveDialog = (spec: {
@@ -236,7 +238,7 @@ const showSaveDialog = (spec: {
         finish: (r) => gtk.symbols.gtk_file_dialog_save_finish(fileDialog, r, null),
         readPath: readGFilePath,
       }),
-  );
+  ).finally(() => loadGObjectFFI().symbols.g_object_unref(fileDialog));
 };
 
 /** The Linux native dialog backend (single-path open; multi-select is v2). */
