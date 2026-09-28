@@ -313,6 +313,18 @@ describe('App paths', () => {
     expect(() => appWith().setPath('userData', 'data')).toThrow(InvalidArgumentError);
   });
 
+  test('Linux user folders come from xdg-user-dirs', () => {
+    const userDirs =
+      '# written by xdg-user-dirs-update\nXDG_DOWNLOAD_DIR="$HOME/Téléchargements"\n';
+    const a = appWith({
+      platform: 'linux',
+      home: '/home/ada',
+      readFile: (path) =>
+        slash(path) === '/home/ada/.config/user-dirs.dirs' ? userDirs : undefined,
+    });
+    expect(a.getPath('downloads')).toBe('/home/ada/Téléchargements');
+  });
+
   test('setAppLogsPath without a path restores the platform default', () => {
     const a = appWith();
     a.setAppLogsPath('/var/log/custom');

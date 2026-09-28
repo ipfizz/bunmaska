@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname } from 'node:path';
+import { dirname, posix } from 'node:path';
 import { currentPlatform, type Platform } from '../../common/platform';
 import { findManifest, type Manifest, type ManifestReader, readManifest } from './app-metadata';
 import { normalizeLocale, parsePreferredLanguages } from './app-locale';
@@ -70,6 +70,20 @@ const locateApp = (deps: EnvironmentDeps): { dir: string; manifest: Manifest | u
   return { dir: found?.dir ?? deps.cwd, manifest: found?.manifest };
 };
 
+/** The absolute `XDG_<NAME>_DIR` entries of xdg-user-dirs' `user-dirs.dirs`, `$HOME` expanded. */
+const readUserDirs = (deps: EnvironmentDeps): Record<string, string> => {
+  const configHome = deps.env['XDG_CONFIG_HOME'] || posix.join(deps.home, '.config');
+  const text = deps.readFile(posix.join(configHome, 'user-dirs.dirs')) ?? '';
+  const dirs: Record<string, string> = {};
+  for (const [, key = '', value = ''] of text.matchAll(/^[ \t]*(XDG_\w+_DIR)="([^"]*)"/gm)) {
+    const dir = value.replace(/^\$HOME(?=\/|$)/, deps.home);
+    if (dir.startsWith('/')) {
+      dirs[key] = dir;
+    }
+  }
+  return dirs;
+};
+
 export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
   const app = locateApp(deps);
   const locale = normalizeLocale(deps.locale);
@@ -79,7 +93,8 @@ export const buildAppEnvironment = (deps: EnvironmentDeps): AppEnvironment => {
     temp: deps.temp,
     execPath: deps.execPath,
     appPath: app.dir,
-    env: deps.env,
+    // Desktop sessions keep the localized user folders in the file, not the environment.
+    env: deps.platform === 'linux' ? { ...readUserDirs(deps), ...deps.env } : deps.env,
     manifest: app.manifest,
     locale,
     preferredLanguages: computePreferredLanguages(deps.env, locale),
