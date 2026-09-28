@@ -268,7 +268,8 @@ export class App extends EventEmitter {
   relaunch(options?: { args?: string[]; execPath?: string }): void {
     const env = this.#environment();
     const execPath = options?.execPath ?? env.execPath;
-    const args = options?.args ?? process.argv.slice(1);
+    // A compiled binary's argv[1] is its embedded entry, which Bun re-injects on launch.
+    const args = options?.args ?? process.argv.slice(env.isPackaged ? 2 : 1);
     env.relaunch(execPath, args);
   }
 

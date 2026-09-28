@@ -315,19 +315,34 @@ describe('App.isPackaged', () => {
 });
 
 describe('App.relaunch', () => {
-  test('relaunches with the env execPath and current args by default', () => {
-    const calls: Array<[string, string[]]> = [];
-    const a = new App();
-    a.setEnvironmentForTesting(
-      fakeEnv({
-        execPath: '/bin/myapp',
-        relaunch: (execPath, args) => {
-          calls.push([execPath, args]);
-        },
-      }),
-    );
-    a.relaunch();
-    expect(calls).toEqual([['/bin/myapp', process.argv.slice(1)]]);
+  /** Relaunch with default args while `process.argv` is `argv`; returns the args passed on. */
+  const relaunchArgs = (argv: string[], mainScript: string): string[] => {
+    const calls: string[][] = [];
+    const a = appWith({ mainScript, relaunch: (_execPath, args) => calls.push(args) });
+    const saved = process.argv;
+    process.argv = argv;
+    try {
+      a.relaunch();
+    } finally {
+      process.argv = saved;
+    }
+    return calls[0] ?? [];
+  };
+
+  test('keeps the script path under the dev runner', () => {
+    const argv = ['/opt/homebrew/bin/bun', '/proj/src/main.ts', '--flag'];
+    expect(relaunchArgs(argv, '/proj/src/main.ts')).toEqual(['/proj/src/main.ts', '--flag']);
+  });
+
+  test('drops the embedded entry path in a compiled binary', () => {
+    const argv = ['bun', '/$bunfs/root/Demo', '--flag'];
+    expect(relaunchArgs(argv, '/$bunfs/root/Demo')).toEqual(['--flag']);
+  });
+
+  test('relaunches with the env execPath', () => {
+    const calls: string[] = [];
+    appWith({ execPath: '/bin/myapp', relaunch: (execPath) => calls.push(execPath) }).relaunch();
+    expect(calls).toEqual(['/bin/myapp']);
   });
 
   test('honors execPath and args overrides', () => {
