@@ -1,5 +1,5 @@
 import { nsStringToString } from './cocoa-foundation';
-import { msgSendI64, msgSendReturnsI64 } from './cocoa-msgsend-variants';
+import { msgSendI64, msgSendReturnsI64, msgSendReturnsU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
 import type { Handle } from './objc';
@@ -53,19 +53,13 @@ const ensureDelegateClass = (): Handle => {
         const count = msgSendReturnsI64(urls, rt.selectors.get('count'));
         for (let i = 0n; i < count; i += 1n) {
           const url = msgSendI64(urls, rt.selectors.get('objectAtIndex:'), i);
-          current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+          // AppKit never calls application:openFile: once openURLs: exists; split file URLs here.
+          if (msgSendReturnsU8(url, rt.selectors.get('isFileURL')) === 1) {
+            current?.openFile(nsStringToString(rt.msgSend(url, rt.selectors.get('path'))));
+          } else {
+            current?.openUrl(nsStringToString(rt.msgSend(url, rt.selectors.get('absoluteString'))));
+          }
         }
-      },
-    },
-    {
-      // BOOL application:(NSApplication*)app openFile:(NSString*)filename
-      selector: 'application:openFile:',
-      typeEncoding: 'c@:@@',
-      args: ['object', 'object'],
-      returns: 'bool',
-      impl: (_self, _cmd, _app, filename) => {
-        current?.openFile(nsStringToString(filename));
-        return 1;
       },
     },
   ]);
