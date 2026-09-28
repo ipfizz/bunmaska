@@ -77,12 +77,6 @@ export class PowerSaveBlockerImpl {
   isStarted(id: number): boolean {
     return this.#blockers.has(id);
   }
-
-  /** Clears every blocker WITHOUT releasing natively. @internal */
-  resetForTesting(): void {
-    this.#blockers.clear();
-    this.#nextId = 1;
-  }
 }
 
 export const powerSaveBlocker = new PowerSaveBlockerImpl();

@@ -22,6 +22,7 @@ import type {
   Rect,
   WindowEventType,
 } from '../../../../src/main/platform/native';
+import { armInertObservers } from '../../../helpers/inert-observers';
 import { appExitCodes, installSafeAppExit } from '../../../helpers/safe-app-exit';
 
 type FakeWindow = NativeWindow & {
@@ -228,6 +229,7 @@ let created: NativeWindowOptions[];
 let windows: FakeWindow[];
 
 beforeEach(() => {
+  armInertObservers();
   resetWindowRegistryForTesting();
   resetWebContentsIdsForTesting();
   resetBootstrapForTesting();

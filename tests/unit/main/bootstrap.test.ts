@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { app } from '../../../src/main/api/app';
-import { nativeTheme } from '../../../src/main/api/native-theme';
-import { powerMonitor } from '../../../src/main/api/power-monitor';
+import { resetNativeThemeObservingForTesting } from '../../../src/main/api/native-theme';
+import { resetPowerMonitorObservingForTesting } from '../../../src/main/api/power-monitor';
 import { ensureNativeStarted, resetBootstrapForTesting } from '../../../src/main/bootstrap';
 import { setNativeAppForTesting } from '../../../src/main/native-app';
 import type { NativeApplication } from '../../../src/main/platform/native';
+import { armInertObservers } from '../../helpers/inert-observers';
 import { installSafeAppExit } from '../../helpers/safe-app-exit';
 
 type NativeTriggers = {
@@ -51,19 +52,14 @@ const makeNative = (): NativeTriggers => {
 };
 
 describe('bootstrap native wiring', () => {
-  beforeEach(() => {
-    // Pre-arm the once-guards with no-ops so the synthetic `onReady` below does
-    // not drive the real native OS observers (FFI) during a unit test.
-    nativeTheme.startObserving(() => undefined);
-    powerMonitor.startObserving(() => undefined);
-  });
+  beforeEach(armInertObservers);
 
   afterEach(() => {
     setNativeAppForTesting(undefined);
     app.resetForTesting();
     resetBootstrapForTesting();
-    nativeTheme.resetObservingForTesting();
-    powerMonitor.resetObservingForTesting();
+    resetNativeThemeObservingForTesting();
+    resetPowerMonitorObservingForTesting();
   });
 
   test('an OS quit request runs app.quit on a later tick, never inside the native callback', async () => {

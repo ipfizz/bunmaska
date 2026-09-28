@@ -1,7 +1,7 @@
 import { makeCancelableEvent } from '../common/cancelable-event';
 import { app } from './api/app';
-import { nativeTheme } from './api/native-theme';
-import { powerMonitor } from './api/power-monitor';
+import { startNativeThemeObserving } from './api/native-theme';
+import { startPowerMonitorObserving } from './api/power-monitor';
 import { nativeApp } from './native-app';
 
 // Wires `app` to the native backend; separate from `app` and `BrowserWindow` to avoid an import cycle.
@@ -17,8 +17,8 @@ export const ensureNativeStarted = (): void => {
   native.onReady(() => {
     app.markReady();
     // Observers attach native hooks, which need NSApp / GTK initialised first.
-    nativeTheme.startObserving();
-    powerMonitor.startObserving();
+    startNativeThemeObserving();
+    startPowerMonitorObserving();
   });
   native.onActivate?.((hasVisibleWindows) => {
     app.emit('activate', makeCancelableEvent(), hasVisibleWindows);

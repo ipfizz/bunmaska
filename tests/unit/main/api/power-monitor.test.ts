@@ -1,7 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { PowerEventHandlers } from '../../../../src/main/platform/macos/cocoa-power';
-import { PowerMonitorImpl, powerMonitor } from '../../../../src/main/api/power-monitor';
+import {
+  powerMonitor,
+  resetPowerMonitorObservingForTesting,
+  startPowerMonitorObserving,
+} from '../../../../src/main/api/power-monitor';
 
 describe('powerMonitor', () => {
   test('is an EventEmitter (for suspend/resume/lock events)', () => {
@@ -9,15 +13,19 @@ describe('powerMonitor', () => {
   });
 });
 
-describe('powerMonitor.startObserving', () => {
+describe('startPowerMonitorObserving', () => {
+  beforeEach(resetPowerMonitorObservingForTesting);
+  afterEach(() => {
+    powerMonitor.removeAllListeners();
+  });
+
   test('maps each native handler to its corresponding event', () => {
-    const monitor = new PowerMonitorImpl();
     let handlers: PowerEventHandlers | undefined;
     const fired: string[] = [];
     for (const event of ['suspend', 'resume', 'lock-screen', 'unlock-screen']) {
-      monitor.on(event, () => fired.push(event));
+      powerMonitor.on(event, () => fired.push(event));
     }
-    monitor.startObserving((h) => {
+    startPowerMonitorObserving((h) => {
       handlers = h;
     });
     expect(handlers).toBeDefined();
@@ -28,13 +36,12 @@ describe('powerMonitor.startObserving', () => {
     expect(fired).toEqual(['suspend', 'resume', 'lock-screen', 'unlock-screen']);
   });
 
-  test('is idempotent — only the first call attaches observers', () => {
-    const monitor = new PowerMonitorImpl();
+  test('is idempotent: only the first call attaches observers', () => {
     let attaches = 0;
-    monitor.startObserving(() => {
+    startPowerMonitorObserving(() => {
       attaches += 1;
     });
-    monitor.startObserving(() => {
+    startPowerMonitorObserving(() => {
       attaches += 1;
     });
     expect(attaches).toBe(1);
