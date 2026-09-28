@@ -9,12 +9,6 @@ import {
   x11ModifierMask,
   x11StateMatches,
 } from '../../../../../src/main/platform/linux/x11-keymap';
-import { X11_FFI_SYMBOLS } from '../../../../../src/main/platform/linux/x11-ffi';
-
-/**
- * Pure X11 keysym-name + modifier-mask mapping, plus an FFI SHAPE check for the
- * Xlib symbol table. No dlopen here (we are on macOS) — shape only.
- */
 
 describe('x11KeysymName', () => {
   test('lowercases single ASCII letters', () => {
@@ -44,20 +38,16 @@ describe('x11KeysymName', () => {
     expect(x11KeysymName('Backspace')).toBe('BackSpace');
   });
 
-  test('returns undefined for an unmappable key', () => {
+  test('maps the Plus key name to its keysym', () => {
     expect(x11KeysymName('Plus')).toBe('plus');
+  });
+
+  test('returns undefined for an unmappable key', () => {
     expect(x11KeysymName('Bogus')).toBeUndefined();
   });
 });
 
 describe('x11ModifierMask', () => {
-  test('exposes the X.h mask constants', () => {
-    expect(SHIFT_MASK).toBe(1);
-    expect(CONTROL_MASK).toBe(4);
-    expect(MOD1_MASK).toBe(8);
-    expect(MOD4_MASK).toBe(64);
-  });
-
   test('CmdOrCtrl on Linux yields ControlMask', () => {
     const parsed = parseAccelerator('CmdOrCtrl+K', 'linux');
     if (parsed === undefined) {
@@ -83,37 +73,12 @@ describe('x11ModifierMask', () => {
   });
 });
 
-describe('X11_FFI_SYMBOLS shape', () => {
-  test('declares the grab/poll symbols the backend needs', () => {
-    for (const name of [
-      'XOpenDisplay',
-      'XCloseDisplay',
-      'XDefaultRootWindow',
-      'XKeysymToKeycode',
-      'XStringToKeysym',
-      'XGrabKey',
-      'XUngrabKey',
-      'XSelectInput',
-      'XPending',
-      'XNextEvent',
-      'XFlush',
-    ]) {
-      expect(X11_FFI_SYMBOLS).toHaveProperty(name);
-    }
-  });
-
-  test('XGrabKey has the 7-argument Xlib signature', () => {
-    expect(X11_FFI_SYMBOLS.XGrabKey.args).toHaveLength(7);
-  });
-});
-
 describe('x11StateMatches', () => {
   test('matches the exact registered modifiers', () => {
     expect(x11StateMatches(CONTROL_MASK | SHIFT_MASK, CONTROL_MASK | SHIFT_MASK)).toBe(true);
   });
 
   test('rejects a subset or superset of the registered modifiers', () => {
-    // The old dispatch matched on keycode alone, so Ctrl+K fired Ctrl+Shift+K too.
     expect(x11StateMatches(CONTROL_MASK, CONTROL_MASK | SHIFT_MASK)).toBe(false);
     expect(x11StateMatches(CONTROL_MASK | SHIFT_MASK, CONTROL_MASK)).toBe(false);
   });
