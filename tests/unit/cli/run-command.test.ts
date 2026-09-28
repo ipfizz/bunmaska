@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { runApp } from '../../../src/cli/run';
 
 describe('runApp', () => {
-  test('passes trailing args through to the entry after the entry path', async () => {
+  test('runs the entry with the running Bun, not whichever bun is on PATH', async () => {
     let captured: readonly string[] = [];
     const spawn = (cmd: readonly string[]) => {
       captured = cmd;
@@ -11,7 +11,7 @@ describe('runApp', () => {
 
     await runApp('app.ts', ['--flag', 'value'], { spawn });
 
-    expect(captured).toEqual(['bun', 'run', 'app.ts', '--flag', 'value']);
+    expect(captured).toEqual([process.execPath, 'run', 'app.ts', '--flag', 'value']);
   });
 
   test('carries the engine pin into the child environment', async () => {

@@ -23,7 +23,7 @@ export const runApp = async (
   deps: { readonly spawn?: Spawner; readonly extraEnv?: Readonly<Record<string, string>> } = {},
 ): Promise<number> => {
   const spawn = deps.spawn ?? defaultSpawner;
-  const child = spawn(['bun', 'run', entry, ...args], {
+  const child = spawn([process.execPath, 'run', entry, ...args], {
     ...(deps.extraEnv !== undefined ? { env: { ...process.env, ...deps.extraEnv } } : {}),
   });
   // Killing the CLI (IDE stop button, process manager) must not orphan the app window.
