@@ -23,8 +23,6 @@ const LIBX11_PATH = 'libX11.so.6';
 export const X11_FFI_SYMBOLS = {
   // (const char *display_name) -> Display*   (NULL = $DISPLAY)
   XOpenDisplay: { args: [FFIType.cstring], returns: FFIType.pointer },
-  // (Display*) -> int
-  XCloseDisplay: { args: [FFIType.pointer], returns: FFIType.i32 },
   // (Display*) -> Window (XID, unsigned long)
   XDefaultRootWindow: { args: [FFIType.pointer], returns: FFIType.u64 },
   // (Display*, KeySym) -> KeyCode (unsigned char)

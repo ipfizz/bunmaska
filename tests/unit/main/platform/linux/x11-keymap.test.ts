@@ -82,7 +82,6 @@ describe('X11_FFI_SYMBOLS shape', () => {
   test('declares the grab/poll symbols the backend needs', () => {
     for (const name of [
       'XOpenDisplay',
-      'XCloseDisplay',
       'XDefaultRootWindow',
       'XKeysymToKeycode',
       'XStringToKeysym',

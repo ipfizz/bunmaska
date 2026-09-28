@@ -1,14 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import { cstr } from '../../../src/main/platform/cstr';
+import { loadGObjectFFI } from '../../../src/main/platform/linux/gobject-ffi';
 import { loadGtkFFI } from '../../../src/main/platform/linux/gtk-ffi';
 import { loadWebKitGtkFFI, readGetUriResult } from '../../../src/main/platform/linux/webkitgtk-ffi';
+
+/** A WebKitWebView with no construct properties: g_object_new(type, NULL). */
+const newWebView = () =>
+  loadGObjectFFI().symbols.g_object_new(
+    loadWebKitGtkFFI().symbols.webkit_web_view_get_type(),
+    null,
+    null,
+    null,
+  );
 
 if (currentPlatform() === 'linux') {
   describe('WebKitGTK FFI on Linux', () => {
     test('resolves the core web-view symbols (proves the library + names are correct)', () => {
       const lib = loadWebKitGtkFFI();
-      expect(typeof lib.symbols.webkit_web_view_new).toBe('function');
       expect(typeof lib.symbols.webkit_web_view_load_uri).toBe('function');
       expect(typeof lib.symbols.webkit_web_view_load_html).toBe('function');
       expect(typeof lib.symbols.webkit_web_view_get_uri).toBe('function');
@@ -24,7 +33,6 @@ if (currentPlatform() === 'linux') {
         'webkit_web_view_can_go_back',
         'webkit_web_view_can_go_forward',
         'webkit_web_view_evaluate_javascript',
-        'webkit_web_view_get_user_content_manager',
         'webkit_user_content_manager_new',
         'webkit_user_content_manager_register_script_message_handler',
         'webkit_user_content_manager_add_script',
@@ -51,7 +59,7 @@ if (currentPlatform() === 'linux') {
       const webkit = loadWebKitGtkFFI();
 
       // get_uri is NULL before any load -> readGetUriResult guards it to ''.
-      const view = webkit.symbols.webkit_web_view_new();
+      const view = newWebView();
       expect(view).not.toBeNull();
       expect(readGetUriResult(webkit.symbols.webkit_web_view_get_uri(view))).toBe('');
 
@@ -93,7 +101,7 @@ if (currentPlatform() === 'linux') {
         return; // No display.
       }
       const webkit = loadWebKitGtkFFI();
-      const view = webkit.symbols.webkit_web_view_new();
+      const view = newWebView();
       const settings = webkit.symbols.webkit_web_view_get_settings(view);
       expect(settings).not.toBeNull();
       // Must resolve + not crash; the UA takes effect on the next navigation.

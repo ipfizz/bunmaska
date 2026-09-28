@@ -26,10 +26,6 @@ export const GTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.cstring],
     returns: FFIType.void,
   },
-  gtk_window_get_title: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   gtk_window_set_default_size: {
     args: [FFIType.pointer, FFIType.i32, FFIType.i32],
     returns: FFIType.void,
@@ -89,10 +85,6 @@ export const GTK_FFI_SYMBOLS = {
     returns: FFIType.i32,
   },
   gtk_widget_get_height: {
-    args: [FFIType.pointer],
-    returns: FFIType.i32,
-  },
-  gtk_widget_grab_focus: {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },

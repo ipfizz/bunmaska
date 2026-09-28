@@ -18,11 +18,7 @@ if (currentPlatform() === 'linux') {
   describe('Linux powerMonitor backend (GDBus/logind)', () => {
     test('loadGDBusFFI resolves every GDBus symbol', () => {
       const gdbus = loadGDBusFFI();
-      for (const name of [
-        'g_bus_get_sync',
-        'g_dbus_connection_signal_subscribe',
-        'g_dbus_connection_signal_unsubscribe',
-      ] as const) {
+      for (const name of ['g_bus_get_sync', 'g_dbus_connection_signal_subscribe'] as const) {
         expect(typeof gdbus.symbols[name]).toBe('function');
       }
     });

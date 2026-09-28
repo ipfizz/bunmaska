@@ -48,11 +48,6 @@ export const LIBNOTIFY_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.i32,
   },
-  // (notification, timeout_ms) -> void; -1 = default, 0 = never expire.
-  notify_notification_set_timeout: {
-    args: [FFIType.pointer, FFIType.i32],
-    returns: FFIType.void,
-  },
   // (NotifyNotification*, const char* key, GVariant* value) -> void; sinks the floating variant
   notify_notification_set_hint: {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer],

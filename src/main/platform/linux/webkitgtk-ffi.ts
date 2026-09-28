@@ -40,10 +40,6 @@ export const WEBKIT_SNAPSHOT_OPTIONS_NONE = 0;
  *   (a real world name, e.g. `BunmaskaPreload`) — the isolated-world injection path.
  */
 export const WEBKITGTK_FFI_SYMBOLS = {
-  webkit_web_view_new: {
-    args: [],
-    returns: FFIType.pointer,
-  },
   webkit_web_view_get_type: {
     args: [],
     returns: FFIType.u64,
@@ -126,10 +122,6 @@ export const WEBKITGTK_FFI_SYMBOLS = {
       FFIType.pointer,
     ],
     returns: FFIType.void,
-  },
-  webkit_web_view_get_user_content_manager: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
   },
   webkit_web_view_get_settings: {
     args: [FFIType.pointer],

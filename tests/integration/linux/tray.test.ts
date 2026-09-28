@@ -45,7 +45,6 @@ if (currentPlatform() === 'linux') {
         'gdk_pixbuf_get_pixels',
         'gdk_pixbuf_get_rowstride',
         'gdk_pixbuf_get_n_channels',
-        'gdk_pixbuf_get_has_alpha',
       ] as const) {
         expect(typeof pix.symbols[name]).toBe('function');
       }

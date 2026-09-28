@@ -55,8 +55,6 @@ if (currentPlatform() === 'linux') {
         'gtk_window_is_maximized',
         'gtk_widget_get_width',
         'gtk_widget_get_height',
-        'gtk_window_get_title',
-        'gtk_widget_grab_focus',
       ] as const) {
         expect(typeof lib.symbols[name]).toBe('function');
       }

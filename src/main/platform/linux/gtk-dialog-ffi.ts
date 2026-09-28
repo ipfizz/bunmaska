@@ -103,10 +103,6 @@ export const GTK_DIALOG_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.cstring],
     returns: FFIType.void,
   },
-  gtk_file_filter_set_name: {
-    args: [FFIType.pointer, FFIType.cstring],
-    returns: FFIType.void,
-  },
   gtk_file_dialog_set_default_filter: {
     args: [FFIType.pointer, FFIType.pointer],
     returns: FFIType.void,

@@ -93,10 +93,6 @@ export const dlopenLinux = <Fns extends Record<string, FFIFunction>>(
 
 /** The GLib FFI symbol descriptor table. */
 export const GLIB_FFI_SYMBOLS = {
-  g_main_context_default: {
-    args: [],
-    returns: FFIType.pointer,
-  },
   g_main_context_iteration: {
     args: [FFIType.pointer, FFIType.i32],
     returns: FFIType.i32,
@@ -212,10 +208,6 @@ export const GLIB_FFI_SYMBOLS = {
     args: [FFIType.cstring],
     returns: FFIType.pointer,
   },
-  g_variant_type_free: {
-    args: [FFIType.pointer],
-    returns: FFIType.void,
-  },
   // (type:GVariantType*) -> GVariantBuilder* (heap; g_variant_builder_unref).
   g_variant_builder_new: {
     args: [FFIType.pointer],
@@ -255,11 +247,6 @@ export const GLIB_FFI_SYMBOLS = {
       FFIType.pointer,
       FFIType.pointer,
     ],
-    returns: FFIType.pointer,
-  },
-  // (value) -> GVariant*. Sinks a floating ref + adds one full ref (so we OWN the value).
-  g_variant_ref_sink: {
-    args: [FFIType.pointer],
     returns: FFIType.pointer,
   },
   // (GList*) -> void. Frees the LIST CELLS ONLY - each node's data must already

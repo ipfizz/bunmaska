@@ -12,7 +12,6 @@ if (currentPlatform() === 'linux') {
       for (const name of [
         'g_signal_connect_data',
         'g_signal_handler_disconnect',
-        'g_object_ref',
         'g_object_unref',
         'g_object_new',
       ] as const) {

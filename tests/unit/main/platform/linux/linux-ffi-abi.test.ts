@@ -98,7 +98,6 @@ describe('gboolean is i32, never bool', () => {
  * transfer is full, hand the buffer back to g_free.
  */
 const POINTER_GETTERS: ReadonlyArray<readonly [string, Sym]> = [
-  ['gtk_window_get_title', GTK_FFI_SYMBOLS.gtk_window_get_title],
   ['webkit_web_view_get_uri', WEBKITGTK_FFI_SYMBOLS.webkit_web_view_get_uri],
   ['jsc_value_to_string', JSC_FFI_SYMBOLS.jsc_value_to_string],
   ['g_file_get_path', GIO_FFI_SYMBOLS.g_file_get_path],
@@ -156,9 +155,8 @@ describe('width-sensitive scalars', () => {
     expect(GOBJECT_FFI_SYMBOLS.g_signal_handler_disconnect.args[1]).toBe(T.u64);
   });
 
-  test('a D-Bus subscription id is guint (u32) on both sides', () => {
+  test('a D-Bus subscription id is guint (u32)', () => {
     expect(GDBUS_FFI_SYMBOLS.g_dbus_connection_signal_subscribe.returns).toBe(T.u32);
-    expect(GDBUS_FFI_SYMBOLS.g_dbus_connection_signal_unsubscribe.args[1]).toBe(T.u32);
   });
 
   test('webkit_uri_scheme_request_finish takes a 64-bit stream length', () => {

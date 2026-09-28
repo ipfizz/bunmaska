@@ -56,11 +56,6 @@ export const GDK_PIXBUF_FFI_SYMBOLS = {
     args: [FFIType.pointer],
     returns: FFIType.i32,
   },
-  // (GdkPixbuf*) -> gboolean whether the pixbuf has an alpha channel.
-  gdk_pixbuf_get_has_alpha: {
-    args: [FFIType.pointer],
-    returns: FFIType.i32,
-  },
   // (src, dest_width, dest_height, GdkInterpType /*BILINEAR=2*/) -> GdkPixbuf* (transfer-full)
   gdk_pixbuf_scale_simple: {
     args: [FFIType.pointer, FFIType.i32, FFIType.i32, FFIType.i32],

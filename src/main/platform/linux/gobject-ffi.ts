@@ -48,10 +48,6 @@ export const GOBJECT_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.u64],
     returns: FFIType.void,
   },
-  g_object_ref: {
-    args: [FFIType.pointer],
-    returns: FFIType.pointer,
-  },
   g_object_unref: {
     args: [FFIType.pointer],
     returns: FFIType.void,

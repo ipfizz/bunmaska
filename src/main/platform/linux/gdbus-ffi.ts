@@ -96,11 +96,6 @@ export const GDBUS_FFI_SYMBOLS = {
     ],
     returns: FFIType.u32,
   },
-  // (connection, subscription_id:guint) -> void.
-  g_dbus_connection_signal_unsubscribe: {
-    args: [FFIType.pointer, FFIType.u32],
-    returns: FFIType.void,
-  },
   // Bounded REMOTE method call. SAFE on the pumped thread: the reply is read by the
   // connection's PRIVATE GDBusWorker thread and call_sync awaits it on its OWN private
   // GMainContext (gdbusconnection.c), so it blocks only THIS thread for a bounded round
