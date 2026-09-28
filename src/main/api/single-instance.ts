@@ -36,6 +36,9 @@ export type LockBackend = {
 
 export const encodePayload = (payload: SecondInstancePayload): string => JSON.stringify(payload);
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
 /** `undefined` if malformed or missing `argv`. */
 export const decodePayload = (json: string): SecondInstancePayload | undefined => {
   let parsed: unknown;
@@ -50,10 +53,10 @@ export const decodePayload = (json: string): SecondInstancePayload | undefined =
   const record = parsed as Record<string, unknown>;
   const argv = record['argv'];
   const cwd = record['cwd'];
-  if (!Array.isArray(argv) || typeof cwd !== 'string') {
+  if (!isStringArray(argv) || typeof cwd !== 'string') {
     return undefined;
   }
-  return { argv: argv as string[], cwd, additionalData: record['additionalData'] };
+  return { argv, cwd, additionalData: record['additionalData'] };
 };
 
 export class SingleInstanceManager {
