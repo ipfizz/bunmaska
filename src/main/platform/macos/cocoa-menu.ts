@@ -47,7 +47,6 @@ export type NativeMenuItemSpec = {
 
 const clickRegistry = new Map<Handle, NativeMenuItemSpec>();
 
-let targetClass: Handle | undefined;
 let sharedTarget: Handle | undefined;
 
 const setState = (item: Handle, on: boolean): void => {
@@ -81,7 +80,7 @@ const ensureTarget = (): Handle => {
     return sharedTarget;
   }
   const rt = cocoa();
-  targetClass = defineObjcClass('BunmaskaMenuTarget', 'NSObject', [
+  const targetClass = defineObjcClass('BunmaskaMenuTarget', 'NSObject', [
     {
       selector: 'bunmaskaMenuAction:',
       typeEncoding: 'v@:@',

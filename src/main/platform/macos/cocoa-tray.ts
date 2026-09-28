@@ -30,7 +30,6 @@ const NS_VARIABLE_STATUS_ITEM_LENGTH = -1;
 
 const clickRegistry = new Map<Handle, () => void>();
 
-let targetClass: Handle | undefined;
 let sharedTarget: Handle | undefined;
 
 const ensureTarget = (): Handle => {
@@ -38,7 +37,7 @@ const ensureTarget = (): Handle => {
     return sharedTarget;
   }
   const rt = cocoa();
-  targetClass = defineObjcClass('BunmaskaTrayTarget', 'NSObject', [
+  const targetClass = defineObjcClass('BunmaskaTrayTarget', 'NSObject', [
     {
       selector: 'bunmaskaTrayAction:',
       typeEncoding: 'v@:@',

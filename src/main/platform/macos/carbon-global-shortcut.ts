@@ -33,7 +33,6 @@ const EVENT_NOT_HANDLED_ERR = -9874;
 type Registration = {
   readonly id: number;
   readonly hotKeyRef: bigint;
-  readonly callback: () => void;
 };
 
 const byAccelerator = new Map<string, Registration>();
@@ -136,7 +135,7 @@ const register = (accelerator: string, callback: () => void): boolean => {
     return false;
   }
   byId.set(id, callback);
-  byAccelerator.set(accelerator, { id, hotKeyRef, callback });
+  byAccelerator.set(accelerator, { id, hotKeyRef });
   return true;
 };
 
