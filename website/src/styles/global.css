@@ -102,7 +102,6 @@
   --danger: light-dark(#c0392b, #e5736a);
 
   --width-page: 1152px;
-  --width-prose: 68ch;
 }
 
 :root[data-theme="light"] {
