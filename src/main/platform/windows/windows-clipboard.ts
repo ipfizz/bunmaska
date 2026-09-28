@@ -42,8 +42,6 @@ const cfHtmlFormat = (): number => {
 /** Pad an offset to the fixed 10-digit width CF_HTML headers conventionally use. */
 const pad = (value: number): string => String(value).padStart(10, '0');
 
-const byteLength = (text: string): number => new TextEncoder().encode(text).length;
-
 const FRAGMENT_START = '<!--StartFragment-->';
 const FRAGMENT_END = '<!--EndFragment-->';
 
@@ -60,11 +58,11 @@ export const buildCfHtml = (markup: string): string => {
   const pre = `<html><body>\r\n${FRAGMENT_START}`;
   const post = `${FRAGMENT_END}\r\n</body></html>`;
   // The header's byte length is constant regardless of the (always 10-digit) values.
-  const headerLength = byteLength(header(0, 0, 0, 0));
+  const headerLength = Buffer.byteLength(header(0, 0, 0, 0));
   const startHtml = headerLength;
-  const startFragment = headerLength + byteLength(pre);
-  const endFragment = startFragment + byteLength(markup);
-  const endHtml = endFragment + byteLength(post);
+  const startFragment = headerLength + Buffer.byteLength(pre);
+  const endFragment = startFragment + Buffer.byteLength(markup);
+  const endHtml = endFragment + Buffer.byteLength(post);
   return `${header(startHtml, endHtml, startFragment, endFragment)}${pre}${markup}${post}`;
 };
 
