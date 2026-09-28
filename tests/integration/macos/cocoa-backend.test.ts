@@ -526,6 +526,34 @@ onMac('MacOSWindow + WebContents end-to-end', () => {
     }
   });
 
+  test('a message a sub-frame posts to a bunmaska handler is dropped', async () => {
+    const app = createMacOSApplication();
+    app.start();
+    try {
+      const win = app.createWindow({ width: 320, height: 240, title: 't', show: true });
+      let domReady = 0;
+      win.webContents.onNavigation((event) => {
+        if (event.type === 'dom-ready') {
+          domReady += 1;
+        }
+      });
+      win.webContents.loadHTML(
+        `<iframe srcdoc="<script>webkit.messageHandlers.bunmaskaDomReady.postMessage('')</script>"></iframe>`,
+        'about:blank',
+      );
+      const probe = `document.querySelector('iframe')?.contentDocument?.readyState === 'complete'`;
+      const deadline = performance.now() + 5_000;
+      while (!(await win.webContents.executeJavaScript(probe)) && performance.now() < deadline) {
+        await Bun.sleep(20);
+      }
+      expect(await win.webContents.executeJavaScript(probe)).toBe(true);
+      expect(domReady).toBe(1);
+      win.destroy();
+    } finally {
+      app.quit();
+    }
+  });
+
   test('protocol.handle rejects every scheme WebKit serves natively', () => {
     const rt = cocoa();
     loadWebKit();
