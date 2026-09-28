@@ -6,7 +6,8 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { type BunmaskaRendererConfig, rendererOutDir } from '../common/config-schema';
 import { DEFAULT_CHANNEL } from '../common/manifest';
 import { currentArch, currentPlatform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
@@ -21,7 +22,7 @@ import {
 } from './build-macos';
 import { buildWindowsApp } from './build-windows';
 import { loadConfig } from './config';
-import { classifyChange, defaultDevDeps, resolveDevEntry, runDev } from './dev';
+import { type ChangeAction, classifyChange, defaultDevDeps, resolveDevEntry, runDev } from './dev';
 import { buildRenderer } from './renderer-build';
 import { runDoctor, runEngine } from './engine-command';
 import { engineDir, enginesPath, isInstalled } from './engine-store';
@@ -420,6 +421,18 @@ const launchEngineEnv = async (): Promise<Record<string, string>> => {
   return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
 };
 
+/** {@link classifyChange} with the renderer's entry and outDir resolved against `dir`. */
+export const rendererClassifier = (
+  dir: string,
+  renderer: BunmaskaRendererConfig,
+): ((relPath: string) => ChangeAction) => {
+  const root = relative(dir, dirname(resolve(dir, renderer.entry)));
+  const outDir = resolve(dir, rendererOutDir(renderer)) + sep;
+  // Output writes must reload, not rebuild again: an outDir may sit inside the root.
+  return (relPath) =>
+    classifyChange(relPath, resolve(dir, relPath).startsWith(outDir) ? undefined : root);
+};
+
 const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promise<number> => {
   const { config } = await loadConfig(process.cwd());
   const entry = resolveDevEntry(config, command.entry);
@@ -430,7 +443,6 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
   let deps = baseDeps;
   if (renderer !== undefined) {
     const rendererConfig = renderer;
-    const rendererRoot = dirname(rendererConfig.entry);
     const rebuild = async (): Promise<void> => {
       // A broken renderer edit must never take the dev loop down with it.
       try {
@@ -444,7 +456,7 @@ const runDevCommand = async (command: Extract<Command, { kind: 'dev' }>): Promis
     await rebuild();
     deps = {
       ...baseDeps,
-      classify: (relPath) => classifyChange(relPath, rendererRoot),
+      classify: rendererClassifier(dir, rendererConfig),
       rebuild,
     };
   }
