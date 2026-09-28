@@ -162,6 +162,7 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
   if (spec.type === 'submenu' && spec.submenu !== undefined) {
     const submenu = realizeMenu(spec.submenu);
     msgSendPtr(item, rt.selectors.get('setSubmenu:'), submenu);
+    rt.msgSend(submenu, rt.selectors.get('release'));
   }
 
   return item;
@@ -175,10 +176,43 @@ export const realizeMenu = (items: ReadonlyArray<NativeMenuItemSpec>): Handle =>
     rt.selectors.get('init'),
   );
   for (const spec of items) {
-    msgSendPtr(menu, rt.selectors.get('addItem:'), realizeItem(spec));
+    const item = realizeItem(spec);
+    msgSendPtr(menu, rt.selectors.get('addItem:'), item);
+    if (spec.type !== 'separator') {
+      rt.msgSend(item, rt.selectors.get('release')); // separatorItem is +0
+    }
   }
   return menu;
 };
+
+const forgetItems = (menu: Handle): void => {
+  const rt = cocoa();
+  for (let i = menuItemCount(menu) - 1; i >= 0; i -= 1) {
+    const item = msgSendI64(menu, rt.selectors.get('itemAtIndex:'), BigInt(i));
+    clickRegistry.delete(item);
+    const submenu = rt.msgSend(item, rt.selectors.get('submenu'));
+    if (submenu !== 0n) {
+      forgetItems(submenu);
+    }
+  }
+};
+
+/**
+ * Drop a realized menu's handlers and our +1 on it. Deferred a tick, never inline:
+ * a click handler may be replacing the very menu AppKit is dispatching from.
+ */
+export const disposeMenu = (menu: Handle): void => {
+  if (menu === 0n) {
+    return;
+  }
+  setTimeout(() => {
+    forgetItems(menu);
+    cocoa().msgSend(menu, cocoa().selectors.get('release'));
+  }, 0);
+};
+
+let mainMenu: Handle = 0n;
+let lastPopup: Handle = 0n;
 
 /** Install `menu` as the application's main menu bar. */
 /** Install `menu` as the main menu; `0n` (nil) clears the menu bar. */
@@ -186,7 +220,14 @@ export const setApplicationMenu = (menu: Handle): void => {
   const rt = cocoa();
   const app = rt.msgSend(rt.classes.get('NSApplication'), rt.selectors.get('sharedApplication'));
   msgSendPtr(app, rt.selectors.get('setMainMenu:'), menu);
+  if (mainMenu !== menu) {
+    disposeMenu(mainMenu);
+    mainMenu = menu;
+  }
 };
+
+/** @internal */
+export const clickRegistrySize = (): number => clickRegistry.size;
 
 /** Number of items in a realized menu. Used for verification. */
 export const menuItemCount = (menu: Handle): number =>
@@ -209,15 +250,23 @@ export const performMenuItem = (menu: Handle, index: number): void => {
  * AppKit-owned nested loop). Item clicks route through the shared `BunmaskaMenuTarget` registry
  * exactly as for an application menu. `item = nil` anchors the menu's top-left at the location.
  */
-export const popUpMenu = (menu: Handle, view: Handle, x: number, y: number): boolean =>
-  msgSendPtrPointPtrReturnsU8(
-    menu,
-    cocoa().selectors.get('popUpMenuPositioningItem:atLocation:inView:'),
-    0n, // item = nil
-    x,
-    y,
-    view,
-  ) === 1;
+export const popUpMenu = (menu: Handle, view: Handle, x: number, y: number): boolean => {
+  // ponytail: the previous popup tree lives until the next popup; freeing it on return would race a click AppKit may still deliver.
+  if (lastPopup !== menu) {
+    disposeMenu(lastPopup);
+    lastPopup = menu;
+  }
+  return (
+    msgSendPtrPointPtrReturnsU8(
+      menu,
+      cocoa().selectors.get('popUpMenuPositioningItem:atLocation:inView:'),
+      0n, // item = nil
+      x,
+      y,
+      view,
+    ) === 1
+  );
+};
 
 /** Cancel an in-progress context-menu tracking session (`-[NSMenu cancelTracking]`). */
 export const cancelMenuTracking = (menu: Handle): void => {

@@ -1,6 +1,7 @@
 import type { Menu } from '../../api/menu';
 import type { TrayBackend, TrayInstance, TrayImageOptions } from '../../api/tray';
 import { nsString } from './cocoa-foundation';
+import { disposeMenu } from './cocoa-menu';
 import { msgSendF64, msgSendPtr, msgSendU8 } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
@@ -98,6 +99,7 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
   applyImage(image, options?.template === true);
 
   let destroyed = false;
+  let contextMenu: Handle = 0n;
 
   return {
     setToolTip: (toolTip) => {
@@ -120,6 +122,8 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
       // BunmaskaMenuTarget registry, exactly like an application menu.
       const nsMenu: Handle = menu === null ? 0n : menu.realize();
       msgSendPtr(item, rt.selectors.get('setMenu:'), nsMenu);
+      disposeMenu(contextMenu);
+      contextMenu = nsMenu;
     },
     onClick: (cb) => {
       const btn = button();
@@ -141,6 +145,8 @@ const create = (image: string, options?: TrayImageOptions): TrayInstance => {
       }
       msgSendPtr(systemStatusBar(), rt.selectors.get('removeStatusItem:'), item);
       rt.msgSend(item, rt.selectors.get('release'));
+      disposeMenu(contextMenu);
+      contextMenu = 0n;
     },
     isDestroyed: () => destroyed,
   };

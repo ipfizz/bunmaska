@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { currentPlatform } from '../../../src/common/platform';
 import {
+  clickRegistrySize,
+  disposeMenu,
   menuItemCount,
   type NativeMenuItemSpec,
   performMenuItem,
@@ -14,6 +16,7 @@ import {
 } from '../../../src/main/platform/macos/cocoa-msgsend-variants';
 import { cocoa } from '../../../src/main/platform/macos/cocoa-runtime';
 import type { Handle } from '../../../src/main/platform/macos/objc';
+import { objcWeakRef } from '../../helpers/objc-weak';
 
 /** Realize one item and run AppKit's autoenable pass, as opening the menu or a key press does. */
 const realizeAndValidate = (spec: NativeMenuItemSpec): { menu: Handle; item: Handle } => {
@@ -22,6 +25,19 @@ const realizeAndValidate = (spec: NativeMenuItemSpec): { menu: Handle; item: Han
   rt.msgSend(menu, rt.selectors.get('update'));
   return { menu, item: msgSendI64(menu, rt.selectors.get('itemAtIndex:'), 0n) };
 };
+
+const appSubmenu = (): NativeMenuItemSpec => ({
+  label: 'App',
+  type: 'submenu',
+  enabled: true,
+  keyEquivalent: '',
+  submenu: [
+    { label: 'About', type: 'normal', enabled: true, keyEquivalent: '', onClick: () => undefined },
+  ],
+});
+
+/** Bun.sleep(0) resolves before a pending setTimeout(0); this waits for it. */
+const nextTick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 const isEnabled = (item: Handle): boolean =>
   msgSendReturnsU8(item, cocoa().selectors.get('isEnabled')) === 1;
@@ -192,17 +208,47 @@ if (currentPlatform() === 'macos') {
       expect(menuItemCount(submenu)).toBe(2);
     });
 
-    test('setApplicationMenu installs the menu without throwing', () => {
-      const menu = realizeMenu([
-        {
-          label: 'App',
-          type: 'submenu',
-          enabled: true,
-          keyEquivalent: '',
-          submenu: [{ label: 'Quit', type: 'normal', enabled: true, keyEquivalent: 'q' }],
-        },
-      ]);
-      expect(() => setApplicationMenu(menu)).not.toThrow();
+    test('setApplicationMenu installs the menu as the main menu', () => {
+      const rt = cocoa();
+      const menu = realizeMenu([appSubmenu()]);
+      setApplicationMenu(menu);
+      const app = rt.msgSend(
+        rt.classes.get('NSApplication'),
+        rt.selectors.get('sharedApplication'),
+      );
+      expect(rt.msgSend(app, rt.selectors.get('mainMenu'))).toBe(menu);
+    });
+
+    test('disposeMenu frees the whole tree and forgets its handlers', async () => {
+      const rt = cocoa();
+      await nextTick();
+      const registered = clickRegistrySize();
+      const menu = realizeMenu([appSubmenu()]);
+      const submenu = rt.msgSend(
+        msgSendI64(menu, rt.selectors.get('itemAtIndex:'), 0n),
+        rt.selectors.get('submenu'),
+      );
+      const menuRef = objcWeakRef(menu);
+      const itemRef = objcWeakRef(msgSendI64(submenu, rt.selectors.get('itemAtIndex:'), 0n));
+
+      disposeMenu(menu);
+      await nextTick();
+
+      expect(menuRef()).toBe(0n);
+      expect(itemRef()).toBe(0n);
+      expect(clickRegistrySize()).toBe(registered);
+    });
+
+    // AppKit may hold the outgoing main menu past a tick, so this checks our side only.
+    test('replacing the application menu disposes the old one', async () => {
+      setApplicationMenu(realizeMenu([appSubmenu()]));
+      await nextTick();
+      const registered = clickRegistrySize();
+
+      setApplicationMenu(realizeMenu([appSubmenu()]));
+      await nextTick();
+
+      expect(clickRegistrySize()).toBe(registered);
     });
   });
 }
