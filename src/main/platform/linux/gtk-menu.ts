@@ -170,6 +170,10 @@ type WalkContext = {
   readonly dispatchRole?: ((spec: NativeMenuItemSpec) => void) | undefined;
 };
 
+/** Electron `&` mnemonics as GTK underlines (`&&` is a literal `&`); literal `_` doubled. */
+const gtkLabel = (label: string): string =>
+  label.replace(/_/g, '__').replace(/&(&?)/g, (_match, escaped: string) => (escaped ? '&' : '_'));
+
 /** A click handler's throw is re-thrown on a microtask; unwinding into the GLib dispatch loses it. */
 const guarded = (thunk: () => void) => (): void => {
   try {
@@ -192,7 +196,7 @@ const wireAction = (
   ctx.retained.push(ctx.b.connectActivate(action, guarded(thunk)));
   ctx.b.gActionMapAddAction(ctx.group, action);
   ctx.actionNames.push(name);
-  ctx.b.gMenuAppend(model, label, detailedAction(name));
+  ctx.b.gMenuAppend(model, gtkLabel(label), detailedAction(name));
 };
 
 const appendItems = (
@@ -211,7 +215,7 @@ const appendItems = (
     if (spec.type === 'submenu' && spec.submenu !== undefined) {
       const child = ctx.b.gMenuNew();
       appendItems(ctx, child, spec.submenu);
-      ctx.b.gMenuAppendSubmenu(model, spec.label, child);
+      ctx.b.gMenuAppendSubmenu(model, gtkLabel(spec.label), child);
       continue;
     }
     // A role item with a per-window dispatcher + a Linux action: wire its activate to the
@@ -244,7 +248,7 @@ const appendItems = (
       continue;
     }
     // A normal item with no onClick: a static, inert label (e.g. a heading).
-    ctx.b.gMenuAppend(model, spec.label, detailedAction(actionName()));
+    ctx.b.gMenuAppend(model, gtkLabel(spec.label), detailedAction(actionName()));
   }
 };
 

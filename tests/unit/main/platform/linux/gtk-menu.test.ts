@@ -230,6 +230,33 @@ describe('linuxMenuRealizer.realize (fake bindings)', () => {
     expect(() => queued[0]?.()).toThrow(boom);
   });
 
+  it('maps Electron & mnemonics to GTK underlines and escapes literal underscores', () => {
+    const { bindings, calls } = makeFakeBindings();
+    setBindingsForTesting(bindings);
+    linuxMenuRealizer.realize([
+      {
+        label: '&File',
+        type: 'submenu',
+        enabled: true,
+        keyEquivalent: '',
+        submenu: [
+          {
+            label: 'my_notes.txt',
+            type: 'normal',
+            enabled: true,
+            keyEquivalent: '',
+            onClick: () => undefined,
+          },
+          { label: 'Save && Quit', type: 'normal', enabled: true, keyEquivalent: '' },
+        ],
+      },
+    ]);
+    const labels = calls
+      .filter((c) => c.fn === 'gMenuAppend' || c.fn === 'gMenuAppendSubmenu')
+      .map((c) => c.args[1]);
+    expect(labels).toEqual(['my__notes.txt', 'Save & Quit', '_File']);
+  });
+
   it('honours enabled:false via g_simple_action_set_enabled(0)', () => {
     const { bindings, calls } = makeFakeBindings();
     setBindingsForTesting(bindings);
