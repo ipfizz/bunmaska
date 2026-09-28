@@ -153,6 +153,16 @@ const showMessageBox = (spec: {
   );
 };
 
+/** A `*.ext` glob matching any letter case; GTK's add_pattern is case-sensitive off Windows. */
+export const extensionPattern = (ext: string): string => {
+  const chars = [...ext].map((c) => {
+    const lower = c.toLowerCase();
+    const upper = c.toUpperCase();
+    return lower === upper ? c : `[${lower}${upper}]`;
+  });
+  return `*.${chars.join('')}`;
+};
+
 /** Set a default `GtkFileFilter` of `*.ext` patterns, when any extension is given. */
 const applyExtensionFilter = (
   gtk: ReturnType<typeof loadGtkDialogFFI>,
@@ -167,7 +177,7 @@ const applyExtensionFilter = (
     return;
   }
   for (const ext of extensions) {
-    gtk.symbols.gtk_file_filter_add_pattern(filter, cstr(`*.${ext}`));
+    gtk.symbols.gtk_file_filter_add_pattern(filter, cstr(extensionPattern(ext)));
   }
   gtk.symbols.gtk_file_dialog_set_default_filter(fileDialog, filter);
 };

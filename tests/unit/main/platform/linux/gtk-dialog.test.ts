@@ -4,6 +4,7 @@ import { GASYNC_READY_CB_DEF } from '../../../../../src/main/platform/linux/gasy
 import {
   buildButtonsArray,
   cancelIdForButtons,
+  extensionPattern,
   mapChooseResult,
   settleChoose,
   settleFilePath,
@@ -78,6 +79,14 @@ describe('cancelIdForButtons', () => {
 
   it('falls back to 0 when no button is a cancel label', () => {
     expect(cancelIdForButtons(['OK', 'Retry'])).toBe(0);
+  });
+});
+
+describe('extensionPattern', () => {
+  it('matches an extension in any letter case (GTK globs are case-sensitive on Linux)', () => {
+    expect(extensionPattern('jpg')).toBe('*.[jJ][pP][gG]');
+    expect(extensionPattern('Tar.gz')).toBe('*.[tT][aA][rR].[gG][zZ]');
+    expect(extensionPattern('mp4')).toBe('*.[mM][pP]4');
   });
 });
 
