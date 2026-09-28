@@ -45,10 +45,36 @@ export type NativeMenuItemSpec = {
   readonly onClick?: () => void;
 };
 
-const clickRegistry = new Map<Handle, () => void>();
+const clickRegistry = new Map<Handle, NativeMenuItemSpec>();
 
 let targetClass: Handle | undefined;
 let sharedTarget: Handle | undefined;
+
+const setState = (item: Handle, on: boolean): void => {
+  msgSendI64(item, cocoa().selectors.get('setState:'), on ? 1n : 0n);
+};
+
+/** Electron semantics: a checkbox flips; a radio turns on and clears its adjacent radios. */
+const toggleChecked = (item: Handle, type: 'checkbox' | 'radio'): void => {
+  const rt = cocoa();
+  if (type === 'checkbox') {
+    setState(item, msgSendReturnsI64(item, rt.selectors.get('state')) === 0n);
+    return;
+  }
+  const menu = rt.msgSend(item, rt.selectors.get('menu'));
+  const index = Number(msgSendPtr(menu, rt.selectors.get('indexOfItem:'), item));
+  const count = Number(msgSendReturnsI64(menu, rt.selectors.get('numberOfItems')));
+  const at = (i: number): Handle => msgSendI64(menu, rt.selectors.get('itemAtIndex:'), BigInt(i));
+  for (const step of [-1, 1]) {
+    for (let i = index + step; i >= 0 && i < count; i += step) {
+      if (clickRegistry.get(at(i))?.type !== 'radio') {
+        break;
+      }
+      setState(at(i), false);
+    }
+  }
+  setState(item, true);
+};
 
 const ensureTarget = (): Handle => {
   if (sharedTarget !== undefined) {
@@ -61,7 +87,11 @@ const ensureTarget = (): Handle => {
       typeEncoding: 'v@:@',
       args: ['object'],
       impl: (_self, _cmd, sender) => {
-        clickRegistry.get(sender)?.();
+        const spec = clickRegistry.get(sender);
+        if (spec?.type === 'checkbox' || spec?.type === 'radio') {
+          toggleChecked(sender, spec.type);
+        }
+        spec?.onClick?.();
       },
     },
     {
@@ -108,9 +138,7 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
 
   if (targeted) {
     msgSendPtr(item, rt.selectors.get('setTarget:'), ensureTarget());
-    if (spec.onClick !== undefined) {
-      clickRegistry.set(item, spec.onClick);
-    }
+    clickRegistry.set(item, spec);
   }
 
   // Apply the explicit modifier mask so multi-modifier accelerators (e.g. redo's
@@ -120,8 +148,7 @@ const realizeItem = (spec: NativeMenuItemSpec): Handle => {
   }
 
   if (checkable) {
-    // NSControlStateValueOn = 1, Off = 0 — renders a checkmark for checked items.
-    msgSendI64(item, rt.selectors.get('setState:'), spec.checked ? 1n : 0n);
+    setState(item, spec.checked === true);
   }
 
   // For role items, let AppKit auto-enable via the responder chain (Copy greys out

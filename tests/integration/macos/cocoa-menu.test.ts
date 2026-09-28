@@ -26,6 +26,16 @@ const realizeAndValidate = (spec: NativeMenuItemSpec): { menu: Handle; item: Han
 const isEnabled = (item: Handle): boolean =>
   msgSendReturnsU8(item, cocoa().selectors.get('isEnabled')) === 1;
 
+const itemStates = (menu: Handle): bigint[] => {
+  const rt = cocoa();
+  return Array.from({ length: menuItemCount(menu) }, (_, i) =>
+    msgSendReturnsI64(
+      msgSendI64(menu, rt.selectors.get('itemAtIndex:'), BigInt(i)),
+      rt.selectors.get('state'),
+    ),
+  );
+};
+
 if (currentPlatform() === 'macos') {
   describe('cocoa-menu', () => {
     // performActionForItemAtIndex: dispatches through NSApp; without it nothing fires.
@@ -131,6 +141,35 @@ if (currentPlatform() === 'macos') {
         keyEquivalent: '/',
       });
       expect(msgSendReturnsI64(item, cocoa().selectors.get('keyEquivalentModifierMask'))).toBe(0n);
+    });
+
+    test('clicking a checkbox toggles its check mark', () => {
+      const menu = realizeMenu([
+        { label: 'Wrap', type: 'checkbox', enabled: true, checked: false, keyEquivalent: '' },
+      ]);
+      performMenuItem(menu, 0);
+      expect(itemStates(menu)).toEqual([1n]);
+      performMenuItem(menu, 0);
+      expect(itemStates(menu)).toEqual([0n]);
+    });
+
+    test('clicking a radio checks it and clears only its adjacent radio group', () => {
+      const radio = (checked: boolean): NativeMenuItemSpec => ({
+        label: 'R',
+        type: 'radio',
+        enabled: true,
+        checked,
+        keyEquivalent: '',
+      });
+      const separator: NativeMenuItemSpec = {
+        label: '',
+        type: 'separator',
+        enabled: true,
+        keyEquivalent: '',
+      };
+      const menu = realizeMenu([radio(false), radio(true), separator, radio(true)]);
+      performMenuItem(menu, 0);
+      expect(itemStates(menu)).toEqual([1n, 0n, 0n, 1n]);
     });
 
     test('a submenu is realized with its own items', () => {
