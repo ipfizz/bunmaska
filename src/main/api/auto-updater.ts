@@ -156,7 +156,7 @@ const productionDeps = (): AutoUpdaterDeps => ({
 });
 
 export class AutoUpdaterImpl extends EventEmitter {
-  #deps: AutoUpdaterDeps;
+  readonly #deps: AutoUpdaterDeps;
   #feedURL: string | undefined;
   #publicKey: string | undefined;
   #channel: string | undefined;
@@ -166,11 +166,6 @@ export class AutoUpdaterImpl extends EventEmitter {
   constructor(deps?: Partial<AutoUpdaterDeps>) {
     super();
     this.#deps = { ...productionDeps(), ...deps };
-  }
-
-  /** @internal */
-  setDepsForTesting(deps: Partial<AutoUpdaterDeps>): void {
-    this.#deps = { ...this.#deps, ...deps };
   }
 
   /**
