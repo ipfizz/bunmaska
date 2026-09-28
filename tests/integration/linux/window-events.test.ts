@@ -92,4 +92,58 @@ describe.skipIf(!isLinux)('Linux window lifecycle events end-to-end', () => {
 
     app.quit();
   });
+
+  test('a throwing close listener still closes and tears the window down', async () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const app = createLinuxApplication();
+    app.start();
+    const window = app.createWindow({
+      width: 200,
+      height: 120,
+      title: 'Throwing Close',
+      show: true,
+    });
+    let closed = 0;
+    window.onClosed(() => {
+      closed += 1;
+    });
+    window.onClose(() => {
+      throw new Error('listener bug');
+    });
+
+    window.close();
+
+    expect(closed).toBe(1);
+    await expect(window.webContents.executeJavaScript('1')).rejects.toThrow('destroyed');
+    app.quit();
+  });
+
+  test('a close listener that destroys the window does not destroy it twice', () => {
+    if (loadGtkFFI().symbols.gtk_init_check() === 0) {
+      return;
+    }
+    const app = createLinuxApplication();
+    app.start();
+    const window = app.createWindow({
+      width: 200,
+      height: 120,
+      title: 'Destroy In Close',
+      show: true,
+    });
+    let closed = 0;
+    window.onClosed(() => {
+      closed += 1;
+    });
+    window.onClose(() => {
+      window.destroy();
+      return false;
+    });
+
+    window.close();
+
+    expect(closed).toBe(1);
+    app.quit();
+  });
 });

@@ -1,6 +1,7 @@
 import { type Pointer, ptr } from 'bun:ffi';
 import { isDevRestart } from '../../dev-reload';
 import { UnsupportedPlatformError } from '../../../common/errors';
+import { createLogger } from '../../../common/logger';
 import {
   generateChannelId,
   generateIsolatedChannelSetup,
@@ -47,6 +48,8 @@ import { loadWebKitGtkFFI, readGetUriResult } from './webkitgtk-ffi';
  * (`g_main_context_iteration` with `may_block = FALSE`) — NO `GtkApplication`
  * or `g_main_loop_run`, which would block Bun's thread (D020).
  */
+
+const log = createLogger('linux-backend');
 
 const GTK_TRUE = 1;
 const GTK_FALSE = 0;
@@ -312,6 +315,7 @@ class LinuxWindow implements NativeWindow {
   #activePopover: Pointer | null = null;
   readonly #closedCallbacks: Array<() => void> = [];
   #onClose: (() => boolean) | undefined;
+  #releaseAppMenu: (() => void) | undefined;
   readonly #eventHandlers = new Map<WindowEventType, () => void>();
 
   /** Surface a non-preventable lifecycle event to its registered handler. */
@@ -390,7 +394,7 @@ class LinuxWindow implements NativeWindow {
       const bar = menu.symbols.gtk_popover_menu_bar_new_from_model(model);
       menu.symbols.gtk_box_append(box, bar);
       menu.symbols.gtk_box_append(box, view);
-      onAppMenuCleared(() => {
+      this.#releaseAppMenu = onAppMenuCleared(() => {
         if (!this.#closed) {
           menu.symbols.gtk_box_remove(box, bar);
         }
@@ -481,11 +485,21 @@ class LinuxWindow implements NativeWindow {
       // allow GTK to finish destroying.
       return false;
     }
-    if (this.#onClose?.() === true) {
+    if (this.#vetoed()) {
       return true;
     }
     this.#handleClosed();
     return false;
+  }
+
+  /** A throwing `close` listener does not veto: the window still closes, as in Electron. */
+  #vetoed(): boolean {
+    try {
+      return this.#onClose?.() === true;
+    } catch (error) {
+      log.error("a 'close' listener threw; closing anyway", error);
+      return false;
+    }
   }
 
   #handleClosed(): void {
@@ -496,8 +510,13 @@ class LinuxWindow implements NativeWindow {
     this.#visible = false;
     this.#closeActivePopover(); // drop any open context-menu popover before teardown.
     for (const callback of this.#closedCallbacks) {
-      callback();
+      try {
+        callback();
+      } catch (error) {
+        log.error("a 'closed' listener threw", error);
+      }
     }
+    this.#releaseAppMenu?.();
     // Reject any executeJavaScript Promise still awaiting a `bunmaskaExec` result
     // it can no longer receive, THEN disconnect signals + close the retained
     // JSCallbacks (including the shared exec handler) — never per-call.
@@ -646,20 +665,10 @@ class LinuxWindow implements NativeWindow {
   }
 
   close(): void {
-    if (this.#closed) {
+    if (this.#closed || this.#vetoed()) {
       return;
     }
-    // Preventable: consult the JS `close` listener (same veto the native
-    // `close-request` path uses). If vetoed, leave the window fully alive.
-    if (this.#onClose?.() === true) {
-      return;
-    }
-    const gtk = loadGtkFFI();
-    // Disconnect handlers and tear down web contents while the GObjects are
-    // still alive, then destroy the window. Teardown runs OUTSIDE any signal
-    // callback here, so closing the retained thunks is safe.
-    this.#handleClosed();
-    gtk.symbols.gtk_window_destroy(this.#window);
+    this.destroy(); // no-op when a `close` listener already destroyed the window
   }
 
   destroy(): void {
