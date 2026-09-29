@@ -137,7 +137,7 @@ This is the all-or-nothing form. Passing Electron's `options` argument (`origin`
 
 Platform notes on exactly _what_ gets cleared:
 
-- **macOS** - clears **all** website data: cache, cookies, local and session storage, IndexedDB, and the rest.
+- **macOS** - clears **all** website data: cache, cookies, local and session storage, IndexedDB, and the rest. Open pages keep their in-memory resource cache until they reload.
 - **Windows** - clears cookies and the fetch/HTTP caches. Clearing local storage and IndexedDB is a follow-up, so it is **not** the full wipe macOS performs yet.
 - **Linux** - not yet wired: `clearStorageData` currently rejects with an `UnsupportedPlatformError` (`WebKitWebsiteDataManager` clearing is a follow-up).
 
