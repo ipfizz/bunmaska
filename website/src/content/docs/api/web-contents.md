@@ -253,7 +253,7 @@ win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
 win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
 ```
 
-Honest follow-up limits: there are no keyboard modifiers yet, synthesized drags don't carry button state, and `KeyboardEvent.code` / scan codes and the F1-F24 keys are not wired.
+Limits on Windows today: there are no modifier keys, so a `modifiers` array is ignored and Shift, Ctrl and Alt come from the physical keyboard. `keyDown` and `keyUp` know letters, digits, Enter, Tab, Escape, Backspace, Space, Delete, the arrows, Home, End, PageUp and PageDown; any other key, F1-F24 included, does nothing (`char` types any single character). Coordinates are only guaranteed at 100% display scaling. See the [parity page](/docs/migrating/parity#webcontentssendinputevent) for the full list.
 
 ### `contents.setWindowOpenHandler(handler)`
 
@@ -309,7 +309,7 @@ if (!win.webContents.isDestroyed()) {
 * `channel` string
 * `...args` any[]
 
-Sends an event on `channel` to the renderer, where `ipcRenderer.on(channel, ...)` in the preload receives it. Arguments are **JSON**-serialized, not structured-cloned as in Electron: a function, symbol or `bigint` throws `InvalidArgumentError`, a `Date` arrives as a string, `Map` / `Set` / typed arrays arrive as plain objects, and `undefined` properties vanish. Send plain data. A `send` before the page's first load is queued on all platforms and flushed once the bridge is up - at `dom-ready` on Linux and Windows, at `did-finish-load` on macOS - so a message fired right after `loadFile` is not lost.
+Sends an event on `channel` to the renderer, where `ipcRenderer.on(channel, ...)` in the preload receives it. Arguments are **JSON**-serialized, not structured-cloned as in Electron: a `Map`, `Set`, `ArrayBuffer`, typed array, function, symbol or `bigint` throws `InvalidArgumentError`, a `Date` arrives as a string, a Node `Buffer` arrives as `{ type: 'Buffer', data: [...] }`, and `undefined` properties vanish. Send plain data. A `send` before the page's first load is queued on all platforms and flushed once the bridge is up - at `dom-ready` on Linux and Windows, at `did-finish-load` on macOS - so a message fired right after `loadFile` is not lost.
 
 ```ts
 win.webContents.send('update-available', { version: '1.2.0' });

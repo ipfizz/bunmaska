@@ -9,9 +9,8 @@ export type Size = {
 };
 
 /**
- * `workArea` excludes the taskbar on Windows only; macOS and Linux report `bounds`. macOS also
- * reports every display's origin as (0, 0), since CoreGraphics has no scalar origin getter.
- * `scaleFactor` is the device-pixel ratio, `rotation` degrees clockwise.
+ * `workArea` excludes the menu bar and Dock on macOS and the taskbar on Windows; Linux reports
+ * `bounds`. `scaleFactor` is the device-pixel ratio, `rotation` degrees clockwise.
  */
 export type Display = {
   readonly id: number;
