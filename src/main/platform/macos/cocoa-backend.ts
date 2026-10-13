@@ -542,7 +542,7 @@ class MacOSWebContents implements NativeWebContents {
 
 class MacOSWindow implements NativeWindow {
   #window: Handle;
-  readonly #contents: MacOSWebContents;
+  readonly #contents: NativeWebContents;
   readonly #teardown: () => void;
   readonly #releaseNative: () => void;
   #tornDown = false;
@@ -554,7 +554,7 @@ class MacOSWindow implements NativeWindow {
 
   constructor(
     window: Handle,
-    contents: MacOSWebContents,
+    contents: NativeWebContents,
     teardown: () => void,
     releaseNative: () => void,
   ) {
@@ -828,7 +828,223 @@ class MacOSWindow implements NativeWindow {
   }
 }
 
+/** The view a {@link createMacOSWindow} shell hosts, and how to take it down. */
+export type MacOSViewHost = {
+  readonly contents: NativeWebContents;
+  /** Runs once AppKit committed to the close, before `closed`. */
+  readonly teardown: () => void;
+  /** Frees the view's natives a tick after the close, before the window's own release. */
+  readonly release: () => void;
+};
+
+/** Builds the view inside a new NSWindow; `emit` surfaces window events such as `ready-to-show`. */
+export type MacOSViewAttacher = (
+  window: Handle,
+  options: NativeWindowOptions,
+  emit: (type: WindowEventType) => void,
+) => MacOSViewHost;
+
+const attachWebKitView: MacOSViewAttacher = (window, options, emit) => {
+  const rt = cocoa();
+  const frame: readonly [number, number, number, number] = [0, 0, options.width, options.height];
+
+  const configuration = rt.msgSend(
+    rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
+    rt.selectors.get('init'),
+  );
+
+  enableDeveloperExtras(rt.msgSend(configuration, rt.selectors.get('preferences')));
+
+  registerCustomSchemes(configuration, options.protocol);
+
+  // The handlers exist before the web view, so they reach its contents late-bound.
+  let contents: MacOSWebContents | undefined;
+  const userContentController = rt.msgSend(
+    configuration,
+    rt.selectors.get('userContentController'),
+  );
+
+  // The bridge and preload run in an isolated world, invisible to page scripts.
+  const isolatedWorld = getContentWorld(PRELOAD_WORLD_NAME);
+
+  const handler = createScriptMessageHandler((envelopeJson) =>
+    contents?.deliverRendererEnvelope(envelopeJson),
+  );
+  // Only the isolated world can reach this handler.
+  msgSendPtr3(
+    userContentController,
+    rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
+    handler.handle,
+    isolatedWorld,
+    nsString(IPC_HANDLER_NAME),
+  );
+
+  // executeJavaScript's return channel (D022b). pageWorld() is interned by WebKit,
+  // so teardown gets the same handle without a retain here.
+  const execHandler = createScriptMessageHandler((json) => contents?.deliverExecResult(json));
+  msgSendPtr3(
+    userContentController,
+    rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
+    execHandler.handle,
+    pageWorld(),
+    nsString(EXEC_HANDLER_NAME),
+  );
+
+  // The page world's DOMContentLoaded surfaces Electron's dom-ready.
+  const domReadyHandler = createScriptMessageHandler(() =>
+    contents?.deliverNavigation({ type: 'dom-ready' }),
+  );
+  msgSendPtr3(
+    userContentController,
+    rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
+    domReadyHandler.handle,
+    pageWorld(),
+    nsString(DOM_READY_HANDLER_NAME),
+  );
+
+  const addUserScript = (source: string, world: Handle): void => {
+    const userScript = msgSendPtrI64U8Ptr(
+      rt.msgSend(rt.classes.get('WKUserScript'), rt.selectors.get('alloc')),
+      rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:inContentWorld:'),
+      nsString(source),
+      WK_INJECTION_TIME_AT_DOCUMENT_START,
+      FOR_MAIN_FRAME_ONLY,
+      world,
+    );
+    msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
+    rt.msgSend(userScript, rt.selectors.get('release'));
+  };
+
+  const scripts = injectedScripts({
+    preloadScript: options.preloadScript,
+    frame: options.frame,
+    domReadyWorld: 'page',
+  });
+  for (const source of scripts.isolated) {
+    addUserScript(source, isolatedWorld);
+  }
+  for (const source of scripts.page) {
+    addUserScript(source, pageWorld());
+  }
+
+  const webview = msgSendInitWithFrameConfig(
+    rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),
+    rt.selectors.get('initWithFrame:configuration:'),
+    frame,
+    configuration,
+  );
+  // The web view copies the configuration; the copy shares its user content controller.
+  rt.msgSend(configuration, rt.selectors.get('release'));
+  contents = new MacOSWebContents(webview, isolatedWorld);
+
+  let readyToShowEmitted = false;
+  const navigationDelegate = createNavigationDelegate((event) => {
+    contents?.deliverNavigation(event);
+    if (event.type === 'did-finish-load' && !readyToShowEmitted) {
+      readyToShowEmitted = true;
+      emit('ready-to-show');
+    }
+  });
+  msgSendPtr(webview, rt.selectors.get('setNavigationDelegate:'), navigationDelegate.handle);
+
+  // window.open and target=_blank go to the JS handler; nil means no child view.
+  const uiDelegate = createUIDelegate((url) => contents?.deliverWindowOpen(url));
+  msgSendPtr(webview, rt.selectors.get('setUIDelegate:'), uiDelegate.handle);
+
+  msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
+
+  const teardown = (): void => {
+    msgSendPtrPtr(
+      userContentController,
+      rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
+      nsString(IPC_HANDLER_NAME),
+      isolatedWorld,
+    );
+    handler.dispose();
+    msgSendPtrPtr(
+      userContentController,
+      rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
+      nsString(EXEC_HANDLER_NAME),
+      pageWorld(),
+    );
+    execHandler.dispose();
+    msgSendPtrPtr(
+      userContentController,
+      rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
+      nsString(DOM_READY_HANDLER_NAME),
+      pageWorld(),
+    );
+    domReadyHandler.dispose();
+    contents?.rejectPendingExecs();
+  };
+
+  return {
+    contents,
+    teardown,
+    release: () => {
+      navigationDelegate.destroy();
+      uiDelegate.destroy();
+      cocoa().msgSend(webview, rt.selectors.get('release'));
+    },
+  };
+};
+
+/** An NSWindow (style, placement, delegate, close choreography) around the view `attach` builds. */
+export const createMacOSWindow = (
+  options: NativeWindowOptions,
+  attach: MacOSViewAttacher,
+): NativeWindow => {
+  const rt = cocoa();
+  const windowClass =
+    options.frame === false ? ensureFramelessWindowClass() : rt.classes.get('NSWindow');
+  const window = msgSendInitWithContentRect(
+    rt.msgSend(windowClass, rt.selectors.get('alloc')),
+    rt.selectors.get('initWithContentRect:styleMask:backing:defer:'),
+    [0, 0, options.width, options.height],
+    BigInt(computeWindowStyleMask(styleFromOptions(options))),
+    NS_BACKING_STORE_BUFFERED,
+    false,
+  );
+
+  // releasedWhenClosed:YES (the default) frees the window under our handle on
+  // close; releaseNative balances our +1 instead.
+  msgSendU8(window, rt.selectors.get('setReleasedWhenClosed:'), 0);
+  // Electron's default placement.
+  rt.msgSend(window, rt.selectors.get('center'));
+
+  // Assigned below; the view's and the delegate's closures only run on later native callbacks.
+  let nativeWindow: MacOSWindow;
+  const view = attach(window, options, (type) => nativeWindow.emitEvent(type));
+  msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));
+
+  // Detach the delegate before releasing, so no late notification fires.
+  const releaseNative = (): void => {
+    msgSendPtr(window, rt.selectors.get('setDelegate:'), 0n);
+    view.release();
+    windowDelegate.destroy();
+    cocoa().msgSend(window, rt.selectors.get('release'));
+  };
+
+  nativeWindow = new MacOSWindow(window, view.contents, view.teardown, releaseNative);
+
+  const windowDelegate = createWindowDelegate({
+    shouldClose: () => nativeWindow.shouldClose(),
+    willClose: () => nativeWindow.willClose(),
+    event: (type) => nativeWindow.emitEvent(type),
+  });
+  msgSendPtr(window, rt.selectors.get('setDelegate:'), windowDelegate.handle);
+
+  if (options.fullscreen === true) {
+    nativeWindow.setFullScreen(true);
+  }
+  if (options.show) {
+    nativeWindow.show();
+  }
+  return nativeWindow;
+};
+
 class MacOSApplication implements NativeApplication {
+  readonly #onDrain: (() => void) | undefined;
   #started = false;
   #app: Handle = 0n;
   #appDelegate: Handle = 0n;
@@ -843,6 +1059,10 @@ class MacOSApplication implements NativeApplication {
   #sendEventSel: Handle = 0n;
   #distantPast: Handle = 0n;
   #eventPumpMode: Handle = 0n;
+
+  constructor(onDrain?: () => void) {
+    this.#onDrain = onDrain;
+  }
 
   start(): void {
     if (this.#started) {
@@ -873,7 +1093,12 @@ class MacOSApplication implements NativeApplication {
     this.#distantPast = rt.msgSend(rt.classes.get('NSDate'), rt.selectors.get('distantPast'));
     this.#eventPumpMode = rt.msgSend(nsString('kCFRunLoopDefaultMode'), rt.selectors.get('retain'));
 
-    this.#pump = new AdaptiveBlockingPump(createMacOSDrain(() => this.#pumpAppEvents()));
+    this.#pump = new AdaptiveBlockingPump(
+      createMacOSDrain(() => {
+        this.#pumpAppEvents();
+        this.#onDrain?.();
+      }),
+    );
     this.#pump.start();
     this.#started = true;
     log.info('application started');
@@ -946,186 +1171,7 @@ class MacOSApplication implements NativeApplication {
   }
 
   createWindow(options: NativeWindowOptions): NativeWindow {
-    const rt = cocoa();
-    const frame: readonly [number, number, number, number] = [0, 0, options.width, options.height];
-
-    const windowClass =
-      options.frame === false ? ensureFramelessWindowClass() : rt.classes.get('NSWindow');
-    const window = msgSendInitWithContentRect(
-      rt.msgSend(windowClass, rt.selectors.get('alloc')),
-      rt.selectors.get('initWithContentRect:styleMask:backing:defer:'),
-      frame,
-      BigInt(computeWindowStyleMask(styleFromOptions(options))),
-      NS_BACKING_STORE_BUFFERED,
-      false,
-    );
-
-    // releasedWhenClosed:YES (the default) frees the window under our handle on
-    // close; releaseNative balances our +1 instead.
-    msgSendU8(window, rt.selectors.get('setReleasedWhenClosed:'), 0);
-    // Electron's default placement.
-    rt.msgSend(window, rt.selectors.get('center'));
-
-    const configuration = rt.msgSend(
-      rt.msgSend(rt.classes.get('WKWebViewConfiguration'), rt.selectors.get('alloc')),
-      rt.selectors.get('init'),
-    );
-
-    enableDeveloperExtras(rt.msgSend(configuration, rt.selectors.get('preferences')));
-
-    registerCustomSchemes(configuration, options.protocol);
-
-    // The handlers exist before the web view, so they reach its contents late-bound.
-    let contents: MacOSWebContents | undefined;
-    const userContentController = rt.msgSend(
-      configuration,
-      rt.selectors.get('userContentController'),
-    );
-
-    // The bridge and preload run in an isolated world, invisible to page scripts.
-    const isolatedWorld = getContentWorld(PRELOAD_WORLD_NAME);
-
-    const handler = createScriptMessageHandler((envelopeJson) =>
-      contents?.deliverRendererEnvelope(envelopeJson),
-    );
-    // Only the isolated world can reach this handler.
-    msgSendPtr3(
-      userContentController,
-      rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
-      handler.handle,
-      isolatedWorld,
-      nsString(IPC_HANDLER_NAME),
-    );
-
-    // executeJavaScript's return channel (D022b). pageWorld() is interned by WebKit,
-    // so teardown gets the same handle without a retain here.
-    const execHandler = createScriptMessageHandler((json) => contents?.deliverExecResult(json));
-    msgSendPtr3(
-      userContentController,
-      rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
-      execHandler.handle,
-      pageWorld(),
-      nsString(EXEC_HANDLER_NAME),
-    );
-
-    // The page world's DOMContentLoaded surfaces Electron's dom-ready.
-    const domReadyHandler = createScriptMessageHandler(() =>
-      contents?.deliverNavigation({ type: 'dom-ready' }),
-    );
-    msgSendPtr3(
-      userContentController,
-      rt.selectors.get('addScriptMessageHandler:contentWorld:name:'),
-      domReadyHandler.handle,
-      pageWorld(),
-      nsString(DOM_READY_HANDLER_NAME),
-    );
-
-    const addUserScript = (source: string, world: Handle): void => {
-      const userScript = msgSendPtrI64U8Ptr(
-        rt.msgSend(rt.classes.get('WKUserScript'), rt.selectors.get('alloc')),
-        rt.selectors.get('initWithSource:injectionTime:forMainFrameOnly:inContentWorld:'),
-        nsString(source),
-        WK_INJECTION_TIME_AT_DOCUMENT_START,
-        FOR_MAIN_FRAME_ONLY,
-        world,
-      );
-      msgSendPtr(userContentController, rt.selectors.get('addUserScript:'), userScript);
-      rt.msgSend(userScript, rt.selectors.get('release'));
-    };
-
-    const scripts = injectedScripts({
-      preloadScript: options.preloadScript,
-      frame: options.frame,
-      domReadyWorld: 'page',
-    });
-    for (const source of scripts.isolated) {
-      addUserScript(source, isolatedWorld);
-    }
-    for (const source of scripts.page) {
-      addUserScript(source, pageWorld());
-    }
-
-    const webview = msgSendInitWithFrameConfig(
-      rt.msgSend(rt.classes.get('WKWebView'), rt.selectors.get('alloc')),
-      rt.selectors.get('initWithFrame:configuration:'),
-      frame,
-      configuration,
-    );
-    // The web view copies the configuration; the copy shares its user content controller.
-    rt.msgSend(configuration, rt.selectors.get('release'));
-    contents = new MacOSWebContents(webview, isolatedWorld);
-
-    // Assigned below; the delegate closures only run on later native callbacks.
-    let nativeWindow: MacOSWindow;
-
-    let readyToShowEmitted = false;
-    const navigationDelegate = createNavigationDelegate((event) => {
-      contents?.deliverNavigation(event);
-      if (event.type === 'did-finish-load' && !readyToShowEmitted) {
-        readyToShowEmitted = true;
-        nativeWindow.emitEvent('ready-to-show');
-      }
-    });
-    msgSendPtr(webview, rt.selectors.get('setNavigationDelegate:'), navigationDelegate.handle);
-
-    // window.open and target=_blank go to the JS handler; nil means no child view.
-    const uiDelegate = createUIDelegate((url) => contents?.deliverWindowOpen(url));
-    msgSendPtr(webview, rt.selectors.get('setUIDelegate:'), uiDelegate.handle);
-
-    msgSendPtr(window, rt.selectors.get('setContentView:'), webview);
-    msgSendPtr(window, rt.selectors.get('setTitle:'), nsString(options.title));
-
-    const teardown = (): void => {
-      msgSendPtrPtr(
-        userContentController,
-        rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(IPC_HANDLER_NAME),
-        isolatedWorld,
-      );
-      handler.dispose();
-      msgSendPtrPtr(
-        userContentController,
-        rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(EXEC_HANDLER_NAME),
-        pageWorld(),
-      );
-      execHandler.dispose();
-      msgSendPtrPtr(
-        userContentController,
-        rt.selectors.get('removeScriptMessageHandlerForName:contentWorld:'),
-        nsString(DOM_READY_HANDLER_NAME),
-        pageWorld(),
-      );
-      domReadyHandler.dispose();
-      contents?.rejectPendingExecs();
-    };
-
-    // Detach the delegate before releasing, so no late notification fires.
-    const releaseNative = (): void => {
-      msgSendPtr(window, rt.selectors.get('setDelegate:'), 0n);
-      navigationDelegate.destroy();
-      uiDelegate.destroy();
-      windowDelegate.destroy();
-      cocoa().msgSend(webview, rt.selectors.get('release'));
-      cocoa().msgSend(window, rt.selectors.get('release'));
-    };
-
-    nativeWindow = new MacOSWindow(window, contents, teardown, releaseNative);
-
-    const windowDelegate = createWindowDelegate({
-      shouldClose: () => nativeWindow.shouldClose(),
-      willClose: () => nativeWindow.willClose(),
-      event: (type) => nativeWindow.emitEvent(type),
-    });
-    msgSendPtr(window, rt.selectors.get('setDelegate:'), windowDelegate.handle);
-
-    if (options.fullscreen === true) {
-      nativeWindow.setFullScreen(true);
-    }
-    if (options.show) {
-      nativeWindow.show();
-    }
-    return nativeWindow;
+    return createMacOSWindow(options, attachWebKitView);
   }
 
   quit(): void {
@@ -1135,5 +1181,6 @@ class MacOSApplication implements NativeApplication {
   }
 }
 
-/** Create the macOS native application backend. Call `start()` before use. */
-export const createMacOSApplication = (): NativeApplication => new MacOSApplication();
+/** Call `start()` before use. `onDrain` runs every pump tick, for an engine with its own loop. */
+export const createMacOSApplication = (onDrain?: () => void): NativeApplication =>
+  new MacOSApplication(onDrain);

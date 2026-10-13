@@ -9,6 +9,7 @@ import {
   configChannel,
   rendererOutDir,
 } from '../common/config-schema';
+import { parseEngineId } from '../common/engine-id';
 import { type Arch, currentArch, currentPlatform, type Platform } from '../common/platform';
 import { BUNMASKA_VERSION } from '../common/version';
 import { buildLinuxApp, resolveBuildEngineId } from './build-linux';
@@ -218,10 +219,15 @@ const resolveProjectEngine = (
   return { engineId, embed: config.engine?.embed === true };
 };
 
-/** dev and run must forward the pin, or on Windows the app launches with no engine. */
+/**
+ * dev and run must forward the pin, or on Windows the app launches with no engine. Both
+ * names: an inherited BUNMASKA_ENGINE_ID would otherwise outrank the alias.
+ */
 const launchEngineEnv = (config: BunmaskaConfig, command: string): Record<string, string> => {
   const { engineId } = resolveProjectEngine(config, command);
-  return engineId === 'system' ? {} : { BUNMASKA_WEBKIT_ID: engineId };
+  return engineId === 'system'
+    ? {}
+    : { BUNMASKA_ENGINE_ID: engineId, BUNMASKA_WEBKIT_ID: engineId };
 };
 
 const runBuild = async (
@@ -240,6 +246,15 @@ const runBuild = async (
   if (target === 'macos' && currentPlatform() !== 'macos') {
     err(
       `bunmaska build: --target macos requires a macOS host (this host is ${currentPlatform()}).`,
+    );
+    return 1;
+  }
+  const macPin = resolveBuildEngineId(config.engine?.webkit, { os: 'macos', arch: currentArch() });
+  if (target === 'macos' && macPin !== 'system' && parseEngineId(macPin).engine === 'cef') {
+    // ponytail: packaged Blink waits on helper signing + the entitlements audit (D048 phase 2).
+    err(
+      `bunmaska build: the Blink engine ${macPin} runs under dev and run only so far; the .app ` +
+        'would ship the system WebKit instead. Remove the pin to build.',
     );
     return 1;
   }

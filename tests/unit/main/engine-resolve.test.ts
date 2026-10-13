@@ -85,6 +85,24 @@ describe('resolveEngineWith', () => {
     expect(warnings.join(' ')).not.toMatch(/system WebKit/);
   });
 
+  test('a Blink store pin reports the cef family', () => {
+    const cef = 'cef-154.0.28-154.0.8037.58-bunmaska1-macos-arm64';
+    const r = resolve({
+      env: { BUNMASKA_ENGINE_ID: cef },
+      host: { os: 'macos', arch: 'arm64' },
+    });
+    expect(r.mode).toBe('pinned');
+    expect(r.family).toBe('cef');
+    expect(slash(r.libDir ?? '')).toBe(`${ROOT}/${cef}/lib`);
+  });
+
+  test('BUNMASKA_ENGINE_ID wins over its BUNMASKA_WEBKIT_ID alias', () => {
+    const other = 'webkitgtk-6.0-2.46.0-bunmaska1-linux-x64';
+    const r = resolve({ env: { BUNMASKA_ENGINE_ID: other, BUNMASKA_WEBKIT_ID: ID } });
+    expect(r.id).toBe(other);
+    expect(r.family).toBe('webkitgtk');
+  });
+
   test('store-resolved pinned carries the engine id + root (for refcount linking)', () => {
     const r = resolve({ env: {}, readBakedId: () => ID });
     expect(r.id).toBe(ID);

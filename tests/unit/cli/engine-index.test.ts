@@ -10,7 +10,7 @@ import {
 } from '../../../src/cli/engine-index';
 
 const ID = 'webkit-2-2.53.3-bunmaska1-windows-x64';
-const CEF_ID = 'cef-154-154.0.8037.58-bunmaska1-macos-arm64';
+const FUTURE_ID = 'servo-1-0.1.0-bunmaska1-macos-arm64';
 
 describe('engineFeedIndexUrl', () => {
   test('maps a feed base to <base>/index.json (official by default, trailing slash ok)', () => {
@@ -50,7 +50,7 @@ describe('parseEngineIndex', () => {
 
   test('skips entries this client cannot parse, so a newer engine family never breaks it', () => {
     const entries = parseEngineIndex(
-      JSON.stringify({ version: 1, engines: [{ id: CEF_ID }, { id: ID }, { id: 'nope' }] }),
+      JSON.stringify({ version: 1, engines: [{ id: FUTURE_ID }, { id: ID }, { id: 'nope' }] }),
     );
     expect(entries.map((e) => e.id)).toEqual([ID]);
   });
@@ -117,9 +117,11 @@ describe('mergeEngineIndex', () => {
   });
 
   test('keeps entries this client cannot parse', () => {
-    const existing = buildEngineIndex([{ id: CEF_ID, hash: 'blink' }]);
+    const existing = buildEngineIndex([{ id: FUTURE_ID, hash: 'servo' }]);
     const json = mergeEngineIndex(existing, { id: ID, hash: 'new' });
-    expect(JSON.parse(json).engines.map((e: { id: string }) => e.id)).toEqual([CEF_ID, ID].sort());
+    expect(JSON.parse(json).engines.map((e: { id: string }) => e.id)).toEqual(
+      [FUTURE_ID, ID].sort(),
+    );
   });
 
   test('refuses to republish an id already in the index (ids are immutable)', () => {

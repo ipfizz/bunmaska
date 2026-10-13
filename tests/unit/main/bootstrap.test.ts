@@ -138,6 +138,21 @@ describe('bootstrap native wiring', () => {
     },
   );
 
+  test('hands userData to a backend with its own profile before starting it', () => {
+    const { native } = makeNative();
+    const calls: string[] = [];
+    resetBootstrapForTesting();
+    setNativeAppForTesting({
+      ...native,
+      setUserDataPath: (path) => calls.push(`userData ${path}`),
+      start: () => {
+        calls.push('start');
+      },
+    });
+    ensureNativeStarted();
+    expect(calls).toEqual([`userData ${app.getPath('userData')}`, 'start']);
+  });
+
   test('retries the native start after a failed one', () => {
     const { native } = makeNative();
     let starts = 0;

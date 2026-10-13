@@ -58,6 +58,7 @@ export const ensureNativeStarted = (): void => {
   native.onQuitRequest?.(() => {
     setTimeout(() => app.quit(), 0);
   });
+  native.setUserDataPath?.(app.getPath('userData'));
   try {
     native.start();
   } catch (error) {

@@ -26,6 +26,17 @@ describe('parseEngineId', () => {
     expect(parsed.os).toBe('windows');
   });
 
+  test('parses a Blink engine with the CEF version as api and Chromium as upstream (D048)', () => {
+    expect(parseEngineId('cef-154.0.28-154.0.8037.58-bunmaska1-macos-arm64')).toEqual({
+      engine: 'cef',
+      api: '154.0.28',
+      upstream: '154.0.8037.58',
+      rev: 'bunmaska1',
+      os: 'macos',
+      arch: 'arm64',
+    });
+  });
+
   test('rejects the retired webview2 family', () => {
     expect(() => parseEngineId('webview2-fixed-126.0.2592-bunmaska1-windows-x64')).toThrow(
       BunmaskaError,
@@ -76,6 +87,12 @@ describe('compareEngineIds', () => {
     const r1 = 'webkitgtk-6.0-2.52.4-bunmaska1-linux-x64';
     const r2 = 'webkitgtk-6.0-2.52.4-bunmaska2-linux-x64';
     expect(compareEngineIds(r1, r2)).toBe(-1);
+  });
+
+  test('orders Blink engines by Chromium version, not by CEF version', () => {
+    const older = 'cef-999.0.0-153.0.1.1-bunmaska1-macos-arm64';
+    const newer = 'cef-154.0.28-154.0.8037.58-bunmaska1-macos-arm64';
+    expect(compareEngineIds(older, newer)).toBe(-1);
   });
 
   test('sorts a list ascending', () => {

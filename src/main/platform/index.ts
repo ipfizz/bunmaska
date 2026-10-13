@@ -1,5 +1,7 @@
 import { UnsupportedPlatformError } from '../../common/errors';
 import { currentPlatform, type Platform } from '../../common/platform';
+import { type EngineResolution, prepareEngineForLoad, resolveEngine } from '../engine/resolve';
+import { createCefApplication } from './cef/cef-backend';
 import { gdkNativeImageBackend } from './linux/gdk-native-image';
 import { gdkScreenBackend } from './linux/gdk-screen';
 import { linuxClipboardBackend } from './linux/gtk-clipboard';
@@ -32,7 +34,7 @@ import * as cocoaShell from './macos/cocoa-shell';
 import { macosTrayBackend } from './macos/cocoa-tray';
 import { clearStorageData as macosClearStorageData } from './macos/cocoa-website-data';
 import type { NativeApplication } from './native';
-import type { PlatformServices } from './services';
+import type { PlatformServices, SessionBackend } from './services';
 import { createWindowsApplication } from './windows/windows-backend';
 import { windowsClipboardBackend } from './windows/windows-clipboard';
 import { windowsDialogBackend } from './windows/windows-dialog';
@@ -49,9 +51,25 @@ import { windowsSessionBackend } from './windows/windows-session';
 import { windowsShellBackend } from './windows/windows-shell';
 import { windowsTrayBackend } from './windows/windows-tray';
 
-/** Every backend's FFI loaders are lazy, so importing another OS's backend opens no library. */
-export const createNativeApplication = (): NativeApplication => {
+/**
+ * Every backend's FFI loaders are lazy, so importing another OS's backend opens no library.
+ * A pinned `cef` engine picks the Blink backend (D048); it exists on macOS only.
+ */
+export const createNativeApplication = (
+  engine: EngineResolution = resolveEngine(),
+): NativeApplication => {
   const platform = currentPlatform();
+  if (platform === 'macos') {
+    prepareEngineForLoad(engine, (text) => process.stderr.write(text));
+  }
+  if (engine.family === 'cef') {
+    if (platform !== 'macos' || engine.libDir === undefined) {
+      throw new UnsupportedPlatformError(
+        `The Blink engine ${engine.id ?? ''} runs on macOS only so far; unpin it on ${platform}.`,
+      );
+    }
+    return createCefApplication(engine.libDir);
+  }
   switch (platform) {
     case 'macos':
       return createMacOSApplication();
@@ -147,6 +165,27 @@ const SERVICES: Record<Platform, PlatformServices> = {
   },
 };
 
+const blinkGap = (what: string): Promise<never> =>
+  Promise.reject(new UnsupportedPlatformError(`${what} is not wired for the Blink engine yet`));
+
+// ponytail: session acts on WKWebsiteDataStore, so Blink rejects; wire cef_cookie_manager + CDP Storage.
+const BLINK_SESSION: SessionBackend = {
+  clearStorageData: () => blinkGap('session.clearStorageData'),
+  getCookies: () => blinkGap('session.cookies.get'),
+  setCookie: () => blinkGap('session.cookies.set'),
+  removeCookie: () => blinkGap('session.cookies.remove'),
+};
+
+/** macOS services under the Blink engine: only the ones that act on the web engine differ. */
+const BLINK_ON_MACOS: PlatformServices = { ...SERVICES.macos, session: BLINK_SESSION };
+
+const currentServices = (): PlatformServices => {
+  const platform = currentPlatform();
+  return platform === 'macos' && resolveEngine().family === 'cef'
+    ? BLINK_ON_MACOS
+    : SERVICES[platform];
+};
+
 /** The current OS's `key` service, resolved on every `get()`, with a test override. */
 export const service = <K extends keyof PlatformServices>(
   key: K,
@@ -156,7 +195,7 @@ export const service = <K extends keyof PlatformServices>(
 } => {
   let override: PlatformServices[K] | undefined;
   return {
-    get: () => override ?? SERVICES[currentPlatform()][key],
+    get: () => override ?? currentServices()[key],
     setForTesting: (fake) => {
       override = fake;
     },
