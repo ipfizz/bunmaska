@@ -1,5 +1,5 @@
 import type { NotificationBackend, NotificationHandle, NotificationSpec } from '../services';
-import { nsString } from './cocoa-foundation';
+import { nsString, nsStringToString } from './cocoa-foundation';
 import { msgSendPtr } from './cocoa-msgsend-variants';
 import { cocoa } from './cocoa-runtime';
 import { defineObjcClass } from './cocoa-runtime-class';
@@ -17,6 +17,8 @@ const defaultCenter = (): Handle => {
 };
 
 let delegate: Handle | undefined;
+let nextNotificationId = 1;
+const clickById = new Map<string, () => void>();
 
 /** The center holds its delegate weakly, so this one lives for the process. */
 export const notificationDelegate = (): Handle => {
@@ -32,6 +34,15 @@ export const notificationDelegate = (): Handle => {
       args: ['object', 'object'],
       returns: 'bool',
       impl: () => 1,
+    },
+    {
+      selector: 'userNotificationCenter:didActivateNotification:',
+      typeEncoding: 'v@:@@',
+      args: ['object', 'object'],
+      impl: (_self, _cmd, _center, notification) => {
+        const id = nsStringToString(rt.msgSend(notification, rt.selectors.get('identifier')));
+        clickById.get(id)?.();
+      },
     },
   ]);
   delegate = rt.msgSend(rt.msgSend(cls, rt.selectors.get('alloc')), rt.selectors.get('init'));
@@ -63,6 +74,10 @@ const buildNotification = (spec: NotificationSpec): Handle => {
 const present = (spec: NotificationSpec): NotificationHandle => {
   const rt = cocoa();
   const notification = buildNotification(spec);
+  const id = `bunmaska-${nextNotificationId++}`;
+  msgSendPtr(notification, rt.selectors.get('setIdentifier:'), nsString(id));
+  let onClick: (() => void) | undefined;
+  clickById.set(id, () => onClick?.());
   const center = defaultCenter();
   if (center !== 0n) {
     msgSendPtr(center, rt.selectors.get('setDelegate:'), notificationDelegate());
@@ -74,8 +89,12 @@ const present = (spec: NotificationSpec): NotificationHandle => {
       if (c !== 0n) {
         msgSendPtr(c, rt.selectors.get('removeDeliveredNotification:'), notification);
       }
+      clickById.delete(id);
     },
     onClosed: () => undefined, // ponytail: the center reports no dismissals; poll deliveredNotifications if 'close' is needed.
+    onClick: (cb) => {
+      onClick = cb;
+    },
   };
 };
 

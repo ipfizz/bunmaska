@@ -10,6 +10,7 @@ import type {
   NativeInputEvent,
   NativeWebContents,
 } from '../platform/native';
+import type { BrowserWindowOptions } from './browser-window';
 import { ipcMain } from './ipc-main';
 import { type NativeImage, nativeImage } from './native-image';
 
@@ -21,6 +22,25 @@ export type LoadFileOptions = {
   readonly query?: Record<string, string>;
   /** Raw query string; takes precedence over `query`. */
   readonly search?: string;
+};
+
+export type WindowOpenHandlerResult = {
+  readonly action: 'allow' | 'deny';
+  readonly overrideBrowserWindowOptions?: BrowserWindowOptions;
+};
+
+export type ChildWindowOpener = (url: string, options?: BrowserWindowOptions) => void;
+
+let childWindowOpener: ChildWindowOpener | undefined;
+
+/** Installed by `browser-window.ts` so this module never imports the class (a cycle). @internal */
+export const installChildWindowOpener = (opener: ChildWindowOpener): void => {
+  childWindowOpener = opener;
+};
+
+/** @internal */
+export const setChildWindowOpenerForTesting = (opener: ChildWindowOpener | undefined): void => {
+  childWindowOpener = opener;
 };
 
 /** Electron's error for a call on a destroyed window or web contents. */
@@ -269,14 +289,28 @@ export class WebContents extends EventEmitter {
   }
 
   /**
-   * The popup is always blocked, `allow` included (no child windows), so apps typically
-   * `shell.openExternal(url)` and return `deny`. Windows never calls the handler.
+   * `{ action: 'allow' }` opens a new `BrowserWindow` (a sibling, not a native child view)
+   * and loads `url`. Windows still never calls the handler (no WKPageUIClient yet).
    */
-  setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void {
+  setWindowOpenHandler(
+    handler: (details: { url: string }) => WindowOpenHandlerResult,
+  ): void {
     this.#native.setWindowOpenHandler((url) => {
-      if (handler({ url }).action === 'allow') {
-        log.warn('setWindowOpenHandler { action: "allow" } is not yet supported; window blocked');
+      let result: WindowOpenHandlerResult;
+      try {
+        result = handler({ url });
+      } catch (error) {
+        log.error('setWindowOpenHandler threw', error);
+        return;
       }
+      if (result?.action !== 'allow') {
+        return;
+      }
+      if (childWindowOpener === undefined) {
+        log.warn('setWindowOpenHandler { action: "allow" } is not yet supported; window blocked');
+        return;
+      }
+      childWindowOpener(url, result.overrideBrowserWindowOptions);
     });
   }
 

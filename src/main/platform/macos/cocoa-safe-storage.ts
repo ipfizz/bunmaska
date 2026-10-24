@@ -109,8 +109,10 @@ export const deleteMacosKeychainItem = (service: string, account: string): void 
   loadSecurityFFI().symbols.SecItemDelete(identityQuery(service, account));
 };
 
-// ponytail: one Keychain item for every Bunmaska app on the machine; key it by app name via api/safe-storage.ts.
-export const macosKeychainBackend = makeMacosKeychainBackend(
-  'dev.bunmaska.safeStorage',
-  'master-key',
-);
+const SERVICE = 'dev.bunmaska.safeStorage';
+
+export const macosKeychainBackend: KeyringBackend = {
+  isAvailable: () => makeMacosKeychainBackend(SERVICE, 'master-key').isAvailable(),
+  getOrCreateKey: (appId = 'master-key') =>
+    makeMacosKeychainBackend(SERVICE, appId.length > 0 ? appId : 'master-key').getOrCreateKey(),
+};

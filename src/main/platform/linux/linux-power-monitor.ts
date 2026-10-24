@@ -1,5 +1,8 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Pointer } from 'bun:ffi';
-import type { PowerEventHandlers } from '../services';
+import { idleStateFrom } from '../idle-state';
+import type { PowerEventHandlers, PowerMonitorBackend, SystemIdleState } from '../services';
 import { loadGlibFFI } from './glib-ffi';
 import { getSystemBus, type SignalEvent, type SignalMatch, subscribeSignal } from './linux-dbus';
 
@@ -59,6 +62,9 @@ export const observePowerEvents = (
   handlers: PowerEventHandlers,
   deps: PowerDbusDeps = realDeps,
 ): void => {
+  emitBatterySource(handlers);
+  const timer = setInterval(() => emitBatterySource(handlers), 2_000);
+  timer.unref();
   const bus = deps.getSystemBus();
   if (bus === null) {
     return;
@@ -73,10 +79,81 @@ export const observePowerEvents = (
     },
     (event) => decodePrepareForSleep(deps.readSleepBoolean(event.parameters), handlers),
   );
-  deps.subscribeSignal(bus, { sender: LOGIN1_NAME, interface: SESSION_IFACE, member: LOCK }, () =>
-    handlers.onLockScreen(),
-  );
-  deps.subscribeSignal(bus, { sender: LOGIN1_NAME, interface: SESSION_IFACE, member: UNLOCK }, () =>
-    handlers.onUnlockScreen(),
-  );
+  deps.subscribeSignal(bus, { sender: LOGIN1_NAME, interface: SESSION_IFACE, member: LOCK }, () => {
+    locked = true;
+    handlers.onLockScreen();
+  });
+  deps.subscribeSignal(bus, { sender: LOGIN1_NAME, interface: SESSION_IFACE, member: UNLOCK }, () => {
+    locked = false;
+    handlers.onUnlockScreen();
+  });
+};
+
+let lastOnBattery: boolean | undefined;
+
+const emitBatterySource = (handlers: PowerEventHandlers): void => {
+  const onBattery = readSysfsOnBattery();
+  if (lastOnBattery === undefined) {
+    lastOnBattery = onBattery;
+    return;
+  }
+  if (onBattery === lastOnBattery) {
+    return;
+  }
+  lastOnBattery = onBattery;
+  if (onBattery) {
+    handlers.onBattery?.();
+  } else {
+    handlers.onAc?.();
+  }
+};
+
+let locked = false;
+
+const POWER_SUPPLY_DIR = '/sys/class/power_supply';
+
+const readTrimmed = (path: string): string | undefined => {
+  try {
+    return readFileSync(path, 'utf8').trim();
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * True when sysfs shows an AC adapter offline or a battery discharging.
+ * `dir` is injectable so tests never touch the real host.
+ */
+export const readSysfsOnBattery = (dir: string = POWER_SUPPLY_DIR): boolean => {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return false;
+  }
+  let sawAcOnline = false;
+  let sawBatteryDischarging = false;
+  for (const name of names) {
+    const type = readTrimmed(join(dir, name, 'type'));
+    if (type === 'Mains' || type === 'USB') {
+      if (readTrimmed(join(dir, name, 'online')) === '1') {
+        sawAcOnline = true;
+      }
+    } else if (type === 'Battery' && readTrimmed(join(dir, name, 'status')) === 'Discharging') {
+      sawBatteryDischarging = true;
+    }
+  }
+  return !sawAcOnline && sawBatteryDischarging;
+};
+
+export const linuxGetSystemIdleTime = (): number => 0;
+
+export const linuxGetSystemIdleState = (idleThreshold: number): SystemIdleState =>
+  idleStateFrom(linuxGetSystemIdleTime(), idleThreshold, locked);
+
+export const linuxPowerMonitorBackend: PowerMonitorBackend = {
+  observe: observePowerEvents,
+  getSystemIdleTime: linuxGetSystemIdleTime,
+  getSystemIdleState: linuxGetSystemIdleState,
+  isOnBatteryPower: () => readSysfsOnBattery(),
 };

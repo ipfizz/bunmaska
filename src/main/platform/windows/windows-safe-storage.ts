@@ -12,16 +12,18 @@ import { loadKernel32 } from './win32-ffi';
 // user) is stored (D036).
 
 const KEY_LENGTH = 32;
-const KEY_FILE = 'safestorage.key';
 
 /** `DATA_BLOB { DWORD cbData; BYTE* pbData; }` on x64. */
 const BLOB_SIZE = 16;
 const BLOB_PBDATA_OFFSET = 8;
 
-/** The DPAPI-sealed key's on-disk location (per-user; honours `BUNMASKA_HOME`). */
-const keyFilePath = (): string => {
+const sanitizeAppId = (appId: string): string =>
+  appId.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 64) || 'app';
+
+/** The DPAPI-sealed key's on-disk location (per-user, per-app; honours `BUNMASKA_HOME`). */
+const keyFilePath = (appId = 'bunmaska'): string => {
   const home = process.env['BUNMASKA_HOME'] ?? join(homedir(), '.bunmaska');
-  return join(home, KEY_FILE);
+  return join(home, `safestorage.${sanitizeAppId(appId)}.key`);
 };
 
 /** Build an input `DATA_BLOB` pointing at `data` (kept alive by the caller). */
@@ -118,5 +120,6 @@ export const windowsDpapiBackend: KeyringBackend = {
   // DPAPI ships with every Windows install.
   isAvailable: (): boolean => true,
 
-  getOrCreateKey: (): Buffer => loadOrCreateSealedKey(keyFilePath(), dpapiProtect, dpapiUnprotect),
+  getOrCreateKey: (appId?: string): Buffer =>
+    loadOrCreateSealedKey(keyFilePath(appId), dpapiProtect, dpapiUnprotect),
 };

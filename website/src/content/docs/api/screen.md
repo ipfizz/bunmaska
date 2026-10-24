@@ -1,6 +1,6 @@
 ---
 title: "screen"
-description: "Enumerate displays and read screen geometry and the cursor position in the Bunmaska main process - the drop-in equivalent of Electron's screen module, minus the DIP conversions and change events."
+description: "Enumerate displays and read screen geometry and the cursor position in the Bunmaska main process - the drop-in equivalent of Electron's screen module, minus the DIP conversions."
 order: 18
 ---
 
@@ -8,7 +8,7 @@ Retrieve information about connected displays and their geometry. `screen` is th
 
 Process: Main
 
-Unlike Electron, Bunmaska's `screen` is **not** an `EventEmitter` and emits no events - it is a plain object with methods. Display geometry comes from AppKit's `NSScreen` (plus CoreGraphics for rotation and the built-in flag) on macOS, GTK4's `GdkMonitor` model on Linux, and `EnumDisplayMonitors` + `GetMonitorInfoW` + `GetDpiForMonitor` on Windows (displays, bounds, work area, and scale factor).
+`screen` is an `EventEmitter`. Display geometry comes from AppKit's `NSScreen` (plus CoreGraphics for rotation and the built-in flag) on macOS, GTK4's `GdkMonitor` model on Linux, and `EnumDisplayMonitors` + `GetMonitorInfoW` + `GetDpiForMonitor` on Windows (displays, bounds, work area, and scale factor). Hot-plug and metrics changes emit `display-added`, `display-removed` and `display-metrics-changed`.
 
 ```ts
 import { app, BrowserWindow, screen } from 'bunmaska';
@@ -88,6 +88,35 @@ import { screen } from 'bunmaska';
 const point = screen.getCursorScreenPoint(); // real on macOS and Windows; { x: 0, y: 0 } on Linux
 ```
 
+## Events
+
+The bootstrap starts observing once the app is ready. Listeners receive Electron's argument order: an empty `event` object, then the `Display` (and a `metrics` string array for metrics changes).
+
+### Event: 'display-added'
+
+Emitted when a display appears. The listener is `(event, display)`.
+
+### Event: 'display-removed'
+
+Emitted when a display disappears. The listener is `(event, display)`.
+
+### Event: 'display-metrics-changed'
+
+Emitted when an existing display's `bounds`, `workArea`, `scaleFactor` or `rotation` changes. The listener is `(event, display, metrics)`, where `metrics` is a string array of the fields that changed.
+
+```ts
+import { screen } from 'bunmaska';
+
+screen.on('display-added', (_event, display) => {
+  console.log('plugged in', display.id, display.bounds);
+});
+screen.on('display-metrics-changed', (_event, display, metrics) => {
+  console.log(display.id, 'changed', metrics);
+});
+```
+
+On Linux, display ids are list indexes, so a plug/unplug can look like a remove-plus-add of every monitor rather than a stable identity. On Linux, metrics changes that do not alter the monitor list (for example a scale-factor-only change) may not fire, because GTK 4 only notifies `items-changed` on the monitor model.
+
 ## Structures
 
 ### `Display`
@@ -124,7 +153,6 @@ A connected display. Mirrors a subset of Electron's `Display`:
 
 Compared to Electron's `screen`, these are missing:
 
-* **Events** - `display-added`, `display-removed`, and `display-metrics-changed` are not implemented. Bunmaska's `screen` is a plain object, not an `EventEmitter`, so there is no hot-plug or metrics-change notification. Re-call `getAllDisplays()` if you need fresh data.
 * **DIP/physical conversion methods** - `screenToDipPoint`, `dipToScreenPoint`, `screenToDipRect`, and `dipToScreenRect` are absent. (These are Windows-only or Windows/Linux-only in Electron; Bunmaska does not implement them on any backend, including Windows.)
 * **`getCursorScreenPoint()` on Linux** - stubbed to `{0,0}` (see above).
 * **A real `workArea` on Linux** - equal to `bounds`; the panel inset is not subtracted there.

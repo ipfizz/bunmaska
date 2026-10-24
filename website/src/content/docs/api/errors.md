@@ -36,7 +36,7 @@ try {
 
 ## Warnings
 
-Some calls do not throw but tell you they did nothing useful - `openDevTools` on Windows, `setWindowOpenHandler` returning `allow`, a custom scheme Windows cannot serve. Those warnings (and errors Bunmaska catches for you, such as a throwing IPC listener) go to stderr, prefixed `[bunmaska:<module>]`. When a page says "logs a warning", that line is what it means.
+Some calls do not throw but tell you they did nothing useful - `openDevTools` on Windows, `setWindowOpenHandler` on Windows, a custom scheme Windows cannot serve. Those warnings (and errors Bunmaska catches for you, such as a throwing IPC listener) go to stderr, prefixed `[bunmaska:<module>]`. When a page says "logs a warning", that line is what it means.
 
 ## Uncaught exceptions
 

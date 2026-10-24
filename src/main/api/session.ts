@@ -75,8 +75,8 @@ export class Session {
   }
 
   /**
-   * Clears all website data on macOS, only cookies and fetch caches on Windows, and rejects on
-   * Linux. A `storages` or `origin` filter rejects rather than widening to everything.
+   * Clears all website data on macOS and Linux, only cookies and fetch caches on Windows.
+   * A `storages` or `origin` filter rejects rather than widening to everything.
    */
   clearStorageData(options?: {
     readonly origin?: string;

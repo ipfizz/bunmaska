@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ipcMain } from '../../../../src/main/api/ipc-main';
-import { resetWebContentsIdsForTesting, WebContents } from '../../../../src/main/api/web-contents';
+import {
+  resetWebContentsIdsForTesting,
+  setChildWindowOpenerForTesting,
+  WebContents,
+} from '../../../../src/main/api/web-contents';
 import { decodeEnvelope, encodeEnvelope } from '../../../../src/main/ipc/ipc-protocol';
 import type {
   NativeNavigationEvent,
@@ -524,6 +528,25 @@ describe('WebContents.setWindowOpenHandler', () => {
     });
     fireWindowOpen('https://popup.test/path');
     expect(seen).toBe('https://popup.test/path');
+  });
+
+  test('allow opens a child window through the installed opener', () => {
+    const { native, fireWindowOpen } = makeFakeNative();
+    const wc = new WebContents(native);
+    const opened: Array<{ url: string; width?: number }> = [];
+    setChildWindowOpenerForTesting((url, options) => {
+      opened.push({ url, width: options?.width });
+    });
+    try {
+      wc.setWindowOpenHandler(() => ({
+        action: 'allow',
+        overrideBrowserWindowOptions: { width: 640 },
+      }));
+      fireWindowOpen('https://child.test/');
+      expect(opened).toEqual([{ url: 'https://child.test/', width: 640 }]);
+    } finally {
+      setChildWindowOpenerForTesting(undefined);
+    }
   });
 });
 

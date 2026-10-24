@@ -9,8 +9,8 @@ order: 11
 Platform support is uneven and honest about it:
 
 - **macOS** - fully wired to a real `NSStatusItem`. Works un-bundled (`bun main.ts`). Icon, tooltip, title, context menu, and the `click` event all function.
-- **Linux** - a `StatusNotifierItem` exported over D-Bus (KDE, the GNOME AppIndicator extension, Waybar, swaybar, etc. draw the icon). It is gated behind the `BUNMASKA_ENABLE_LINUX_TRAY=1` environment variable. With the gate off, or when no session bus is reachable, the tray is an **inert no-op** rather than a throw - so cross-platform code can construct a `Tray` safely everywhere. Even when live, `setContextMenu` is not yet shown on Linux (the `com.canonical.dbusmenu` service is deferred).
-- **Windows** - wired to the notification area via `Shell_NotifyIcon`. Icon, tooltip, and the left-click `click` event all function. Caveats: `setContextMenu` is deferred (a no-op - no menu is shown), `setTitle` is a no-op (Windows tray icons have no inline text), and right-click / double-click are not surfaced.
+- **Linux** - a `StatusNotifierItem` exported over D-Bus (KDE, the GNOME AppIndicator extension, Waybar, swaybar, etc. draw the icon). It is gated behind the `BUNMASKA_ENABLE_LINUX_TRAY=1` environment variable. With the gate off, or when no session bus is reachable, the tray is an **inert no-op** rather than a throw - so cross-platform code can construct a `Tray` safely everywhere. When live, `setContextMenu` shows a GTK popover from a hidden 1×1 window on `ContextMenu` / `SecondaryActivate`. Placement on Wayland is weak (the popover is not anchored to the panel icon). There is no dbusmenu service yet.
+- **Windows** - wired to the notification area via `Shell_NotifyIcon`. Icon, tooltip, left-click `click`, and a right-click context menu (`TrackPopupMenu` at the cursor) all function. `setTitle` is a no-op (Windows tray icons have no inline text). Double-click is not surfaced as its own event.
 
 ```ts
 import { app, Menu, Tray } from 'bunmaska';
@@ -80,7 +80,7 @@ tray.setImage('/path/to/active-iconTemplate.png');
 
 Attaches a context menu (shown on click) or clears it with `null`. No-op after `destroy()`.
 
-On **macOS** this installs a real `NSMenu` and works as expected. On **Linux** this is accepted but currently a soft no-op - the menu is not shown, because the dbusmenu service is deferred. On **Windows** it is likewise a deferred no-op - the menu is accepted but not yet shown. It never throws, so the same code runs on every platform.
+On **macOS** this installs a real `NSMenu`. On **Windows** a right-click opens the menu at the cursor. On **Linux** (live tray only) `ContextMenu` / `SecondaryActivate` opens a GTK popover; on Wayland it may not sit next to the icon. It never throws, so the same code runs on every platform.
 
 ```ts
 import { Menu } from 'bunmaska';
@@ -139,5 +139,5 @@ Compared with Electron's `Tray`, the following are not implemented:
 - **`popUpContextMenu()` / `closeContextMenu()`** - no programmatic menu pop-up/dismiss.
 - **`getBounds()`** - the icon's screen rectangle is not exposed.
 - **`getGUID()`** - no GUID support, so nothing to return.
-- **Linux and Windows context menus** - `setContextMenu` is accepted but the menu is not yet drawn on Linux (dbusmenu deferred) or Windows (deferred no-op). Only macOS shows the menu today.
+- **Linux dbusmenu** - the tray menu is a GTK popover, not `com.canonical.dbusmenu`, so hosts that only speak dbusmenu will not embed it in the panel.
 - **Windows balloon / focus members** - `displayBalloon`, `removeBalloon`, `focus`, `balloon-*` events, etc. are not implemented, even though the Windows tray icon itself (via `Shell_NotifyIcon`) is now supported.

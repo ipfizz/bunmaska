@@ -6,6 +6,7 @@ import { dialog } from './api/dialog';
 import { installDefaultApplicationMenu } from './api/menu';
 import { startNativeThemeObserving } from './api/native-theme';
 import { startPowerMonitorObserving } from './api/power-monitor';
+import { startScreenObserving } from './api/screen';
 import { nativeApp } from './native-app';
 
 // Wires `app` to the native backend; separate from `app` and `BrowserWindow` to avoid an import cycle.
@@ -44,6 +45,7 @@ export const ensureNativeStarted = (): void => {
     // Observers attach native hooks, which need NSApp / GTK initialised first.
     startNativeThemeObserving();
     startPowerMonitorObserving();
+    startScreenObserving();
   });
   native.onActivate?.((hasVisibleWindows) => {
     app.emit('activate', makeCancelableEvent(), hasVisibleWindows);

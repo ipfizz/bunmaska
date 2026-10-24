@@ -15,6 +15,7 @@ let presented: NotificationSpec[];
 let closedCalls: number;
 let supportedResult: boolean;
 let closedListeners: Array<() => void>;
+let clickListeners: Array<() => void>;
 
 const makeHandle = (): NotificationHandle => ({
   close: () => {
@@ -23,6 +24,9 @@ const makeHandle = (): NotificationHandle => ({
   onClosed: (cb) => {
     closedListeners.push(cb);
   },
+  onClick: (cb) => {
+    clickListeners.push(cb);
+  },
 });
 
 beforeEach(() => {
@@ -30,6 +34,7 @@ beforeEach(() => {
   closedCalls = 0;
   supportedResult = true;
   closedListeners = [];
+  clickListeners = [];
   const fake: NotificationBackend = {
     isSupported: () => supportedResult,
     present: (spec) => {
@@ -153,6 +158,20 @@ describe('Notification close event wiring', () => {
     n.show();
     expect(closedListeners.length).toBe(1);
     closedListeners[0]?.();
+    expect(fired).toBe(1);
+  });
+});
+
+describe('Notification click event wiring', () => {
+  test('emits click when the backend handle reports an activation', () => {
+    const n = new Notification({ title: 'T' });
+    let fired = 0;
+    n.on('click', () => {
+      fired += 1;
+    });
+    n.show();
+    expect(clickListeners.length).toBe(1);
+    clickListeners[0]?.();
     expect(fired).toBe(1);
   });
 });

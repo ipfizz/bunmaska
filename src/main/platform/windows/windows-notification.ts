@@ -39,6 +39,14 @@ export const isBalloonDismiss = (
   return code === NIN_BALLOONHIDE || code === NIN_BALLOONTIMEOUT || code === NIN_BALLOONUSERCLICK;
 };
 
+/** A user click on the balloon (distinct from timeout/hide). Pure. */
+export const isBalloonClick = (
+  message: number,
+  wParam: number,
+  lParam: number,
+  uid: number,
+): boolean => message === WM_NOTIFICATION && wParam === uid && (lParam & 0xffff) === NIN_BALLOONUSERCLICK;
+
 /** The balloon `NOTIFYICONDATAW` for `spec` (also valid for NIM_DELETE). */
 const buildNotifyData = (
   hwnd: bigint,
@@ -68,13 +76,19 @@ export const windowsNotificationBackend: NotificationBackend = {
     const shell32 = loadShell32().symbols;
     const hIcon = loadUser32().symbols.LoadIconW(0n, IDI_APPLICATION);
     let closedCallback: (() => void) | undefined;
+    let clickCallback: (() => void) | undefined;
     let dismissed = false;
 
     // The handler closes over `window` (assigned synchronously just below; the
     // balloon dismissal that triggers it only ever arrives later via the pump).
     const window = createMessageWindow((message, wParam, lParam) => {
-      if (dismissed || !isBalloonDismiss(message, Number(wParam), Number(lParam), uid)) {
+      const msg = Number(wParam);
+      const lp = Number(lParam);
+      if (dismissed || !isBalloonDismiss(message, msg, lp, uid)) {
         return;
+      }
+      if (isBalloonClick(message, msg, lp, uid)) {
+        clickCallback?.();
       }
       dismissed = true;
       shell32.Shell_NotifyIconW(NIM_DELETE, ptr(buildNotifyData(window.hwnd, uid, hIcon, spec)));
@@ -96,6 +110,9 @@ export const windowsNotificationBackend: NotificationBackend = {
       },
       onClosed(callback: () => void): void {
         closedCallback = callback;
+      },
+      onClick(callback: () => void): void {
+        clickCallback = callback;
       },
     };
   },

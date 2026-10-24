@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  isBalloonClick,
   isBalloonDismiss,
   notificationInfoFlags,
   WM_NOTIFICATION,
@@ -48,5 +49,13 @@ describe('isBalloonDismiss', () => {
 
   test('an unrelated message is ignored', () => {
     expect(isBalloonDismiss(0x0100, 1, NIN_BALLOONTIMEOUT, 1)).toBe(false);
+  });
+});
+
+describe('isBalloonClick', () => {
+  test('only the user-click code is a click', () => {
+    expect(isBalloonClick(WM_NOTIFICATION, 1, NIN_BALLOONUSERCLICK, 1)).toBe(true);
+    expect(isBalloonClick(WM_NOTIFICATION, 1, NIN_BALLOONTIMEOUT, 1)).toBe(false);
+    expect(isBalloonClick(WM_NOTIFICATION, 2, NIN_BALLOONUSERCLICK, 1)).toBe(false);
   });
 });

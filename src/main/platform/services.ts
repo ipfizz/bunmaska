@@ -156,6 +156,8 @@ export type NotificationHandle = {
   close(): void;
   /** Fired when the OS closes or the user dismisses it. */
   onClosed(callback: () => void): void;
+  /** Fired when the user activates the notification body. Optional: a backend that cannot tell click from dismiss omits it. */
+  onClick?(callback: () => void): void;
 };
 
 export type NotificationBackend = {
@@ -168,6 +170,20 @@ export type PowerEventHandlers = {
   readonly onResume: () => void;
   readonly onLockScreen: () => void;
   readonly onUnlockScreen: () => void;
+  readonly onAc?: () => void;
+  readonly onBattery?: () => void;
+};
+
+/** Electron's `powerMonitor.getSystemIdleState` return values. */
+export type SystemIdleState = 'active' | 'idle' | 'locked' | 'unknown';
+
+/** Observe plus the idle/battery queries. The API owns events; the backend owns the OS. */
+export type PowerMonitorBackend = {
+  observe(handlers: PowerEventHandlers): void;
+  /** Whole seconds since the last HID event. `0` when the OS will not say. */
+  getSystemIdleTime(): number;
+  getSystemIdleState(idleThreshold: number): SystemIdleState;
+  isOnBatteryPower(): boolean;
 };
 
 export type PowerSaveBlockerType = 'prevent-app-suspension' | 'prevent-display-sleep';
@@ -185,8 +201,11 @@ export type PowerSaveBlockerBackend = {
 export type KeyringBackend = {
   /** MUST be cheap, non-blocking, and never throw. */
   isAvailable(): boolean;
-  /** Exactly 32 bytes. May throw; the throw is surfaced by encrypt/decrypt. */
-  getOrCreateKey(): Buffer;
+  /**
+   * Exactly 32 bytes, scoped to `appId` so two Bunmaska apps do not share a key.
+   * `appId` may be omitted in tests; backends then use a default identity.
+   */
+  getOrCreateKey(appId?: string): Buffer;
 };
 
 /** Top-left screen coordinates; backends already report top-left rects, so none is flipped. */
@@ -210,6 +229,8 @@ export type ScreenBackend = {
   /** Must return at least one display on a real host. */
   getDisplays(): readonly RawDisplay[];
   getCursorScreenPoint(): Point;
+  /** Calls `onChange` when a display is added, removed or resized. Optional: the API then polls nothing. */
+  observe?(onChange: () => void): void;
 };
 
 export type SessionBackend = {
@@ -258,7 +279,7 @@ export type PlatformServices = {
   readonly nativeImage: NativeImageBackend;
   readonly nativeTheme: NativeThemeBackend;
   readonly notification: NotificationBackend;
-  readonly powerMonitor: (handlers: PowerEventHandlers) => void;
+  readonly powerMonitor: PowerMonitorBackend;
   readonly powerSaveBlocker: PowerSaveBlockerBackend;
   readonly safeStorage: KeyringBackend;
   readonly screen: ScreenBackend;

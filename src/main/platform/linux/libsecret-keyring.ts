@@ -6,7 +6,7 @@ import { loadLibsecretFFI, secretSchema } from './libsecret-ffi';
 
 // The key is stored as hex: libsecret passwords are NUL-terminated C strings. Env gate and a
 // non-blocking isAvailable per D036.
-// ponytail: one zero-attribute item is shared by every Bunmaska app; scope it with an 'application' attribute.
+// The item is keyed by app name (`secret_password_*` label + identity), so two apps that share a name share a key.
 // ponytail: the *_sync calls block the JS thread on a keyring unlock prompt; prefetch async at app ready.
 
 const LABEL = 'Bunmaska safeStorage key';
@@ -20,18 +20,25 @@ const takePassword = (password: Pointer): string => {
 };
 
 /** null when absent or on any error. */
-const lookupHex = (): string | null => {
+const lookupHex = (appId: string): string | null => {
   const lib = loadLibsecretFFI();
   let result: Pointer | null;
   try {
-    result = lib.symbols.secret_password_lookup_sync(secretSchema(), null, null, null);
+    result = lib.symbols.secret_password_lookup_sync(
+      secretSchema(),
+      null,
+      null,
+      cstr('application'),
+      cstr(appId),
+      null,
+    );
   } catch {
     return null;
   }
   return result === null ? null : takePassword(result);
 };
 
-const storeHex = (hex: string): boolean => {
+const storeHex = (hex: string, appId: string): boolean => {
   const lib = loadLibsecretFFI();
   try {
     const ok = lib.symbols.secret_password_store_sync(
@@ -41,6 +48,8 @@ const storeHex = (hex: string): boolean => {
       cstr(hex),
       null,
       null,
+      cstr('application'),
+      cstr(appId),
       null,
     );
     return ok !== 0;
@@ -72,17 +81,17 @@ export const linuxLibsecretBackend: KeyringBackend = {
       return false;
     }
   },
-  getOrCreateKey: () => {
-    const existing = lookupHex();
+  getOrCreateKey: (appId = 'bunmaska') => {
+    const identity = appId.length > 0 ? appId : 'bunmaska';
+    const existing = lookupHex(identity);
     if (existing !== null) {
       return decodeKey(existing);
     }
     const fresh = randomBytes(32);
-    if (!storeHex(fresh.toString('hex'))) {
+    if (!storeHex(fresh.toString('hex'), identity)) {
       throw new Error('safeStorage: failed to store key in the Linux keyring');
     }
-    // Adopt whatever the keyring actually holds (a concurrent writer may have won).
-    const winner = lookupHex();
+    const winner = lookupHex(identity);
     return winner !== null ? decodeKey(winner) : fresh;
   },
 };
