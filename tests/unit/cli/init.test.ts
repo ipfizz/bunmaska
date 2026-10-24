@@ -52,6 +52,21 @@ describe('initTemplateFiles', () => {
     expect(pkg.dependencies.bunmaska).toMatch(/^\^/);
   });
 
+  // Issue #20: IDEs must resolve node:fs / node:path / Bun built-ins out of the box.
+  test('package.json declares @types/bun so language servers see Node and Bun built-ins', () => {
+    const pkg = JSON.parse(byPath.get('package.json') ?? '{}') as {
+      devDependencies?: Record<string, string>;
+    };
+    expect(pkg.devDependencies?.['@types/bun']).toBeTruthy();
+  });
+
+  test('tsconfig includes bun types for the editor language server', () => {
+    const tsconfig = JSON.parse(byPath.get('tsconfig.json') ?? '{}') as {
+      compilerOptions?: { types?: string[] };
+    };
+    expect(tsconfig.compilerOptions?.types).toContain('bun');
+  });
+
   test('config substitutes the name and id', () => {
     const config = byPath.get('bunmaska.config.ts') ?? '';
     expect(config).toContain('name: "My App"');
