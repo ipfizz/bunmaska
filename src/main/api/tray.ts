@@ -72,7 +72,7 @@ export class Tray extends EventEmitter {
     this.#instance.setImage(this.#resolveImagePath(image), imageOptions(image));
   }
 
-  /** `null` clears it. Shown on click on macOS only; Linux and Windows accept and ignore it. */
+  /** `null` clears it. Shown on click on macOS; right-click on Windows; SNI ContextMenu on Linux. */
   setContextMenu(menu: Menu | null): void {
     if (this.#destroyed) {
       return;

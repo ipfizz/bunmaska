@@ -129,7 +129,7 @@ app.whenReady().then(() => {
 
 ### `ses.clearStorageData()`
 
-`clearStorageData(): Promise<void>` _macOS, Windows_
+`clearStorageData(): Promise<void>` _macOS, Linux, Windows_
 
 Clears the default data store's website data and resolves when the clear completes.
 
@@ -139,14 +139,13 @@ Platform notes on exactly _what_ gets cleared:
 
 - **macOS** - clears **all** website data: cache, cookies, local and session storage, IndexedDB, and the rest. Open pages keep their in-memory resource cache until they reload.
 - **Windows** - clears cookies and the fetch/HTTP caches. Clearing local storage and IndexedDB is a follow-up, so it is **not** the full wipe macOS performs yet.
-- **Linux** - not yet wired: `clearStorageData` currently rejects with an `UnsupportedPlatformError` (`WebKitWebsiteDataManager` clearing is a follow-up).
+- **Linux** - clears every website-data type the default `WebKitWebsiteDataManager` holds (`WEBKIT_WEBSITE_DATA_ALL`).
 
 ```ts
 import { session } from 'bunmaska';
 
 async function signOut() {
-  // macOS: clears everything. Windows: clears cookies + fetch caches.
-  // Linux: rejects (not yet wired).
+  // macOS / Linux: clears everything. Windows: cookies + fetch caches.
   await session.defaultSession.clearStorageData();
 }
 ```
@@ -156,9 +155,9 @@ async function signOut() {
 The default session is deliberately minimal right now. Compared to Electron's `session` module, the following are **not** implemented:
 
 - **`session.fromPartition()` / `session.fromPath()`** - no partitioned or path-based sessions; there is only `defaultSession`. The `cache` option and `persist:` semantics don't exist.
-- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options reject with an `UnsupportedPlatformError`; only the unscoped clear exists. It works on macOS (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up); Linux rejects.
+- **`ses.clearStorageData(options)`** - the `origin` and `storages` scoping options reject with an `UnsupportedPlatformError`; only the unscoped clear exists. It works on macOS and Linux (full wipe) and Windows (cookies + fetch caches; local/IndexedDB clearing is a follow-up).
 - **Cookie extras** - `cookies.get`/`set`/`remove` exist (macOS/Linux; Windows rejects), but not the `changed` event, `flushStore()`, or set-details fields beyond the documented ones (`sameSite` cannot be set; macOS stores `lax`).
-- **Cache (`ses.getCacheSize()`, `ses.clearCache()`)** - no granular cache inspection or HTTP-cache-only clear (use `clearStorageData()`, which clears everything on macOS and cookies + fetch caches on Windows).
+- **Cache (`ses.getCacheSize()`, `ses.clearCache()`)** - no granular cache inspection or HTTP-cache-only clear (use `clearStorageData()`, which clears everything on macOS and Linux and cookies + fetch caches on Windows).
 - **Proxy (`ses.setProxy()`, `ses.resolveProxy()`, `ses.forceReloadProxyConfig()`)** - no proxy configuration.
 - **Network interception (`ses.webRequest`, `ses.protocol`, `ses.fetch()`)** - no request interception, custom protocols, or main-process fetch.
 - **Permissions (`ses.setPermissionRequestHandler()`, `ses.setPermissionCheckHandler()`, `ses.setDisplayMediaRequestHandler()`)** - no permission plumbing.

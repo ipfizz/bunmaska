@@ -252,6 +252,38 @@ export const WEBKITGTK_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
     returns: FFIType.pointer,
   },
+  webkit_print_operation_new: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  webkit_print_operation_set_print_settings: {
+    args: [FFIType.pointer, FFIType.pointer],
+    returns: FFIType.void,
+  },
+  webkit_print_operation_print: {
+    args: [FFIType.pointer],
+    returns: FFIType.void,
+  },
+  webkit_network_session_get_website_data_manager: {
+    args: [FFIType.pointer],
+    returns: FFIType.pointer,
+  },
+  // (manager, types:guint, timespan:gint64, cancellable, callback, user_data)
+  webkit_website_data_manager_clear: {
+    args: [
+      FFIType.pointer,
+      FFIType.u32,
+      FFIType.i64,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.void,
+  },
+  webkit_website_data_manager_clear_finish: {
+    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.i32,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopenLinux<typeof WEBKITGTK_FFI_SYMBOLS>> | undefined } = {

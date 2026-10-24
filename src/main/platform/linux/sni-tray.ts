@@ -21,6 +21,9 @@ import {
   subscribeSignal,
   unregisterObject,
 } from './linux-dbus';
+import { ACTION_GROUP_PREFIX, rewireForWindow } from './gtk-menu';
+import { loadGtkFFI } from './gtk-ffi';
+import { loadGtkMenuFFI } from './gtk-menu-ffi';
 
 /**
  * Tray as a StatusNotifierItem on the session bus, gated by BUNMASKA_ENABLE_LINUX_TRAY (unset in
@@ -218,6 +221,7 @@ type State = {
   toolTip: string;
   icon: Icon | null;
   click: (() => void) | null;
+  menu: { realize(): bigint } | null;
 };
 
 /** A floating GVariant, or null for a name GDBus would already have rejected. */
@@ -248,6 +252,33 @@ const getPropertyValue = (state: State, name: string): Pointer | null => {
 };
 
 let trayCount = 0;
+let trayPopupHost: Pointer | null = null;
+
+const popupTrayMenu = (menu: { realize(): bigint }): void => {
+  const entry = rewireForWindow(menu.realize(), () => undefined);
+  if (entry === undefined) {
+    return;
+  }
+  const gtk = loadGtkFFI().symbols;
+  trayPopupHost ??= gtk.gtk_window_new();
+  if (trayPopupHost === null) {
+    return;
+  }
+  gtk.gtk_window_set_default_size(trayPopupHost, 1, 1);
+  gtk.gtk_widget_set_visible(trayPopupHost, 1);
+  const menuFfi = loadGtkMenuFFI().symbols;
+  const popover = menuFfi.gtk_popover_menu_new_from_model(Number(entry.model) as unknown as Pointer);
+  if (popover === null) {
+    return;
+  }
+  menuFfi.gtk_widget_set_parent(popover, trayPopupHost);
+  menuFfi.gtk_widget_insert_action_group(
+    popover,
+    cstr(ACTION_GROUP_PREFIX),
+    Number(entry.group) as unknown as Pointer,
+  );
+  menuFfi.gtk_popover_popup(popover);
+};
 
 /** Null on any failure. */
 const createLive = (conn: Pointer, initialImage: string, appName: string): TrayInstance | null => {
@@ -270,6 +301,7 @@ const createLive = (conn: Pointer, initialImage: string, appName: string): TrayI
     toolTip: '',
     icon: decodeIcon(initialImage),
     click: null,
+    menu: null,
   };
 
   // Both handlers catch: a throw must not unwind into the GDBus dispatch.
@@ -289,8 +321,13 @@ const createLive = (conn: Pointer, initialImage: string, appName: string): TrayI
 
   const methodCall = new JSCallback((_c, _s, _p, _i, method, _params, invocation, _u): void => {
     try {
-      if ((method === null ? '' : new CString(method).toString()) === 'Activate') {
+      const name = method === null ? '' : new CString(method).toString();
+      if (name === 'Activate') {
         state.click?.();
+      } else if (name === 'ContextMenu' || name === 'SecondaryActivate') {
+        if (state.menu !== null) {
+          popupTrayMenu(state.menu);
+        }
       }
     } catch (error) {
       // A throwing click handler must not skip the reply below.
@@ -376,7 +413,9 @@ const createLive = (conn: Pointer, initialImage: string, appName: string): TrayI
       state.icon = decodeIcon(image);
       emitSignal(conn, objectPath, SNI_IFACE, 'NewIcon', null); // argument-less; host re-fetches.
     },
-    setContextMenu: () => undefined, // ponytail: no com.canonical.dbusmenu export, so a no-op.
+    setContextMenu: (menu) => {
+      state.menu = menu;
+    },
     onClick: (callback) => {
       state.click = callback;
     },

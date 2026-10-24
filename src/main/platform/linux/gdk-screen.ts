@@ -1,9 +1,10 @@
-import { FFIType, type Pointer, ptr } from 'bun:ffi';
+import { FFIType, JSCallback, type Pointer, ptr } from 'bun:ffi';
 import type { Point, RawDisplay, ScreenBackend } from '../services';
 import { dlopen } from '../dlopen';
 import { loadGdkFFI } from './gdk-ffi';
 import { loadGioFFI } from './gio-ffi';
 import { loadGObjectFFI } from './gobject-ffi';
+import { connectSignal } from './gtk-signals';
 
 const loadFractionalScale = () =>
   dlopen('libgtk-4.so.1', {
@@ -78,7 +79,25 @@ export const getDisplays = (): readonly RawDisplay[] => {
 // ponytail: always {0,0}; the GTK4 pointer position needs a surface, seat and device.
 export const getCursorScreenPoint = (): Point => ({ x: 0, y: 0 });
 
+const retainedScreenCallbacks: JSCallback[] = [];
+
 export const gdkScreenBackend: ScreenBackend = {
   getDisplays,
   getCursorScreenPoint,
+  observe(onChange) {
+    const gdk = loadGdkFFI();
+    const display = gdk.symbols.gdk_display_get_default();
+    if (display === null) {
+      return;
+    }
+    const model = gdk.symbols.gdk_display_get_monitors(display);
+    if (model === null) {
+      return;
+    }
+    const callback = new JSCallback(() => {
+      onChange();
+    }, { args: ['ptr', 'u32', 'u32', 'u32', 'ptr'], returns: 'void' });
+    retainedScreenCallbacks.push(callback);
+    connectSignal(model, 'items-changed', callback);
+  },
 };

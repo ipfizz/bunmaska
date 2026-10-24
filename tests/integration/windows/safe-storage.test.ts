@@ -47,7 +47,7 @@ describe.skipIf(currentPlatform() !== 'windows')('Windows safeStorage (DPAPI)', 
   test('getOrCreateKey returns a stable 32-byte key and persists it sealed', () => {
     const first = windowsDpapiBackend.getOrCreateKey();
     expect(first).toHaveLength(32);
-    expect(existsSync(join(home, 'safestorage.key'))).toBe(true);
+    expect(existsSync(join(home, 'safestorage.bunmaska.key'))).toBe(true);
     // A second call reads the persisted (sealed) key back to the same bytes.
     expect(windowsDpapiBackend.getOrCreateKey()).toEqual(first);
   });

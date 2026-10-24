@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   dispatchPowerMessage,
+  idleSecondsFromTicks,
+  isBatteryFromAcLine,
   WM_POWERBROADCAST,
   WM_WTSSESSION_CHANGE,
 } from '../../../../../src/main/platform/windows/windows-power-monitor';
@@ -62,5 +64,35 @@ describe('dispatchPowerMessage', () => {
     dispatchPowerMessage(handlers, WM_POWERBROADCAST, 0x99);
     dispatchPowerMessage(handlers, WM_WTSSESSION_CHANGE, 0x1); // WTS_CONSOLE_CONNECT
     expect(events).toEqual([]);
+  });
+
+  test('PBT_APMPOWERSTATUSCHANGE fires onBattery when the line is offline', () => {
+    const events: string[] = [];
+    const handlers = {
+      onSuspend: () => undefined,
+      onResume: () => undefined,
+      onLockScreen: () => undefined,
+      onUnlockScreen: () => undefined,
+      onAc: () => events.push('ac'),
+      onBattery: () => events.push('battery'),
+    };
+    dispatchPowerMessage(handlers, WM_POWERBROADCAST, 0x000a, () => true);
+    expect(events).toEqual(['battery']);
+    events.length = 0;
+    dispatchPowerMessage(handlers, WM_POWERBROADCAST, 0x000a, () => false);
+    expect(events).toEqual(['ac']);
+  });
+});
+
+describe('idleSecondsFromTicks / isBatteryFromAcLine', () => {
+  test('unsigned wrap and millisecond to second', () => {
+    expect(idleSecondsFromTicks(5000, 1000)).toBe(4);
+    expect(idleSecondsFromTicks(100, 0xfffffff0)).toBe(Math.floor(((100 - 0xfffffff0) >>> 0) / 1000));
+  });
+
+  test('AC line 0 is battery, 1 and 255 are not', () => {
+    expect(isBatteryFromAcLine(0)).toBe(true);
+    expect(isBatteryFromAcLine(1)).toBe(false);
+    expect(isBatteryFromAcLine(255)).toBe(false);
   });
 });

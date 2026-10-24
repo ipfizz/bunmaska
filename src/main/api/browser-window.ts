@@ -12,7 +12,12 @@ import { loadPreloadScript } from './preload';
 import { protocol } from './protocol';
 import { screen } from './screen';
 import { session } from './session';
-import { type LoadFileOptions, objectDestroyedError, WebContents } from './web-contents';
+import {
+  installChildWindowOpener,
+  type LoadFileOptions,
+  objectDestroyedError,
+  WebContents,
+} from './web-contents';
 
 export type WebPreferences = {
   /**
@@ -383,4 +388,9 @@ installWindowResolver({
   },
   resolve: (window) => (window instanceof BrowserWindow ? popupTargets.get(window) : undefined),
   focusedWindow: () => BrowserWindow.getFocusedWindow() ?? undefined,
+});
+
+installChildWindowOpener((url, options) => {
+  const window = new BrowserWindow(options);
+  window.loadURL(url);
 });

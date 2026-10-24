@@ -149,6 +149,8 @@ const USER32_SYMBOLS = {
   GetMonitorInfoW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   // (LPPOINT) -> BOOL - the cursor position in screen coordinates.
   GetCursorPos: { args: [FFIType.ptr], returns: FFIType.i32 },
+  // (PLASTINPUTINFO) -> BOOL - tick of the last HID input. cbSize must be set first.
+  GetLastInputInfo: { args: [FFIType.ptr], returns: FFIType.i32 },
   // (UINT uType) -> BOOL - play a system sound (shell.beep). 0xFFFFFFFF = a simple beep.
   MessageBeep: { args: [FFIType.u32], returns: FFIType.i32 },
 
@@ -239,6 +241,10 @@ const KERNEL32_SYMBOLS = {
   // (HLOCAL) -> HLOCAL - free a block the system allocated for us (e.g. a DPAPI
   // CryptProtectData output blob), NULL on success.
   LocalFree: { args: [FFIType.u64], returns: FFIType.u64 },
+  // () -> DWORD - milliseconds since boot (wraps ~49 days). Used with GetLastInputInfo.
+  GetTickCount: { args: [], returns: FFIType.u32 },
+  // (LPSYSTEM_POWER_STATUS) -> BOOL - AC line and battery.
+  GetSystemPowerStatus: { args: [FFIType.ptr], returns: FFIType.i32 },
 } as const;
 
 /** ole32.dll - COM/OLE, which WebKit's Windows port requires initialised per-thread. */

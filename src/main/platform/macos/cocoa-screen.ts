@@ -10,6 +10,7 @@ import {
   msgSendReturnsF64,
   msgSendReturnsI64,
 } from './cocoa-msgsend-variants';
+import { observeNotification } from './cocoa-notification-observer';
 import { cocoa } from './cocoa-runtime';
 import { CORE_GRAPHICS_PATH } from './core-graphics-image-ffi';
 import { type Handle, macOSLibraryAccessor } from './objc';
@@ -32,6 +33,11 @@ const CG_SYMBOLS = {
   CGDisplayModeGetWidth: { args: [FFIType.pointer], returns: FFIType.u64 },
   CGDisplayModeGetPixelWidth: { args: [FFIType.pointer], returns: FFIType.u64 },
   CGDisplayModeRelease: { args: [FFIType.pointer], returns: FFIType.void },
+  // (CGEventSourceStateID, CGEventType) -> CFTimeInterval seconds since that event.
+  CGEventSourceSecondsSinceLastEventType: {
+    args: [FFIType.i32, FFIType.u32],
+    returns: FFIType.f64,
+  },
 } as const;
 
 export const loadCoreGraphicsFFI = macOSLibraryAccessor('CoreGraphics screen', () =>
@@ -166,4 +172,12 @@ export const getCursorScreenPoint = (): Point => {
 export const cocoaScreenBackend: ScreenBackend = {
   getDisplays,
   getCursorScreenPoint,
+  observe(onChange) {
+    const rt = cocoa();
+    const center = rt.msgSend(
+      rt.classes.get('NSNotificationCenter'),
+      rt.selectors.get('defaultCenter'),
+    );
+    observeNotification(center, 'NSApplicationDidChangeScreenParametersNotification', onChange);
+  },
 };

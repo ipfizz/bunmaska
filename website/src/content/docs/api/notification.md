@@ -56,6 +56,24 @@ n.on('show', () => console.log('notification shown'));
 n.show();
 ```
 
+### Event: 'click'
+
+Emitted when the user activates the notification (clicks the banner or balloon).
+
+- _macOS_ - `userNotificationCenter:didActivateNotification:` on the process-lifetime delegate. Only reaches you from a packaged `.app`.
+- _Linux_ - a libnotify default action added before `show`.
+- _Windows_ - `NIN_BALLOONUSERCLICK` on the tray balloon.
+
+`reply` and `action` (button) events are not delivered.
+
+```ts
+import { Notification } from 'bunmaska';
+
+const n = new Notification({ title: 'Hello', body: 'World' });
+n.on('click', () => console.log('notification clicked'));
+n.show();
+```
+
 ### Event: 'close'
 
 Emitted when the OS reports that the notification was dismissed or closed.
@@ -139,7 +157,7 @@ if (Notification.isSupported()) {
 
 Bunmaska implements a deliberately small, honest subset. The following Electron `Notification` members are not present in the current source:
 
-- **User-interaction events** - `click`, `reply`, and `action` are deferred in v1. They require OS delegate/action wiring (an `NSUserNotificationCenterDelegate` on macOS, action capabilities on Linux) that is not yet implemented, so they are intentionally not advertised. The `failed` event is also not emitted.
+- **User-interaction events** - `click` is delivered on all three OSes. `reply` and `action` are not; they need reply fields and action buttons that the constructor does not accept yet. The `failed` event is also not emitted.
 - **Constructor options** - only `title`, `body`, `subtitle`, and `silent` are supported. `icon`, `hasReply`, `replyPlaceholder`, `sound`, `urgency`, `timeoutType`, `actions`, `closeButtonText`, `id`, `groupId`, `groupTitle`, and `toastXml` are not implemented.
 - **Properties** - correspondingly, there are no `icon`, `hasReply`, `replyPlaceholder`, `sound`, `urgency`, `timeoutType`, `actions`, `closeButtonText`, `id`, `groupId`, or `groupTitle` properties.
 - **Static methods** - `Notification.getHistory()`, `Notification.remove()`, `Notification.removeAll()`, and `Notification.removeGroup()` (all macOS in Electron) are not implemented. `Notification.handleActivation()` is Windows-only in Electron and out of scope here.

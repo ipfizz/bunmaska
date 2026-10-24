@@ -50,7 +50,13 @@ const KEYSYM_NAMES: ReadonlyMap<string, string> = new Map([
   ['NUMDIV', 'KP_Divide'],
   ['NUMSUB', 'KP_Subtract'],
   ...Array.from({ length: 10 }, (_, digit): [string, string] => [`NUM${digit}`, `KP_${digit}`]),
-  // ponytail: no media/volume keys; their XF86Audio* keysyms usually belong to the desktop.
+  ['VOLUMEUP', 'XF86AudioRaiseVolume'],
+  ['VOLUMEDOWN', 'XF86AudioLowerVolume'],
+  ['VOLUMEMUTE', 'XF86AudioMute'],
+  ['MEDIANEXTTRACK', 'XF86AudioNext'],
+  ['MEDIAPREVIOUSTRACK', 'XF86AudioPrev'],
+  ['MEDIASTOP', 'XF86AudioStop'],
+  ['MEDIAPLAYPAUSE', 'XF86AudioPlay'],
 ]);
 
 const isFunctionKey = (key: string): boolean => /^F([1-9]|1[0-9]|2[0-4])$/.test(key);

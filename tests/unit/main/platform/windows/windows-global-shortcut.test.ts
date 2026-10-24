@@ -81,6 +81,16 @@ describe('acceleratorToHotkey', () => {
     // '£' parses as a one-char key but has no VK mapping.
     expect(acceleratorToHotkey('CmdOrCtrl+£')).toBeUndefined();
   });
+
+  test('maps media and volume keys', () => {
+    expect(acceleratorToHotkey('VolumeUp')?.vk).toBe(0xaf);
+    expect(acceleratorToHotkey('VolumeDown')?.vk).toBe(0xae);
+    expect(acceleratorToHotkey('VolumeMute')?.vk).toBe(0xad);
+    expect(acceleratorToHotkey('MediaPlayPause')?.vk).toBe(0xb3);
+    expect(acceleratorToHotkey('MediaNextTrack')?.vk).toBe(0xb0);
+    expect(acceleratorToHotkey('MediaPreviousTrack')?.vk).toBe(0xb1);
+    expect(acceleratorToHotkey('MediaStop')?.vk).toBe(0xb2);
+  });
 });
 
 describe('createWindowsGlobalShortcutBackend', () => {

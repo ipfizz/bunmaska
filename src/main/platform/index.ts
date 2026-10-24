@@ -10,10 +10,12 @@ import { linuxNotificationBackend } from './linux/gtk-notification';
 import * as gtkShell from './linux/gtk-shell';
 import { linuxLibsecretBackend } from './linux/libsecret-keyring';
 import { createLinuxApplication } from './linux/linux-backend';
-import { observePowerEvents as linuxObservePowerEvents } from './linux/linux-power-monitor';
+import { linuxPowerMonitorBackend } from './linux/linux-power-monitor';
 import { linuxPowerSaveBlockerBackend } from './linux/linux-power-save-blocker';
 import { linuxTrayBackend } from './linux/sni-tray';
+import { linuxClearStorageData } from './linux/linux-website-data';
 import * as linuxCookies from './linux/webkit-cookies';
+import { waylandGlobalShortcutBackend } from './linux/wayland-global-shortcut';
 import { linuxGlobalShortcutBackend } from './linux/x11-global-shortcut';
 import { macosGlobalShortcutBackend } from './macos/carbon-global-shortcut';
 import { createMacOSApplication } from './macos/cocoa-backend';
@@ -24,7 +26,7 @@ import * as cocoaMenu from './macos/cocoa-menu';
 import { cocoaNativeImageBackend } from './macos/cocoa-native-image';
 import * as cocoaNativeTheme from './macos/cocoa-native-theme';
 import { macosNotificationBackend } from './macos/cocoa-notification';
-import { observePowerEvents as macosObservePowerEvents } from './macos/cocoa-power';
+import { macosPowerMonitorBackend } from './macos/cocoa-power';
 import { cocoaPowerSaveBlockerBackend } from './macos/cocoa-power-save-blocker';
 import { macosKeychainBackend } from './macos/cocoa-safe-storage';
 import { cocoaScreenBackend } from './macos/cocoa-screen';
@@ -41,7 +43,7 @@ import { windowsMenuRealizer } from './windows/windows-menu';
 import { windowsNativeImageBackend } from './windows/windows-native-image';
 import { windowsShouldUseDarkColors } from './windows/windows-native-theme';
 import { windowsNotificationBackend } from './windows/windows-notification';
-import { observePowerEvents as windowsObservePowerEvents } from './windows/windows-power-monitor';
+import { windowsPowerMonitorBackend } from './windows/windows-power-monitor';
 import { windowsPowerSaveBlockerBackend } from './windows/windows-power-save-blocker';
 import { windowsDpapiBackend } from './windows/windows-safe-storage';
 import { windowsScreenBackend } from './windows/windows-screen';
@@ -82,7 +84,7 @@ const SERVICES: Record<Platform, PlatformServices> = {
       observe: cocoaNativeTheme.observeAppearanceChange,
     },
     notification: macosNotificationBackend,
-    powerMonitor: macosObservePowerEvents,
+    powerMonitor: macosPowerMonitorBackend,
     powerSaveBlocker: cocoaPowerSaveBlockerBackend,
     safeStorage: macosKeychainBackend,
     screen: cocoaScreenBackend,
@@ -98,7 +100,22 @@ const SERVICES: Record<Platform, PlatformServices> = {
   linux: {
     clipboard: linuxClipboardBackend,
     dialog: linuxDialogBackend,
-    globalShortcut: linuxGlobalShortcutBackend, // ponytail: X11 only; Wayland needs the GlobalShortcuts portal
+    globalShortcut: {
+      isSupported: () =>
+        linuxGlobalShortcutBackend.isSupported() || waylandGlobalShortcutBackend.isSupported(),
+      register: (accelerator, callback) =>
+        linuxGlobalShortcutBackend.isSupported()
+          ? linuxGlobalShortcutBackend.register(accelerator, callback)
+          : waylandGlobalShortcutBackend.register(accelerator, callback),
+      unregister: (accelerator) => {
+        linuxGlobalShortcutBackend.unregister(accelerator);
+        waylandGlobalShortcutBackend.unregister(accelerator);
+      },
+      unregisterAll: () => {
+        linuxGlobalShortcutBackend.unregisterAll();
+        waylandGlobalShortcutBackend.unregisterAll();
+      },
+    },
     menu: linuxMenuRealizer,
     nativeImage: gdkNativeImageBackend,
     nativeTheme: {
@@ -108,15 +125,12 @@ const SERVICES: Record<Platform, PlatformServices> = {
       observe: gtkNativeTheme.observeAppearanceChange,
     },
     notification: linuxNotificationBackend,
-    powerMonitor: linuxObservePowerEvents,
+    powerMonitor: linuxPowerMonitorBackend,
     powerSaveBlocker: linuxPowerSaveBlockerBackend,
     safeStorage: linuxLibsecretBackend,
     screen: gdkScreenBackend,
     session: {
-      clearStorageData: () =>
-        Promise.reject(
-          new UnsupportedPlatformError('session.clearStorageData is not yet wired on Linux'),
-        ), // ponytail: wire WebKitWebsiteDataManager clearing
+      clearStorageData: linuxClearStorageData,
       getCookies: linuxCookies.getCookies,
       setCookie: linuxCookies.setCookie,
       removeCookie: linuxCookies.removeCookie,
@@ -137,7 +151,7 @@ const SERVICES: Record<Platform, PlatformServices> = {
       observe: () => undefined, // ponytail: no Windows appearance watcher
     },
     notification: windowsNotificationBackend,
-    powerMonitor: windowsObservePowerEvents,
+    powerMonitor: windowsPowerMonitorBackend,
     powerSaveBlocker: windowsPowerSaveBlockerBackend,
     safeStorage: windowsDpapiBackend,
     screen: windowsScreenBackend,

@@ -161,12 +161,12 @@ await win.webContents.removeInsertedCSS(key);
 
 ### `contents.printToPDF()`
 
-Returns `Promise<Buffer>` - renders the current page to a PDF and resolves to its bytes. _macOS only._ On Linux it rejects with an `UnsupportedPlatformError` (WebKitGTK has no page-to-PDF-bytes API). On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no PDF sink (confirmed by parsing the DLL exports), so it rejects there too. Takes no options object (no page size, margins, etc. yet).
+Returns `Promise<Buffer>` - renders the current page to a PDF and resolves to its bytes. _macOS and Linux._ On Linux WebKitGTK prints to a temporary PDF file and the bytes are read back. On Windows it is **engine-blocked**: the WinCairo WebKit2 C API exposes no PDF sink (confirmed by parsing the DLL exports), so it rejects there. Takes no options object (no page size, margins, etc. yet).
 
 ```ts
 import { writeFile } from 'node:fs/promises';
 
-const pdf = await win.webContents.printToPDF(); // macOS only
+const pdf = await win.webContents.printToPDF(); // macOS and Linux
 await writeFile('out.pdf', pdf);
 ```
 
@@ -257,9 +257,9 @@ Limits on Windows today: there are no modifier keys, so a `modifiers` array is i
 
 ### `contents.setWindowOpenHandler(handler)`
 
-* `handler` Function - receives `{ url }` and returns `{ action: 'allow' | 'deny' }`.
+* `handler` Function - receives `{ url }` and returns `{ action: 'allow' | 'deny', overrideBrowserWindowOptions? }`.
 
-Sets the handler consulted when the page requests a new window (`window.open` / `target=_blank`). Honest caveat: the native popup is **always blocked** on every platform - child-window creation isn't supported, so `{ action: 'allow' }` is unimplemented everywhere. Returning `{ action: 'allow' }` logs a warning and still blocks the window, so the practical pattern is to open the URL externally and return `deny`. The handler's return shape is `{ action }` only - no `overrideBrowserWindowOptions`, and there is no `did-create-window` event. On Windows the handler is not invoked yet: setting one logs a warning, and `window.open` is blocked (engine work pending).
+Sets the handler consulted when the page requests a new window (`window.open` / `target=_blank`). On macOS and Linux, `{ action: 'allow' }` opens a new `BrowserWindow` (a sibling, not a native child view) and loads the URL. You can pass `overrideBrowserWindowOptions` to size or preload that window. There is no `did-create-window` event and no native parent/child relationship. On Windows the handler is not invoked yet: setting one logs a warning, and `window.open` is blocked (WinCairo has no `WKPageUIClient`).
 
 ```ts
 import { shell } from 'bunmaska';
@@ -425,10 +425,11 @@ Electron's `webContents` is huge; Bunmaska implements the navigation + scripting
 - **Process / lifecycle events** - `render-process-gone`, `unresponsive` / `responsive`, `crashed`, `destroyed`, `will-prevent-unload`. There's no separate renderer process to go gone.
 - **DevTools protocol** - no `debugger` (CDP), no `inspectElement`, no `setDevToolsWebContents`. DevTools is open/close/toggle only.
 - **Input & focus** - no `before-input-event` / `input-event`, `focus()` / `isFocused()`, `beginFrameSubscription`, `startDrag`. (`sendInputEvent` does exist, on Windows - see above.)
-- **Printing & content** - `print()` (only `printToPDF`, macOS-only; engine-blocked on Windows), `savePage`, `getPrintersAsync`, `findInPage` / `stopFindInPage`.
+- **Printing & content** - `print()` (only `printToPDF`, macOS and Linux; engine-blocked on Windows), `savePage`, `getPrintersAsync`, `findInPage` / `stopFindInPage`.
 - **Page dialogs** - `alert()`, `confirm()` and `<input type="file">` open native sheets on macOS; `prompt()` returns `null` there, as it does in Electron. On Linux and Windows Bunmaska adds no handling of its own.
 - **Editing & clipboard commands** - `undo`/`redo`/`cut`/`copy`/`paste`/`selectAll`/`replace`, `cut`-style menu wiring, `replaceMisspelling`.
 - **Media / audio** - `isAudioMuted` / `setAudioMuted`, `setBackgroundThrottling`, `getOSProcessId`, `getProcessId`.
-- **`setWindowOpenHandler` with `allow`** - child-window creation is unsupported, so `{ action: 'allow' }` is logged and ignored; there is no `did-create-window`, and the handler return type omits `overrideBrowserWindowOptions`. On Windows the handler is not invoked at all yet.
-- **`capturePage` on Windows / `printToPDF` off macOS** - `capturePage` works on macOS and Linux but is **engine-blocked on Windows**; `printToPDF` is _macOS only_ (not yet wired on Linux, engine-blocked on Windows - the WinCairo WebKit2 C API exposes neither a PDF sink nor a UI-process snapshot).
+- **`setWindowOpenHandler` on Windows** - the handler is never called; `window.open` stays blocked. On macOS and Linux `{ action: 'allow' }` opens a sibling `BrowserWindow`. There is no `did-create-window` and no native parent/child view.
+- **`capturePage` / `printToPDF` on Windows** - both are **engine-blocked**. `capturePage` and `printToPDF` work on macOS and Linux. The WinCairo WebKit2 C API exposes neither a PDF sink nor a UI-process snapshot.
+- **DevTools on Windows** - `openDevTools` logs a warning and does nothing. WinCairo does not export a verified inspector entry point.
 - **Session / zoom plumbing** - no `session` property, no `setVisualZoomLevelLimits`, no `zoomLevel` persistence across reloads (zoom is stored in-memory and reapplied per `setZoomFactor`).

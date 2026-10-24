@@ -15,7 +15,7 @@ Support is not the same on every platform, and we won't pretend it is. Start wit
 
 ## How to read the table
 
-- <span class="st st-full" role="img" aria-label="full"></span> **Full.** Everything Bunmaska offers in this module works on this OS. A few differences from Electron apply on every OS, such as async clipboard reads, JSON IPC or media keys in `globalShortcut`. The note and the module's section list them.
+- <span class="st st-full" role="img" aria-label="full"></span> **Full.** Everything Bunmaska offers in this module works on this OS. A few differences from Electron apply on every OS, such as async clipboard reads or JSON IPC. The note and the module's section list them.
 - <span class="st st-partial" role="img" aria-label="partial"></span> **Partial.** It works on this OS, with gaps you should plan around. The note and the module's section say exactly which.
 - <span class="st st-blocked" role="img" aria-label="engine-blocked"></span> **Engine-blocked.** It can't be built on this OS today, because the WebKit build Bunmaska uses there lacks the piece it needs. `printToPDF` and `capturePage` reject with `UnsupportedPlatformError`. `protocol.handle` is the exception: it registers without an error but never serves anything (see [`protocol`](#protocol)). This changes only if WebKit adds the missing piece. See [why](#why-some-things-cant-work-on-an-os).
 - <span class="st st-none" role="img" aria-label="not implemented"></span> **Not implemented.** Not built on this OS yet, though nothing in the platform stops it. Calling it throws `UnsupportedPlatformError`, or rejects with it when the method returns a Promise. To fall back, catch it: import `UnsupportedPlatformError` from `bunmaska/main`, or check `err.code === 'ERR_UNSUPPORTED_PLATFORM'`. [Still to do](#still-to-do) says what is planned.
@@ -38,7 +38,7 @@ Your users don't set anything. Your main process does, at the top of `main.ts`, 
 | `app` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Lifecycle, quit, paths and locale work everywhere. Windows has no about panel.](#app) |
 | `BrowserWindow` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [On Linux your app can't position its windows or tell when the user minimizes one. Windows reports moves and resizes only when a drag ends.](#browserwindow) |
 | `webContents` (core) | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Loading, navigation, scripts and IPC work everywhere. Windows has no DevTools or pop-up handler yet.](#webcontents-core) |
-| `webContents.printToPDF` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-none" role="img" aria-label="not implemented"></span> | <span class="st st-blocked" role="img" aria-label="engine-blocked"></span> | [macOS only.](#webcontentsprinttopdf) |
+| `webContents.printToPDF` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-blocked" role="img" aria-label="engine-blocked"></span> | [macOS and Linux. Engine-blocked on Windows.](#webcontentsprinttopdf) |
 | `webContents.capturePage` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-blocked" role="img" aria-label="engine-blocked"></span> | [macOS and Linux. Not possible on Windows today.](#webcontentscapturepage) |
 | `webContents.sendInputEvent` | <span class="st st-none" role="img" aria-label="not implemented"></span> | <span class="st st-none" role="img" aria-label="not implemented"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Windows only, without modifier keys.](#webcontentssendinputevent) |
 | `ipcMain` / `ipcRenderer` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Works everywhere. Messages are sent as JSON, so send plain data only.](#ipcmain-and-ipcrenderer) |
@@ -46,17 +46,17 @@ Your users don't set anything. Your main process does, at the top of `main.ts`, 
 | `Menu` / `MenuItem` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Menu keyboard shortcuts work on macOS only.](#menu-and-menuitem) |
 | `dialog` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Dialogs never attach to a window. Windows can't show custom button labels.](#dialog) |
 | `clipboard` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Text, HTML and images everywhere. Reads return Promises.](#clipboard) |
-| `Tray` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [No tray menu on Linux or Windows yet. Linux needs an opt-in switch.](#tray) |
-| `Notification` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [macOS needs a packaged `.app`. No `click` event anywhere.](#notification) |
+| `Tray` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Context menus work on all three. Linux needs an opt-in switch; Wayland placement is weak.](#tray) |
+| `Notification` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [macOS needs a packaged `.app`. `click` works on all three.](#notification) |
 | `nativeImage` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Works everywhere. Windows ignores JPEG quality.](#nativeimage) |
 | `nativeTheme` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Forcing light or dark with `themeSource` restyles the page on macOS only.](#nativetheme) |
-| `globalShortcut` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Linux works under X11 only. Media keys don't register anywhere.](#globalshortcut) |
+| `globalShortcut` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Linux prefers X11; Wayland is a best-effort portal. Media keys work on Windows and Linux, not macOS.](#globalshortcut) |
 | `shell` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Works everywhere. Linux can't highlight the file in its folder.](#shell) |
 | `protocol` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-blocked" role="img" aria-label="engine-blocked"></span> | [Custom schemes like `app://` serve on macOS and Linux. Not possible on Windows today.](#protocol) |
-| `screen` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [No display-change events anywhere. Linux can't read the cursor or work area.](#screen) |
-| `powerMonitor` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Sleep, wake, lock and unlock only. Linux needs an opt-in switch.](#powermonitor) |
+| `screen` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Hot-plug events fire. Linux can't read the cursor or work area.](#screen) |
+| `powerMonitor` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Idle, battery, sleep and lock. Linux idle time is always 0; sleep/lock need an opt-in switch.](#powermonitor) |
 | `powerSaveBlocker` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Blocks idle sleep. Linux needs an opt-in switch, and both types do the same thing there.](#powersaveblocker) |
-| `safeStorage` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [One key shared by every Bunmaska app. Linux needs an opt-in switch.](#safestorage) |
+| `safeStorage` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [One key per `app.getName()`. Linux needs an opt-in switch.](#safestorage) |
 | `session` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [One default session. Cookies on macOS and Linux only.](#session) |
 | `autoUpdater` | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | <span class="st st-partial" role="img" aria-label="partial"></span> | [Signed updates download, install and relaunch on all three. Unlike Electron, you start the download yourself, and `.deb` installs can't update themselves.](#autoupdater) |
 | Accelerator strings, `app.getPath` | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | <span class="st st-full" role="img" aria-label="full"></span> | [Parse and resolve the same on all three.](#accelerator-strings-and-appgetpath) |
@@ -97,13 +97,13 @@ On every OS, `BrowserWindow.fromWebContents` and `getFocusedWindow` work, and a 
   - While the user drags or resizes a window, `move` and `resize` arrive when they let go of the mouse, not continuously.
   - To your code, a closed window behaves as on the other OSes: `closed` fires, and using it throws `Object has been destroyed`. Behind the scenes, Bunmaska only hides the native window and loads a blank page into it, because tearing down a live WebKit view crashes on Windows today. That memory is freed only when the app exits, so an app that opens and closes many windows uses more memory over time.
 
-Parent, child and modal windows are not implemented on any OS. The [BrowserWindow page](/docs/api/browser-window#not-in-bunmaska-yet) lists the rest.
+Native parent, child and modal windows (`parent` / `modal` constructor options) are not implemented on any OS. `{ action: 'allow' }` from `setWindowOpenHandler` opens a sibling `BrowserWindow` on macOS and Linux; see [`webContents`](#webcontents-core). The [BrowserWindow page](/docs/api/browser-window#not-in-bunmaska-yet) lists the rest.
 
 ### `webContents` (core)
 
 Loading pages, navigation events, `executeJavaScript`, zoom, `insertCSS` and `send` work on all three.
 
-Bunmaska can't create child windows yet, so `window.open` and `target="_blank"` links are always blocked, on every OS. On macOS and Linux your `setWindowOpenHandler` handler is still called with the URL. Returning `{ action: 'allow' }` logs a warning and the window stays blocked. The practical pattern: open the URL with `shell.openExternal(url)` and return `{ action: 'deny' }`.
+On macOS and Linux, `setWindowOpenHandler` is called for `window.open` and `target="_blank"`. Returning `{ action: 'allow' }` opens a new `BrowserWindow` (a sibling, not a native child view) and loads the URL. You can pass `overrideBrowserWindowOptions`. There is no `did-create-window` event. To send the URL to the browser instead, call `shell.openExternal(url)` and return `{ action: 'deny' }`.
 
 - **macOS:** `openDevTools()` opens the Web Inspector through a private WebKit API. If that API is missing, it logs a warning instead of throwing. `alert()`, `confirm()` and file inputs open native sheets. `prompt()` returns `null`, as in Electron.
 - **Linux:** `openDevTools()` opens the WebKitGTK inspector.
@@ -115,7 +115,7 @@ Bunmaska can't create child windows yet, so `window.open` and `target="_blank"` 
 ### `webContents.printToPDF`
 
 - **macOS:** works. Resolves to the PDF bytes. Options such as page size and margins are ignored (TypeScript flags them).
-- **Linux:** rejects with `UnsupportedPlatformError`. WebKitGTK has no call that hands back PDF bytes, but it can print to a file. Printing to a temporary PDF and reading it back would work. It just isn't wired up yet.
+- **Linux:** works. WebKitGTK prints to a temporary PDF file and Bunmaska reads the bytes back. Options are ignored, as on macOS.
 - **Windows:** engine-blocked. Rejects with `UnsupportedPlatformError`. WinCairo has no PDF export at all.
 
 ### `webContents.capturePage`
@@ -224,14 +224,14 @@ The Linux selection clipboard, RTF, bookmarks and the combined `write()` are not
 - **Linux:** off by default. Turn it on with the `BUNMASKA_ENABLE_LINUX_TRAY` [opt-in switch](#linux-opt-in-switches).
   - When it is off, or the desktop's message bus can't be reached, `new Tray()` still works but shows nothing, so the same code runs on every OS.
   - When on, the icon uses StatusNotifierItem, the tray standard that KDE, Waybar, swaybar and GNOME (with the AppIndicator extension) draw.
-  - `click` fires when the desktop activates the icon. `setContextMenu` is accepted, but no menu shows yet.
-- **Windows:** icon, tooltip and left-click `click` work. `setContextMenu` is accepted, but no menu shows yet. `setTitle` does nothing, because Windows tray icons have no text. Right-click and double-click are not reported.
+  - `click` fires when the desktop activates the icon. `setContextMenu` opens a GTK popover on `ContextMenu` / `SecondaryActivate`. The popover is parented to a hidden 1×1 window, so on Wayland it may not sit next to the panel icon. Hosts that only speak dbusmenu will not embed the menu in the panel.
+- **Windows:** icon, tooltip, left-click `click` and a right-click context menu (`TrackPopupMenu`) work. `setTitle` does nothing, because Windows tray icons have no text. Double-click is not reported as its own event.
 
 On every OS, `click` carries no event, bounds or position.
 
 ### `Notification`
 
-`new Notification({ title, body, subtitle, silent }).show()` works on all three. Those four are the only options; others such as `icon`, `actions` and `urgency` are ignored (TypeScript flags them). `silent` is honored everywhere. Changing a property after `show()` doesn't update the notification on screen. `click`, `reply` and `action` events are not delivered on any OS yet.
+`new Notification({ title, body, subtitle, silent }).show()` works on all three. Those four are the only options; others such as `icon`, `actions` and `urgency` are ignored (TypeScript flags them). `silent` is honored everywhere. Changing a property after `show()` doesn't update the notification on screen. The `click` event fires when the user activates the banner or balloon. `reply` and `action` are not delivered.
 
 - **macOS:** notifications only appear from a packaged `.app`. Under `bunmaska dev` or `bun main.ts`, nothing shows and `Notification.isSupported()` returns `false`, so check it first. The `close` event never fires.
 - **Linux:** shown through libnotify. `close` fires when the user or the system dismisses the notification. `subtitle` is ignored.
@@ -260,8 +260,8 @@ System-wide shortcuts that fire even when your app is not focused.
 
 - **macOS:** works, even when the app is not packaged.
 - **Windows:** works.
-- **Linux:** works under X11 only. Linux desktops run on one of two display systems, X11 or Wayland, and Ubuntu and Fedora default to Wayland. Under Wayland, `register` returns `false` and nothing is grabbed, even through XWayland. Supporting Wayland means asking the desktop for permission through its global-shortcuts service, which Bunmaska doesn't do yet. Check the return value of `register` and offer an in-app shortcut as a fallback. Under X11, shortcuts fire regardless of NumLock and CapsLock.
-- **Every OS:** media and volume keys (`MediaPlayPause`, `VolumeUp` and friends) parse, but `register` returns `false` for them. The numpad keys and `Insert` work. An accelerator that can't be parsed makes `register` return `false` instead of throwing.
+- **Linux:** prefers X11 (`XGrabKey`). Under X11, shortcuts fire regardless of NumLock and CapsLock. On a Wayland session with a session bus, `register` falls back to the `org.freedesktop.portal.GlobalShortcuts` portal: it returns `true` and stores the callback, but the CreateSession handshake is incomplete, so the key may never fire. Check the return value and keep an in-app shortcut as a fallback.
+- **Every OS:** media and volume keys (`MediaPlayPause`, `VolumeUp` and friends) parse. Windows (`RegisterHotKey` media VKs) and Linux X11 (`XF86Audio*` keysyms) can grab them. Carbon cannot grab those NX_SYSDEFINED keys, so `register` returns `false` for them on macOS. The numpad keys and `Insert` work. An accelerator that can't be parsed makes `register` return `false` instead of throwing.
 
 ### `shell`
 
@@ -294,7 +294,7 @@ On every OS:
 
 Listing displays with their bounds, scale factor and multi-monitor positions works on all three. Coordinates start at the top-left corner of the primary display.
 
-On every OS, `screen` emits no events: no `display-added`, `display-removed` or `display-metrics-changed`. It is a plain object, not an `EventEmitter`. Call `getAllDisplays()` again when you need fresh data.
+`screen` is an `EventEmitter`. `display-added`, `display-removed` and `display-metrics-changed` fire when the backend notices a change (AppKit screen-parameter notifications, GTK's monitor `items-changed`, Win32 display-change). On Linux, display ids are list indexes, so a plug/unplug can look like every monitor was removed and added, and a scale-only change may not fire.
 
 - **macOS:** `getCursorScreenPoint()` and `workArea` (the screen minus the menu bar and Dock) are real, and so are `rotation` and `internal`.
 - **Windows:** `getCursorScreenPoint()` and `workArea` (the screen minus the taskbar) are real. `rotation` is always `0` and `internal` is always `false`.
@@ -308,12 +308,13 @@ On every OS, `screen` emits no events: no `display-added`, `display-removed` or 
 
 ### `powerMonitor`
 
-The `suspend`, `resume`, `lock-screen` and `unlock-screen` events work on all three. The rest of Electron's `powerMonitor` is missing on every OS: no `getSystemIdleTime` or `getSystemIdleState`, no `isOnBatteryPower` or `on-ac` / `on-battery`, no `shutdown` event and no thermal state.
+The `suspend`, `resume`, `lock-screen`, `unlock-screen`, `on-ac` and `on-battery` events work, plus `getSystemIdleTime`, `getSystemIdleState`, `isOnBatteryPower` and the `onBatteryPower` getter. There is still no `shutdown` event and no thermal state.
 
-- **Linux:** off by default. Turn it on with the `BUNMASKA_ENABLE_LINUX_POWER` [opt-in switch](#linux-opt-in-switches). It also needs systemd-logind, Linux's login manager, on the system message bus. With it off, no events fire.
+- **Linux:** sleep and lock events are off by default. Turn them on with the `BUNMASKA_ENABLE_LINUX_POWER` [opt-in switch](#linux-opt-in-switches). They also need systemd-logind, Linux's login manager, on the system message bus. With it off, those four stay silent. Battery queries and `on-ac` / `on-battery` read sysfs and do not need the switch. `getSystemIdleTime()` is always `0`; `getSystemIdleState` still reports `'locked'` when logind says the session is locked.
   - `suspend` is best-effort. Bunmaska doesn't ask the system to wait for it, so the event can arrive after the machine wakes. Don't count on it to finish work before the lid closes.
   - `lock-screen` and `unlock-screen` fire only when the lock goes through logind, for example `loginctl lock-session`. Lock screens that lock without telling logind don't trigger them, so test on the desktops you target before relying on these events.
-- **Windows:** Windows sometimes refuses the lock listener, usually when the app starts right at login. Bunmaska then logs a warning, and `lock-screen` and `unlock-screen` stay silent until the app restarts.
+- **Windows:** idle time comes from `GetLastInputInfo`. Battery state comes from `GetSystemPowerStatus`. `on-ac` / `on-battery` fire on `PBT_APMPOWERSTATUSCHANGE`. Windows sometimes refuses the lock listener, usually when the app starts right at login. Bunmaska then logs a warning, and `lock-screen` and `unlock-screen` stay silent until the app restarts.
+- **macOS:** idle time comes from CoreGraphics; battery from IOKit. `on-ac` / `on-battery` fire when the power source changes (polled every two seconds, and again on wake).
 
 ### `powerSaveBlocker`
 
@@ -327,14 +328,14 @@ The `suspend`, `resume`, `lock-screen` and `unlock-screen` events work on all th
 `isEncryptionAvailable`, `encryptString` and `decryptString` work. Strings are encrypted with AES-256-GCM, so a tampered blob makes `decryptString` throw instead of returning garbage.
 
 - **macOS:** the key lives in the Keychain.
-- **Windows:** the key is sealed with DPAPI, Windows' built-in per-user encryption. It is stored as `safestorage.key` in the folder `BUNMASKA_HOME` names, or in `.bunmaska` in the user's home folder when that isn't set.
+- **Windows:** the key is sealed with DPAPI, Windows' built-in per-user encryption. It is stored as `safestorage.<app.getName()>.key` in the folder `BUNMASKA_HOME` names, or in `.bunmaska` in the user's home folder when that isn't set.
 - **Linux:** off by default. Turn it on with the `BUNMASKA_ENABLE_LINUX_KEYRING` [opt-in switch](#linux-opt-in-switches) to keep the key in the desktop keyring through libsecret.
   - With it off, or with no keyring, `isEncryptionAvailable()` returns `false` and `encryptString` / `decryptString` throw.
   - If the keyring is locked, the first `encryptString` or `decryptString` waits for the user to unlock it, and your main process is frozen until they do.
 
 Two differences from Electron on every OS:
 
-- **One key is shared by every Bunmaska app of the same user.** Electron keeps one per app. Any other Bunmaska app the same user runs can decrypt your app's data (macOS may ask the user first). Treat `safeStorage` as protection against other users and a stolen disk, not against other apps. A separate key per app is on the [to-do list](#still-to-do).
+- **The key is scoped to `app.getName()`.** Two apps that share a name share a key. Blobs sealed by older alpha builds (one shared `master-key` / `safestorage.key`) will not decrypt.
 - **There is no plaintext fallback.** Without a keyring, Electron falls back to a weak built-in key. Bunmaska refuses and throws instead. Blobs are Bunmaska's own format and can't be read by Electron.
 
 ### `session`
@@ -348,9 +349,8 @@ There is one session, `session.defaultSession`. Partitions (`fromPartition`, `fr
   - `cookies.set` defaults `path` to `/`, not the URL's directory.
 - **Windows:** every `cookies` method rejects with `UnsupportedPlatformError`. WinCairo has no way to read or write a single cookie; it can only delete them all.
 - **`clearStorageData()`:**
-  - macOS clears all website data: cookies, caches, local storage, IndexedDB and the rest. Pages that are still open keep their in-memory cache until they reload.
+  - macOS and Linux clear all website data: cookies, caches, local storage, IndexedDB and the rest. Pages that are still open keep their in-memory cache until they reload.
   - Windows clears cookies and Cache API storage (`caches`) only, not the HTTP cache, local storage or IndexedDB.
-  - Linux rejects with `UnsupportedPlatformError`. It is not wired up yet.
   - On every OS, passing the `origin` or `storages` options rejects rather than quietly clearing everything.
 - **macOS, in development:** every Bunmaska app you run unpackaged (`bunmaska dev`, `bun main.ts`) shares one cookie jar and one set of web storage, across all your projects, because they all run as the same `bun` process. Logins and `localStorage` from one project show up in another. A packaged `.app` gets its own.
 
@@ -411,41 +411,35 @@ GTK 4 removed the calls that let an app move its own window, and Wayland forbids
 
 ## Still to do
 
-Gaps inside modules that already ship. We're filling them. Gaps mentioned above but not listed here, such as `sendInputEvent` on macOS and Linux, parent and child windows, `trashItem`, `MessagePort`, session partitions and `printToPDF` options, have no date yet.
+Gaps inside modules that already ship. We're filling them. Gaps mentioned above but not listed here, such as `sendInputEvent` on macOS and Linux, native parent/modal windows, `trashItem`, `MessagePort`, session partitions and `printToPDF` options, have no date yet.
 
 **Every OS**
 
-- `getSystemIdleTime` and `isOnBatteryPower` in `powerMonitor`.
-- `click`, `reply` and `action` events for notifications.
-- Display-change events in `screen`.
-- Media and volume keys for `globalShortcut`.
-- Child windows, so `setWindowOpenHandler` can `allow`.
-- A separate `safeStorage` key per app.
+- `reply` and `action` events for notifications.
 - Richer `webContents` events.
 
 **macOS**
 
 - The `close` event for notifications.
+- Media and volume keys for `globalShortcut` (Carbon cannot grab them).
 
 **Linux**
 
-- `session.clearStorageData`.
-- `printToPDF`.
-- The tray context menu.
+- A real `getSystemIdleTime` (today it is always `0`).
+- A complete Wayland global-shortcuts portal bind (today `register` may return `true` without the key ever firing).
 - Menu keyboard shortcuts.
 - The minimized state, and the `minimize` and `restore` events.
 - The cursor position and the work area in `screen`.
-- Global shortcuts under Wayland.
 - Your app's name and version in the about dialog.
+- A dbusmenu-backed tray menu (today a GTK popover).
 
 **Windows**
 
 - The `setWindowOpenHandler` callback.
-- DevTools.
+- DevTools (engine-blocked: no verified WinCairo inspector symbol).
 - Live dark-mode changes in `nativeTheme`.
-- The tray context menu.
 - Menu keyboard shortcuts.
-- An isolated world for the preload.
+- An isolated world for the preload (engine-blocked: WinCairo has no content-world API).
 - JPEG quality in `nativeImage`.
 - Rich notifications.
 - Modifier keys, more keys and scaled displays in `sendInputEvent`.
@@ -469,10 +463,10 @@ Differences in behavior today, on every OS unless noted. Some are by design, lik
 - **`clipboard`, `shell` and `nativeImage` work in the main process only.** Call them there and expose what the page needs through IPC. Clipboard reads return Promises.
 - **`shell.openExternal` resolves `true` or `false`** instead of rejecting on failure.
 - **`cookies.set` defaults `path` to `/`**, not the URL's directory, and `session.getUserAgent()` returns `''` until you set one.
-- **`safeStorage` shares one key across all Bunmaska apps** of a user, on all three OSes, and has no plaintext fallback.
+- **`safeStorage` keys off `app.getName()`** and has no plaintext fallback. Older alpha blobs sealed under the shared key will not decrypt.
 - **`autoUpdater` doesn't download on its own.** You call `downloadUpdate()`, and `before-quit-for-update` is not emitted.
 - **`MenuItem` properties are read-only** after construction, except `checked`.
-- **`screen` is not an `EventEmitter`.**
+- **`setWindowOpenHandler` `{ action: 'allow' }` opens a sibling `BrowserWindow`**, not a native child view, and only on macOS and Linux.
 
 ## Out of scope by design
 

@@ -8,6 +8,8 @@ import { loadLibnotifyFFI } from './libnotify-ffi';
 
 /** `NotifyNotification::closed`: `(notification, user_data) -> void`. */
 const CLOSED_CB_DEF = { args: ['ptr', 'ptr'], returns: 'void' } as const;
+/** `NotifyActionCallback`: `(notification, action, user_data) -> void`. */
+const ACTION_CB_DEF = { args: ['ptr', 'ptr', 'ptr'], returns: 'void' } as const;
 
 /** Keeps each `closed` thunk reachable until it fires; closed on a later tick (`deferCallbackClose`). */
 const liveCallbacks = new Set<JSCallback>();
@@ -51,19 +53,40 @@ const present = (spec: NotificationSpec): NotificationHandle => {
     );
   }
 
+  let onClosed: (() => void) | undefined;
+  let onClick: (() => void) | undefined;
+  let open = true;
+  const actionCallback = new JSCallback((): void => {
+    onClick?.();
+  }, ACTION_CB_DEF);
+  liveCallbacks.add(actionCallback);
+  notify.symbols.notify_notification_add_action(
+    notification,
+    cstr('default'),
+    cstr('Open'),
+    actionCallback.ptr,
+    null,
+    null,
+  );
+
   // No daemon (headless CI) makes show return FALSE and `closed` never fires, so release now.
   if (notify.symbols.notify_notification_show(notification, null) === 0) {
+    liveCallbacks.delete(actionCallback);
+    deferCallbackClose([actionCallback]);
     gobject.g_object_unref(notification);
     return { close: () => undefined, onClosed: () => undefined };
   }
 
-  let onClosed: (() => void) | undefined;
-  let open = true;
   const callback = new JSCallback((): void => {
     open = false;
     liveCallbacks.delete(callback);
+    liveCallbacks.delete(actionCallback);
     gobject.g_signal_handler_disconnect(notification, connection.handlerId);
-    deferCallbackClose([callback, { close: () => gobject.g_object_unref(notification) }]);
+    deferCallbackClose([
+      callback,
+      actionCallback,
+      { close: () => gobject.g_object_unref(notification) },
+    ]);
     onClosed?.();
   }, CLOSED_CB_DEF);
   liveCallbacks.add(callback);
@@ -77,6 +100,9 @@ const present = (spec: NotificationSpec): NotificationHandle => {
     },
     onClosed: (cb) => {
       onClosed = cb;
+    },
+    onClick: (cb) => {
+      onClick = cb;
     },
   };
 };

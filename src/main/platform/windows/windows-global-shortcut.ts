@@ -40,7 +40,13 @@ const NAMED_VK = new Map<string, number>([
   ['numdec', 0x6e],
   ['numdiv', 0x6f],
   ...Array.from({ length: 10 }, (_, digit): [string, number] => [`num${digit}`, 0x60 + digit]),
-  // ponytail: no media/volume keys yet; they are VK_VOLUME_MUTE (0xAD) through VK_MEDIA_PLAY_PAUSE (0xB3).
+  ['VolumeMute', 0xad],
+  ['VolumeDown', 0xae],
+  ['VolumeUp', 0xaf],
+  ['MediaNextTrack', 0xb0],
+  ['MediaPreviousTrack', 0xb1],
+  ['MediaStop', 0xb2],
+  ['MediaPlayPause', 0xb3],
 ]);
 
 /** Common US-layout OEM punctuation virtual-key codes (layout-dependent). */

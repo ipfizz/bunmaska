@@ -107,6 +107,14 @@ export const GTK_FFI_SYMBOLS = {
     args: [],
     returns: FFIType.pointer,
   },
+  gtk_print_settings_new: {
+    args: [],
+    returns: FFIType.pointer,
+  },
+  gtk_print_settings_set: {
+    args: [FFIType.pointer, FFIType.cstring, FFIType.cstring],
+    returns: FFIType.void,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopenLinux<typeof GTK_FFI_SYMBOLS>> | undefined } = {

@@ -17,6 +17,7 @@ import type {
 } from '../native';
 import { injectedScripts } from '../web-scripts';
 import { ExecResultChannel } from '../exec-result-channel';
+import { linuxPrintToPDF } from './linux-print-to-pdf';
 import { loadGObjectFFI } from './gobject-ffi';
 import { loadGtkFFI } from './gtk-ffi';
 import {
@@ -212,10 +213,10 @@ class LinuxWebContents implements NativeWebContents {
   }
 
   printToPDF(): Promise<Uint8Array> {
-    // WebKitGTK prints only to a printer or file; it has no page-to-PDF-bytes API.
-    return Promise.reject(
-      new UnsupportedPlatformError('webContents.printToPDF is not yet supported on Linux'),
-    );
+    if (this.#destroyed) {
+      return Promise.reject(new Error('printToPDF failed: web contents destroyed'));
+    }
+    return linuxPrintToPDF(this.#view);
   }
 
   capturePage(): Promise<Uint8Array> {

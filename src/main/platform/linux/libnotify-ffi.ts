@@ -40,6 +40,18 @@ export const LIBNOTIFY_FFI_SYMBOLS = {
     args: [FFIType.pointer, FFIType.cstring, FFIType.pointer],
     returns: FFIType.void,
   },
+  // (notification, action, label, NotifyActionCallback, user_data, free_func) -> void
+  notify_notification_add_action: {
+    args: [
+      FFIType.pointer,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+    ],
+    returns: FFIType.void,
+  },
 } as const;
 
 const cache: { ffi: ReturnType<typeof dlopenLinux<typeof LIBNOTIFY_FFI_SYMBOLS>> | undefined } = {

@@ -60,6 +60,12 @@ describe('x11KeysymName', () => {
   test('returns undefined for an unmappable key', () => {
     expect(x11KeysymName('Bogus')).toBeUndefined();
   });
+
+  test('maps media and volume keys to XF86 keysyms', () => {
+    expect(x11KeysymName('VolumeUp')).toBe('XF86AudioRaiseVolume');
+    expect(x11KeysymName('MediaPlayPause')).toBe('XF86AudioPlay');
+    expect(x11KeysymName('MediaNextTrack')).toBe('XF86AudioNext');
+  });
 });
 
 describe('x11ModifierMask', () => {

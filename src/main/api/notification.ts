@@ -15,7 +15,7 @@ const { get: getBackend, setForTesting } = service('notification');
 /** @internal */
 export const setNotificationBackendForTesting = setForTesting;
 
-/** Emits `show`, and `close` except on macOS, where it never fires. `click` is not delivered. */
+/** Emits `show`, `click` when the OS reports an activation, and `close` except on macOS. */
 export class Notification extends EventEmitter {
   title: string;
   body: string;
@@ -51,6 +51,9 @@ export class Notification extends EventEmitter {
     this.#handle = handle;
     handle.onClosed(() => {
       this.emit('close');
+    });
+    handle.onClick?.(() => {
+      this.emit('click');
     });
     this.emit('show');
   }

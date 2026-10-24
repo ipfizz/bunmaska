@@ -1,5 +1,12 @@
+import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { screen, setScreenBackendForTesting } from '../../../src/main/api/screen';
+import {
+  diffDisplays,
+  resetScreenObservingForTesting,
+  screen,
+  setScreenBackendForTesting,
+  startScreenObserving,
+} from '../../../src/main/api/screen';
 import type { RawDisplay, ScreenBackend } from '../../../src/main/platform/services';
 
 /**
@@ -27,13 +34,19 @@ const SECONDARY: RawDisplay = {
   primary: false,
 };
 
-const fakeBackend = (displays: readonly RawDisplay[], cursor = { x: 0, y: 0 }): ScreenBackend => ({
+const fakeBackend = (
+  displays: readonly RawDisplay[],
+  cursor = { x: 0, y: 0 },
+  observe?: (onChange: () => void) => void,
+): ScreenBackend => ({
   getDisplays: () => displays,
   getCursorScreenPoint: () => cursor,
+  ...(observe === undefined ? {} : { observe }),
 });
 
 afterEach(() => {
   setScreenBackendForTesting(undefined);
+  resetScreenObservingForTesting();
 });
 
 describe('screen.getAllDisplays', () => {
@@ -129,5 +142,49 @@ describe('screen.getCursorScreenPoint', () => {
   test('passes the backend cursor point through', () => {
     setScreenBackendForTesting(fakeBackend([PRIMARY], { x: 321, y: 654 }));
     expect(screen.getCursorScreenPoint()).toEqual({ x: 321, y: 654 });
+  });
+});
+
+describe('screen events', () => {
+  test('is an EventEmitter', () => {
+    expect(screen).toBeInstanceOf(EventEmitter);
+  });
+
+  test('diffDisplays reports added, removed and metric changes', () => {
+    const a = screen.getAllDisplays;
+    setScreenBackendForTesting(fakeBackend([PRIMARY, SECONDARY]));
+    const first = a();
+    setScreenBackendForTesting(
+      fakeBackend([
+        { ...PRIMARY, bounds: { ...PRIMARY.bounds, width: 2000 } },
+        { ...SECONDARY, id: 3 },
+      ]),
+    );
+    const next = a();
+    const { added, removed, changed } = diffDisplays(first, next);
+    expect(removed.map((d) => d.id)).toEqual([2]);
+    expect(added.map((d) => d.id)).toEqual([3]);
+    expect(changed[0]?.display.id).toBe(1);
+    expect(changed[0]?.metrics).toContain('bounds');
+  });
+
+  test('startScreenObserving emits display-added when the backend notifies', () => {
+    let onChange: (() => void) | undefined;
+    let current: readonly RawDisplay[] = [PRIMARY];
+    setScreenBackendForTesting({
+      getDisplays: () => current,
+      getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+      observe: (cb) => {
+        onChange = cb;
+      },
+    });
+    const added: number[] = [];
+    screen.on('display-added', (_e, display) => {
+      added.push(display.id);
+    });
+    startScreenObserving();
+    current = [PRIMARY, SECONDARY];
+    onChange?.();
+    expect(added).toEqual([2]);
   });
 });

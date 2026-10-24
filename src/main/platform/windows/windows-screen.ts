@@ -4,6 +4,7 @@ import type { Rect } from '../native';
 import { readRect } from './win32';
 import { loadUser32 } from './win32-ffi';
 import { loadShcore, MDT_EFFECTIVE_DPI } from './win32-shcore-ffi';
+import { createMessageWindow } from './windows-message-window';
 
 /** `sizeof(MONITORINFO)`: cbSize(4) + rcMonitor(16) + rcWork(16) + dwFlags(4). */
 const MONITORINFO_SIZE = 40;
@@ -84,6 +85,9 @@ const describeMonitor = (hMonitor: bigint): RawDisplay => ({
   internal: false, // ponytail: not derived; needs the monitor's output technology
 });
 
+/** WM_DISPLAYCHANGE: a monitor was added, removed or its mode changed. */
+export const WM_DISPLAYCHANGE = 0x007e;
+
 export const windowsScreenBackend: ScreenBackend = {
   getDisplays(): readonly RawDisplay[] {
     return enumerateMonitors().map(describeMonitor);
@@ -94,5 +98,13 @@ export const windowsScreenBackend: ScreenBackend = {
     const pointPtr = ptr(point);
     loadUser32().symbols.GetCursorPos(pointPtr);
     return { x: read.i32(pointPtr, 0), y: read.i32(pointPtr, 4) };
+  },
+
+  observe(onChange) {
+    createMessageWindow((message) => {
+      if (message === WM_DISPLAYCHANGE) {
+        onChange();
+      }
+    });
   },
 };

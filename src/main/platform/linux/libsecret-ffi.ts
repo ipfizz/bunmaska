@@ -14,13 +14,16 @@ const SCHEMA_NAME = 'dev.bunmaska.safeStorage';
 /** Tags the secret with the schema name, so a zero-attribute lookup still finds it. */
 const SECRET_SCHEMA_NONE = 0;
 
+/** `SECRET_SCHEMA_ATTRIBUTE_STRING`. */
+export const SECRET_SCHEMA_ATTRIBUTE_STRING = 0;
+
 export const LIBSECRET_FFI_SYMBOLS = {
-  // (name, flags, ...attrs terminated by NULL) -> SecretSchema* (transfer-full).
+  // (name, flags, attr_name, attr_type, NULL) -> SecretSchema* (transfer-full).
   secret_schema_new: {
-    args: [FFIType.cstring, FFIType.i32, FFIType.pointer],
+    args: [FFIType.cstring, FFIType.i32, FFIType.cstring, FFIType.i32, FFIType.pointer],
     returns: FFIType.pointer,
   },
-  // (schema, collection|null, label, password, cancellable|null, error|null, NULL) -> gboolean
+  // (schema, collection|null, label, password, cancellable|null, error|null, attr, value, NULL)
   secret_password_store_sync: {
     args: [
       FFIType.pointer,
@@ -29,13 +32,22 @@ export const LIBSECRET_FFI_SYMBOLS = {
       FFIType.cstring,
       FFIType.pointer,
       FFIType.pointer,
+      FFIType.cstring,
+      FFIType.cstring,
       FFIType.pointer,
     ],
     returns: FFIType.i32,
   },
-  // (schema, cancellable|null, error|null, NULL) -> gchar* (NULL if absent OR error)
+  // (schema, cancellable|null, error|null, attr, value, NULL) -> gchar*
   secret_password_lookup_sync: {
-    args: [FFIType.pointer, FFIType.pointer, FFIType.pointer, FFIType.pointer],
+    args: [
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.pointer,
+      FFIType.cstring,
+      FFIType.cstring,
+      FFIType.pointer,
+    ],
     returns: FFIType.pointer,
   },
   // (password) -> void; frees a transfer-full gchar* from lookup.
@@ -77,6 +89,8 @@ export const secretSchema = (): Pointer => {
   const schema = loadLibsecretFFI().symbols.secret_schema_new(
     cstr(SCHEMA_NAME),
     SECRET_SCHEMA_NONE,
+    cstr('application'),
+    SECRET_SCHEMA_ATTRIBUTE_STRING,
     null,
   );
   if (schema === null) {

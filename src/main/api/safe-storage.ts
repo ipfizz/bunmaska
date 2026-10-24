@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { BunmaskaError, InvalidArgumentError } from '../../common/errors';
 import { service } from '../platform/index';
+import { app } from './app';
 import type { KeyringBackend } from '../platform/services';
 
 /**
@@ -67,7 +68,7 @@ const isAvailable = (): boolean => {
 /** Read the keyring once per process: on Linux it is the one blocking D-Bus call. */
 const getKey = (): Buffer => {
   if (cachedKey === undefined) {
-    const key = getBackend().getOrCreateKey();
+    const key = getBackend().getOrCreateKey(app.getName());
     if (key.length !== KEY_LENGTH) {
       throw new BunmaskaError(
         `safeStorage: keyring returned a ${key.length}-byte key, expected ${KEY_LENGTH}`,

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { BunmaskaError } from '../../common/errors';
 import { service } from '../platform/index';
 import type { Rect } from '../platform/native';
@@ -117,10 +118,115 @@ const getDisplayMatching = (rect: Rect): Display => {
   return toDisplay(nearestRaw(center));
 };
 
-export const screen = {
-  getAllDisplays,
-  getPrimaryDisplay,
-  getDisplayNearestPoint,
-  getCursorScreenPoint,
-  getDisplayMatching,
+export type DisplayMetricsChange = {
+  readonly display: Display;
+  readonly metrics: readonly string[];
+};
+
+const metricChanges = (prev: Display, next: Display): string[] => {
+  const metrics: string[] = [];
+  if (
+    prev.bounds.x !== next.bounds.x ||
+    prev.bounds.y !== next.bounds.y ||
+    prev.bounds.width !== next.bounds.width ||
+    prev.bounds.height !== next.bounds.height
+  ) {
+    metrics.push('bounds');
+  }
+  if (
+    prev.workArea.x !== next.workArea.x ||
+    prev.workArea.y !== next.workArea.y ||
+    prev.workArea.width !== next.workArea.width ||
+    prev.workArea.height !== next.workArea.height
+  ) {
+    metrics.push('workArea');
+  }
+  if (prev.scaleFactor !== next.scaleFactor) {
+    metrics.push('scaleFactor');
+  }
+  if (prev.rotation !== next.rotation) {
+    metrics.push('rotation');
+  }
+  return metrics;
+};
+
+/** Diff two display snapshots by `id`. Pure; used by the observer and tests. */
+export const diffDisplays = (
+  previous: readonly Display[],
+  next: readonly Display[],
+): {
+  readonly added: readonly Display[];
+  readonly removed: readonly Display[];
+  readonly changed: readonly DisplayMetricsChange[];
+} => {
+  const prevById = new Map(previous.map((d) => [d.id, d]));
+  const nextById = new Map(next.map((d) => [d.id, d]));
+  const added: Display[] = [];
+  const removed: Display[] = [];
+  const changed: DisplayMetricsChange[] = [];
+  for (const display of next) {
+    const prior = prevById.get(display.id);
+    if (prior === undefined) {
+      added.push(display);
+      continue;
+    }
+    const metrics = metricChanges(prior, display);
+    if (metrics.length > 0) {
+      changed.push({ display, metrics });
+    }
+  }
+  for (const display of previous) {
+    if (!nextById.has(display.id)) {
+      removed.push(display);
+    }
+  }
+  return { added, removed, changed };
+};
+
+class ScreenImpl extends EventEmitter {
+  getAllDisplays = getAllDisplays;
+  getPrimaryDisplay = getPrimaryDisplay;
+  getDisplayNearestPoint = getDisplayNearestPoint;
+  getCursorScreenPoint = getCursorScreenPoint;
+  getDisplayMatching = getDisplayMatching;
+}
+
+export const screen = new ScreenImpl();
+
+let observing = false;
+let lastDisplays: Display[] = [];
+
+const emitDisplayChanges = (): void => {
+  const next = getAllDisplays();
+  const { added, removed, changed } = diffDisplays(lastDisplays, next);
+  lastDisplays = next;
+  const event = {};
+  for (const display of added) {
+    screen.emit('display-added', event, display);
+  }
+  for (const display of removed) {
+    screen.emit('display-removed', event, display);
+  }
+  for (const { display, metrics } of changed) {
+    screen.emit('display-metrics-changed', event, display, metrics);
+  }
+};
+
+/** Called once from bootstrap `onReady`. Later calls are no-ops. @internal */
+export const startScreenObserving = (
+  observe: (onChange: () => void) => void = (onChange) => getBackend().observe?.(onChange),
+): void => {
+  if (observing) {
+    return;
+  }
+  observing = true;
+  lastDisplays = getAllDisplays();
+  observe(emitDisplayChanges);
+};
+
+/** @internal */
+export const resetScreenObservingForTesting = (): void => {
+  observing = false;
+  lastDisplays = [];
+  screen.removeAllListeners();
 };
